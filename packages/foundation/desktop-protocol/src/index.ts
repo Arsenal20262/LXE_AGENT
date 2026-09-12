@@ -455,6 +455,13 @@ export interface DesktopSetupState {
     account: string;
     password_configured: boolean;
   };
+  yacang: {
+    managed: boolean;
+    configured: boolean;
+    issues: string[];
+    mobile: string;
+    password_configured: boolean;
+  };
   feishu: {
     managed: boolean;
     configured: boolean;
@@ -485,6 +492,10 @@ export type DesktopMabangSetupInput =
   | { action: "clear" }
   | { action: "save"; account: string; password?: string };
 
+export type DesktopYacangSetupInput =
+  | { action: "clear" }
+  | { action: "save"; mobile: string; password?: string };
+
 export type DesktopFeishuSetupInput =
   | { action: "clear" }
   | { action: "save"; app_id: string; app_secret?: string };
@@ -493,6 +504,7 @@ export interface DesktopSetupInput {
   workspace_root: string;
   ziniao?: DesktopZiniaoSetupInput;
   mabang?: DesktopMabangSetupInput;
+  yacang?: DesktopYacangSetupInput;
   feishu?: DesktopFeishuSetupInput;
   logging?: {
     profile: DesktopLogProfile;

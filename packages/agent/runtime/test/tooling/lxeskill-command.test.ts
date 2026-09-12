@@ -49,7 +49,7 @@ describe("lxeskill command recognition", () => {
     // Every directory is owned by exactly one business module — the property the
     // <module>/<data-type> layout depends on.
     const modules = new Set(datasets.map((entry) => entry.dir.split("/")[0]));
-    expect([...modules].sort()).toEqual(["amazon", "browser", "fba", "replenish"]);
+    expect([...modules].sort()).toEqual(["amazon", "browser", "fba", "replenish", "yacang"]);
     expect(new Set(datasets.map((entry) => entry.dir)).size).toBe(datasets.length);
     expect(datasets.every((entry) => entry.holds.length > 0)).toBe(true);
   });
@@ -83,6 +83,14 @@ describe("lxeskill command recognition", () => {
           { field: "restock_xlsx_paths[]", role: "deliverable" },
           { field: "contract_xlsx_paths[]", role: "deliverable" },
         ],
+      });
+    expect(entries.find((entry) => entry.name === "yacang_export_inventory_sales"))
+      .toMatchObject({
+        command: "lxeskill yacang inventory-sales export",
+        module: "services.agent_cli.yacang.export_inventory_sales",
+        ownerSkills: ["yacang-inventory-sales-export"],
+        attributionSkill: "yacang-inventory-sales-export",
+        artifactPaths: [{ field: "xlsx_paths[]", role: "deliverable" }],
       });
     expect(entries.find((entry) => entry.name === "ziniao_page")).toMatchObject({
       ownerSkills: ["ziniao-browser"],
