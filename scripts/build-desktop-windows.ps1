@@ -67,11 +67,11 @@ function Write-LxeDesktopBuildTimingSummary {
 
 $bunCommand = Get-Command bun -ErrorAction SilentlyContinue
 if ($null -eq $bunCommand) {
-    throw "Bun 1.3.14 is required to build the Windows desktop package."
+    throw "Bun 1.4.2 is required to build the Windows desktop package."
 }
 $bunVersion = (& $bunCommand.Source --version).Trim()
-if ($LASTEXITCODE -ne 0 -or $bunVersion -ne "1.3.14") {
-    throw "Bun 1.3.14 is required; found '$bunVersion' at $($bunCommand.Source)."
+if ($LASTEXITCODE -ne 0 -or $bunVersion -ne "1.4.2") {
+    throw "Bun 1.4.2 is required; found '$bunVersion' at $($bunCommand.Source)."
 }
 
 $versionSelector = Join-Path $repositoryRoot "apps\desktop\scripts\select-desktop-version.ts"

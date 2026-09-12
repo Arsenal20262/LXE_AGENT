@@ -2,7 +2,7 @@
 
 这里是 LXE Agent macOS/Windows 桌面应用的唯一 React Renderer。它使用 React、TypeScript 和 Vite 构建，不作为独立网站发布。
 
-开发与构建统一使用根工作区固定的 Bun 1.3.14。
+开发与构建统一使用根工作区固定的 Bun 1.4.2。
 
 ## 运行边界
 
