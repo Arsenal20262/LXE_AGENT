@@ -4,7 +4,7 @@ This page is a navigation inventory, not a second source of runtime prompt truth
 
 ## Inventory
 
-The repository currently contains 28 top-level workflow and default runtime skills:
+The repository currently contains 29 top-level workflow and default runtime skills:
 
 | Type | Count | Purpose |
 | --- | ---: | --- |
@@ -13,10 +13,11 @@ The repository currently contains 28 top-level workflow and default runtime skil
 | `amazon_operations` | 2 | listing, keyword, competitor, and public-review analysis |
 | `default` | 2 | general connector and workbook capabilities |
 | `ziniao_browser` | 1 | controlled Ziniao browser lifecycle and page operations |
+| `yacang_operations` | 1 | controlled four-warehouse Yacang inventory-sales XLSX export |
 
 Counts describe top-level repository skills before per-agent permission and connector filtering. The
 bundled Lark CLI contributes another 27 nested connector-specific Skill manifests, so recursive runtime
-discovery sees 55 repository manifests in total.
+discovery sees 56 repository manifests in total.
 
 ## Amazon FBA
 
@@ -67,6 +68,10 @@ LXE formally maintains these modules' command and failure contracts. Their resul
 
 - `ziniao-browser`: controlled store lifecycle, snapshots, navigation, and page interaction.
 
+## Yacang Operations
+
+- `yacang-inventory-sales-export`: automatically signs in and returns one validated inventory-sales XLSX for each configured warehouse.
+
 ## Runtime Visibility
 
 The visible catalog for one turn can be smaller than this page because runtime applies:
@@ -83,7 +88,7 @@ Dashboard skill APIs and the runtime prompt must use the same filtered catalog. 
 ### UI 中文名
 
 `config/skill-labels.json` 是本地与服务器前端共用的官方中文名源，首次覆盖本页的
-FBA、备货、亚马逊运营和紫鸟 26 个技能。只用于 UI 展示，不参与 AI 提示词、命令或权限判断。
+FBA、备货、亚马逊运营、紫鸟和雅仓 27 个技能。只用于 UI 展示，不参与 AI 提示词、命令或权限判断。
 中文界面按英文 `name` 查名称；英文界面及未知技能保留原名。
 
 新增上述类型的技能时追加中文名，删除技能时保留映射，让历史统计继续可读。

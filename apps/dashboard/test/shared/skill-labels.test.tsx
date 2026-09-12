@@ -18,7 +18,7 @@ const skill: SkillPayload = {
 describe("official skill labels", () => {
   test("covers all current owned skills while permitting historical entries", () => {
     const checkedLabels = JSON.parse(readFileSync(new URL("../../../../config/skill-labels.json", import.meta.url), "utf8"));
-    const types = new Set(["amazon_fba", "amazon_replenish", "amazon_operations", "ziniao_browser"]);
+    const types = new Set(["amazon_fba", "amazon_replenish", "amazon_operations", "ziniao_browser", "yacang_operations"]);
     const foundTypes = new Set<string>();
     let count = 0;
     for (const path of new Bun.Glob("skills/**/SKILL.md").scanSync({ cwd: root, absolute: true })) {

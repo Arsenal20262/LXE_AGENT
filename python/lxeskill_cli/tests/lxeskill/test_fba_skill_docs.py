@@ -13,10 +13,22 @@ def _skill_text(name: str) -> str:
 
 def test_repository_skill_inventory_distinguishes_top_level_and_nested_manifests() -> None:
     skill_root = PROJECT_ROOT / "skills"
-    assert len(list(skill_root.glob("*/SKILL.md"))) == 28
-    assert len(list(skill_root.rglob("SKILL.md"))) == 55
+    assert len(list(skill_root.glob("*/SKILL.md"))) == 29
+    assert len(list(skill_root.rglob("SKILL.md"))) == 56
     assert not (skill_root / "feishu-im-read" / "SKILL.md").exists()
     assert (skill_root / "larksuite-cli" / "lark-im" / "SKILL.md").exists()
+
+
+def test_yacang_export_skill_uses_one_declared_command_and_four_deliverables() -> None:
+    catalog = load_catalog()
+    entry = catalog["yacang_export_inventory_sales"]
+    assert entry["command_path"] == ["yacang", "inventory-sales", "export"]
+    assert entry["owner_skills"] == ["yacang-inventory-sales-export"]
+    assert entry["artifact_paths"] == [{"field": "xlsx_paths[]", "role": "deliverable"}]
+    text = _skill_text("yacang-inventory-sales-export")
+    assert "terminal `files`" in text
+    assert "send_files(paths=<terminal.files>)" in text
+    assert "15 天销量" in text
 
 
 def test_ziniao_is_independent_and_shipment_owns_only_four_stages() -> None:
