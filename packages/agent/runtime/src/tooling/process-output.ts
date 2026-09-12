@@ -161,6 +161,7 @@ export class ProcessOutputStore {
   private total = 0;
   private dropped = 0;
   private sink: ReturnType<ReturnType<typeof Bun.file>["writer"]> | undefined;
+  private readonly pendingSpillOperations = new Set<Promise<void>>();
   private resolvedSpillPath = "";
   private spillWritten = 0;
   private spillExhausted = false;
@@ -252,8 +253,8 @@ export class ProcessOutputStore {
     const sink = this.sink;
     if (!sink) return;
     try {
-      const flushed: unknown = sink.flush();
-      if (flushed instanceof Promise) await flushed;
+      this.trackSpillOperation(sink.flush());
+      await Promise.all(this.pendingSpillOperations);
     } catch (error) {
       this.recordSpillError(error);
     }
@@ -265,6 +266,7 @@ export class ProcessOutputStore {
     this.sink = undefined;
     if (!sink) return;
     try {
+      await Promise.all(this.pendingSpillOperations);
       await sink.end();
     } catch (error) {
       this.recordSpillError(error);
@@ -300,19 +302,27 @@ export class ProcessOutputStore {
     }
     const slice = bytes.byteLength <= remaining ? bytes : bytes.subarray(0, remaining);
     try {
-      this.sink.write(slice);
+      this.trackSpillOperation(this.sink.write(slice));
       // The path is handed to the model while the command is still running, so the
       // transcript has to be readable now rather than only after the sink is closed.
-      const flushed: unknown = this.sink.flush();
-      if (flushed instanceof Promise) {
-        void flushed.catch((error: unknown) => this.recordSpillError(error));
-      }
+      this.trackSpillOperation(this.sink.flush());
     } catch (error) {
       this.recordSpillError(error);
       return;
     }
     this.spillWritten += slice.byteLength;
     if (slice.byteLength < bytes.byteLength) this.spillExhausted = true;
+  }
+
+  private trackSpillOperation(operation: number | Promise<number>): void {
+    if (!(operation instanceof Promise)) return;
+    // Bun can return a pending write even when the following flush returns zero.
+    // Keep both operations until readers can safely open the live transcript.
+    const pending = operation.then(
+      () => undefined,
+      (error: unknown) => this.recordSpillError(error),
+    ).finally(() => this.pendingSpillOperations.delete(pending));
+    this.pendingSpillOperations.add(pending);
   }
 
   private recordSpillError(error: unknown): void {

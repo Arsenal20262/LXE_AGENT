@@ -162,6 +162,26 @@ describe("process output store", () => {
     expect(store.outputFileCoversCaptured).toBe(true);
   });
 
+  test("makes each live transcript readable immediately after materialization", async () => {
+    const root = scratch();
+    for (let index = 0; index < 50; index += 1) {
+      const spillPath = join(root, `live-${index}.log`);
+      const store = new ProcessOutputStore({ retainBytes: 10_000, spillPath });
+      const first = `第 ${index} 次输出\n`;
+      try {
+        store.append("stdout", utf8(first));
+        await store.ensureSpill();
+        expect(readFileSync(spillPath, "utf8")).toBe(first);
+        store.append("stderr", utf8("继续输出\n"));
+        await store.ensureSpill();
+        expect(readFileSync(spillPath, "utf8")).toBe(`${first}继续输出\n`);
+        expect(store.outputFileCoversCaptured).toBe(true);
+      } finally {
+        await store.close();
+      }
+    }
+  });
+
   test("reports the real output-file creation error", async () => {
     const root = scratch();
     const parentFile = join(root, "not-a-directory");
