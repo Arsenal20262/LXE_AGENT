@@ -2,13 +2,14 @@ import { expect, test } from "bun:test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import validJob from "../../../packages/foundation/protocol/fixtures/valid-agent-job.json";
 
 test("bundled CLI resolves shared schemas locally and validates jobs over JSONL", async () => {
   const directory = await mkdtemp(join(tmpdir(), "lxe-bundled-protocol-"));
   try {
     const build = Bun.spawn([process.execPath, "build", "src/main.ts", "--outdir", directory, "--target", "bun"], {
-      cwd: new URL("../", import.meta.url).pathname, stdout: "pipe", stderr: "pipe",
+      cwd: fileURLToPath(new URL("../", import.meta.url)), stdout: "pipe", stderr: "pipe",
     });
     const [buildOutput, buildError, buildCode] = await Promise.all([
       new Response(build.stdout).text(), new Response(build.stderr).text(), build.exited,

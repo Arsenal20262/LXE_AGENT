@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { rejects } from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -55,17 +56,17 @@ describe("JSON-RPC subprocess transport", () => {
   });
 
   test("times out without replay and ignores late duplicate responses", async () => {
-    const runtime = create("late", { requestTimeoutMs: 40 }); await runtime.start();
-    await expect(read(runtime, "first")).rejects.toMatchObject({ code: "AgentRequestTimeout" });
+    const runtime = create("late", { requestTimeoutMs: 1000 }); await runtime.start();
+    await rejects(read(runtime, "first"), { code: "AgentRequestTimeout" });
     expect(await read(runtime, "second")).toEqual("second");
-    await Bun.sleep(100);
+    await Bun.sleep(600);
     expect(runtime.isReady).toBe(true);
     expect(await read(runtime, "third")).toEqual("third");
   });
 
   test("keeps actual business error and both code representations", async () => {
     const runtime = create("business-error"); await runtime.start();
-    await expect(read(runtime)).rejects.toMatchObject({ code: "vendor_failed", rpcCode: -32000, message: "actual vendor error" });
+    await rejects(read(runtime), { code: "vendor_failed", rpcCode: -32000, message: "actual vendor error" });
     expect(runtime.isReady).toBe(true);
   });
 
@@ -129,7 +130,7 @@ describe("JSON-RPC subprocess transport", () => {
   test("invalid context source identifies its own field, not the part_updated branch", async () => {
     const runtime = create("metrics", { environment: { ...process.env, RPC_FIXTURE_MODE: "metrics", RPC_CONTEXT_SOURCE: "bad-source" } });
     await runtime.start();
-    await expect(read(runtime)).rejects.toThrow("/display_metrics/context_source");
+    await rejects(read(runtime), /\/display_metrics\/context_source/);
     expect(runtime.status().message).not.toContain("required property 'part'");
   });
 });

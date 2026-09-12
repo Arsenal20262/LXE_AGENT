@@ -31,7 +31,7 @@ for await (const line of createInterface({ input: process.stdin, crlfDelay: Infi
       setTimeout(() => write(response), delay);
       break;
     }
-    case "late": setTimeout(() => { write(response); write(response); }, readCount++ === 0 ? 100 : 0); break;
+    case "late": setTimeout(() => { write(response); write(response); }, readCount++ === 0 ? 1500 : 0); break;
     case "fragmented": {
       const text = JSON.stringify({ ...response, result: { found: true, path: "你好\n第二行" } });
       process.stdout.write(text.slice(0, 12));

@@ -1,2 +1,4 @@
 *.sh text eol=lf
 scripts/wt-claim text eol=lf
+packages/foundation/protocol/schemas/*.json text eol=lf
+packages/foundation/protocol/src/generated/contracts.ts text eol=lf

@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { runInNewContext } from "node:vm";
+import { fileURLToPath } from "node:url";
 import { assertNoRuntimeSchemaCompiler } from "../vite/renderer-csp-guard";
 
 test("rejects Ajv in production chunks, including Windows and virtual module paths", () => {
@@ -15,7 +16,7 @@ test("rejects Ajv in production chunks, including Windows and virtual module pat
 
 test("context display module initializes with runtime code generation disabled", async () => {
   const build = await Bun.build({
-    entrypoints: [new URL("../src/features/sessions/context-display.ts", import.meta.url).pathname],
+    entrypoints: [fileURLToPath(new URL("../src/features/sessions/context-display.ts", import.meta.url))],
     target: "browser",
     format: "cjs",
     write: false,
