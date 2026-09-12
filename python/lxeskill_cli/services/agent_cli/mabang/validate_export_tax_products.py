@@ -38,15 +38,17 @@ def _read_products_frame(products_path: Path):
     except Exception as exc:
         raise RuntimeError(f"读取出口退税产品表失败: {products_path}, error={exc}") from exc
 
-    if EXPORT_TAX_PRODUCTS_SHEET not in excel_file.sheet_names:
-        raise RuntimeError(f"出口退税产品表缺少 sheet: {EXPORT_TAX_PRODUCTS_SHEET}")
-
     try:
-        df = pd.read_excel(products_path, sheet_name=EXPORT_TAX_PRODUCTS_SHEET, dtype=str)
-    except Exception as exc:
-        raise RuntimeError(
-            f"读取出口退税产品表失败: {products_path}, sheet={EXPORT_TAX_PRODUCTS_SHEET}, error={exc}"
-        ) from exc
+        if EXPORT_TAX_PRODUCTS_SHEET not in excel_file.sheet_names:
+            raise RuntimeError(f"出口退税产品表缺少 sheet: {EXPORT_TAX_PRODUCTS_SHEET}")
+        try:
+            df = pd.read_excel(excel_file, sheet_name=EXPORT_TAX_PRODUCTS_SHEET, dtype=str)
+        except Exception as exc:
+            raise RuntimeError(
+                f"读取出口退税产品表失败: {products_path}, sheet={EXPORT_TAX_PRODUCTS_SHEET}, error={exc}"
+            ) from exc
+    finally:
+        excel_file.close()
     columns = [str(column or "").strip() for column in list(df.columns)]
     df.columns = columns
     return df

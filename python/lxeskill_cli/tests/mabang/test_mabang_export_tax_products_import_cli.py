@@ -37,9 +37,13 @@ def _write_products(
 def _read_rows(path: Path) -> list[tuple]:
     from openpyxl import load_workbook
 
-    workbook = load_workbook(path)
-    worksheet = workbook["Sheet1"]
-    return list(worksheet.iter_rows(values_only=True))
+    with path.open("rb") as source:
+        workbook = load_workbook(source)
+        try:
+            worksheet = workbook["Sheet1"]
+            return list(worksheet.iter_rows(values_only=True))
+        finally:
+            workbook.close()
 
 
 def test_missing_sku_returns_failure_json(monkeypatch, capsys):
@@ -101,7 +105,7 @@ def test_import_skips_existing_and_not_found_then_appends_found(monkeypatch, tmp
         ("sku", "产品名称"),
         ("SKU-EXIST", "已有产品"),
     ]
-    assert payload["input_products_path"] == str(products_path)
+    assert Path(payload["input_products_path"]) == products_path
     assert payload["output_xlsx"] == str(output_dir / "products_updated_20260512_120000.xlsx")
     assert _read_rows(Path(payload["output_xlsx"])) == [
         ("sku", "产品名称"),
@@ -184,7 +188,7 @@ def test_main_success_outputs_json(monkeypatch, tmp_path, capsys):
 
     payload = cli.run({"sku": "SKU-NEW", "products_path": str(products_path)})
     assert payload["success"] is True
-    assert payload["input_products_path"] == str(products_path)
+    assert Path(payload["input_products_path"]) == products_path
     assert payload["products_path"] == str(tmp_path / "artifacts" / "products_updated_20260512_120000.xlsx")
     assert payload["output_xlsx"] == payload["products_path"]
     assert payload["backup_path"] == str(backup_dir / "products_20260512_120000.xlsx")
@@ -239,7 +243,7 @@ def test_import_updates_default_asset_for_next_import_and_summary(
     ]
     assert previous.path.read_bytes() == original_bytes
     assert stored_products.read_bytes() == original_bytes
-    assert record["files"] == [record["data"]["output_xlsx"]]
+    assert [Path(path) for path in record["files"]] == [Path(record["data"]["output_xlsx"])]
     assert record["data"]["asset_sources"]["products_path"] == {
         "slot": "export_tax_products", "from": "generated",
         "file_name": updated.file_name, "updated_at": updated.updated_at,
@@ -299,5 +303,5 @@ def test_asset_save_failure_reports_error_and_keeps_generated_file(
     assert record["data"]["success"] is False
     assert record["error"]["code"] == "input_asset_update_failed"
     assert f"{error_type.__name__}: cannot save updated whitelist" in record["error"]["message"]
-    assert record["files"] == [record["data"]["output_xlsx"]]
+    assert [Path(path) for path in record["files"]] == [Path(record["data"]["output_xlsx"])]
     assert ("SKU-NEW", "新产品") in _read_rows(Path(record["files"][0]))

@@ -14,7 +14,7 @@ from services.mabang.amazon.fba.store_resolver import FbaStore
 from services.mabang.official_api import OfficialApiError
 from test_mabang_official_combo import listing_page
 
-FIXTURE = json.loads((Path(__file__).parent / "fixtures/listing_de_shop_site.json").read_text())
+FIXTURE = json.loads((Path(__file__).parent / "fixtures/listing_de_shop_site.json").read_text(encoding="utf-8"))
 STORE = "Amazon-Lerxiuer-DE"
 SID = "697456820"
 
@@ -51,7 +51,7 @@ def test_missing_shop_list_uses_top_site():
 
 
 def test_live_de_request_returning_italian_shop_is_still_rejected():
-    fixture = json.loads((Path(__file__).parent / "fixtures/listing_de_cross_shop.json").read_text())
+    fixture = json.loads((Path(__file__).parent / "fixtures/listing_de_cross_shop.json").read_text(encoding="utf-8"))
     assert fixture["request"] == FIXTURE["request"]
     with pytest.raises(OfficialApiError, match="店铺不符") as exc:
         combo._validate_listing_scope(fixture["listing"], SID, "de", "sid=697456820 站点=de page=1")
