@@ -1,4 +1,4 @@
-import { mkdirSync, readdirSync, statSync, unlinkSync } from "node:fs";
+import { createWriteStream, mkdirSync, readdirSync, statSync, unlinkSync, type WriteStream } from "node:fs";
 import { dirname, join } from "node:path";
 import iconv from "iconv-lite";
 import type { JsonObject } from "@lxe/protocol";
@@ -160,7 +160,7 @@ export class ProcessOutputStore {
   private retainedBytes = 0;
   private total = 0;
   private dropped = 0;
-  private sink: ReturnType<ReturnType<typeof Bun.file>["writer"]> | undefined;
+  private sink: WriteStream | undefined;
   private readonly pendingSpillOperations = new Set<Promise<void>>();
   private resolvedSpillPath = "";
   private spillWritten = 0;
@@ -253,7 +253,6 @@ export class ProcessOutputStore {
     const sink = this.sink;
     if (!sink) return;
     try {
-      this.trackSpillOperation(sink.flush());
       await Promise.all(this.pendingSpillOperations);
     } catch (error) {
       this.recordSpillError(error);
@@ -267,7 +266,9 @@ export class ProcessOutputStore {
     if (!sink) return;
     try {
       await Promise.all(this.pendingSpillOperations);
-      await sink.end();
+      if (!sink.destroyed) await new Promise<void>((resolve, reject) => {
+        sink.end((error?: Error | null) => error ? reject(error) : resolve());
+      });
     } catch (error) {
       this.recordSpillError(error);
     }
@@ -282,7 +283,8 @@ export class ProcessOutputStore {
     }
     try {
       mkdirSync(dirname(path), { recursive: true });
-      this.sink = Bun.file(path).writer();
+      this.sink = createWriteStream(path);
+      this.sink.on("error", (error) => this.recordSpillError(error));
       this.resolvedSpillPath = path;
       for (const chunk of this.chunks) this.writeSpill(chunk.bytes);
     } catch (error) {
@@ -302,10 +304,10 @@ export class ProcessOutputStore {
     }
     const slice = bytes.byteLength <= remaining ? bytes : bytes.subarray(0, remaining);
     try {
-      this.trackSpillOperation(this.sink.write(slice));
-      // The path is handed to the model while the command is still running, so the
-      // transcript has to be readable now rather than only after the sink is closed.
-      this.trackSpillOperation(this.sink.flush());
+      const sink = this.sink;
+      this.trackSpillOperation(new Promise<void>((resolve, reject) => {
+        sink.write(slice, (error) => error ? reject(error) : resolve());
+      }));
     } catch (error) {
       this.recordSpillError(error);
       return;
@@ -314,10 +316,9 @@ export class ProcessOutputStore {
     if (slice.byteLength < bytes.byteLength) this.spillExhausted = true;
   }
 
-  private trackSpillOperation(operation: number | Promise<number>): void {
-    if (!(operation instanceof Promise)) return;
-    // Bun can return a pending write even when the following flush returns zero.
-    // Keep both operations until readers can safely open the live transcript.
+  private trackSpillOperation(operation: Promise<void>): void {
+    // Write callbacks confirm visibility to readers. Bun 1.4.2 FileSink.flush()
+    // can return before a Windows write is readable, even after awaiting write().
     const pending = operation.then(
       () => undefined,
       (error: unknown) => this.recordSpillError(error),
