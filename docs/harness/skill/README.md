@@ -42,7 +42,7 @@ Ask the Agent to create a skill, modify one, or save a completed workflow. The b
 
 Dashboard → Skills → 我的技能 lists valid, disabled, invalid and shadowed managed entries. Viewing supports Markdown and an attached-file list. Use and Edit append a natural-language prompt to a new conversation draft; they do not send messages or run skills. Sending uses the existing `sessions.send` route.
 
-`skills.user.list/content/setEnabled/delete` are UI RPC operations, not model tools. Mutations use a server-issued path identity and version; stale writes fail and require reloading. Deletion moves the whole folder to `<dataRoot>/trash/skills`, which is excluded from discovery even when a custom root contains it. Restore by asking the Agent to move it back with file tools. Shared originals can be changed only when explicitly requested in conversation.
+`skills.user.list/content/setEnabled/delete` are UI RPC operations, not model tools. Mutations use a server-issued path identity and version; stale writes fail and require reloading. Deletion moves the whole folder to `<dataRoot>/trash/skills`, which is excluded from discovery even when a custom root contains it. Across filesystem volumes, it copies the folder and rechecks the source version before removal; if removal fails, the complete recovery copy is retained and its path is reported. Restore by asking the Agent to move it back with file tools. Shared originals can be changed only when explicitly requested in conversation.
 
 ## Business Commands
 
