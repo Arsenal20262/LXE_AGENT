@@ -1,5 +1,5 @@
 import { clearResetStreams } from "../features/sessions/context-display";
-import type { DesktopConversationActivityPayload, SubmitUserQuestionAnswer } from "@lxe/desktop-protocol";
+import type { DesktopConversationActivityPayload, SubmitUserQuestionAnswer, UserSkillPayload } from "@lxe/desktop-protocol";
 import {
   keepPreviousData,
   useInfiniteQuery,
@@ -431,4 +431,27 @@ export function useSessionStatus(sessionIds:string[],ready:boolean,display:Conve
       .then(cache.receive).catch(cause=>setError(cause instanceof Error?cause.message:String(cause)));
   },[selected,display,visible,focused,ready,error,refresh,cache]);
   return {items,error,ready};
+}
+
+
+export function useUserSkillsQuery() {
+  return useQuery({ queryKey: dashboardQueryKeys.skills.userList,
+    queryFn: () => callDashboard({ operation: "skills.user.list", input: {} }) });
+}
+
+export function useUserSkillContentQuery(id: string, path: string) {
+  return useQuery({ queryKey: dashboardQueryKeys.skills.userContent(id, path),
+    queryFn: () => callDashboard({ operation: "skills.user.content", input: { id, path } }) });
+}
+
+export function useUserSkillMutation(onRecycled: (id: string, path: string) => void) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ skill, action }: { skill: UserSkillPayload; action: "toggle" | "delete" }) => {
+      if (action === "delete") return callDashboard({ operation: "skills.user.delete", input: { id: skill.id, version: skill.version } });
+      await callDashboard({ operation: "skills.user.setEnabled", input: { id: skill.id, version: skill.version, enabled: !skill.enabled } });
+    },
+    onSuccess: result => { if (result) onRecycled(result.id, result.recycled_path); },
+    onSettled: () => client.invalidateQueries({ queryKey: dashboardQueryKeys.skills.all }),
+  });
 }

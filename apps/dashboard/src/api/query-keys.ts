@@ -31,6 +31,8 @@ export const dashboardQueryKeys = {
   skills: {
     all: ["skills"] as const,
     list: ["skills", "list"] as const,
+    userList: ["skills", "user", "list"] as const,
+    userContent: (id: string, path: string) => ["skills", "user", "content", id, path] as const,
     content: (name: string) => ["skills", "content", name] as const,
     reference: (name: string, path: string) => ["skills", "content", name, "reference", path] as const,
   },

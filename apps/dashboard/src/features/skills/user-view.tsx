@@ -1,11 +1,8 @@
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import ReactMarkdown from "react-markdown";
 import { X } from "lucide-react";
 import type { SkillPayload, UserSkillPayload } from "@lxe/desktop-protocol";
-import { callDashboard } from "../../api/client";
-import { dashboardQueryKeys } from "../../api/query-keys";
-import { queryError } from "../../api/queries";
+import { queryError, useUserSkillsQuery, useUserSkillContentQuery, useUserSkillMutation } from "../../api/queries";
 import { useUiText } from "../../shared/i18n";
 import { markdownWithoutFrontMatter } from "../../shared/markdown";
 import { markdownComponents, markdownRehypePlugins, markdownRemarkPlugins } from "../../shared/ui/markdown";
@@ -18,8 +15,7 @@ function UserSkillPreview({ skill, close }: { skill: UserSkillPayload; close: ()
   const [path, setPath] = useState("SKILL.md");
   const [source, setSource] = useState(false);
   const dialog = useDialogFocus<HTMLElement>(true, close);
-  const query = useQuery({ queryKey: ["skills", "user", "content", skill.id, path],
-    queryFn: () => callDashboard({ operation: "skills.user.content", input: { id: skill.id, path } }) });
+  const query = useUserSkillContentQuery(skill.id, path);
   const data = query.data;
   return <div className="modal-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) close(); }}>
     <section className="modal" role="dialog" aria-modal="true" aria-label={skill.name} ref={dialog} tabIndex={-1}>
@@ -49,22 +45,12 @@ function UserSkillPreview({ skill, close }: { skill: UserSkillPayload; close: ()
 
 export function UserSkillsView({ onConversation }: { onConversation: (action: SkillConversationAction, skill?: SkillPayload) => void }) {
   const t = useUiText();
-  const client = useQueryClient();
   const [selected, setSelected] = useState<UserSkillPayload | null>(null);
   const [recycled, setRecycled] = useState("");
-  const query = useQuery({ queryKey: ["skills", "user", "list"],
-    queryFn: () => callDashboard({ operation: "skills.user.list", input: {} }) });
-  const mutation = useMutation({
-    mutationFn: async ({ skill, action }: { skill: UserSkillPayload; action: "toggle" | "delete" }) => {
-      if (action === "toggle") await callDashboard({ operation: "skills.user.setEnabled",
-        input: { id: skill.id, version: skill.version, enabled: !skill.enabled } });
-      else {
-        const result = await callDashboard({ operation: "skills.user.delete", input: { id: skill.id, version: skill.version } });
-        setRecycled(result.recycled_path);
-        if (selected?.id === skill.id) setSelected(null);
-      }
-    },
-    onSettled: () => client.invalidateQueries({ queryKey: dashboardQueryKeys.skills.all }),
+  const query = useUserSkillsQuery();
+  const mutation = useUserSkillMutation((id, path) => {
+    setRecycled(path);
+    if (selected?.id === id) setSelected(null);
   });
   return <section className="user-skills-section catalog-section" aria-label={t.userSkills.title}>
     <div className="user-skills-header"><div><h2>{t.userSkills.title}</h2><p>{t.userSkills.hint}</p></div>
