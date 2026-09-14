@@ -2058,17 +2058,11 @@ def fill_customs_declaration(
 
 def run(arguments: dict[str, Any]) -> dict[str, Any]:
     """lxeskill entrypoint — the catalog input_schema is the argument contract."""
+    from services.agent_cli.mabang.customs_erp import failure, fill
+
     try:
-        raw_inputs = arguments.get("input_xlsx")
-        input_xlsx = [raw_inputs] if isinstance(raw_inputs, str) else list(raw_inputs or [])
-        return fill_customs_declaration(
-            input_xlsx,
-            template_xlsx=str(arguments.get("template_xlsx") or "").strip() or None,
-            output_dir=str(arguments.get("output_dir") or DEFAULT_OUTPUT_DIR),
-            consignment_excel=str(arguments.get("consignment_excel") or ""),
-        )
+        if not arguments.get("preview_path"):
+            raise ValueError("请先运行 lxeskill fba customs preview，用户确认后使用 fill --preview-path 生成报关资料")
+        return fill(arguments["preview_path"])
     except Exception as exc:  # noqa: BLE001 — failure context belongs in the payload
-        return {
-            "success": False,
-            "exception": _exception_text(exc),
-        }
+        return failure(exc)

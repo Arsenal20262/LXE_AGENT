@@ -1,89 +1,60 @@
 ---
 name: fba-customs-declaration-fill
-description: 根据用户上传的一个或多个备货 xlsx、本地 FBA 发货单 CSV 和本地 WMS 装箱数据填写报关资料模板，按 WMS 实际发货量生成申报要素、报关单明细、发票、箱单、合同和库存 SKU 数量校验报告。用户要求填写报关单、报关资料、报关文件时使用。
+description: 用上传备货单的汇总表售价、ERP 只读计算的实发量和本地 WMS 箱重生成报关资料。用户要求填写报关单、报关资料、报关文件时使用；先展示各型号缺货预览，经用户确认后生成。
 type: amazon_fba
 commands:
+  - lxeskill fba customs preview
   - lxeskill fba customs fill
 ---
 
-# Customs Declaration Fill
+# 报关资料填写
 
 ## Hard Rules
 
 - 必须通过 exec 调用 frontmatter commands 中声明的 lxeskill 命令；禁止直接执行对应 Python 业务模块。
-- 下方均为真实 shell 命令；简单参数使用 flags，复杂对象写入 JSON 文件后使用 --input-json。
-- 先检查 terminal 的 `ok`；成功时读取 `data` 和 `files`，失败时读取 `error.message` 及可选的 `data.context`。
+- 简单参数使用 flags；只把最后一条 `type="result"` 作为 terminal，先检查 `ok`，再读取 `data`、`files` 或真实 `error.message`。
+- 备货单必须来自当前对话附件，使用附件下载后的真实绝对路径。不要修改附件或模板原件。
+- 此流程只有只读计算与本地文件生成；禁止调用 ERP 正式对账确认命令。
 
-- 只使用固定 CLI。
-- 不要手动编辑用户上传的备货单或报关资料模板。
-- 备货单必须来自当前对话附件；只使用附件下载结果中的真实绝对路径。禁止猜测路径、扫描系统目录或使用安装目录内的文件。
-- 模板由系统记忆，见下方「长期资产」；只有用户上传新版模板时才传 `template_xlsx`。
-- 任一必需附件缺失时停止执行并向用户索取文件，不要调用 CLI。
-- 模板原件不能修改；CLI 会复制模板到 `artifacts/fba/customs_declaration/` 后填写副本。
-- CLI 会填写申报要素、报关单明细、发票、箱单、合同，并保留模板公式和默认字段。
-- CLI 根据文件名里的 `SP...` 查找本地 WMS 装箱数据；WMS `装箱数量` 是正式报关资料的实际发货量来源，同时用于计算毛重、净重和件数。
-- CLI 必须使用本地 FBA 发货单 CSV 的 `MSKU` 和 `SKU发货量` 解析 `MSKU -> 库存 SKU` 组成关系，并以 `SKU发货量` 汇总预期库存 SKU 数量；发货单 CSV 不作为实际发货量来源。
-- 只接受新版备货单：必须包含 `备货单` 和 `汇总表` 两个 sheet；不要尝试兼容旧表头。
-- `备货单` sheet 使用 `库存sku` 多行列表和 `型号` 建立 `库存 SKU -> 型号` 映射；`汇总表` 使用 `库存sku（第一行）` 作为型号组代表，并提供 `产品名称（第一行）`、`数量`、`原价`、`合同产品名称`、`售价`、`总价（售价）`、`单位`。
-- 正式报关资料按 WMS 实际发货量填写，不按汇总表预期发货量填写；实际发货量为 0 的申报行不写入正式报关资料。
-- 同型号存在多个价格行时，先按汇总表顺序分配 `日期=走库存` 的历史库存批次，每批最多使用其计划数量，再把剩余实际数量分配给唯一的当前采购行；每行保留自己的售价并重算总价。
-- 同型号多价格但没有 `走库存` 标识、存在多个当前采购行，或实际数量超过全部走库存批次且没有当前采购价格时，CLI 会失败并返回真实原因。
-- CLI 会生成独立库存 SKU 数量校验报告，报告包含 `数量校验`、`汇总表计算前后对比`、`数据来源`。
-- 多个备货单会写入同一份报关资料；目的国必须一致，相同 SKU 不合并、不去重。
-- 商品总数最多 50 行，超过时 CLI 会失败。
-- 本 CLI 不自动下载 WMS 装箱数据或 FBA 发货单 CSV；缺少本地文件时只转述 CLI 结果。
+## 输入与数据来源
 
-## Required Input
+- 一个或多个 `.xlsx` 备货单，文件名包含 SP 单号和目的国；多 SP 必须同一目的国。
+- 表格需要「汇总表」和「备货单」。售价只取「汇总表」的「售价」，不取「备货单」中的售价或外部公式。
+- SKU、走库存标记和必要的原价用于匹配价格来源；表格型号可以为空。表格数量、旧总价均不用于报关计算。
+- ERP 提供计划量、MSKU 组成、SKU 实发量、厂家、型号、品名、单位、目的国及采购来源。每次预览自动重新下载马帮发货单 CSV，以 `MSKU发货量` 为本次实际数量。
+- 本地 WMS 装箱资料只提供箱数、毛重；不会自动下载。缺少时按 CLI 返回的确切 SP 提示补齐，不用 WMS 数量代替 ERP 实发量。
+- 同型号多个价格行保留来源区别；无法唯一匹配时解决错误后重跑，不自行选价。
 
-- 至少一个用户提供的 `.xlsx` 备货单路径。
-- 每个备货单必须使用新版 `备货单`、`汇总表` sheet 和新版表头。
-- 每个文件名必须包含 `SP...` 发货单号和目的国。
-- 多文件目的国必须一致；仅支持 `日本`、`澳大利亚`、`德国`、`英国`、`美国`、`加拿大`。
-- 本地必须已存在每个 SP 对应的装箱数据：`artifacts/fba/wms_consignment/<SP单号>.xls|xlsx`。
-- 本地必须已存在每个 SP 对应的 FBA 发货单 CSV：`artifacts/fba/delivery_csv/<SP单号>_*.csv`。
+## 长期资产
 
-## 长期资产（自动记忆）
+- `template_xlsx` 是系统记忆的 `customs_template`；平时不传，只有用户上传新版模板时传其真实路径。
+- 缺少已存模板时按 `input_required` 索取；结果里的 `asset_sources.template_xlsx` 必须转述给用户。
+- 附件用途不明确时询问用户，不把无法识别的备货单自动当作模板。
 
-- `template_xlsx`（报关资料模板）是**长期资产**：系统记住当前版，**平时不要传这个参数**。
-- 只有用户在本轮对话里上传了新版本时才传它的绝对路径；CLI 会自动把它升为当前版，旧版留一份可回退。
-- 用户没上传、系统也没存过时，CLI 会返回 `input_required`，这时才向用户索取。
-- 结果里的 `asset_sources.template_xlsx` 必须转述给用户，例如「使用报关资料模板：xxx.xlsx（07-06 上传）」，让用户能发现用错了版本。
-
-## 上传分流
-
-同一条消息里的 `.xlsx` 附件要分清用途，**不要猜**：
-
-- 文件名含 `SP` 单号（如 `6.2-SP260601002-新棱镜备货-美国.xlsx`）→ 本次备货单，传给 `input_xlsx`。
-- 文件名不含 `SP` 单号 → 报关资料模板，传给 `template_xlsx`。
-- 判断不了就直接问用户，不要试。
-
-## Command
+## 第一步：预览
 
 ```text
-lxeskill fba customs fill --input-xlsx <uploaded_xlsx_path>
+lxeskill fba customs preview --input-xlsx <附件路径>
 ```
 
-用户上传了新版本时（只有这种情况才传该参数）：
+多文件重复 `--input-xlsx`；上传新版模板时增加 `--template-xlsx <模板路径>`。单 SP 可通过 `--consignment-excel <装箱文件路径>` 指定重量资料。
+
+- 展示 `model_summary` 的各 SP、厂家、型号、计划量、实发量、缺货量和多发量。缺货与多发分别展示，不能只报净差值。
+- 明确列出 `excluded_lines` 中未纳入计算的商品。
+- `status=blocked`：转述 `issues` 和诊断报告路径，解决后重新预览。
+- `status=no_shipment`：说明本次无可申报实发商品，不生成空报关文件。
+- `status=confirmation_required` 且 `can_generate=true`：让用户判断当前数量是否可用于报关。完全一致也展示，不推断“未装箱”，不要求先完成正式对账。
+- 用户明确确认这次预览后才能进入第二步。保存返回的 `preview_path`，不要手动修改预览材料。
+
+## 第二步：生成
 
 ```text
-lxeskill fba customs fill --input-xlsx <uploaded_xlsx_path> --template-xlsx <新版模板路径>
+lxeskill fba customs fill --preview-path <上次预览返回的真实路径>
 ```
 
-多个备货单重复传参：
-
-```text
-lxeskill fba customs fill --input-xlsx <path_1> --input-xlsx <path_2>
-```
-
-只把最后一条 `type="result"` 记录作为 terminal；业务字段位于 `data`，附件位于 `files`。
-
-## Result Handling
-
-- `success=true`：告诉用户报关资料文件已生成，并提供 `output_xlsx`；确认 `quantity_basis=actual`。
-- `row_count` 是最终有实际数量的价格来源行数；同型号可能因当前采购价和历史库存价占用多行。
-- terminal `files` 中只有正式报关资料；非空时一次调用 `send_files(paths=<terminal.files>)`。校验报告属于诊断文件，不主动发送。
-- 始终检查 `validation_report_xlsx`、`quantity_validation_status` 和 `quantity_validation_summary`；数量不一致或无法校验时，把报告路径一并告诉用户。
-- 简要说明数量校验报告包含 `数量校验`、`汇总表计算前后对比`、`数据来源`，可用于查看期望发货量、实际发货量、MSKU 来源和汇总表前后差异。
-- 可简要说明 `sp_nos`、`box_count`、`total_gross_weight`、`total_amount_upper`。
-- `unmatched_count > 0`：提醒用户有未匹配申报规则的行，并转述 `notice`。
-- `success=false`：只转述 `exception`。
+- 确认后使用固定的售价、CSV 和箱重资料；CLI 只读核验 ERP 计算依据。发生变化时重新预览并再次确认，不静默更新。
+- 生成申报要素、报关单、发票、箱单、合同；零实发行不写入，最多 50 条有效价格行，多 SP 不合并价格行。
+- 成功时提供 `output_xlsx`，确认 `quantity_basis=erp_preview`。只有正式报关文件属于交付附件，诊断报告不主动发送。
+- terminal `files` 非空时，一次调用 `send_files(paths=<terminal.files>)` 发送正式报关文件。
+- 检查 `unmatched_count` 和 `notice`，说明尚未匹配申报规则的商品；不要声称所有申报要素均已完整。
+- 失败时保留真实错误；旧 `fill --input-xlsx` 必须改为先调用 `preview`。

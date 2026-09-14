@@ -34,9 +34,10 @@ flowchart TD
   E["fba-shipment-wms-box-download<br/>WMS 装箱数据"] --> F["fba-shipment-create<br/>Amazon FBA 创建货件"]
   E --> D
   L["备货单 xlsx"] --> D
-  A --> H["fba-customs-declaration-fill<br/>报关资料"]
-  E --> H["fba-customs-declaration-fill<br/>报关资料"]
-  L["备货单 xlsx"] --> H
+  A -->|重新下载 MSKU发货量| V["ERP 报关只读计算"]
+  V --> H["fba-customs-declaration-fill<br/>缺货预览 → 用户确认 → 报关资料"]
+  E -->|仅箱数与毛重| H
+  L -->|汇总表售价| H
 
   A --> I["fba-export-tax-delivery-summary<br/>发货单退税汇总"]
   J["fba-export-tax-products-manage<br/>退税白名单"] --> I
@@ -83,7 +84,7 @@ flowchart TD
 | ERP 期初库存 | 历史进销存 xlsx -> 后端管理员 CLI 预览 -> SHA-256 确认 -> FIFO 库存批次；Agent 不执行 |
 | ERP 历史库存补录 | 历史增量 xlsx -> ERP 留存库存页管理员预览 -> SHA-256 确认 -> FIFO 库存批次；Agent 不执行 |
 | 发票资料 | 备货单 + FBA 发货单 CSV + 本地 WMS 装箱数据 -> `fba-invoice-template-fill` |
-| 报关资料 | 备货单 + FBA 发货单 CSV + 本地 WMS 装箱数据 -> `fba-customs-declaration-fill` |
+| 报关资料 | 备货单售价 + 最新发货单 CSV -> ERP 只读计算；结合 WMS 箱重，预览各型号缺货，经用户确认后生成 |
 | 采购文件预览 | 一批 FBA 发货单 CSV + 出口退税总表 + 合同汇总模板 + 毛利率 -> ERP 只读计算（默认 FIFO；用户明确要求时可不扣库存）-> `fba-purchase-summary-create --preview` 生成带占位合同号的完整预览文件；不创建批次或占库存 |
 | 正式采购文件生成 | 一批 FBA 发货单 CSV + 出口退税总表 + 合同汇总模板 + 毛利率 -> ERP 默认 FIFO，或按用户明确要求使用 `--inventory-deduction-mode none` 全量采购 -> `fba-purchase-summary-create` 一次生成采购汇总表、批量备货单和正式合同 |
 | 正式采购文件重新生成 | ERP 采购批次号 + 本机当前合同模板 -> `fba-purchase-files-regenerate` 只读取得冻结数据并覆盖生成采购汇总、备货单和合同 |

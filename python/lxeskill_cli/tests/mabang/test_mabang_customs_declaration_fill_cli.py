@@ -2471,69 +2471,7 @@ def test_fill_multiple_input_workbooks_rejects_single_consignment_override(tmp_p
         cli.fill_customs_declaration([input_path_1, input_path_2], consignment_excel=consignment_path)
 
 
-def test_main_accepts_repeated_input_xlsx(monkeypatch, tmp_path, capsys):
-    input_path_1 = tmp_path / "4.26-SP260414001-新棱镜备货-美国（4.28）-2.xlsx"
-    input_path_2 = tmp_path / "4.26-SP260422010-新棱镜备货-美国（4.28）-1.xlsx"
-    template_path = tmp_path / "custom_declaration_documents.xlsx"
-    output_dir = tmp_path / "artifacts"
-    consignment_path_1 = _write_consignment_excel(tmp_path / "SP260414001.xlsx", [{"箱序号": 1, "毛重": 1}])
-    consignment_path_2 = _write_consignment_excel(tmp_path / "SP260422010.xlsx", [{"箱序号": 1, "毛重": 2}])
-    _patch_consignment_lookup(
-        monkeypatch,
-        {
-            "SP260414001": consignment_path_1,
-            "SP260422010": consignment_path_2,
-        },
-    )
-    _write_input_workbook(input_path_1, [_valid_source_row(SKU="SKU-1")])
-    _write_input_workbook(input_path_2, [_valid_source_row(SKU="SKU-2")])
-    _write_template(template_path, customs_detail_blocks=2)
-
-    payload = cli.run({"input_xlsx": [str(input_path_1), str(input_path_2)], "template_xlsx": str(template_path), "output_dir": str(output_dir)})
-    assert payload["success"] is True
-    assert payload["sp_nos"] == ["SP260414001", "SP260422010"]
-    assert payload["row_count"] == 2
-    assert payload["box_count"] == 2
-
-
-def test_main_returns_failure_json_when_customs_detail_capacity_is_insufficient(tmp_path, capsys):
-    input_path = tmp_path / "4.26-SP260414001-新棱镜备货-美国（4.28）-2.xlsx"
-    template_path = tmp_path / "custom_declaration_documents.xlsx"
-    output_dir = tmp_path / "artifacts"
-    consignment_path = _write_default_consignment_excel(tmp_path)
-    _write_input_workbook(
-        input_path,
-        [
-            _valid_source_row(SKU="SKU-1"),
-            _valid_source_row(SKU="SKU-2"),
-        ],
-    )
-    _write_template(template_path, customs_detail_blocks=1)
-
-    payload = cli.run({"input_xlsx": str(input_path), "template_xlsx": str(template_path), "output_dir": str(output_dir), "consignment_excel": str(consignment_path)})
-    assert payload["success"] is False
-    assert "报关单明细区容量不足" in payload["exception"]
-
-
-def test_main_success_outputs_json(tmp_path, capsys):
-    input_path = tmp_path / "4.26-SP260414001-新棱镜备货-美国（4.28）-2.xlsx"
-    template_path = tmp_path / "custom_declaration_documents.xlsx"
-    output_dir = tmp_path / "artifacts"
-    consignment_path = _write_default_consignment_excel(tmp_path)
-    _write_input_workbook(input_path, [_valid_source_row(品名="TPU保护壳", 商品名称="手表保护套")])
-    _write_template(template_path)
-
-    payload = cli.run({"input_xlsx": str(input_path), "template_xlsx": str(template_path), "output_dir": str(output_dir), "consignment_excel": str(consignment_path)})
-    assert payload["success"] is True
-    assert payload["sp_no"] == "SP260414001"
-    assert payload["destination_country"] == "美国"
-    assert payload["box_count"] == 1
-    assert payload["total_gross_weight"] == 10
-    assert payload["source"] == "customs_declaration_fill"
-    assert Path(payload["output_xlsx"]).is_file()
-
-
-def test_main_failure_outputs_json(capsys):
+def test_fill_requires_confirmed_preview():
     payload = cli.run({"input_xlsx": "missing-sp.xlsx"})
     assert payload["success"] is False
-    assert "文件名中缺少 SP 单号" in payload["exception"]
+    assert "customs preview" in payload["exception"]

@@ -157,6 +157,19 @@
       "input_schema": {"type": "object", "properties": {"query": {"type": "string", "minLength": 1, "maxLength": 200, "description": "Amazon.com 竞品搜索词。"}, "marketplace": {"type": "string", "enum": ["com"], "description": "首版仅支持 com。"}, "limit": {"type": "integer", "minimum": 1, "maximum": 10, "description": "返回竞品数，默认 10，最多 10。"}}, "required": ["query"], "additionalProperties": false}
     },
     {
+      "name": "mabang_preview_customs_declaration",
+      "command_path": ["fba", "customs", "preview"],
+      "legacy_aliases": ["mabang_preview_customs_declaration"],
+      "visibility": "business",
+      "session_mode": "none",
+      "module": "services.agent_cli.mabang.preview_customs_declaration",
+      "owner_skills": ["fba-customs-declaration-fill"],
+      "artifact_paths": [{"field": "validation_report_xlsx", "role": "diagnostic"}, {"field": "preview_path", "role": "diagnostic"}],
+      "timeout_ms": 600000,
+      "exposed": true,
+      "input_schema": {"type": "object", "properties": {"input_xlsx": {"type": "array", "items": {"type": "string"}, "x-lxe-file-input": {"accepted_extensions": [".xlsx"], "instruction": "请上传备货 Excel，并使用附件保存后的真实绝对路径。"}}, "template_xlsx": {"type": "string", "x-lxe-file-input": {"accepted_extensions": [".xlsx"], "instruction": "请上传报关资料模板，并使用附件保存后的真实绝对路径。"}, "x-lxe-asset-slot": "customs_template"}, "consignment_excel": {"type": "string"}}, "required": ["input_xlsx"], "additionalProperties": false}
+    },
+    {
       "name": "mabang_fill_customs_declaration",
       "command_path": ["fba", "customs", "fill"],
       "legacy_aliases": ["mabang_fill_customs_declaration"],
@@ -167,7 +180,7 @@
       "artifact_paths": [{"field": "output_xlsx", "role": "deliverable"}, {"field": "validation_report_xlsx", "role": "diagnostic"}],
       "timeout_ms": 600000,
       "exposed": true,
-      "input_schema": {"type": "object", "properties": {"input_xlsx": {"type": "array", "items": {"type": "string"}, "x-lxe-file-input": {"accepted_extensions": [".xlsx"], "instruction": "请上传备货 Excel，并使用附件保存后的真实绝对路径。"}}, "template_xlsx": {"type": "string", "x-lxe-file-input": {"accepted_extensions": [".xlsx"], "instruction": "请上传报关资料模板，并使用附件保存后的真实绝对路径。"}, "x-lxe-asset-slot": "customs_template"}, "consignment_excel": {"type": "string"}}, "required": ["input_xlsx"], "additionalProperties": false}
+      "input_schema": {"type": "object", "properties": {"preview_path": {"type": "string"}, "input_xlsx": {"type": "array", "items": {"type": "string"}, "description": "旧参数：请先调用 customs preview。"}}, "additionalProperties": false}
     },
     {
       "name": "mabang_summarize_fba_delivery_tax_sku",
