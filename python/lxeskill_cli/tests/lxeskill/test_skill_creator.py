@@ -8,7 +8,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[4]
 SCRIPTS = ROOT / "skills/skill-creator/scripts"
-CASES = json.loads((ROOT / "packages/agent/runtime/test/fixtures/skill-manifests.json").read_text(encoding="utf-8"))
+CASES = json.loads((ROOT / "packages/agent/runtime/test/tooling/skill-manifests.fixtures.json").read_text(encoding="utf-8"))
 
 
 def load_script(name):

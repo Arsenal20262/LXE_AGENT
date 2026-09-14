@@ -164,7 +164,7 @@ def test_doctor_reports_repository_contract_without_adding_a_list_command(capsys
             "data": {
                 "catalog_commands": 36,
                 "business_commands": 30,
-                "skill_files": 55,
+                "skill_files": 56,
                 "owner_skills": 24,
                 "command_declarations": 30,
             },

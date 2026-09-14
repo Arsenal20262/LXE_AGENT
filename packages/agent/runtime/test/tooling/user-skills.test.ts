@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import { SkillCatalog, parseSkillManifest } from "../../src/tooling/skills";
 import { UserSkillFiles } from "../../src/tooling/user-skill-files";
 import { skillPathKey } from "../../src/tooling/skill-files";
-import cases from "../fixtures/skill-manifests.json";
+import cases from "./skill-manifests.fixtures.json";
 
 const roots: string[] = [];
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });

@@ -27,6 +27,7 @@ afterEach(async () => {
 
 const setup = (options: {
   maxInstances?: number;
+  checkIntervalMs?: number;
   now?: () => number;
   debounceMs?: number;
   watchPath?: WorkspaceInstanceManagerOptions["watchPath"];
@@ -46,14 +47,14 @@ const setup = (options: {
     "---\nname: demo\ntype: default\ndescription: Demo workflow\n---\n# Demo\n",
     "utf8",
   );
-  const catalog = new SkillCatalog(resourceRoot, join(root, "missing-user"), { refreshIntervalMs: 0, sharedSkillsRoot: false });
+  const catalog = new SkillCatalog(resourceRoot, join(root, "missing-user"), { refreshIntervalMs: options.checkIntervalMs ?? 0, sharedSkillsRoot: false });
   const connectorStatePath = join(root, "connector-state.json");
   if (options.connectorPolicy) writeFileSync(connectorStatePath, '{"version":1}', "utf8");
   const manager = new WorkspaceInstanceManager({
     soulPath: join(resourceRoot, "SOUL.md"),
     skillCatalog: catalog,
     skillOptions: () => ({ allowedTypes: options.allowedTypes ?? new Set(["default"]) }),
-    checkIntervalMs: 0,
+    checkIntervalMs: options.checkIntervalMs ?? 0,
     debounceMs: options.debounceMs ?? 60_000,
     sweepIntervalMs: 0,
     ...(options.connectorPolicy ? {
@@ -338,4 +339,17 @@ describe("WorkspaceInstanceManager", () => {
     expect(manager.diagnostics().instances).toBe(1);
     second.release();
   });
+});
+
+
+test("the immediate next turn sees saved user skills before polls or watcher events", async () => {
+  const { catalog, manager, workspace } = setup({ checkIntervalMs: 60_000,
+    watchPath: () => ({ close() {}, unref() {} }) });
+  const before = await manager.acquire(workspace()); before.release();
+  const root = join(catalog.userSkillsRoot, "instant"); mkdirSync(root, { recursive: true });
+  writeFileSync(join(root, "SKILL.md"), "---\nname: instant\ndescription: Freshly saved workflow\n---\nInstructions\n");
+  const after = await manager.acquire(workspace());
+  expect(after.snapshot.skills.names).toContain("instant");
+  expect(after.snapshot.generation).toBeGreaterThan(before.snapshot.generation);
+  after.release();
 });

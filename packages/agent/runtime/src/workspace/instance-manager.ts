@@ -471,12 +471,15 @@ export class WorkspaceInstanceManager {
 
   private async loadGlobal(force: boolean): Promise<boolean> {
     const checkedAt = this.now();
-    if (!force && this.globalInitialized && checkedAt < this.nextGlobalCheckAt) return false;
     const previousRevision = this.lastSkillRevision;
     if (force) this.options.beforeForceRefresh?.();
-    if (force) this.options.skillCatalog.forceRefresh();
-    else this.options.skillCatalog.refreshIfNeeded();
+    // Turn acquisition must see a just-saved skill even before the polling interval
+    // or filesystem watcher fires. refreshGlobal still single-flights concurrent turns.
+    this.options.skillCatalog.forceRefresh();
     this.lastSkillRevision = this.options.skillCatalog.revision();
+    if (!force && this.globalInitialized && checkedAt < this.nextGlobalCheckAt) {
+      return previousRevision !== this.lastSkillRevision;
+    }
 
     const fingerprint = cheapFileFingerprint(this.soulPath);
     let soulChanged = false;
