@@ -57,7 +57,7 @@ Router ensure session、保存 response route，并根据当前用户输入创�
 6. 没有 tool call 时进入 final；否则按相邻的并行调用组和独占调用顺序执行。
 7. 本批结果按原调用顺序组成 tool message append，再进入下一 step。
 
-默认最多 50 step。达到上限会返回可继续的用户提示并保持 transcript 闭合，不把 Gateway 进程视为失败。
+默认不限 step 数，直到模型自然结束、用户取消或发生终止性错误。只有显式设置有限的 `maxSteps` 时，最后一步才会禁用工具并收尾。若模型仍返回工具调用，不再执行，优先使用响应文本，无文本时提示用户发送下一条消息继续；transcript 保持闭合，turn 以 completed 结束。
 
 ## Tool 数据流
 

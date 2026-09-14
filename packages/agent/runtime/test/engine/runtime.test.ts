@@ -1358,24 +1358,74 @@ describe("TypeScriptAgentRuntime", () => {
     await runtime.stop();
   });
 
-  test("disables tools on the last step and ignores a violating tool call", async () => {
+  test.each(["completed", "cancelled"] as const)("runs past 50 steps by default until %s", async status => {
     const store = new MemoryStore();
     const tools = new ToolRegistry();
-    let executed = false;
+    const controller = new AbortController();
+    let executed = 0;
+    tools.register({
+      name: "loop", description: "continue working", input_schema: { type: "object", properties: {} },
+      execute: async () => {
+        executed += 1;
+        if (status === "cancelled" && executed === 60) controller.abort();
+        return { content: [{ type: "text", text: "step completed" }] };
+      },
+    });
+    const requests: Array<{ tools: string[]; toolChoice: string }> = [];
+    const runtime = new TypeScriptAgentRuntime({
+      store,
+      tools,
+      provider: {
+        summarize,
+        turn: async request => {
+          requests.push({ tools: request.tools.map(tool => tool.name), toolChoice: request.toolChoice });
+          return requests.length <= 60
+            ? messageFixture({
+              content: [{ type: "tool_call", id: `loop-${requests.length}`, name: "loop", arguments: {} }],
+              stopReason: "toolUse",
+            })
+            : messageFixture({ content: [{ type: "text", text: "done after 60 tool steps" }], stopReason: "stop" });
+        },
+      },
+      emitter: { emit: async () => undefined, typing: async () => undefined },
+      systemPrompt: "test",
+    });
+    await runtime.start();
+    try {
+      const outcome = await runtime.runTurn(job(), { ...handle(), signal: controller.signal });
+      expect(outcome).toMatchObject({ status, reply: status === "completed" ? "done after 60 tool steps" : "" });
+      expect(executed).toBe(60);
+      expect(requests).toEqual(Array.from({ length: status === "completed" ? 61 : 60 }, () => ({
+        tools: ["loop"], toolChoice: "auto",
+      })));
+      const blocks = store.messages.flatMap(message => Array.isArray(message.content) ? message.content : []);
+      const expectedIds = Array.from({ length: 60 }, (_, index) => `loop-${index + 1}`);
+      expect(blocks.filter(block => block.type === "tool_call").map(block => block.id)).toEqual(expectedIds);
+      expect(blocks.filter(block => block.type === "tool_result").map(block => block.tool_call_id)).toEqual(expectedIds);
+      expect(store.messageReasons).not.toContain("assistant_max_steps");
+    } finally {
+      await runtime.stop();
+    }
+  });
+
+  test.each([1, 2])("disables tools on the last step and ignores a violating tool call with maxSteps=%i", async maxSteps => {
+    const store = new MemoryStore();
+    const tools = new ToolRegistry();
+    let executed = 0;
     tools.register({
       name: "danger",
-      description: "must not execute",
+      description: "must not execute on the last step",
       input_schema: { type: "object" },
       execute: async () => {
-        executed = true;
-        return { content: [{ type: "text", text: "bad" }] };
+        executed += 1;
+        return { content: [{ type: "text", text: "executed before the last step" }] };
       },
     });
     const requests: Array<{ tools: unknown[]; toolChoice: string }> = [];
     const runtime = new TypeScriptAgentRuntime({
       store,
       tools,
-      maxSteps: 1,
+      maxSteps,
       provider: {
         summarize,
         turn: async (request) => {
@@ -1383,7 +1433,7 @@ describe("TypeScriptAgentRuntime", () => {
           return messageFixture({
             content: [
               { type: "text", text: "Here is the available result." },
-              { type: "tool_call", id: "late", name: "danger", arguments: {} },
+              { type: "tool_call", id: `call-${requests.length}`, name: "danger", arguments: {} },
             ],
             stopReason: "toolUse",
             usage: { input_tokens: 1, output_tokens: 1 },
@@ -1395,10 +1445,18 @@ describe("TypeScriptAgentRuntime", () => {
     });
     await runtime.start();
     const outcome = await runtime.runTurn(job(), handle());
-    expect(requests).toEqual([{ tools: [], toolChoice: "none" }]);
-    expect(executed).toBe(false);
+    expect(requests).toHaveLength(maxSteps);
+    expect(requests.at(-1)).toEqual({ tools: [], toolChoice: "none" });
+    if (maxSteps === 2) {
+      expect(requests[0]).toEqual({ tools: [expect.objectContaining({ name: "danger" })], toolChoice: "auto" });
+      expect(store.messages.find(message => message.role === "tool")?.content).toEqual([
+        expect.objectContaining({ type: "tool_result", tool_call_id: "call-1" }),
+      ]);
+    }
+    expect(executed).toBe(maxSteps - 1);
     expect(outcome.reply).toBe("Here is the available result.");
     expect(store.messages.at(-1)?.content).toEqual([{ type: "text", text: "Here is the available result." }]);
+    await runtime.stop();
   });
 
   test("closes a tool call, persists canonical messages, and emits the final answer", async () => {

@@ -89,6 +89,7 @@ export interface TypeScriptAgentRuntimeOptions {
   ) => Promise<void> | void;
   artifactRoot?: string;
   systemPrompt: string | ((context: SystemPromptContext) => string);
+  /** Defaults to unlimited steps; a finite limit reserves the last step for a tool-free reply. */
   maxSteps?: number;
   contextWindowTokens?: number;
   environment?: Environment;
@@ -136,7 +137,8 @@ const addUsage = (target: TurnUsageTotals, usage: RuntimeUsage): void => {
   target.cacheCreation += Math.max(0, Math.trunc(usage.cache_creation_input_tokens ?? 0));
 };
 
-export const DEFAULT_MAX_STEPS = 50;
+/** Turns have no step limit unless the caller supplies a finite maxSteps value. */
+export const DEFAULT_MAX_STEPS = Number.POSITIVE_INFINITY;
 export const DEFAULT_PROVIDER_ATTEMPTS = 3;
 export const MAX_STEP_REPLY = "本轮已达到最大步骤，请发送下一条消息继续。";
 

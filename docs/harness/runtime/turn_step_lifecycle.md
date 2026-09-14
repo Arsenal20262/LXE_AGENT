@@ -82,12 +82,12 @@ cancelled step 不进入新的 provider request，剩余 steering 由 Scheduler 
 
 ## Step 终止条件
 
-Step 只以这些方式结束：
+默认不限 step 数。Step 只以这些方式结束：
 
 - 无 tool use，产生 final outcome。
 - tool results 闭合，进入下一 step。
 - cancel，产生 cancelled outcome。
 - provider/context/Runtime 结构性错误，产生 error outcome。
-- 达到 maxSteps，产生可继续提示。
+- 显式设置有限的 `maxSteps` 时，最后一步禁用工具并收尾；若模型仍返回工具调用，不再执行，优先使用响应文本，无文本时才产生可继续提示。
 
 任何单个 provider attempt、tool call 或 delivery 失败都不能使 Bun 进程退出。

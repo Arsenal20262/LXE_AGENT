@@ -26,7 +26,7 @@ Runtime 同时初始化 turn/tool/skill usage counters。usage 最多写一次�
 
 ## Step loop
 
-默认 `maxSteps=50`。每个 step：
+默认不限 step 数（`maxSteps=Infinity`），直到模型自然结束、用户取消或发生终止性错误。调用方仍可传入有限的 `maxSteps`，其最后一步只用于收尾。每个 step：
 
 1. 检查 handle cancelled/aborted。
 2. drain steering 并 append 为 user message。
@@ -85,4 +85,6 @@ final 后执行 post-turn context maintenance。它可以追加 compaction `cont
 
 ## 最大步骤与错误回复
 
-达到最大步骤时，Runtime 返回明确的“请发送下一条消息继续”提示，保留当前闭合状态。其它异常由错误路径关闭 streamer、best-effort final/error delivery、停止 typing 并记录 error outcome；错误处理本身不得让 Gateway 进程退出。
+只有显式设置有限的 `maxSteps` 时，Runtime 才会在最后一步禁用工具（`tools=[]`、`toolChoice="none"`）并结束 turn。若模型仍返回工具调用，Runtime 不再执行，优先使用响应中的文本收尾；没有文本时才提示“本轮已达到最大步骤，请发送下一条消息继续。”，并保持 transcript 闭合。默认不限步数时不会触发这条路径。
+
+其它异常由错误路径关闭 streamer、best-effort final/error delivery、停止 typing 并记录 error outcome；错误处理本身不得让 Gateway 进程退出。
