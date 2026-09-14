@@ -111,7 +111,7 @@ test("an encrypted v4 identity file binds an existing tunnel without provisionin
   } finally { await service.stop(); }
 });
 
-test("existing ERP shortcut hands administrators into ERP while members retain ordinary navigation", async () => {
+test("ERP shortcut hands both administrators and members into a device session", async () => {
   const { root, config, identity } = setup(); enroll(config);
   identity.permission_v2.grants.desktop_features = ["erp_dashboard"];
   identity.permission_v2.profile = { id: "fba", revision: 2, labels: { "zh-CN": "FBA", "en-US": "FBA" } };
@@ -140,7 +140,7 @@ test("existing ERP shortcut hands administrators into ERP while members retain o
     expect(await service.erpDashboardUrl()).toBe(`http://10.88.0.1:8000/erp?auth=identity-v1#handoff=${erpCode}`);
     expect(requests).toEqual([JSON.stringify({ target: "erp" })]);
     wrongScope = true;
-    await expect(service.erpDashboardUrl()).rejects.toThrow("Invalid administrator handoff response");
+    await expect(service.erpDashboardUrl()).rejects.toThrow("Invalid device handoff response");
     wrongScope = false; fail = true;
     try { await service.erpDashboardUrl(); throw new Error("Expected failure"); }
     catch (error) { expect(String(error)).toContain("403"); expect(String(error)).not.toContain(erpCode); }
@@ -149,8 +149,9 @@ test("existing ERP shortcut hands administrators into ERP while members retain o
     identity.management_role = "member"; identity.management_version += 1;
     await service.check();
     const before = requests.length;
-    expect(await service.erpDashboardUrl()).toBe("http://10.88.0.1:8000/erp");
-    expect(requests.length).toBe(before);
+    expect(await service.erpDashboardUrl()).toBe(`http://10.88.0.1:8000/erp?auth=identity-v1#handoff=${erpCode}`);
+    expect(requests.length).toBe(before + 1);
+    await expect(service.adminDashboardUrl()).rejects.toThrow("管理员身份");
     identity.permission_v2.grants.desktop_features = [];
     identity.permission_v2.assignment_version += 1;
     await service.check();

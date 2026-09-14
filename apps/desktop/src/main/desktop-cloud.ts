@@ -174,18 +174,18 @@ export class DesktopCloudService {
 
   async erpDashboardUrl(): Promise<string> {
     const state = this.state();
-    const url = resolveCloudDestinationUrl({
+    resolveCloudDestinationUrl({
       configured: state.configured, connection: state.connection,
       dataServerUrl: this.options.config.cloudConfiguration().data_server_url,
       destination: "erp_dashboard", desktopFeatures: state.desktop_features,
     });
-    return state.is_admin ? this.adminDashboardUrl("erp") : url;
+    return this.adminDashboardUrl("erp");
   }
 
   async adminDashboardUrl(destination: "admin" | "erp" = "admin"): Promise<string> {
     const target = this.probeTarget();
-    if (!target || this.connection !== "connected" || !this.isAdmin) {
-      throw new Error("请先连接并验证管理员身份");
+    if (!target || this.connection !== "connected" || (destination === "admin" && !this.isAdmin)) {
+      throw new Error(destination === "erp" ? "请先连接并验证设备身份" : "请先连接并验证管理员身份");
     }
     const response = await this.request(`${target.dataServerUrl}/api/v1/agent-data/identity/admin-handoff`, {
       method: "POST", headers: { authorization: `Bearer ${target.apiToken}`, "content-type": "application/json" },
@@ -193,14 +193,14 @@ export class DesktopCloudService {
     });
     if (!response.ok) {
       const body = await response.text();
-      if (response.status === 401 || (response.status === 403 && !body.includes("erp_device_access_denied"))) this.isAdmin = false;
+      if (response.status === 401 || (destination === "admin" && response.status === 403)) this.isAdmin = false;
       this.publishState();
-      throw new Error(this.diagnosticError(new Error(`Administrator handoff HTTP ${response.status}: ${body}`), target));
+      throw new Error(this.diagnosticError(new Error(`Device handoff HTTP ${response.status}: ${body}`), target));
     }
     const payload = objectValue(await response.json());
     const codePattern = destination === "erp" ? /^lxe_erp_handoff_[A-Za-z0-9_-]{32,}$/u : /^lxe_handoff_[A-Za-z0-9_-]{32,}$/u;
     if (typeof payload?.code !== "string" || !codePattern.test(payload.code)) {
-      throw new Error("Invalid administrator handoff response");
+      throw new Error("Invalid device handoff response");
     }
     // Separate the identity login from browsers' cached legacy shared-key page.
     return `${target.dataServerUrl}/${destination}?auth=identity-v1#handoff=${encodeURIComponent(payload.code)}`;
