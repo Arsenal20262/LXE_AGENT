@@ -10,10 +10,6 @@ from services.yacang.export_intent import (
     WAREHOUSE_CODES,
     normalize_export_intent,
 )
-from services.yacang.export_workflow import (
-    ALL_DATA_TYPES as LEGACY_WORKFLOW_DATA_TYPES,
-    normalize_export_request,
-)
 
 
 FIXED_TODAY = lambda: date(2026, 9, 14)
@@ -118,18 +114,6 @@ def test_legacy_inventory_candidate_normalizes_at_compatibility_boundary() -> No
         "values": ["inventory-current-snapshot"],
     }
     assert result["effective_request"]["data_types"] == ["inventory-current-snapshot"]
-
-
-def test_legacy_workflow_wrapper_keeps_old_type_name_until_execution_migration() -> None:
-    request = normalize_export_request("导出当前库存", today=FIXED_TODAY)
-
-    assert LEGACY_WORKFLOW_DATA_TYPES == (
-        "sales-monthly",
-        "sales-90d",
-        "inventory-month-end",
-        "inbound-listing-time",
-    )
-    assert request["data_types"] == ["inventory-month-end"]
 
 
 @pytest.mark.parametrize(

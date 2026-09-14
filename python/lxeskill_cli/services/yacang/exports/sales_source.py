@@ -18,6 +18,29 @@ from services.yacang.warehouses import WAREHOUSES
 DEFAULT_SOURCE_RANGE_DAYS = 7
 
 
+def resolve_source_date_range(
+    *,
+    start_date: Any = None,
+    end_date: Any = None,
+    as_of_date: Any = None,
+    today: Callable[[], date] = date.today,
+) -> tuple[date, date]:
+    explicit_start = str(start_date or "").strip()
+    explicit_end = str(end_date or "").strip()
+    if bool(explicit_start) != bool(explicit_end):
+        raise ValueError("start_date 和 end_date 必须同时提供")
+    if as_of_date is not None and (explicit_start or explicit_end):
+        raise ValueError("as_of_date 不能与 start_date/end_date 同时提供")
+    if explicit_start:
+        start = date.fromisoformat(explicit_start)
+        end = date.fromisoformat(explicit_end)
+        if start > end:
+            raise ValueError("start_date 不能晚于 end_date")
+        return start, end
+    end = date.fromisoformat(str(as_of_date or today().isoformat()).strip())
+    return end - timedelta(days=DEFAULT_SOURCE_RANGE_DAYS), end
+
+
 def download_inventory_sales_sources(
     *,
     as_of_date: Any = None,
@@ -65,4 +88,8 @@ def download_inventory_sales_sources(
     return end, results
 
 
-__all__ = ["DEFAULT_SOURCE_RANGE_DAYS", "download_inventory_sales_sources"]
+__all__ = [
+    "DEFAULT_SOURCE_RANGE_DAYS",
+    "download_inventory_sales_sources",
+    "resolve_source_date_range",
+]
