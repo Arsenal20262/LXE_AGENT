@@ -921,6 +921,31 @@ describe("DesktopCloudService", () => {
     expect(JSON.stringify(events)).not.toContain(wrongPassword);
   });
 
+  test.each([
+    [JSON.stringify({ detail: { code: "device_permission_contract_incompatible", required_version: 2, observed_version: 1, message: "Upgrade required" } }), "当前 Agent 版本过旧，请升级后重试"],
+    [JSON.stringify({ detail: { code: "device_already_bound", message: "Do not render this raw message" } }), "该设备文件已绑定到另一台电脑"],
+    ["not JSON", "该设备文件已绑定到另一台电脑"],
+    [JSON.stringify({ detail: null }), "该设备文件已绑定到另一台电脑"],
+  ])("maps protocol errors without exposing raw server messages (%s)", async (body, expected) => {
+    const root = mkdtempSync(join(tmpdir(), "lxe-cloud-protocol-rejection-"));
+    roots.push(root);
+    const config = new DesktopConfigStore(root, join(root, "workspace"), safeStorage, { platform: "win32" });
+    const enrollmentPath = join(root, "Finance-PC-01.lxe-enroll");
+    const password = "ABCD-EFGH-JKLM-NPQR-2345";
+    writeFileSync(enrollmentPath, encryptedEnrollment(password));
+    const events: LogEvent[] = [];
+    const service = cloudService({
+      dataRoot: root, supported: true, config, enrollments: new DesktopCloudEnrollmentManager(),
+      logger: testLogger(events), provisioner: { provision: async () => undefined },
+      onConfigured: async () => undefined, fetch: async () => new Response(body, { status: 409 }),
+    });
+    const selection = service.select(enrollmentPath);
+    const state = await service.activate({ enrollment_id: selection.enrollment_id, password });
+    expect(state).toMatchObject({ connection: "error", last_error: expected });
+    expect(events.at(-1)?.fields).toMatchObject({ http_status: 409, observed_error: body });
+    expect(state.last_error).not.toContain("Do not render");
+  });
+
   test("logs an HTTP credential rejection without changing the public cloud state", async () => {
     const root = mkdtempSync(join(tmpdir(), "lxe-cloud-http-rejection-"));
     roots.push(root);

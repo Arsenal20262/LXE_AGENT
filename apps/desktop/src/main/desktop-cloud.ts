@@ -732,8 +732,18 @@ export class DesktopCloudService {
       await response.text().catch(() => ""),
       target,
     );
+    let errorCode: unknown;
+    try {
+      const payload = objectValue(JSON.parse(observedError));
+      errorCode = objectValue(payload?.detail)?.code;
+    } catch {
+      // Non-JSON failures keep the existing HTTP fallback and diagnostic body.
+    }
+    const upgradeRequired = response.status === 409 && errorCode === "device_permission_contract_incompatible";
     const offline = response.status >= 500;
-    const lastError = offline
+    const lastError = upgradeRequired
+      ? "当前 Agent 版本过旧，请升级后重试"
+      : offline
       ? "公司云端暂时不可用"
       : operation === "status" && response.status === 404
         ? "公司云端版本不兼容，请联系管理员升级服务"
