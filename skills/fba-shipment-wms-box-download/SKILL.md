@@ -18,7 +18,7 @@ commands:
 - 只在用户明确提到 WMS、装箱数据、托运单 Excel 或创建货件前置装箱文件时使用。
 - 下载前必须明确 `split-mode`：`auto` 或 `original`。用户没说明就先追问。
 - 不要猜测本地路径；以 CLI 返回的 `excel_path` 和 `split_excel_paths` 为准。
-- CLI 失败时只转述 `exception` 原文。
+- CLI 失败时保留 `exception` 原文；返回空内容或空文件时，按下方规则追问。
 
 ## Required Input
 
@@ -51,5 +51,5 @@ lxeskill fba shipment wms-box-download --ship-no <ship_no> --split-mode original
 - terminal `files` 已按拆分结果选择正式交付文件，非空时一次调用 `send_files(paths=<terminal.files>)`；不要额外发送诊断用原始文件。
 - 如有 `split_excel_paths`，列出这些拆分文件供后续创建货件使用。
 - 如有 `split_skipped_reason`，简要转述。
-- `success=false`：只转述 `exception` 原文。
+- `success=false`：转述 `exception` 原文。若下载返回空内容或空文件（包括非 Excel 报错中响应头和正文均为空），询问用户：“<SP 单号> 的 WMS 装箱数据是否已从 ERP 中删除？”不要仅凭空响应断定数据已删除或接口故障。
 - 用户继续创建 Amazon FBA 货件时，切到 `fba-shipment-create`。
