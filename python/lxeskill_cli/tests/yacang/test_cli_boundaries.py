@@ -9,6 +9,7 @@ from services.agent_cli.yacang.export_inbound_listing_time import run as run_inb
 from services.agent_cli.yacang.export_inventory_month_end import run as run_inventory
 from services.agent_cli.yacang.export_inventory_sales import run as run_inventory_sales
 from services.agent_cli.yacang.export_sales_monthly import run as run_sales_monthly
+from services.agent_cli.yacang.export_workflow import run as run_workflow
 
 
 @pytest.mark.parametrize(
@@ -63,3 +64,18 @@ def test_invalid_date_is_rejected_before_production() -> None:
     result = run_inventory_sales({"start_date": "not-a-date", "end_date": "2026-09-13"})
     assert result["success"] is False
     assert "YYYY-MM-DD" in result["exception"]
+
+
+@pytest.mark.parametrize(
+    "forbidden",
+    ["url", "headers", "token", "cookie", "authorization", "oss_url", "task_type", "param_where"],
+)
+def test_unified_natural_language_cli_rejects_low_level_arguments(forbidden: str) -> None:
+    result = run_workflow({
+        "request_text": "导出当前库存",
+        forbidden: "must-not-pass",
+    })
+
+    assert result["success"] is False
+    assert result["diagnostics"][0]["code"] == "VALUEERROR"
+    assert "不允许的雅仓参数" in result["diagnostics"][0]["message"]

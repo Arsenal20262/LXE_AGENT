@@ -28,7 +28,7 @@ from services.yacang.submission import (
     submission_key,
 )
 from services.yacang.validation import validate_inventory_list_workbook
-from services.yacang.warehouses import WAREHOUSES, Warehouse
+from services.yacang.warehouses import Warehouse, select_warehouses
 from shared.datasets import dataset_dir
 
 
@@ -39,14 +39,15 @@ DEFAULT_POLL_INTERVAL_SECONDS = 5.0
 DEFAULT_TIMEOUT_SECONDS = 180.0
 DEFAULT_CACHE_MAX_AGE_SECONDS = 300.0
 CACHE_CLOCK_SKEW_SECONDS = 5.0
+CURRENT_INVENTORY_BUSINESS_TYPE = "inventory-current-snapshot"
 
 
 @dataclass(frozen=True)
-class InventoryMonthEndRequest:
+class InventoryCurrentSnapshotRequest:
     warehouse_code: str
     warehouse_id: int
     as_of_date: str
-    business_key: str = "inventory-month-end"
+    business_key: str = CURRENT_INVENTORY_BUSINESS_TYPE
     queue_name: str = EXPORT_NAME
     queue_type: str = EXPORT_TYPE
 
@@ -61,7 +62,7 @@ class InventoryMonthEndRequest:
     @property
     def filename(self) -> str:
         return export_filename(
-            YacangExportKind.INVENTORY_MONTH_END,
+            YacangExportKind.INVENTORY_CURRENT_SNAPSHOT,
             warehouse_code=self.warehouse_code,
             file_date=self.as_of_date,
         )
@@ -75,9 +76,9 @@ def _parse_param_where(value: Any) -> dict[str, Any] | None:
     return parsed if isinstance(parsed, dict) else None
 
 
-def task_matches_inventory_month_end(
+def task_matches_inventory_current_snapshot(
     task: dict[str, Any],
-    request: InventoryMonthEndRequest,
+    request: InventoryCurrentSnapshotRequest,
 ) -> bool:
     if str(task.get("type") or "") != request.queue_type:
         return False
@@ -118,20 +119,14 @@ def _resolve_as_of_date(value: Any, *, today: Callable[[], date]) -> str:
 
 
 def _select_warehouses(value: Any) -> tuple[Warehouse, ...]:
-    code = str(value or "").strip().upper()
-    if not code:
-        return WAREHOUSES
-    selected = tuple(warehouse for warehouse in WAREHOUSES if warehouse.code == code)
-    if not selected:
-        allowed = ", ".join(warehouse.code for warehouse in WAREHOUSES)
-        raise ValueError(f"warehouse 必须是以下仓库之一: {allowed}")
-    return selected
+    return select_warehouses(value)
 
 
-def export_inventory_month_end(
+def export_inventory_current_snapshot(
     *,
     as_of_date: Any = None,
     warehouse: Any = None,
+    warehouses: Any = None,
     mobile: str | None = None,
     password: str | None = None,
     output_dir: str | Path | None = None,
@@ -146,16 +141,18 @@ def export_inventory_month_end(
     if timeout_seconds <= 0 or poll_interval_seconds <= 0:
         raise ValueError("timeout_seconds 和 poll_interval_seconds 必须大于 0")
     snapshot_date = _resolve_as_of_date(as_of_date, today=today)
-    selected_warehouses = _select_warehouses(warehouse)
-    requests: Sequence[InventoryMonthEndRequest] = tuple(
-        InventoryMonthEndRequest(spec.code, spec.warehouse_id, snapshot_date)
+    if warehouse is not None and warehouses is not None:
+        raise ValueError("warehouse 和 warehouses 不能同时提供")
+    selected_warehouses = _select_warehouses(warehouses if warehouses is not None else warehouse)
+    requests: Sequence[InventoryCurrentSnapshotRequest] = tuple(
+        InventoryCurrentSnapshotRequest(spec.code, spec.warehouse_id, snapshot_date)
         for spec in selected_warehouses
     )
     destination_dir = Path(output_dir) if output_dir is not None else dataset_dir("yacang_exports")
     destination_dir.mkdir(parents=True, exist_ok=True)
 
     results: list[dict[str, Any]] = []
-    pending: list[tuple[InventoryMonthEndRequest, Path]] = []
+    pending: list[tuple[InventoryCurrentSnapshotRequest, Path]] = []
     for request in requests:
         path = destination_dir / request.filename
         cached_rows = _cached_file(
@@ -213,7 +210,7 @@ def export_inventory_month_end(
                     timeout_seconds=float(timeout_seconds),
                     poll_interval_seconds=float(poll_interval_seconds),
                     sleep=sleep,
-                    matcher=task_matches_inventory_month_end,
+                    matcher=task_matches_inventory_current_snapshot,
                 )
                 api.download_xlsx(remote_path, staged_path)
                 row_count = validate_inventory_list_workbook(
@@ -244,7 +241,7 @@ def export_inventory_month_end(
     return _inventory_result(snapshot_date, requests, results)
 
 
-def _request_context(request: InventoryMonthEndRequest) -> dict[str, Any]:
+def _request_context(request: InventoryCurrentSnapshotRequest) -> dict[str, Any]:
     return {
         "business_type": request.business_key,
         "warehouse": request.warehouse_code,
@@ -256,7 +253,7 @@ def _request_context(request: InventoryMonthEndRequest) -> dict[str, Any]:
 
 def _inventory_result(
     snapshot_date: str,
-    requests: Sequence[InventoryMonthEndRequest],
+    requests: Sequence[InventoryCurrentSnapshotRequest],
     results: list[dict[str, Any]],
 ) -> dict[str, Any]:
     by_name = {str(item.get("output_filename") or Path(str(item.get("xlsx_path") or "")).name): item for item in results}
@@ -264,14 +261,14 @@ def _inventory_result(
     summary = summarize_exports(ordered)
     return {
         **summary,
-        "business_type": "inventory-month-end",
+        "business_type": CURRENT_INVENTORY_BUSINESS_TYPE,
         "as_of_date": snapshot_date,
         "snapshot_semantics": "current-at-execution",
     }
 
 
 def _result(
-    request: InventoryMonthEndRequest,
+    request: InventoryCurrentSnapshotRequest,
     path: Path,
     *,
     row_count: int,
@@ -285,9 +282,20 @@ def _result(
     }
 
 
+# Compatibility aliases retain old import paths without leaking the legacy type
+# into requests, tasks, filenames, or result payloads.
+InventoryMonthEndRequest = InventoryCurrentSnapshotRequest
+task_matches_inventory_month_end = task_matches_inventory_current_snapshot
+export_inventory_month_end = export_inventory_current_snapshot
+
+
 __all__ = [
+    "CURRENT_INVENTORY_BUSINESS_TYPE",
     "GOODS_SKU_CONDITION",
+    "InventoryCurrentSnapshotRequest",
     "InventoryMonthEndRequest",
+    "export_inventory_current_snapshot",
     "export_inventory_month_end",
+    "task_matches_inventory_current_snapshot",
     "task_matches_inventory_month_end",
 ]

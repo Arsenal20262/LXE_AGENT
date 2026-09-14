@@ -44,6 +44,10 @@ class YacangClient:
             headers["token"] = self._token
         return headers
 
+    @property
+    def is_authenticated(self) -> bool:
+        return bool(self._token)
+
     def _json_request(
         self,
         method: str,

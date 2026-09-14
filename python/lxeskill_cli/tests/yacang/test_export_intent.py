@@ -125,8 +125,11 @@ def test_legacy_inventory_candidate_normalizes_at_compatibility_boundary() -> No
         ("导出近三个月销量", ["sales-90d"]),
         ("导出长期每日销量", ["sales-90d"]),
         ("导出当前库存", ["inventory-current-snapshot"]),
+        ("导出现在库存", ["inventory-current-snapshot"]),
+        ("导出库存现状", ["inventory-current-snapshot"]),
         ("导出库存快照", ["inventory-current-snapshot"]),
         ("现在还有多少货", ["inventory-current-snapshot"]),
+        ("还剩多少货", ["inventory-current-snapshot"]),
         ("导出什么时候上架", ["inbound-listing-time"]),
     ],
 )
@@ -194,8 +197,9 @@ def test_all_data_phrases_select_all_four_types(text: str) -> None:
     assert result["effective_request"]["data_types"] == list(ALL_DATA_TYPES)
 
 
-def test_bare_month_end_inventory_is_ambiguous() -> None:
-    result = normalized("导出四仓月底库存")
+@pytest.mark.parametrize("text", ["导出四仓月底库存", "导出月末库存", "导出月末快照"])
+def test_bare_month_end_inventory_is_ambiguous(text: str) -> None:
+    result = normalized(text)
 
     assert result["intent"]["data_type_intent"] == {
         "state": "resolved",
@@ -205,8 +209,9 @@ def test_bare_month_end_inventory_is_ambiguous() -> None:
     assert result["requires_clarification"] is True
 
 
-def test_historical_inventory_is_explicitly_unsupported() -> None:
-    result = normalized("导出上个月月底库存")
+@pytest.mark.parametrize("text", ["导出上个月月底库存", "导出8月31日库存"])
+def test_historical_inventory_is_explicitly_unsupported(text: str) -> None:
+    result = normalized(text)
 
     assert result["intent"]["inventory_snapshot_intent"] == {"state": "historical"}
     assert result["effective_request"]["data_types"] == ["inventory-current-snapshot"]
