@@ -1199,7 +1199,7 @@ test("existing file and exec tools create, validate, discover and edit personal 
     expect(await execute(`python "${script("quick_validate")}" "${join(user, "templated")}"`)).toContain('valid: true');
     expect(files.list().find(item => item.id === skill.id)?.enabled).toBe(false);
     const snapshot = catalog.snapshot(); const activated: string[] = [];
-    const exposure = registry.createExposureState({ allowedSkills: new Set(snapshot.names), skillLocations: snapshot.locations,
+    const exposure = registry.createExposureState({ allowedSkills: new Set(snapshot.names), skillLocations: snapshot.locations!,
       onSkillActivated: name => { activated.push(name); } });
     await registry.execute("read", { path: join(user, "plain", "SKILL.md") }, { ...callContext, exposureState: exposure });
     expect(activated).toEqual(["plain"]);
