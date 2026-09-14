@@ -3,6 +3,7 @@ import { closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, r
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { readSkillStates, skillFileList, skillPathKey } from "./skill-files";
 import { safeSkillReference, SkillCatalog, type SkillCatalogEntry, type SkillPromptOptions } from "./skills";
+import { recycleSkillDirectory } from "./recycle-skill-directory";
 
 const contains = (root: string, path: string): boolean => {
   const child = relative(skillPathKey(root), skillPathKey(path));
@@ -62,7 +63,7 @@ export class UserSkillFiles {
     if (contains(root, trash) || skillPathKey(root) === skillPathKey(trash)) throw new Error("Skill cannot contain its recycle directory");
     mkdirSync(trash, { recursive: true });
     const destination = join(trash, `${basename(root)}-${randomUUID()}`);
-    renameSync(root, destination);
+    recycleSkillDirectory(root, destination, () => { this.entry(id, version); });
     this.catalog.forceRefresh();
     return { id, deleted: true, recycled_path: destination };
   }
