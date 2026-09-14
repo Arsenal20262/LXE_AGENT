@@ -25,6 +25,7 @@ import {
   providerPreferencePatch,
   readProviderPreference,
   SkillCatalog,
+  UserSkillFiles,
   type McpConfig,
   type LxeSkillCommandDefinition,
   type RuntimeProviderManager,
@@ -47,6 +48,7 @@ interface DashboardServiceOptions {
   skillsRoot: string;
   /** User-owned Skill directory. */
   userSkillsRoot: string;
+  sharedSkillsRoot?: string | false;
   environment: Environment;
   store: SqliteRuntimeStore;
   tools: ToolRegistry;
@@ -256,6 +258,7 @@ function rpcError(code: ConstructorParameters<typeof DashboardRpcError>[0], mess
 export class DashboardService {
   private readonly connectorStatePath: string;
   private readonly skillCatalog: SkillCatalog;
+  private readonly userSkillFiles: UserSkillFiles;
   private connectorStateCache: {
     fingerprint: string;
     state: { enabled: string[]; everConnected: string[]; userDisabled: string[] };
@@ -272,6 +275,10 @@ export class DashboardService {
     "sessions.pin": (input) => this.pinSession(input) as DashboardRpcResult<"sessions.pin">,
     "sessions.delete": (input) => this.deleteSession(input) as Promise<DashboardRpcResult<"sessions.delete">>,
     "sessions.workspace.reload": (input) => this.reloadWorkspace(input),
+    "skills.user.list": () => this.listPayload(this.userSkillFiles.list(this.skillOptions())) as DashboardRpcResult<"skills.user.list">,
+    "skills.user.content": input => this.userSkillFiles.content(input.id, this.skillOptions(), input.path),
+    "skills.user.setEnabled": input => this.userSkillFiles.setEnabled(input.id, input.version, input.enabled, this.skillOptions()),
+    "skills.user.delete": input => this.userSkillFiles.delete(input.id, input.version),
     "skills.list": () => this.listPayload(
       this.skills().map((manifest) => this.skillPayload(manifest)),
     ) as DashboardRpcResult<"skills.list">,
@@ -308,7 +315,11 @@ export class DashboardService {
         || join(options.stateRoot, "config", "connector-states.local.json"));
     this.skillCatalog = options.skillCatalog ?? new SkillCatalog(options.stateRoot, options.userSkillsRoot, {
       repositorySkillsRoot: options.skillsRoot,
+      ...(options.sharedSkillsRoot === undefined ? {} : { sharedSkillsRoot: options.sharedSkillsRoot }),
+      statePath: join(options.stateRoot, "config", "skill-states.local.json"),
+    excludedRoots: [join(options.stateRoot, "trash", "skills")],
     });
+    this.userSkillFiles = new UserSkillFiles(this.skillCatalog, options.stateRoot);
   }
 
   async call<O extends AgentDashboardRpcOperation>(
@@ -378,11 +389,13 @@ export class DashboardService {
     return this.options.reloadWorkspace(input.session_id) as Promise<DashboardRpcResult<"sessions.workspace.reload">>;
   }
 
+  private skillOptions() {
+    return { disabledNames: this.disabledSkillNames(),
+      ...(this.options.allowedSkillTypes ? { allowedTypes: this.options.allowedSkillTypes } : {}) };
+  }
+
   private skills(): SkillManifest[] {
-    return this.skillCatalog.list({
-      disabledNames: this.disabledSkillNames(),
-      ...(this.options.allowedSkillTypes ? { allowedTypes: this.options.allowedSkillTypes } : {}),
-    });
+    return this.skillCatalog.list(this.skillOptions());
   }
 
   disabledSkillNames(): Set<string> {

@@ -222,6 +222,7 @@ const skillSnapshotSignature = (snapshot: WorkspaceSkillSnapshot): string =>
     snapshot.prompt,
     JSON.stringify(snapshot.names),
     JSON.stringify(snapshot.modules),
+    JSON.stringify(snapshot.locations ?? {}),
     JSON.stringify(snapshot.disabledConnectorIds ?? []),
   );
 
@@ -622,6 +623,10 @@ export class WorkspaceInstanceManager {
     for (const root of this.options.skillCatalog.sourceRoots()) {
       if (!existsSync(root)) continue;
       if (!this.addWatcher(root, true)) this.addWatcher(root, false);
+    }
+    if (this.options.skillCatalog.statePath) {
+      const statePath = this.options.skillCatalog.statePath;
+      this.addWatcher(dirname(statePath), false, name => !name || basename(name) === basename(statePath));
     }
     if (this.options.connectorStatePath) {
       const path = resolve(this.options.connectorStatePath);

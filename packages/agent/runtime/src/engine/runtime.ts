@@ -88,6 +88,7 @@ export interface TypeScriptAgentRuntimeOptions {
     credentialRevision: string,
   ) => Promise<void> | void;
   artifactRoot?: string;
+  userSkillsRoot?: string;
   systemPrompt: string | ((context: SystemPromptContext) => string);
   /** Defaults to unlimited steps; a finite limit reserves the last step for a tool-free reply. */
   maxSteps?: number;
@@ -433,7 +434,7 @@ export class TypeScriptAgentRuntime implements AgentRuntime {
       const toolExposure = this.options.tools.createExposureState({
         ...exposureOptions,
         platform: String(job.source.platform ?? "").trim(),
-        ...(skillSnapshot ? { allowedSkills: new Set(skillNames) } : {}),
+        ...(skillSnapshot ? { allowedSkills: new Set(skillNames), skillLocations: skillSnapshot.locations } : {}),
         ...(skillSnapshot?.disabledConnectorIds
           ? { disabledConnectors: new Set(skillSnapshot.disabledConnectorIds) }
           : {}),
@@ -535,7 +536,7 @@ export class TypeScriptAgentRuntime implements AgentRuntime {
           await finalAnswerStreamer?.updateContext(measurement);
         };
         const prepareRequestContext = async (): Promise<void> => {
-          let snapshot = captureEnvironment({ ...systemPromptContext, ...(this.options.artifactRoot ? { artifactRoot: this.options.artifactRoot } : {}) });
+          let snapshot = captureEnvironment({ ...systemPromptContext, ...(this.options.artifactRoot ? { artifactRoot: this.options.artifactRoot } : {}), ...(this.options.userSkillsRoot ? { userSkillsRoot: this.options.userSkillsRoot } : {}) });
           let environment = environmentMessage(snapshot);
           const prepared = await contextPipeline.prepare({
             sessionId: job.session_id,
@@ -558,7 +559,7 @@ export class TypeScriptAgentRuntime implements AgentRuntime {
             throw new ContextOverflowError(prepared.afterTokens, contextPipeline.hardLimitTokens);
           }
           // Summarization can span midnight; refresh the clock after it finishes.
-          snapshot = captureEnvironment({ ...systemPromptContext, ...(this.options.artifactRoot ? { artifactRoot: this.options.artifactRoot } : {}) });
+          snapshot = captureEnvironment({ ...systemPromptContext, ...(this.options.artifactRoot ? { artifactRoot: this.options.artifactRoot } : {}), ...(this.options.userSkillsRoot ? { userSkillsRoot: this.options.userSkillsRoot } : {}) });
           environment = environmentMessage(snapshot);
           if (environmentChanged(messages, snapshot)) {
             const tokens = contextPipeline.measure(systemPrompt, [...messages, environment], toolSchemas, fingerprint).tokens;

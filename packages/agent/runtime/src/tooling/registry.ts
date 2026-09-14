@@ -1,3 +1,4 @@
+import { skillPathKey } from "./skill-files";
 import type { JsonObject, WorkspaceContext } from "@lxe/protocol";
 import type { RuntimeHandle, ToolExecutionResult, ToolSchema } from "../engine/types";
 import type { WorkspaceSearchService } from "./workspace-search";
@@ -35,6 +36,7 @@ export interface ToolDefinition extends ToolSchema {
 export interface ToolExposureOptions {
   platform?: string;
   allowedSkills?: ReadonlySet<string>;
+  skillLocations?: Readonly<Record<string, string>>;
   disabledConnectors?: ReadonlySet<string>;
   onSkillActivated?: (skillName: string) => Promise<void> | void;
 }
@@ -179,6 +181,11 @@ export class ToolExposureState {
       .slice(0, Math.max(1, Math.min(Math.trunc(limit), 20)));
     for (const { definition } of matches) this.exposed.add(definition.name);
     return matches.map(({ definition }) => schemaOf(definition));
+  }
+
+  async activateSkillPath(path: string): Promise<void> {
+    const name = this.options.skillLocations?.[skillPathKey(path)];
+    if (name) await this.activateSkill(name);
   }
 
   async activateSkill(skillName: string): Promise<void> {

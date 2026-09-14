@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SqliteRuntimeStore, ToolRegistry, type RuntimeProviderManager } from "@lxe/runtime";
-import type { AgentDashboardRpcCall } from "@lxe/desktop-protocol";
+import type { AgentDashboardRpcCall, UserSkillPayload } from "@lxe/desktop-protocol";
 import {
   DASHBOARD_TOOL_RESULT_PAGE_PREVIEW_BYTES,
   DASHBOARD_TOOL_RESULT_PREVIEW_BYTES,
@@ -275,6 +275,7 @@ describe("DashboardService", () => {
     };
     const terminatedSessions: string[] = [];
     const service = new DashboardService({
+      sharedSkillsRoot: false,
       stateRoot: root,
       llmConfigRoot: join(root, "config", "llm"),
       skillsRoot: join(root, "skills"),
@@ -375,6 +376,18 @@ describe("DashboardService", () => {
       .rejects.toMatchObject({ code: "not_found", message: "skill not found" });
     expect(await call({ operation: "skills.reference", input: { name: "demo", path: "references/help.md" } }))
       .toMatchObject({ skill_name: "demo", content: "# Help" });
+    const managed = await call({ operation: "skills.user.list", input: {} }) as { items: UserSkillPayload[] };
+    const personal = managed.items[0]!;
+    expect(personal).toMatchObject({ name: "demo", source: "user", enabled: true, available: false });
+    expect(await call({ operation: "skills.user.content", input: { id: personal.id } }))
+      .toMatchObject({ content: expect.stringContaining("User shadow"), files: [{ path: "SKILL.md" }] });
+    const disabled = await call({ operation: "skills.user.setEnabled", input: { id: personal.id, version: personal.version, enabled: false } }) as UserSkillPayload;
+    expect(disabled.enabled).toBe(false);
+    await expect(call({ operation: "skills.user.delete", input: { id: personal.id, version: personal.version } })).rejects.toThrow("Skill changed");
+    const removed = await call({ operation: "skills.user.delete", input: { id: personal.id, version: disabled.version } }) as { recycled_path: string };
+    expect(readFileSync(join(removed.recycled_path, "SKILL.md"), "utf8")).toContain("User shadow");
+    expect(await call({ operation: "skills.user.list", input: {} })).toMatchObject({ items: [], total: 0 });
+    expect(await call({ operation: "skills.content", input: { name: "demo" } })).toMatchObject({ content: expect.stringContaining("# Demo") });
     const toolsets = await call({ operation: "toolsets.list", input: {} }) as { items: Array<Record<string, unknown>> };
     expect(toolsets.items.find((item) => item.name === "coding")).toMatchObject({ tools: [{ name: "demo_tool" }] });
     const mcp = await call({ operation: "mcp.servers.list", input: {} }) as Record<string, unknown>;
@@ -557,6 +570,7 @@ describe("DashboardService", () => {
     expect(existsSync(join(root, ".env.local"))).toBeFalse();
 
     const restartedService = new DashboardService({
+      sharedSkillsRoot: false,
       stateRoot: root,
       llmConfigRoot: join(root, "config", "llm"),
       skillsRoot: join(root, "skills"),

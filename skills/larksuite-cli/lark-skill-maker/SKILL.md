@@ -45,7 +45,7 @@ lark-cli api POST /open-apis/vc/v1/rooms/search --data '{"query":"5F"}'
 
 ## SKILL.md 模板
 
-文件放在 `skills/lark-<name>/SKILL.md`：
+用户未指定位置时，文件放在最新 environment_context 的 `user_skills_root` 下：`<user_skills_root>/lark-<name>/SKILL.md`。用户指定位置时尊重该位置；普通目录中的文件不会自动加入技能目录。用现有文件工具完成编写，不修改官方资源目录。
 
 ```markdown
 ---
@@ -60,7 +60,7 @@ metadata:
 
 # <标题>
 
-> **前置条件：** 先阅读 [`../lark-shared/SKILL.md`](../lark-shared/SKILL.md)。
+> **前置条件：** 从可用技能目录找到 `lark-shared` 的实际 SKILL.md 路径并读取；不要假设它与本技能位于相邻目录。
 
 ## 命令
 

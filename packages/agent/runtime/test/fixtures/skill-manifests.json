@@ -1,0 +1,90 @@
+[
+  {
+    "title": "minimal skill",
+    "content": "---\nname: sample\ndescription: Useful workflow\n---\nDo the work.\n",
+    "compatible": true,
+    "strict": true
+  },
+  {
+    "title": "missing frontmatter",
+    "content": "# sample",
+    "compatible": false,
+    "strict": false
+  },
+  {
+    "title": "broken yaml",
+    "content": "---\nname: [\n---\n",
+    "compatible": false,
+    "strict": false
+  },
+  {
+    "title": "missing name",
+    "content": "---\ndescription: Test\n---\nBody",
+    "compatible": false,
+    "strict": false
+  },
+  {
+    "title": "legacy missing description",
+    "content": "---\nname: sample\n---\nBody",
+    "compatible": true,
+    "strict": false
+  },
+  {
+    "title": "legacy name",
+    "content": "---\nname: Old_Name\ndescription: Test\n---\nBody",
+    "compatible": true,
+    "strict": false
+  },
+  {
+    "title": "missing reference",
+    "content": "---\nname: sample\ndescription: Test\nreferences: [missing.md]\n---\nBody",
+    "compatible": false,
+    "strict": false
+  },
+  {
+    "title": "escaping reference",
+    "content": "---\nname: sample\ndescription: Test\nreferences: [../secret]\n---\nBody",
+    "compatible": false,
+    "strict": false
+  },
+  {
+    "title": "windows absolute reference",
+    "content": "---\nname: sample\ndescription: Test\nreferences: [\"C:/secret\"]\n---\nBody",
+    "compatible": false,
+    "strict": false
+  },
+  {
+    "title": "duplicate commands",
+    "content": "---\nname: sample\ndescription: Test\ncommands: [same, same]\n---\nBody",
+    "compatible": false,
+    "strict": false
+  },
+  {
+    "title": "reference and resources",
+    "content": "---\nname: sample\ndescription: Test\nreferences: [references/guide.md]\n---\nUse references/guide.md",
+    "files": {
+      "references/guide.md": "Read me",
+      "assets/template.txt": "Template"
+    },
+    "compatible": true,
+    "strict": true
+  },
+  {
+    "title": "duplicate YAML key",
+    "content": "---\nname: sample\nname: second\ndescription: Test\n---\nBody",
+    "compatible": false,
+    "strict": false
+  },
+  {
+    "title": "YAML 1.2 description",
+    "content": "---\nname: sample\ndescription: on\n---\nBody",
+    "compatible": true,
+    "strict": true
+  },
+  {
+    "title": "YAML date description",
+    "content": "---\nname: sample\ndescription: 2026-09-14\n---\nBody",
+    "compatible": true,
+    "strict": true
+  }
+]

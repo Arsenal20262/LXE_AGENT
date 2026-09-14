@@ -46,7 +46,7 @@ const setup = (options: {
     "---\nname: demo\ntype: default\ndescription: Demo workflow\n---\n# Demo\n",
     "utf8",
   );
-  const catalog = new SkillCatalog(resourceRoot, join(root, "missing-user"), { refreshIntervalMs: 0 });
+  const catalog = new SkillCatalog(resourceRoot, join(root, "missing-user"), { refreshIntervalMs: 0, sharedSkillsRoot: false });
   const connectorStatePath = join(root, "connector-state.json");
   if (options.connectorPolicy) writeFileSync(connectorStatePath, '{"version":1}', "utf8");
   const manager = new WorkspaceInstanceManager({

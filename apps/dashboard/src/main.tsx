@@ -85,6 +85,9 @@ import {
   SessionsIndex
 } from "./features/sessions/view";
 import { SkillsView } from "./features/skills/view";
+import { UserSkillsView, type SkillConversationAction } from "./features/skills/user-view";
+import { appendComposerDraftPrompt } from "./features/sessions/composer-draft";
+import type { SkillPayload } from "@lxe/desktop-protocol";
 import { StatsView } from "./features/stats/view";
 import { ToolsView } from "./features/tools/view";
 import { SyntheticPerformerWorkbench } from "./features/workbench/view";
@@ -217,6 +220,7 @@ function App({
   const [conversationDisplay] = useState(() => new ConversationDisplayController());
   const setSelectedSessionId = (id: string) => { conversationDisplay.select(id); updateSelectedSessionId(id); };
   const [newConversation, setNewConversation] = useState(false);
+  const unsentNewDraftKey = useRef<string | undefined>(undefined);
   useConversationEntry(conversationDisplay, selectedSessionId, activeSection === "sessions" && !newConversation);
   const sidebar = useThreeStateSidebar(browserStorage());
   const [sessionSearchOpen, setSessionSearchOpen] = useState(false);
@@ -422,8 +426,27 @@ function App({
     pushDashboardRoute("sessions");
     setActiveSection("sessions");
     conversationDisplay.select("", true);
+    unsentNewDraftKey.current = conversationDisplay.getSnapshot().viewKey;
     updateSelectedSessionId("");
     setNewConversation(true);
+  }
+
+  function startSkillConversation(action: SkillConversationAction, skill?: SkillPayload) {
+    const prompt = action === "create" ? t.userSkills.createPrompt
+      : action === "edit" && skill ? t.userSkills.editPrompt(skill.name, skill.location)
+      : skill ? t.userSkills.usePrompt(skill.name) : "";
+    if (!prompt) return;
+    if (!newConversation) {
+      if (unsentNewDraftKey.current) {
+        conversationDisplay.select("", true, unsentNewDraftKey.current);
+        updateSelectedSessionId("");
+        setNewConversation(true);
+      } else startNewConversation();
+    }
+    pushDashboardRoute("sessions"); setActiveSection("sessions");
+    const key = conversationDisplay.getSnapshot().viewKey;
+    try { appendComposerDraftPrompt(window.sessionStorage, key, prompt); }
+    catch (cause) { setError(queryError(cause)); }
   }
 
   async function sendConversation(text: string, attachments: DesktopInputAttachmentPayload[]): Promise<void> {
@@ -433,6 +456,7 @@ function App({
       dashboardQueryKeys.sessions.activity(result.session_id),
       current => acknowledgeConversationSend(current, result, ticket.message),
     );
+    if (ticket.message.draftKey === unsentNewDraftKey.current) unsentNewDraftKey.current = undefined;
     if (selected) { setSelectedSessionId(result.session_id); setNewConversation(false); }
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.sessions.lists }),
@@ -1018,11 +1042,11 @@ function App({
                   !dashboardRuntimeReady ? <EmptyState label={t.conversation.unavailable} />
                     : skillsQuery.isPending || commandsQuery.isPending ? <EmptyState label={t.common.loading} />
                     : skillsQuery.data && commandsQuery.data
-                      ? <SkillsView
-                          skills={skillsQuery.data.items}
+                      ? <><UserSkillsView onConversation={startSkillConversation} /><SkillsView
+                          skills={skillsQuery.data.items.filter(skill => skill.source !== "user")}
                           commands={commandsQuery.data.items}
                           onOpen={setDetailTarget}
-                        />
+                        /></>
                       : <EmptyState label={t.common.errorPrefix(t.errors.api, queryError(skillsQuery.error || commandsQuery.error))} />
                 ) : null}
                 {capabilityView === "tools" ? (

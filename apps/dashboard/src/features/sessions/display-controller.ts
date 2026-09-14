@@ -58,12 +58,12 @@ export class ConversationDisplayController {
     this.receiveHistory(page, direction, ticket.revision); return true;
   }
 
-  select(sessionId: string, newDraft = false): void {
+  select(sessionId: string, newDraft = false, draftKey?: string): void {
     if (sessionId === this.state.sessionId && !newDraft) return;
     this.selection += 1;
     this.turns.clear(); this.touched.clear(); this.visible = []; this.historyRevisions.clear(); this.toolEvidence.clear();
     this.historyProjection = undefined;
-    this.state = { sessionId, viewKey: sessionId || `draft:${this.selection}`, rows: [], pending: [], connection: "attached",
+    this.state = { sessionId, viewKey: sessionId || draftKey || `draft:${this.selection}`, rows: [], pending: [], connection: "attached",
       following: true, loadState: sessionId ? "loading" : "ready", error: "", jump: 0 };
     this.publish();
   }

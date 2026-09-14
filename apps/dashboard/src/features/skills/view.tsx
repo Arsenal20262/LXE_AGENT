@@ -129,6 +129,7 @@ export function SkillsView({
                             <h3 title={skill.name}>{t.skillDisplayName(skill.name)}</h3>
                           </div>
                           <p className="description">{skill.description}</p>
+                          {skill.source === "shared" ? <span className="pill">{t.userSkills.shared}</span> : null}
                           {skill.commands.length || skill.references.length ? (
                             <div className="pill-row">
                               {skill.commands.length ? (

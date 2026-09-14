@@ -1,3 +1,6 @@
+import { SkillCatalog } from "../../src/tooling/skills";
+import { UserSkillFiles } from "../../src/tooling/user-skill-files";
+import { skillPathKey } from "../../src/tooling/skill-files";
 import { afterEach, describe, expect, test } from "bun:test";
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -279,8 +282,12 @@ describe("native coding tools", () => {
     const activated: string[] = [];
     const exposureState = registry.createExposureState({
       allowedSkills: new Set(["demo"]),
+      skillLocations: { [skillPathKey(skillPath)]: "demo" },
       onSkillActivated: (name) => { activated.push(name); },
     });
+    const spoof = await registry.execute("read", { path: join(workspaceRoot, "skills", "nested", "demo", "SKILL.md") }, { ...context(root), exposureState });
+    expect(String(spoof.content[0]?.text)).toContain("Workspace shadow");
+    expect(activated).toEqual([]);
     const bundled = await registry.execute("read", { path: skillPath }, { ...context(root), exposureState });
     expect(String(bundled.content[0]?.text)).toContain("Bundled skill");
     expect(String(bundled.content[0]?.text)).not.toContain("Workspace shadow");
@@ -1155,3 +1162,49 @@ describe("native coding tools", () => {
     expect(JSON.parse(String(found.content[0]?.text)).tools).toEqual([expect.objectContaining({ name: "inventory_lookup" })]);
   });
 });
+
+
+test("existing file and exec tools create, validate, discover and edit personal skills", async () => {
+  const root = mkdtempSync(join(tmpdir(), "lxe-creator-flow-")); roots.push(root);
+  const user = join(root, "中文 skills"), official = join(root, "official"); mkdirSync(official);
+  const catalog = new SkillCatalog(root, user, { repositorySkillsRoot: official, sharedSkillsRoot: false,
+    statePath: join(root, "config", "skill-states.local.json"), refreshIntervalMs: 0 });
+  const files = new UserSkillFiles(catalog, root);
+  const registry = new ToolRegistry(); const processes = registerCodingTools(registry, { userSkillsRoot: user });
+  const callContext = context(projectRoot);
+  const script = (name: string) => join(projectRoot, "skills", "skill-creator", "scripts", `${name}.py`);
+  const execute = async (command: string) => String((await registry.execute("exec", { command }, callContext)).content[0]?.text);
+  try {
+    // Instructions and resources use the same native tools available to a conversation.
+    for (const name of ["plain", "templated"]) {
+      expect(await execute(`python "${script("init_skill")}" ${name} --path "${user}" --resources scripts,assets`)).toContain("exit_code: 0");
+      const directory = join(user, name), path = join(directory, "SKILL.md");
+      if (name === "templated") {
+        await registry.execute("write", { file_path: join(directory, "assets", "template.txt"), content: "Report: {value}" }, callContext);
+        await registry.execute("write", { file_path: join(directory, "scripts", "render.py"),
+          content: 'from pathlib import Path\nprint((Path(__file__).parent.parent / "assets/template.txt").read_text(encoding="utf-8").format(value="sample"))\n' }, callContext);
+      }
+      expect(catalog.list()).toHaveLength(name === "plain" ? 0 : 1);
+      await registry.execute("write", { file_path: path,
+        content: `---\nname: ${name}\ndescription: Reusable report workflow\n---\n# Instructions\nUse the provided records.\n` }, callContext);
+      expect(await execute(`python "${script("quick_validate")}" "${directory}"`)).toContain('valid: true');
+      expect(catalog.get(name)?.source).toBe("user");
+      if (name === "templated") expect(await execute(`python "${join(directory, "scripts", "render.py")}"`)).toContain("Report: sample");
+    }
+    const skill = files.list().find(item => item.name === "templated")!;
+    files.setEnabled(skill.id, skill.version, false);
+    const path = join(user, "templated", "SKILL.md");
+    await registry.execute("read", { path }, callContext);
+    await registry.execute("edit", { path, edits: [{ oldText: "Use the provided records.", newText: "Use the provided records and template." }] }, callContext);
+    expect(await execute(`python "${script("quick_validate")}" "${join(user, "templated")}"`)).toContain('valid: true');
+    expect(files.list().find(item => item.id === skill.id)?.enabled).toBe(false);
+    const snapshot = catalog.snapshot(); const activated: string[] = [];
+    const exposure = registry.createExposureState({ allowedSkills: new Set(snapshot.names), skillLocations: snapshot.locations,
+      onSkillActivated: name => { activated.push(name); } });
+    await registry.execute("read", { path: join(user, "plain", "SKILL.md") }, { ...callContext, exposureState: exposure });
+    expect(activated).toEqual(["plain"]);
+    // External edits still invalidate the file tool's existing version ledger.
+    writeFileSync(path, readFileSync(path, "utf8") + "external update\n");
+    await expect(registry.execute("edit", { path, edits: [{ oldText: "# Instructions", newText: "# Changed" }] }, callContext)).rejects.toThrow();
+  } finally { await processes.stop(); }
+}, 30_000);

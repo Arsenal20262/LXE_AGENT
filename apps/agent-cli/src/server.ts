@@ -307,6 +307,7 @@ export class AgentProtocolServer {
             payload: { tool_call_id: toolCallId, task },
           });
         },
+        onSkillsChanged: revision => this.publish({ type: "skills.changed", payload: { revision } }),
         onSessionChanged: (sessionId, change) => this.publish({
           type: "session.changed",
           thread_id: sessionId,

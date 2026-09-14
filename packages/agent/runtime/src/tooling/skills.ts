@@ -1,9 +1,10 @@
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, readdirSync, realpathSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, realpathSync, statSync, type Dirent } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { parse } from "yaml";
 import { createLogger } from "@lxe/core";
+import { skillPathKey, skillTreeFingerprint, readSkillStates } from "./skill-files";
 import type { JsonObject, WorkspaceContext } from "@lxe/protocol";
 
 export interface SkillPromptOptions {
@@ -23,7 +24,7 @@ export interface SkillManifest {
   commands: string[];
   location: string;
   root: string;
-  source: "repository" | "user";
+  source: "repository" | "user" | "shared";
   references: SkillReference[];
   content: string;
 }
@@ -32,21 +33,36 @@ export interface SkillCatalogSnapshot {
   readonly names: readonly string[];
   readonly prompt: string;
   readonly modules: Readonly<Record<string, string>>;
+  readonly locations?: Readonly<Record<string, string>>;
 }
 
 export interface SkillCatalogDiagnostic extends JsonObject {
-  code: "user_skill_shadowed";
+  code: "user_skill_shadowed" | "skill_invalid" | "skill_name_conflict" | "skill_command_conflict";
   message: string;
   skill_name: string;
-  repository_path: string;
   user_path: string;
+  repository_path?: string;
+}
+
+export interface SkillCatalogEntry {
+  id: string;
+  location: string;
+  source: SkillManifest["source"];
+  version: string;
+  enabled: boolean;
+  manifest?: SkillManifest;
+  diagnostics: SkillCatalogDiagnostic[];
 }
 
 export interface SkillCatalogOptions {
   refreshIntervalMs?: number;
   now?: () => number;
-  /** Explicit repository-owned skills directory used by packaged runtimes. */
   repositorySkillsRoot?: string;
+  /** false is useful for isolated hosts and tests. */
+  sharedSkillsRoot?: string | false;
+  statePath?: string;
+  excludedRoots?: readonly string[];
+  onChanged?: (revision: number) => void;
 }
 
 export class SkillCatalogError extends Error {
@@ -62,11 +78,14 @@ export const MAX_SKILL_REFERENCE_BYTES = 128 * 1024 * 1024;
 const object = (value: unknown): Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 
-const manifestPaths = (root: string): string[] => {
+const manifestPaths = (root: string, excluded: readonly string[], onError?: (path: string, error: unknown) => void): string[] => {
   if (!existsSync(root)) return [];
   const output: string[] = [];
   const walk = (directory: string): void => {
-    const entries = readdirSync(directory, { withFileTypes: true });
+    if (excluded.some(root => containsPath(root, skillPathKey(directory)))) return;
+    let entries: Dirent[];
+    try { entries = readdirSync(directory, { withFileTypes: true }); }
+    catch (error) { if (!onError) throw error; onError(join(directory, "SKILL.md"), error); return; }
     const manifest = entries.find((entry) => entry.isFile() && entry.name === "SKILL.md");
     if (manifest) {
       output.push(join(directory, manifest.name));
@@ -81,8 +100,9 @@ const manifestPaths = (root: string): string[] => {
   return output.sort((left, right) => left.localeCompare(right));
 };
 
-const safeReference = (root: string, requested: string): string => {
-  if (!requested || isAbsolute(requested) || requested.startsWith("~")) {
+export const safeSkillReference = (root: string, requested: string): string => {
+  requested = requested.replaceAll("\\", "/");
+  if (!requested || isAbsolute(requested) || /^[a-z]:/iu.test(requested) || requested.startsWith("~")) {
     throw new SkillCatalogError(`skill reference must be relative: ${requested}`);
   }
   const candidate = resolve(root, requested);
@@ -105,7 +125,7 @@ const safeReference = (root: string, requested: string): string => {
   return requested.replaceAll("\\", "/");
 };
 
-const parseManifest = (path: string, source: SkillManifest["source"]): SkillManifest => {
+export const parseSkillManifest = (path: string, source: SkillManifest["source"]): SkillManifest => {
   const size = statSync(path).size;
   if (size > MAX_SKILL_MANIFEST_BYTES) {
     throw new SkillCatalogError(`skill manifest exceeds ${MAX_SKILL_MANIFEST_BYTES} bytes: ${path}`);
@@ -120,15 +140,18 @@ const parseManifest = (path: string, source: SkillManifest["source"]): SkillMani
     const message = cause instanceof Error ? cause.message : String(cause);
     throw new SkillCatalogError(`skill YAML is invalid: ${path}: ${message}`);
   }
-  const name = String(metadata.name ?? "").trim();
+  const name = typeof metadata.name === "string" ? metadata.name.trim() : "";
   if (!name) throw new SkillCatalogError(`skill name is required: ${path}`);
+  if (source === "user" && (typeof metadata.description !== "string" || !metadata.description.trim())) {
+    throw new SkillCatalogError(`skill description is required: ${path}`);
+  }
   const root = dirname(path);
   const references = Array.isArray(metadata.references) ? metadata.references.map((raw) => {
     const item = typeof raw === "string" ? { path: raw } : object(raw);
     const requested = String(item.path ?? "").trim();
     let referencePath: string;
     try {
-      referencePath = safeReference(root, requested);
+      referencePath = safeSkillReference(root, requested);
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : String(cause);
       throw new SkillCatalogError(`${message} (declared by ${path})`);
@@ -196,7 +219,6 @@ const skillWorkspaceContext = (
 export class SkillCatalog {
   private readonly logger = createLogger("runtime.skills");
   private signature = "";
-  private contentSignature = "";
   private generation = 0;
   private initialized = false;
   private nextRefreshAt = 0;
@@ -207,12 +229,21 @@ export class SkillCatalog {
   private readonly now: () => number;
   private readonly repositorySkillsRoot: string;
   private catalogDiagnostics: SkillCatalogDiagnostic[] = [];
+  private catalogEntries: SkillCatalogEntry[] = [];
+  private readonly sharedSkillsRoot: string | false;
+  private readonly excludedRoots: readonly string[];
+  readonly statePath: string | undefined;
+  private readonly onChanged: SkillCatalogOptions["onChanged"];
 
   constructor(
     private readonly projectRoot: string,
-    private readonly userSkillsRoot = join(homedir(), ".agents", "skills"),
+    readonly userSkillsRoot = join(projectRoot, "var", "skills"),
     options: SkillCatalogOptions = {},
   ) {
+    this.sharedSkillsRoot = options.sharedSkillsRoot ?? join(homedir(), ".agents", "skills");
+    this.statePath = options.statePath;
+    this.excludedRoots = options.excludedRoots ?? [];
+    this.onChanged = options.onChanged;
     this.repositorySkillsRoot = resolve(options.repositorySkillsRoot ?? join(projectRoot, "skills"));
     this.refreshIntervalMs = Math.max(0, Math.trunc(
       options.refreshIntervalMs ?? DEFAULT_REFRESH_INTERVAL_MS,
@@ -239,7 +270,13 @@ export class SkillCatalog {
   }
 
   sourceRoots(): string[] {
-    return [this.repositorySkillsRoot, this.userSkillsRoot];
+    return [...new Set([this.repositorySkillsRoot, this.userSkillsRoot,
+      ...(this.sharedSkillsRoot ? [this.sharedSkillsRoot] : [])].map(skillPathKey))];
+  }
+
+  entries(): SkillCatalogEntry[] {
+    this.refresh();
+    return structuredClone(this.catalogEntries);
   }
 
   diagnostics(): SkillCatalogDiagnostic[] {
@@ -291,6 +328,7 @@ export class SkillCatalog {
         names,
         prompt: this.promptFor(manifests, resolvedWorkspace),
         modules,
+        locations: Object.freeze(Object.fromEntries(manifests.map(manifest => [skillPathKey(manifest.location), manifest.name]))),
       }),
     };
     this.snapshotCache.set(key, cached);
@@ -339,86 +377,109 @@ export class SkillCatalog {
     if (!existsSync(repositoryRoot) || !statSync(repositoryRoot).isDirectory()) {
       throw new SkillCatalogError(`repository Skill directory is missing: ${repositoryRoot}`);
     }
-    const paths = [
-      ...manifestPaths(repositoryRoot).map((path) => ({ path, source: "repository" as const })),
-      ...manifestPaths(this.userSkillsRoot).map((path) => ({ path, source: "user" as const })),
-    ];
-    const signature = paths.map(({ path, source }) => {
-      const stat = statSync(path, { bigint: true });
-      return `${source}:${path}:${realpathSync(path)}:${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeNs}`;
-    }).join("|");
-    if (!force && this.initialized && signature === this.signature) {
-      this.nextRefreshAt = checkedAt + this.refreshIntervalMs;
-      return false;
-    }
-    const parsed = paths.map(({ path, source }) => parseManifest(path, source));
-    const contentSignature = createHash("sha256")
-      .update(parsed.map((manifest) => `${manifest.source}\0${manifest.location}\0${manifest.content}`).join("\0"))
-      .digest("hex");
-    if (this.initialized && contentSignature === this.contentSignature) {
-      this.signature = signature;
-      this.nextRefreshAt = checkedAt + this.refreshIntervalMs;
-      return false;
-    }
-    const byName = new Map<string, SkillManifest>();
     const diagnostics: SkillCatalogDiagnostic[] = [];
-    let externalSkipped = 0;
-    for (const manifest of parsed) {
-      const existing = byName.get(manifest.name);
-      if (!existing) {
-        byName.set(manifest.name, manifest);
-        continue;
+    const entries: SkillCatalogEntry[] = [];
+    const seen = new Set<string>();
+    const states = this.statePath ? readSkillStates(this.statePath) : {};
+    const roots: Array<[string, SkillManifest["source"]]> = [
+      [repositoryRoot, "repository"], [this.userSkillsRoot, "user"],
+      ...(this.sharedSkillsRoot ? [[this.sharedSkillsRoot, "shared"] as [string, SkillManifest["source"]]] : []),
+    ];
+    const addDiagnostic = (entry: SkillCatalogEntry, code: SkillCatalogDiagnostic["code"], message: string,
+      winner?: string): void => {
+      const diagnostic: SkillCatalogDiagnostic = { code, message,
+        skill_name: entry.manifest?.name ?? basename(dirname(entry.location)), user_path: entry.location,
+        ...(winner ? { repository_path: winner } : {}) };
+      entry.diagnostics.push(diagnostic);
+      diagnostics.push(diagnostic);
+    };
+    const scannedRoots = new Set<string>();
+    for (const [root, source] of roots) {
+      const canonicalRoot = skillPathKey(root);
+      if (scannedRoots.has(canonicalRoot)) continue;
+      scannedRoots.add(canonicalRoot);
+      const failures: Array<{ path: string; error: unknown }> = [];
+      const paths = manifestPaths(root, this.excludedRoots.map(skillPathKey), source === "repository" ? undefined :
+        (path, error) => failures.push({ path, error }));
+      for (const path of paths) {
+        const key = skillPathKey(path);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const entry: SkillCatalogEntry = { id: createHash("sha256").update(key).digest("hex"),
+          source, location: resolve(path), version: "", enabled: states[key] !== false, diagnostics: [] };
+        try {
+          entry.manifest = parseSkillManifest(path, source);
+          entry.version = skillTreeFingerprint(dirname(path));
+        } catch (error) {
+          if (source === "repository") throw error;
+          addDiagnostic(entry, "skill_invalid", error instanceof Error ? error.message : String(error));
+          try { entry.version = skillTreeFingerprint(dirname(path)); }
+          catch { entry.version = createHash("sha256").update(JSON.stringify(entry.diagnostics)).digest("hex"); }
+        }
+        entry.version = createHash("sha256").update(entry.version + (entry.manifest?.content ?? "") + String(entry.enabled)).digest("hex");
+        entries.push(entry);
       }
-      if (existing.source === "repository" && manifest.source === "user") {
-        externalSkipped += 1;
-        const diagnostic: SkillCatalogDiagnostic = {
-          code: "user_skill_shadowed",
-          message: `User Skill '${manifest.name}' is ignored because an official Skill has the same name`,
-          skill_name: manifest.name,
-          repository_path: existing.location,
-          user_path: manifest.location,
-        };
-        diagnostics.push(diagnostic);
-        this.logger.warn("skill_external_skipped", {
-          skill_name: manifest.name,
-          reason: "repository_precedence",
-          repository_path: existing.location,
-          user_path: manifest.location,
-        });
-        continue;
+      for (const { path, error } of failures) {
+        const key = skillPathKey(path);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const entry: SkillCatalogEntry = { id: createHash("sha256").update(key).digest("hex"),
+          location: path, source, version: "unreadable", enabled: states[key] !== false, diagnostics: [] };
+        addDiagnostic(entry, "skill_invalid", error instanceof Error ? error.message : String(error));
+        entries.push(entry);
       }
-      if (existing.source === "user" && manifest.source === "repository") {
-        byName.set(manifest.name, manifest);
-        continue;
-      }
-      throw new SkillCatalogError(`duplicate skill name: ${manifest.name}`);
     }
-    const commands = new Map<string, string>();
-    for (const manifest of byName.values()) {
-      for (const command of manifest.commands) {
-        const owner = commands.get(command);
-        if (owner) throw new SkillCatalogError(`duplicate skill command ${command}: ${owner}, ${manifest.name}`);
-        commands.set(command, manifest.name);
+    const groups = new Map<string, SkillCatalogEntry[]>();
+    for (const entry of entries) {
+      if (!entry.manifest) continue;
+      const name = entry.manifest.name;
+      groups.set(name, [...(groups.get(name) ?? []), entry]);
+    }
+    const selected: SkillCatalogEntry[] = [];
+    for (const [name, group] of groups) {
+      const first = group[0]!;
+      const highest = group.filter(entry => entry.source === first.source);
+      if (highest.length > 1 && first.source === "repository") {
+        throw new SkillCatalogError(`duplicate skill name: ${name}`);
+      }
+      for (const entry of group) {
+        if (entry.source !== first.source) {
+          addDiagnostic(entry, "user_skill_shadowed",
+            `Skill '${name}' is ignored because a higher-priority Skill has the same name: ${first.location}`, first.location);
+        } else if (highest.length > 1) {
+          addDiagnostic(entry, "skill_name_conflict", `duplicate skill name: ${name}`);
+        }
+      }
+      if (highest.length === 1) selected.push(first);
+    }
+    const commands = new Map<string, SkillCatalogEntry[]>();
+    for (const entry of selected) {
+      for (const command of entry.manifest!.commands) commands.set(command, [...(commands.get(command) ?? []), entry]);
+    }
+    for (const [command, owners] of commands) {
+      if (owners.length < 2) continue;
+      const official = owners.filter(entry => entry.source === "repository");
+      const message = `duplicate skill command ${command}: ${owners.map(entry => entry.manifest!.name).join(", ")}`;
+      if (official.length > 1) throw new SkillCatalogError(message);
+      for (const entry of owners.filter(entry => entry.source !== "repository")) {
+        addDiagnostic(entry, "skill_command_conflict", message);
       }
     }
-    const manifests = [...byName.values()].sort((left, right) => left.name.localeCompare(right.name));
-    this.manifests = manifests;
-    this.manifestsByName = new Map(manifests.map((manifest) => [manifest.name, manifest]));
+    const signature = createHash("sha256").update(JSON.stringify(entries)).digest("hex");
+    this.nextRefreshAt = checkedAt + this.refreshIntervalMs;
+    if (this.initialized && signature === this.signature) return false;
+    this.manifests = selected.filter(entry => entry.enabled && !entry.diagnostics.length)
+      .map(entry => entry.manifest!).sort((a, b) => a.name.localeCompare(b.name));
+    this.manifestsByName = new Map(this.manifests.map(manifest => [manifest.name, manifest]));
     this.catalogDiagnostics = diagnostics;
+    this.catalogEntries = entries;
     this.signature = signature;
-    this.contentSignature = contentSignature;
     this.generation += 1;
     this.initialized = true;
-    this.nextRefreshAt = checkedAt + this.refreshIntervalMs;
     this.snapshotCache.clear();
-    this.logger.info("skill_catalog_loaded", {
-      generation: this.generation,
-      skill_count: this.manifests.length,
-      repository_skill_count: parsed.filter((manifest) => manifest.source === "repository").length,
-      user_skill_count: parsed.filter((manifest) => manifest.source === "user").length,
-      external_skipped_count: externalSkipped,
-      source_root_count: Number(existsSync(repositoryRoot)) + Number(existsSync(this.userSkillsRoot)),
-    });
+    this.logger.info("skill_catalog_loaded", { generation: this.generation,
+      skill_count: this.manifests.length, diagnostic_count: diagnostics.length });
+    this.onChanged?.(this.generation);
     return true;
   }
 }

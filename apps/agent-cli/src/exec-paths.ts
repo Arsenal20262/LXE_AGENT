@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { homedir } from "node:os";
+import { resolveUserSkillsRoot } from "@lxe/core";
 import { delimiter, dirname, join, resolve } from "node:path";
 
 type Environment = Record<string, string | undefined>;
@@ -69,7 +69,7 @@ export function resolveExecRuntimePaths(
   const layoutRoot = sourceRoot ?? resourceRoot;
   const dataRoot = resolve(text(environment.LXE_DATA_ROOT) || join(projectRoot, "var"));
   const packaged = !sourceRoot;
-  const userSkillsRoot = resolve(text(environment.LXE_USER_SKILLS_ROOT) || join(homedir(), ".agents", "skills"));
+  const userSkillsRoot = resolveUserSkillsRoot(dataRoot, environment, platform);
   const managedPythonPath = packaged
     ? join(resourceRoot, "runtime", "python", platform === "win32" ? "python.exe" : "bin/python3")
     : join(layoutRoot, ".venv", platform === "win32" ? "Scripts/python.exe" : "bin/python");

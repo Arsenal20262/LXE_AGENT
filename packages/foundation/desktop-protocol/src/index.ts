@@ -232,6 +232,7 @@ export type BackgroundTaskChangedPayload = {
 };
 
 export type AgentEvent =
+  | { type: "skills.changed"; payload: { revision: number } }
   | {
       type: "item.completed";
       thread_id: string;
@@ -656,6 +657,7 @@ const agentCommands = new Set<AgentCommand>([
   "shutdown",
 ]);
 const agentEventTypes = new Set<AgentEvent["type"]>([
+  "skills.changed",
   "item.completed",
   "conversation.stream.delta",
   "typing.changed",
@@ -822,6 +824,12 @@ export function decodeAgentEvent(notification: AgentNotification): AgentEvent {
   const object = { ...notification.params, type: notification.method } as Record<string, unknown>;
   if (!agentEventTypes.has(object.type as AgentEvent["type"]) || !objectValue(object.payload)) {
     throw new JsonRpcError(-32602, "Unknown or malformed agent notification");
+  }
+  if (object.type === "skills.changed") {
+    const payload = object.payload as Record<string, unknown>;
+    if (!Number.isSafeInteger(payload.revision) || Number(payload.revision) < 1) {
+      throw new JsonRpcError(-32602, "skills.changed.revision must be a positive integer");
+    }
   }
   const scoped = ["item.completed", "conversation.stream.delta", "typing.changed", "background_task.changed", "thread.started", "turn.started", "turn.completed", "turn.failed", "session.changed"];
   if (scoped.includes(String(object.type))) {

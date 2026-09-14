@@ -7,3 +7,5 @@ export * from "./repository";
 export * from "./workspace";
 
 export * from "./managed-llm";
+
+export * from "./user-skills-path";

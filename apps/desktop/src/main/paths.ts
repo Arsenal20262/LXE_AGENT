@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { homedir } from "node:os";
+import { resolveUserSkillsRoot } from "@lxe/core";
 import { posix, win32 } from "node:path";
 
 export interface DesktopPaths {
@@ -53,15 +53,7 @@ export function resolveDesktopPaths(options: DesktopPathOptions): DesktopPaths {
     ? targetPath.dirname(targetPath.resolve(options.executablePath))
     : sourceRoot;
   const dataRoot = targetPath.join(projectRoot, "var");
-  const userHome = platform === "win32"
-    ? String(environment.USERPROFILE ?? "").trim()
-      || `${String(environment.HOMEDRIVE ?? "").trim()}${String(environment.HOMEPATH ?? "").trim()}`
-      || homedir()
-    : String(environment.HOME ?? "").trim() || homedir();
-  const userSkillsRoot = targetPath.resolve(
-    String(environment.LXE_USER_SKILLS_ROOT ?? "").trim()
-      || targetPath.join(userHome, ".agents", "skills"),
-  );
+  const userSkillsRoot = resolveUserSkillsRoot(dataRoot, environment, platform);
   const executable = platform === "win32" ? ".exe" : "";
   const agentCommand = options.packaged
     ? targetPath.join(options.resourcesPath, "runtime", "agent-cli", `agent-cli${executable}`)

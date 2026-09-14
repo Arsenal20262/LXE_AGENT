@@ -130,9 +130,6 @@ export function createFileTools(dependencies: FileToolDependencies): ToolDefinit
         }
         if (!info.isFile()) throw new Error(`file not found: ${input.path}`);
         const version = fileVersionFromStats(info);
-        if (target.scope.kind !== "host" && basename(path).toLowerCase() === "skill.md") {
-          await context.exposureState?.activateSkill(basename(dirname(path)));
-        }
         const head = await readHeadBytes(path, 4_100, context.handle.signal);
         if (detectReadImageMime(head)) {
           const data = await readFile(path, { signal: context.handle.signal });
@@ -164,6 +161,7 @@ export function createFileTools(dependencies: FileToolDependencies): ToolDefinit
           const body = lines.slice(start - 1, start - 1 + count)
             .map((line, index) => `${String(start + index).padStart(6, " ")}\t${line}`).join("\n");
           ledger.recordVersion(context.session_id, path, version);
+          await context.exposureState?.activateSkillPath(path);
           return { content: textBlock(truncateHeadTail(body, toolOutputLimit).value) };
         }
         const count = Math.max(1, Number(input.limit ?? DEFAULT_LARGE_READ_LINES));
@@ -182,6 +180,7 @@ export function createFileTools(dependencies: FileToolDependencies): ToolDefinit
             ? `... (更多内容，使用 offset=${range.nextOffset} 继续)`
             : ""
           : `... (第 ${range.truncatedLine} 行超过 ${toolOutputLimit} 字符读取上限；请使用 exec 的字节工具读取该超长行)`;
+        await context.exposureState?.activateSkillPath(path);
         if (!hint) return { content: textBlock(range.body) };
         const separator = range.body ? "\n" : "";
         const bodyLimit = Math.max(0, toolOutputLimit - separator.length - hint.length);

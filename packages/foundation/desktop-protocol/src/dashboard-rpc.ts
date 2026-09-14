@@ -283,14 +283,30 @@ export type SkillPayload = {
   commands: string[];
   location: string;
   references: SkillReferencePayload[];
-  source?: "repository" | "user";
+  source?: "repository" | "user" | "shared";
   diagnostics?: Array<{
-    code: "user_skill_shadowed";
+    code: "user_skill_shadowed" | "skill_invalid" | "skill_name_conflict" | "skill_command_conflict";
     message: string;
     skill_name: string;
-    repository_path: string;
+    repository_path?: string;
     user_path: string;
   }>;
+};
+
+export type UserSkillPayload = SkillPayload & {
+  id: string;
+  version: string;
+  source: "user";
+  enabled: boolean;
+  available: boolean;
+  unavailable_reason: string;
+};
+export type UserSkillContentPayload = UserSkillPayload & {
+  files: Array<{ path: string; size: number }>;
+  file: string;
+  content: string;
+  binary: boolean;
+  truncated: boolean;
 };
 
 export type SkillContentPayload = SkillPayload & {
@@ -506,6 +522,10 @@ export interface DashboardRpcSpec {
     input: { session_id: string };
     result: WorkspaceReloadPayload;
   };
+  "skills.user.list": { input: DashboardRpcEmptyInput; result: ApiList<UserSkillPayload> };
+  "skills.user.content": { input: { id: string; path?: string }; result: UserSkillContentPayload };
+  "skills.user.setEnabled": { input: { id: string; version: string; enabled: boolean }; result: UserSkillPayload };
+  "skills.user.delete": { input: { id: string; version: string }; result: { id: string; deleted: boolean; recycled_path: string } };
   "skills.list": { input: DashboardRpcEmptyInput; result: ApiList<SkillPayload> };
   "skills.content": { input: { name: string }; result: SkillContentPayload };
   "skills.reference": {
@@ -759,6 +779,7 @@ export function parseDashboardRpcCall(value: unknown): DashboardRpcCall {
     case "sessions.workspace.reload":
       exactKeys(input, ["session_id"], `${operation}.input`);
       return { operation, input: { session_id: textValue(input.session_id, `${operation}.session_id`)! } };
+    case "skills.user.list":
     case "skills.list":
     case "commands.list":
     case "connectors.list":
@@ -768,6 +789,17 @@ export function parseDashboardRpcCall(value: unknown): DashboardRpcCall {
     case "models.list":
     case "models.current":
       return { operation, input: emptyInput(input, operation) } as DashboardRpcCall;
+    case "skills.user.content":
+      exactKeys(input, ["id", "path"], `${operation}.input`);
+      return { operation, input: { id: textValue(input.id, `${operation}.id`)!,
+        ...(input.path === undefined ? {} : { path: textValue(input.path, `${operation}.path`)! }) } };
+    case "skills.user.setEnabled":
+      exactKeys(input, ["id", "version", "enabled"], `${operation}.input`);
+      return { operation, input: { id: textValue(input.id, `${operation}.id`)!,
+        version: textValue(input.version, `${operation}.version`)!, enabled: booleanValue(input.enabled, `${operation}.enabled`) } };
+    case "skills.user.delete":
+      exactKeys(input, ["id", "version"], `${operation}.input`);
+      return { operation, input: { id: textValue(input.id, `${operation}.id`)!, version: textValue(input.version, `${operation}.version`)! } };
     case "skills.content":
       exactKeys(input, ["name"], `${operation}.input`);
       return { operation, input: { name: textValue(input.name, `${operation}.name`)! } };

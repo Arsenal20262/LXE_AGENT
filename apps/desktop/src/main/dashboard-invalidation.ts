@@ -23,6 +23,7 @@ export interface DashboardInvalidationDraft {
 export function dashboardInvalidationForAgentEvent(
   event: AgentEvent,
 ): DashboardInvalidationDraft | undefined {
+  if (event.type === "skills.changed") return { domains: ["skills"], sessionIds: [] };
   if (event.type === "session.changed") {
     return {
       domains: ["sessions"],
@@ -46,6 +47,9 @@ export function dashboardInvalidationForAgentEvent(
 
 export function dashboardDomainsForMutation(operation: DashboardRpcOperation): DesktopDashboardDataDomain[] {
   switch (operation) {
+    case "skills.user.setEnabled":
+    case "skills.user.delete":
+      return ["skills"];
     case "models.update":
     case "models.thinking.update":
       return ["models"];

@@ -1,10 +1,14 @@
 # Skill Documentation
 
-Runtime skill prompts live in repository `skills/*/SKILL.md` and optional user skills under `~/.agents/skills`. This directory explains discovery and classification; it does not duplicate full runtime prompts.
+Runtime skill prompts live in repository `skills/*/SKILL.md`, managed user skills under `<dataRoot>/skills` (normally `var/skills`), and shared skills under `~/.agents/skills`. This directory explains discovery and classification; it does not duplicate full runtime prompts.
 
 ## Discovery And Precedence
 
-`packages/agent/runtime/src/tooling/skills.ts` scans both roots and parses skill front matter. Repository skills win when the same skill name also exists in the user root. Duplicate names or commands within one source are rejected instead of being resolved by filesystem order.
+`packages/agent/runtime/src/tooling/skills.ts` scans all three sources and deduplicates canonical paths. Name precedence is repository → managed user → shared. Conflicts resolve before enabled-state, device-permission and connector filtering: disabling a winner never exposes its same-name fallback. Invalid, duplicate or command-conflicting external entries have per-entry diagnostics; invalid official resources still fail strictly.
+
+`LXE_USER_SKILLS_ROOT` overrides the managed user directory consistently in Desktop and standalone CLI. Shared files are never migrated or rewritten automatically. The resolved managed path is published as `environment_context.user_skills_root`, so creators do not guess installation paths. Files saved elsewhere are not discovered automatically.
+
+Bun stores disabled entry paths in `<dataRoot>/config/skill-states.local.json`; the Markdown files remain the only body source. Editing preserves state. Both files and configuration live in the application data directory retained during upgrades. There are no Python skill tables or model management tools.
 
 Desktop packaging keeps repository skills in the read-only resource root while the user's workspace is writable and separate. In that split-root mode the catalog publishes canonical absolute manifest paths; when a repository skill is already inside the workspace it keeps the shorter workspace-relative path. Relative tool paths always remain workspace-relative, so a workspace `skills/` directory cannot shadow a bundled manifest selected by the catalog.
 
@@ -15,7 +19,7 @@ The catalog validates that referenced files:
 - remain beneath the real root after symlink resolution;
 - cannot escape through `..` or a linked path.
 
-The catalog signature includes file size and modification metadata so runtime can refresh when skill files change.
+The catalog signature includes all attached files, not only SKILL.md. Runtime checks for changes in the background and before subsequent turns; `skills.changed` invalidates Dashboard lists and previews.
 
 ## Visibility And Activation
 
@@ -25,12 +29,20 @@ Discovery is not the same as model activation.
 2. The server-verified device permission snapshot filters skills by allowed type.
 3. Connector state can hide optional connector-owned skills.
 4. The prompt receives compact metadata for only the available skills.
-5. The model reads a skill's `SKILL.md` when it chooses that workflow.
+5. The model reads a skill's `SKILL.md` when it chooses that workflow. Activation matches the canonical manifest path in the current snapshot; an unrelated draft or a same-name folder cannot activate it.
 6. Owner-gated deferred tools from the activated skill become available on the next step.
 
 Resolve skill references, scripts and assets from the manifest's actual directory rather than the process working directory. Catalog reference validation prevents references escaping a skill root; it does not sandbox coding tools. File tools and command working directories can access host paths using the Agent process user's OS permissions. See the [runtime tool trust boundary](../runtime/tools/README.md#本机信任模型).
 
 This keeps the base prompt bounded while preserving detailed workflow contracts on demand.
+
+## Creating And Managing User Skills
+
+Ask the Agent to create a skill, modify one, or save a completed workflow. The built-in `skill-creator` uses the existing read/write/edit/exec tools and managed Python environment. It writes supporting files before SKILL.md, runs static validation, and verifies changed scripts with examples separately. New names use lowercase letters, numbers and hyphens, match the folder, and are at most 64 characters; descriptions are required and at most 1024 characters. Existing shared skills use compatibility validation without being renamed.
+
+Dashboard → Skills → 我的技能 lists valid, disabled, invalid and shadowed managed entries. Viewing supports Markdown and an attached-file list. Use and Edit append a natural-language prompt to a new conversation draft; they do not send messages or run skills. Sending uses the existing `sessions.send` route.
+
+`skills.user.list/content/setEnabled/delete` are UI RPC operations, not model tools. Mutations use a server-issued path identity and version; stale writes fail and require reloading. Deletion moves the whole folder to `<dataRoot>/trash/skills`, which is excluded from discovery even when a custom root contains it. Restore by asking the Agent to move it back with file tools. Shared originals can be changed only when explicitly requested in conversation.
 
 ## Business Commands
 

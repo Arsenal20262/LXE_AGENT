@@ -22,7 +22,7 @@ describe("skill context", () => {
     const names = readdirSync(source).filter((name) => name.startsWith("replenishment-"));
     expect(names).toHaveLength(9);
     for (const name of names) cpSync(join(source, name), join(root, "skills", name), { recursive: true });
-    const skills = new SkillCatalog(root, join(root, "missing-user")).list();
+    const skills = new SkillCatalog(root, join(root, "missing-user"), { sharedSkillsRoot: false }).list();
     expect(skills).toHaveLength(9);
     const references = skills.flatMap((skill) => skill.references.map((reference) => {
       expect(readFileSync(join(skill.root, reference.path), "utf8").length).toBeGreaterThan(100);
@@ -73,7 +73,7 @@ describe("skill context", () => {
       "utf8",
     );
 
-    const catalog = new SkillCatalog(root, join(root, "missing-user"));
+    const catalog = new SkillCatalog(root, join(root, "missing-user"), { sharedSkillsRoot: false });
     expect(catalog.list().map((skill) => skill.name)).toEqual(["demo", "nested"]);
   });
 
@@ -91,7 +91,7 @@ describe("skill context", () => {
       "utf8",
     );
 
-    const catalog = new SkillCatalog(resourceRoot, join(resourceRoot, "missing-user"));
+    const catalog = new SkillCatalog(resourceRoot, join(resourceRoot, "missing-user"), { sharedSkillsRoot: false });
     const normalizedSkillPath = skillPath.replaceAll("\\", "/");
     expect(catalog.buildPrompt({}, workspaceRoot)).toContain(`Instructions: ${normalizedSkillPath}`);
     expect(catalog.buildPrompt({}, workspaceRoot)).not.toContain("Instructions: skills/demo/SKILL.md");
@@ -108,7 +108,7 @@ describe("skill context", () => {
       "---\nname: demo\ndescription: Worktree skill\n---\n# Demo\n",
       "utf8",
     );
-    const catalog = new SkillCatalog(worktree, join(worktree, "missing-user"));
+    const catalog = new SkillCatalog(worktree, join(worktree, "missing-user"), { sharedSkillsRoot: false });
     const prompt = catalog.buildPrompt({}, {
       directory,
       worktree,
@@ -128,7 +128,7 @@ describe("skill context", () => {
       "references:", "  - path: references/help.md", "---", "# Demo", "",
     ].join("\n"), "utf8");
     writeFileSync(join(userRoot, "demo", "SKILL.md"), "---\nname: demo\ndescription: User version\n---\n", "utf8");
-    const catalog = new SkillCatalog(root, userRoot, { refreshIntervalMs: 0 });
+    const catalog = new SkillCatalog(root, userRoot, { refreshIntervalMs: 0, sharedSkillsRoot: false });
     expect(catalog.get("demo")?.description).toBe("Repository version");
     expect(catalog.get("demo")?.references).toEqual([{ path: "references/help.md", description: "" }]);
     expect(catalog.diagnostics()).toEqual([expect.objectContaining({
@@ -162,7 +162,7 @@ describe("skill context", () => {
     writeFileSync(join(root, "skills", "legacy", "SKILL.md"), [
       "---", "name: legacy", "command: scripts.legacy", "---", "",
     ].join("\n"), "utf8");
-    const catalog = new SkillCatalog(root, join(root, "missing-user"), { refreshIntervalMs: 0 });
+    const catalog = new SkillCatalog(root, join(root, "missing-user"), { refreshIntervalMs: 0, sharedSkillsRoot: false });
     expect(catalog.get("plural")?.commands).toEqual(["scripts.one", "scripts.two"]);
     expect(catalog.get("legacy")?.commands).toEqual(["scripts.legacy"]);
     mkdirSync(join(root, "skills", "conflict"), { recursive: true });
@@ -183,6 +183,7 @@ describe("skill context", () => {
     let now = 10_000;
     const catalog = new SkillCatalog(root, join(root, "missing-user"), {
       refreshIntervalMs: 1_000,
+      sharedSkillsRoot: false,
       now: () => now,
     });
 
@@ -218,7 +219,7 @@ describe("skill context", () => {
     writeFileSync(join(root, "skills", "second", "SKILL.md"), [
       "---", "name: second", "type: internal", "description: Second", "---", "",
     ].join("\n"), "utf8");
-    const catalog = new SkillCatalog(root, join(root, "missing-user"));
+    const catalog = new SkillCatalog(root, join(root, "missing-user"), { sharedSkillsRoot: false });
 
     const allowed = catalog.snapshot({ allowedTypes: new Set(["default"]) });
     const disabled = catalog.snapshot({
@@ -248,6 +249,7 @@ describe("skill context", () => {
     let now = 0;
     const catalog = new SkillCatalog(root, join(root, "missing-user"), {
       refreshIntervalMs: 1_000,
+      sharedSkillsRoot: false,
       now: () => now,
     });
     const valid = catalog.snapshot();
@@ -267,7 +269,7 @@ describe("skill context", () => {
     roots.push(root);
     mkdirSync(join(root, "skills", "demo"), { recursive: true });
     writeFileSync(join(root, "skills", "demo", "SKILL.md"), "---\nname: demo\ndescription: Demo\n---\n", "utf8");
-    const catalog = new SkillCatalog(root, join(root, "missing-user"));
+    const catalog = new SkillCatalog(root, join(root, "missing-user"), { sharedSkillsRoot: false });
     const firstOptions = { disabledNames: new Set(["unused-0"]) };
     const first = catalog.snapshot(firstOptions);
     for (let index = 1; index <= 32; index += 1) {
@@ -285,11 +287,13 @@ describe("skill context", () => {
     mkdirSync(join(userRoot, "broken"), { recursive: true });
     writeFileSync(join(root, "skills", "official", "SKILL.md"), "---\nname: official\n---\n", "utf8");
     writeFileSync(userSkillPath, "x".repeat(MAX_SKILL_MANIFEST_BYTES + 1), "utf8");
-    const catalog = new SkillCatalog(root, userRoot, { refreshIntervalMs: 0 });
+    const catalog = new SkillCatalog(root, userRoot, { refreshIntervalMs: 0, sharedSkillsRoot: false });
 
-    expect(() => catalog.list()).toThrow(`skill manifest exceeds ${MAX_SKILL_MANIFEST_BYTES} bytes: ${userSkillPath}`);
+    expect(catalog.list().map(item => item.name)).toEqual(["official"]);
+    expect(catalog.diagnostics()[0]?.message).toBe(`skill manifest exceeds ${MAX_SKILL_MANIFEST_BYTES} bytes: ${userSkillPath}`);
 
     writeFileSync(userSkillPath, "---\nname: [\n---\n", "utf8");
-    expect(() => catalog.list()).toThrow(`skill YAML is invalid: ${userSkillPath}`);
+    expect(catalog.list().map(item => item.name)).toEqual(["official"]);
+    expect(catalog.diagnostics()[0]?.message).toContain(`skill YAML is invalid: ${userSkillPath}`);
   });
 });

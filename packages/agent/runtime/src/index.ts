@@ -12,6 +12,7 @@ export * from "./providers/config-paths";
 export * from "./engine/runtime";
 export * from "./engine/final-answer-streamer";
 export * from "./tooling/skills";
+export * from "./tooling/user-skill-files";
 export * from "./engine/system-events";
 export * from "./engine/system-prompt";
 export * from "./providers/provider";

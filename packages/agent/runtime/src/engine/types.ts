@@ -41,6 +41,7 @@ export interface RuntimeEnvironmentSnapshot {
   cwd: string;
   worktree: string;
   artifact_root?: string;
+  user_skills_root?: string;
   os: string;
   bun_version: string;
   platform: string;
@@ -206,6 +207,7 @@ export interface RuntimeSkillSnapshot {
   readonly names: readonly string[];
   readonly prompt: string;
   readonly modules: Readonly<Record<string, string>>;
+  readonly locations?: Readonly<Record<string, string>>;
   readonly disabledConnectorIds?: readonly string[];
 }
 

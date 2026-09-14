@@ -8,7 +8,7 @@ import { adaptMessagesForProvider, loadProviderDescriptor } from "../../src/prov
 import { adaptMessagesForResponses } from "../../src/providers/responses-provider";
 import { adaptMessagesForCompletions } from "../../src/providers/completions-provider";
 
-const context = { workspace: { directory: "/work/<a>&b", worktree: "/work" }, platform: "feishu", provider: "custom", model: "test", artifactRoot: "/artifacts" };
+const context = { workspace: { directory: "/work/<a>&b", worktree: "/work" }, platform: "feishu", provider: "custom", model: "test", artifactRoot: "/artifacts", userSkillsRoot: "/data/中文 skills" };
 const capture = (date = "2026-09-05T15:59:00Z", zone = "Asia/Shanghai") => captureEnvironment(context, new Date(date), zone);
 
 test("uses local midnight and detects every environment fact independently", () => {
@@ -30,6 +30,7 @@ test("persists metadata through transcript replay, repairs and replacements with
   const snapshot = capture();
   const message = environmentMessage(snapshot);
   expect(message.content).toContain("<cwd>/work/&lt;a&gt;&amp;b</cwd>");
+  expect(message.content).toContain("<user_skills_root>/data/中文 skills</user_skills_root>");
   const restored = normalizeTranscriptMessage(JSON.parse(JSON.stringify(message)))!;
   expect(restored).toEqual(message);
   expect(sanitizeMessagesForProvider([restored]).messages).toEqual([message]);

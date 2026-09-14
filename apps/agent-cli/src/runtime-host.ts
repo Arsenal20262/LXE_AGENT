@@ -64,6 +64,7 @@ export interface AgentRuntimeHostOptions {
   allowedSkillTypes?: ReadonlySet<string>;
   managedLlmState?: ManagedLlmState;
   onBackgroundTaskChanged?: (snapshot: JsonObject) => Promise<void> | void;
+  onSkillsChanged?: (revision: number) => Promise<void> | void;
   onSessionChanged?: (sessionId: string, change: AgentSessionChange) => Promise<void> | void;
   onManagedLlmAuthenticationFailure?: (
     provider: string,
@@ -132,6 +133,12 @@ export function createAgentRuntimeHost(
   const skillCatalog = new SkillCatalog(options.dataRoot, options.userSkillsRoot, {
     ...(environment.LXE_FD_PATH ? { fdPath: environment.LXE_FD_PATH } : {}),
     repositorySkillsRoot: options.skillsRoot,
+    statePath: join(options.dataRoot, "config", "skill-states.local.json"),
+    excludedRoots: [join(options.dataRoot, "trash", "skills")],
+    onChanged: revision => {
+      void Promise.resolve().then(() => options.onSkillsChanged?.(revision))
+        .catch(error => logger.warn("skills_notification_failed", { error }));
+    },
   });
   const connectorStatePath = join(options.dataRoot, "config", "connector-states.local.json");
   const commandCatalogPath = options.lxeskillCatalogPath;
@@ -203,10 +210,21 @@ export function createAgentRuntimeHost(
     execEnv: ({ skillNames }) => ({ LXESKILL_SKILL_SCOPE: skillNames.join(",") }),
     ...(options.onBackgroundTaskChanged ? { onExecComplete: options.onBackgroundTaskChanged } : {}),
   });
+  let skillRefreshTimer: ReturnType<typeof setInterval> | undefined;
   const runtimeServices: Array<{
     start(registry: ToolRegistry): Promise<void>;
     stop(): Promise<void>;
-  }> = [processes, lxeSkillRuntime];
+  }> = [processes, lxeSkillRuntime, {
+    async start() {
+      skillCatalog.refreshIfNeeded();
+      skillRefreshTimer = setInterval(() => {
+        try { skillCatalog.refreshIfNeeded(); }
+        catch (error) { logger.warn("skill_catalog_refresh_failed", { error }); }
+      }, 1_000);
+      skillRefreshTimer.unref?.();
+    },
+    async stop() { if (skillRefreshTimer) clearInterval(skillRefreshTimer); },
+  }];
   registerToolSearch(tools);
   const mcpConfigPath = String(environment.LXE_MCP_CONFIG_PATH ?? "").trim()
     || join(options.dataRoot, "config", "mcp_servers.local.yaml");
@@ -283,6 +301,7 @@ export function createAgentRuntimeHost(
       ? { onManagedLlmAuthenticationFailure: options.onManagedLlmAuthenticationFailure }
       : {}),
     artifactRoot: join(options.dataRoot, "artifacts"),
+    userSkillsRoot: options.userSkillsRoot,
     systemPrompt: (context) => buildSystemPrompt({
       soul: context.workspaceSnapshot?.soul ?? "",
       workspace: context.workspace,

@@ -21,3 +21,11 @@ export function useComposerDraft(key: string): [string, Dispatch<SetStateAction<
     setDraft(current => current.key === target && current.text === sent ? { key: target, text: "" } : current);
   }];
 }
+
+/** Called only from a user click, before opening the composer; never during render. */
+export function appendComposerDraftPrompt(storage: Pick<Storage, "getItem" | "setItem">, key: string, prompt: string): void {
+  const previous = storage.getItem(keyFor(key)) ?? "";
+  const next = previous ? `${previous}\n\n${prompt}` : prompt;
+  if (next.length > 8192) throw new Error("Draft exceeds 8192 characters; shorten it before adding a skill prompt.");
+  storage.setItem(keyFor(key), next);
+}

@@ -8,6 +8,18 @@ const LEGACY_LANGUAGE_STORAGE_KEY = "agent-dashboard-language";
 export type Language = "zh" | "en";
 
 export const ZH_TEXT = {
+  userSkills: {
+    title: "我的技能", hint: "通过对话创建和修改，保存后供后续任务使用。", create: "创建技能",
+    empty: "还没有自己的技能。描述你想复用的工作方法，即可开始创建。", view: "查看", use: "在对话中使用", edit: "通过对话修改",
+    enable: "启用", disable: "禁用", delete: "移至回收目录", available: "可用", disabled: "已禁用", unavailable: "不可用",
+    permission: "当前设备权限或连接器状态不允许使用。", files: "技能文件", binary: "此文件为二进制资源，请在本地查看。",
+    truncated: "预览已截断，仅显示前 256 KiB。", recycled: "已移至回收目录，可通过对话恢复：",
+    shared: "共享技能", official: "官方技能",
+    createPrompt: "请帮我创建一个可复用的技能。我的需求是：",
+    usePrompt: (name: string) => `请使用 ${name} 技能。我的任务是：`,
+    editPrompt: (name: string, path: string) => `请修改 ${name} 技能（${path}），保留原有启停状态。我要调整的是：`,
+  },
+
   skillDisplayName: (name: string) => skillDisplayName(name, "zh"),
   sessionStatus: {waiting_input:"等待回答",running:"运行中",stopping:"正在停止",queued:"排队中",completed:"已完成，尚未查看",error:"执行失败，尚未查看",cancelled:"已停止",idle:"暂无未查看结果",unknown:"上次运行结果未确认",unavailable:"状态暂不可用",syncError:"状态同步失败"},
   userQuestions: {waiting:"等待回答",received:"回答已接收",done:"完成",retry:"重试提交",skip:"跳过",skipQuestion:"跳过当前问题",skipped:"已跳过",submitting:"正在提交…",stop:"停止本次任务",stopping:"正在停止…",pagination:"问题分页",previous:"上一题",next:"下一题",multiple:"可多选，也可以补充文字",custom:"自己的回答",customPlaceholder:"填写自己的回答…",freeText:"回答"},
@@ -831,6 +843,17 @@ export type UiText = typeof ZH_TEXT;
 export const UI_TEXT: Record<Language, UiText> = {
   zh: ZH_TEXT,
   en: {
+    userSkills: {
+      title: "My skills", hint: "Create and edit in a conversation, then reuse in later tasks.", create: "Create skill",
+      empty: "No personal skills yet. Describe a workflow you want to reuse to get started.", view: "View", use: "Use in conversation", edit: "Edit in conversation",
+      enable: "Enable", disable: "Disable", delete: "Move to recycle folder", available: "Available", disabled: "Disabled", unavailable: "Unavailable",
+      permission: "Unavailable under the current device permissions or connector settings.", files: "Skill files", binary: "This is a binary resource. View it locally.",
+      truncated: "Preview truncated to the first 256 KiB.", recycled: "Moved to the recycle folder. Ask in a conversation to restore:",
+      shared: "Shared skill", official: "Official skill",
+      createPrompt: "Help me create a reusable skill. My requirements are:",
+      usePrompt: (name: string) => `Use the ${name} skill. My task is:`,
+      editPrompt: (name: string, path: string) => `Edit the ${name} skill (${path}), preserving its enabled state. My changes are:`,
+    },
     skillDisplayName: (name: string) => skillDisplayName(name, "en"),
     sessionStatus: {waiting_input:"Waiting for answer",running:"Running",stopping:"Stopping",queued:"Queued",completed:"Completed, not viewed",error:"Failed, not viewed",cancelled:"Stopped",idle:"No unviewed results",unknown:"Previous run result unconfirmed",unavailable:"Status unavailable",syncError:"Status sync failed"},
     userQuestions: {waiting:"Waiting for answer",received:"Answer received",done:"Done",retry:"Retry submission",skip:"Skip",skipQuestion:"Skip this question",skipped:"Skipped",submitting:"Submitting…",stop:"Stop this task",stopping:"Stopping…",pagination:"Question pages",previous:"Previous question",next:"Next question",multiple:"Choose any and optionally add text",custom:"Your own answer",customPlaceholder:"Write your own answer…",freeText:"Answer"},
