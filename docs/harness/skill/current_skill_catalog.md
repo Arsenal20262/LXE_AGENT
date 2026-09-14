@@ -4,7 +4,7 @@ This page is a navigation inventory, not a second source of runtime prompt truth
 
 ## Inventory
 
-The repository currently contains 29 top-level workflow and default runtime skills:
+The repository currently contains 32 top-level workflow and default runtime skills:
 
 | Type | Count | Purpose |
 | --- | ---: | --- |
@@ -13,11 +13,11 @@ The repository currently contains 29 top-level workflow and default runtime skil
 | `amazon_operations` | 2 | listing, keyword, competitor, and public-review analysis |
 | `default` | 3 | general connector, workbook and custom Skill creation capabilities |
 | `ziniao_browser` | 1 | controlled Ziniao browser lifecycle and page operations |
-| `yacang_operations` | 1 | controlled four-warehouse Yacang inventory-sales XLSX export |
+| `yacang_operations` | 6 | Yacang export routing, fixed 7/15/30 and 90-day sales exports, current inventory lists, warehouse-product creation times, and the first-version compatibility export |
 
 Counts describe top-level repository skills before per-agent permission and connector filtering. The
 bundled Lark CLI contributes another 27 nested connector-specific Skill manifests, so recursive runtime
-discovery sees 56 repository manifests in total.
+discovery sees 59 repository manifests in total.
 
 ## Amazon FBA
 
@@ -71,7 +71,12 @@ LXE formally maintains these modules' command and failure contracts. Their resul
 
 ## Yacang Operations
 
-- `yacang-inventory-sales-export`: automatically signs in and returns one validated inventory-sales XLSX for each configured warehouse.
+- `yacang-export-workflow-map`: routes supported Yacang export requests and fails closed for business types whose remote contracts are not yet confirmed.
+- `yacang-sales-monthly-export`: returns one local 7/15/30 projection per fixed warehouse from the validated source exports.
+- `yacang-sales-90d-export`: returns a separate 90-day sales projection per fixed warehouse from the same validated source exports.
+- `yacang-inventory-month-end-export`: exports one validated current-inventory workbook per fixed warehouse; it rejects historical snapshot dates because the remote endpoint has no date parameter.
+- `yacang-inbound-listing-time-export`: exports one validated active warehouse-product workbook and exposes its native creation-time field as the confirmed inbound/listing time.
+- `yacang-inventory-sales-export`: preserves the first-version arbitrary creation-date-range inventory-sales export as a compatibility entry.
 
 ## Runtime Visibility
 
