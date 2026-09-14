@@ -378,14 +378,30 @@ export function toolOperations(messages: SessionMessage[]): ToolOperation[] {
     else if (roleLabel(message.role) === "tool") results.push({ type: "tool_result", ...message });
   }
 
-  const unclaimed = [...results];
+  // Keep original order for anonymous calls and orphan results. Per-ID cursors
+  // and the global cursor each visit an entry at most once, even with duplicates.
+  const entries = results.map(result => ({ result, claimed: false }));
+  const byId = new Map<string, { entries: typeof entries; cursor: number }>();
+  for (const entry of entries) {
+    const id = blockId(entry.result, ["tool_call_id", "tool_use_id"]);
+    const queue = byId.get(id) ?? { entries: [], cursor: 0 };
+    queue.entries.push(entry); byId.set(id, queue);
+  }
+  let cursor = 0;
   const take = (callId: string): unknown => {
-    const index = callId
-      ? unclaimed.findIndex((result) => blockId(result, ["tool_call_id", "tool_use_id"]) === callId)
-      : -1;
-    const at = index >= 0 ? index : (callId ? -1 : 0);
-    if (at < 0 || at >= unclaimed.length) return undefined;
-    return unclaimed.splice(at, 1)[0];
+    let entry: typeof entries[number] | undefined;
+    if (callId) {
+      const queue = byId.get(callId);
+      if (!queue) return undefined;
+      while (queue.entries[queue.cursor]?.claimed) queue.cursor++;
+      entry = queue.entries[queue.cursor++];
+    } else {
+      while (entries[cursor]?.claimed) cursor++;
+      entry = entries[cursor++];
+    }
+    if (!entry) return undefined;
+    entry.claimed = true;
+    return entry.result;
   };
 
   const operations: ToolOperation[] = calls.map((call, index) => {
@@ -404,7 +420,7 @@ export function toolOperations(messages: SessionMessage[]): ToolOperation[] {
       result,
     };
   });
-  unclaimed.forEach((result, index) => {
+  entries.filter(entry => !entry.claimed).forEach(({ result }, index) => {
     const name = (isRecord(result) ? scalarText(result.tool_name) : "") || "tool";
     operations.push({
       key: blockId(result, ["tool_call_id", "tool_use_id"]) || `result-${index}`,

@@ -24,8 +24,45 @@ export const isInternalMessage = (message: SessionMessage): boolean =>
 const toolDisplayId = (turnId: string, groupId: string, callId: string): string =>
   `tool:${encodeURIComponent(turnId || groupId)}:${encodeURIComponent(callId)}`;
 
-/** One projection for both streaming and stored data. Source IDs never depend on the loaded page index. */
-export function conversationRows(messages: SessionMessage[], turns: DesktopConversationTurnPayload[], pending: PendingMessage[], preferLive: boolean | ReadonlySet<string> = false): ConversationRow[] {
+type ArtifactOwner = { turnId: string; groups: Set<string>; files: Map<string, SessionArtifactPayload> };
+export interface ConversationHistoryProjection {
+  readonly source: readonly SessionMessage[];
+  readonly baseRows: readonly ConversationRow[];
+  readonly rows: readonly ConversationRow[];
+  readonly byId: ReadonlyMap<string, ConversationRow>;
+  readonly byTurn: ReadonlyMap<string, readonly ConversationRow[]>;
+  readonly shownTurns: ReadonlySet<string>;
+  readonly savedStatus: ReadonlyMap<string, string | null | undefined>;
+  readonly artifacts: ReadonlyMap<string, ArtifactOwner>;
+  readonly artifactRows: ReadonlyMap<string, ConversationRow>;
+  readonly answerRows: ReadonlyMap<string, ConversationRow | undefined>;
+}
+const answerRowId = (row: ConversationRow) => `answer-meta:${row.turnId ? `turn:${row.turnId}` : `group:${row.groupId}`}`;
+
+/** Preserve find() precedence when an ID and a block identify different operations. */
+function indexToolOperations(operations: ToolOperation[]) {
+  type Entry = { operation: ToolOperation; index: number };
+  const byBlock = new Map<unknown, Entry>();
+  const byId = new Map<string, Entry>();
+  operations.forEach((operation, index) => {
+    const entry = { operation, index };
+    for (const block of [operation.call, operation.result]) if (block !== undefined && !byBlock.has(block)) byBlock.set(block, entry);
+    const call = isRecord(operation.call) ? operation.call : {};
+    const result = isRecord(operation.result) ? operation.result : {};
+    const id = String(call.id || result.tool_call_id || result.tool_use_id);
+    if (!byId.has(id)) byId.set(id, entry);
+  });
+  return (block: unknown, id: string): ToolOperation | undefined => {
+    const reference = byBlock.get(block), identified = byId.get(id);
+    return (!reference ? identified : !identified || reference.index < identified.index ? reference : identified)?.operation;
+  };
+}
+
+/** The controller owns one immutable projection for its current reading window. */
+export function projectConversationHistory(source: readonly SessionMessage[]): ConversationHistoryProjection {
+  const savedStatus = new Map<string, string | null | undefined>();
+  for (const message of source) if (message.turn && !savedStatus.has(message.turn.turn_id)) savedStatus.set(message.turn.turn_id, message.turn.status);
+  let messages = source;
   messages = messages.filter(message => !isInternalMessage(message)).map((message) => {
     if (!message.tool_calls) return message;
     const content = Array.isArray(message.content) ? message.content : message.content ? [{type:"text",text:String(message.content)}] : [];
@@ -47,7 +84,7 @@ export function conversationRows(messages: SessionMessage[], turns: DesktopConve
     rows.push(row);
     if (row.turnId) { const list = byTurn.get(row.turnId) ?? []; list.push(row); byTurn.set(row.turnId, list); }
   };
-  const operationsByGroup = new Map([...groups].map(([key, group]) => [key, toolOperations(group)]));
+  const operationsByGroup = new Map([...groups].map(([key, group]) => [key, indexToolOperations(toolOperations(group))]));
   const claimedTools = new Set<string>();
   for (const message of messages) {
     if (isInternalMessage(message)) continue;
@@ -64,16 +101,11 @@ export function conversationRows(messages: SessionMessage[], turns: DesktopConve
           const callId = String(block.id || block.tool_call_id || block.tool_use_id || `${messageId}:${index}`);
           const id = toolDisplayId(turnId, base.groupId, callId);
           if (claimedTools.has(id)) return;
-          const operation = operationsByGroup.get(turnId || base.groupId)?.find((op) => {
-            const call = isRecord(op.call) ? op.call : {};
-            const result = isRecord(op.result) ? op.result : {};
-            return op.call === block || op.result === block || String(call.id || result.tool_call_id || result.tool_use_id) === callId;
-          });
+          const operation = operationsByGroup.get(turnId || base.groupId)?.(block, callId);
           if (operation) {
-            const active = turns.some(turn => turn.turn_id === turnId && ["running", "queued"].includes(turn.state));
             claimedTools.add(id);
             add({ ...base, id, kind: "tool", presentation: "process",
-              operation: { ...operation, key: id, status: operation.result === undefined && active ? "pending" : operation.status } });
+              operation: { ...operation, key: id } });
           }
           return;
         }
@@ -83,10 +115,32 @@ export function conversationRows(messages: SessionMessage[], turns: DesktopConve
   }
   const turnStatus = new Map(messages.flatMap((message) => message.turn?.status && !isInternalMessage(message) ? [[message.turn.turn_id, message] as const] : []));
   for (const [id, message] of turnStatus) {
-    if (!turns.some((turn) => turn.turn_id === id)) rows.push({id:`status:${id}`,turnId:id,groupId:message.display_group_id,createdAt:(message.created_at??0)*1000,kind:"status",status:message.turn!.status!,elapsedMs:message.turn!.elapsed_ms ?? undefined});
+    rows.push({id:`status:${id}`,turnId:id,groupId:message.display_group_id,createdAt:(message.created_at??0)*1000,kind:"status",status:message.turn!.status!,elapsedMs:message.turn!.elapsed_ms ?? undefined});
   }
+  const artifacts = collectTurnArtifacts(messages);
+  const ordered = appendAnswerMetadata(appendTurnArtifacts(orderRows(rows), artifacts));
+  const answerRows = new Map<string, ConversationRow | undefined>(rows.filter(row => row.presentation === "final").map(row => [answerRowId(row), undefined]));
+  for (const row of ordered) if (row.kind === "answer_meta") answerRows.set(row.id, row);
+  return { source, baseRows: rows, rows: ordered, byId: new Map(ordered.map(row => [row.id, row])), byTurn,
+    shownTurns: new Set(ordered.map(row => row.turnId)), savedStatus, artifacts,
+    artifactRows: new Map(ordered.filter(row => row.kind === "artifacts").map(row => [row.id, row])),
+    answerRows };
+}
+
+/** Rebuild live turns as a unit; untouched history rows and their footers retain identity. */
+export function composeConversationRows(projection: ConversationHistoryProjection, turns: DesktopConversationTurnPayload[], pending: PendingMessage[], preferLive: boolean | ReadonlySet<string> = false): ConversationRow[] {
+  if (!turns.length && !pending.length) return [...projection.rows];
+  const turnIds = new Set(turns.map(turn => turn.turn_id));
+  const activeIds = new Set(turns.filter(turn => ["running", "queued"].includes(turn.state)).map(turn => turn.turn_id));
+  const changedAnswers = new Set(turns.map(turn => `answer-meta:turn:${turn.turn_id}`));
+  const rows = projection.baseRows.filter(row => row.kind !== "status" || !turnIds.has(row.turnId)).map(row => {
+    if (row.kind === "tool" && row.operation?.result === undefined && row.operation && activeIds.has(row.turnId) && row.operation.status !== "pending") {
+      return { ...row, operation: { ...row.operation, status: "pending" as const } };
+    }
+    return row;
+  });
   for (const turn of turns) {
-    const history = byTurn.get(turn.turn_id) ?? [];
+    const history = projection.byTurn.get(turn.turn_id) ?? [];
     const groupId = history.find((row) => row.message?.role === "assistant" || row.kind === "tool")?.groupId ?? `live:${turn.turn_id}`;
     const base = { groupId, turnId: turn.turn_id, createdAt: turn.created_at ?? turn.started_at };
     const userId = userDisplayId(turn);
@@ -102,6 +156,7 @@ export function conversationRows(messages: SessionMessage[], turns: DesktopConve
     const merged = parts.map((part) => {
       const saved = existing.get(part.id);
       if (!saved) return part;
+      changedAnswers.add(answerRowId(saved));
       if ((preferLive === true || preferLive && preferLive.has(turn.turn_id)) && part.message) return { ...saved, ...part, groupId: saved.groupId, message: { ...saved.message!, content: part.message.content } };
       // A transcript call (or a yielded command result) is not an execution end.
       // Tool lifecycle state is authoritative independently of text refresh revisions.
@@ -116,16 +171,28 @@ export function conversationRows(messages: SessionMessage[], turns: DesktopConve
   }
   for (const item of pending) {
     const id = `user:${item.pendingId}`;
-    const existing = rows.find(row => row.id === id);
+    const index = rows.findIndex(row => row.id === id);
+    const existing = rows[index];
     if (existing?.message) {
       const attachments = new Map(item.attachments.map(attachment => [attachment.attachment_id, attachment]));
       for (const attachment of existing.message.attachments ?? []) attachments.set(attachment.attachment_id, attachment);
-      existing.message = { ...existing.message, attachments: [...attachments.values()] };
-      if (item.error) { existing.error = item.error; existing.status = "error"; }
+      rows[index] = { ...existing, message: { ...existing.message, attachments: [...attachments.values()] },
+        ...(item.error ? { error: item.error, status: "error" } : {}) };
+      changedAnswers.add(answerRowId(existing));
       continue;
     }
     rows.push({ id, groupId: `pending:${item.pendingId}`, turnId: item.turnId ?? "", createdAt: item.createdAt, kind: "message", status: item.error ? "error" : item.turnId ? "accepted" : "sending", error: item.error, message: { display_group_id: id, role: "user", content: item.text, attachments: item.attachments, created_at: item.createdAt / 1000 } });
   }
+  return appendAnswerMetadata(appendTurnArtifacts(orderRows(rows), projection.artifacts, projection.artifactRows), projection.answerRows, changedAnswers);
+}
+
+/** Compatibility entry point for callers without a persistent display controller. */
+export function conversationRows(messages: SessionMessage[], turns: DesktopConversationTurnPayload[], pending: PendingMessage[], preferLive: boolean | ReadonlySet<string> = false): ConversationRow[] {
+  const projection = projectConversationHistory(messages);
+  return turns.length || pending.length ? composeConversationRows(projection, turns, pending, preferLive) : [...projection.rows];
+}
+
+function orderRows(rows: ConversationRow[]): ConversationRow[] {
   // Keep a turn together, including when its user row is supplied by pending state.
   const starts = new Map<string, number>();
   for (const row of rows) { const group = row.turnId || row.groupId; starts.set(group, Math.min(starts.get(group) ?? Infinity, row.createdAt || Infinity)); }
@@ -141,12 +208,12 @@ export function conversationRows(messages: SessionMessage[], turns: DesktopConve
     }
     return 0;
   });
-  return appendAnswerMetadata(appendTurnArtifacts(ordered, messages));
+  return ordered;
 }
 
 /** Artifact storage location does not decide its presentation position. */
-function appendTurnArtifacts(rows: ConversationRow[], messages: SessionMessage[]): ConversationRow[] {
-  const owners = new Map<string, {turnId: string; groups: Set<string>; files: Map<string, SessionArtifactPayload>} >();
+function collectTurnArtifacts(messages: readonly SessionMessage[]): Map<string, ArtifactOwner> {
+  const owners = new Map<string, ArtifactOwner>();
   for (const message of messages) {
     if (isInternalMessage(message)) continue;
     for (const file of message.artifacts ?? []) {
@@ -158,25 +225,36 @@ function appendTurnArtifacts(rows: ConversationRow[], messages: SessionMessage[]
       owners.set(key, owner);
     }
   }
+  return owners;
+}
+
+function appendTurnArtifacts(rows: ConversationRow[], owners: ReadonlyMap<string, ArtifactOwner>, cached?: ReadonlyMap<string, ConversationRow>): ConversationRow[] {
   const after = new Map<number, ConversationRow[]>();
+  const byTurn = new Map<string, number>(), unownedByGroup = new Map<string, number>();
+  rows.forEach((row, index) => { if (row.turnId) byTurn.set(row.turnId, index); else unownedByGroup.set(row.groupId, index); });
   for (const [key, owner] of owners) {
-    let last = -1;
-    rows.forEach((row, index) => {
-      if (owner.turnId && row.turnId === owner.turnId || !row.turnId && owner.groups.has(row.groupId)) last = index;
-    });
+    let last = owner.turnId ? byTurn.get(owner.turnId) ?? -1 : -1;
+    for (const group of owner.groups) last = Math.max(last, unownedByGroup.get(group) ?? -1);
     if (last < 0) continue;
     const tail = rows[last]!;
     const entries = after.get(last) ?? [];
-    entries.push({id: `artifacts:${key}`, kind: "artifacts", groupId: tail.groupId,
-      turnId: owner.turnId, createdAt: tail.createdAt, artifacts: [...owner.files.values()]});
+    const previous = cached?.get(`artifacts:${key}`);
+    entries.push(previous && previous.groupId === tail.groupId && previous.createdAt === tail.createdAt
+      ? previous : {id: `artifacts:${key}`, kind: "artifacts", groupId: tail.groupId,
+        turnId: owner.turnId, createdAt: tail.createdAt, artifacts: [...owner.files.values()]});
     after.set(last, entries);
   }
   return rows.flatMap((row, index) => [row, ...(after.get(index) ?? [])]);
 }
 
 /** Final text and files stay independent virtual rows; one stable footer follows both. */
-function appendAnswerMetadata(rows: ConversationRow[]): ConversationRow[] {
+function appendAnswerMetadata(rows: ConversationRow[], cached?: ReadonlyMap<string, ConversationRow | undefined>, changed?: ReadonlySet<string>): ConversationRow[] {
   const answers = new Map<string, ConversationRow[]>();
+  const byTurn = new Map<string, number>(), byGroup = new Map<string, number>();
+  rows.forEach((row, index) => {
+    if (row.turnId) byTurn.set(row.turnId, index);
+    byGroup.set(row.groupId, index);
+  });
   for (const row of rows) {
     if (row.presentation !== "final" || row.message?.role !== "assistant") continue;
     const key = row.turnId ? `turn:${row.turnId}` : `group:${row.groupId}`;
@@ -185,14 +263,17 @@ function appendAnswerMetadata(rows: ConversationRow[]): ConversationRow[] {
   }
   const after = new Map<number, ConversationRow[]>();
   for (const [key, parts] of answers) {
+    const tail = parts.at(-1)!;
+    const last = (tail.turnId ? byTurn.get(tail.turnId) : byGroup.get(tail.groupId))!;
+    const entries = after.get(last) ?? [];
+    const id = `answer-meta:${key}`;
+    const previous = cached?.get(id);
+    if (cached?.has(id) && !changed?.has(id)) {
+      if (previous) { entries.push(previous); after.set(last, entries); }
+      continue;
+    }
     const text = parts.map(part => readerFacingMessageText(part.message!)).filter(value => value.trim()).join("\n\n");
     if (!text.trim()) continue;
-    const tail = parts.at(-1)!;
-    let last = -1;
-    rows.forEach((row, index) => {
-      if (tail.turnId ? row.turnId === tail.turnId : row.groupId === tail.groupId) last = index;
-    });
-    const entries = after.get(last) ?? [];
     entries.push({ id: `answer-meta:${key}`, kind: "answer_meta", groupId: tail.groupId,
       turnId: tail.turnId, createdAt: tail.createdAt,
       answerMeta: { text, createdAt: Number(tail.message!.created_at ?? tail.createdAt / 1000) } });

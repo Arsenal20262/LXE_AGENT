@@ -1,6 +1,6 @@
 import type { DesktopConversationActivityPayload, DesktopConversationSendPayload, DesktopConversationTurnPayload, DesktopInputAttachmentPayload } from "@lxe/desktop-protocol";
 import type { SessionDetailPayload, SessionMessage } from "../../api/payloads";
-import { acknowledgeConversationSend, conversationRows, type ConversationRow, type PendingMessage } from "./presentation";
+import { acknowledgeConversationSend, conversationRows, composeConversationRows, projectConversationHistory, type ConversationHistoryProjection, type ConversationRow, type PendingMessage } from "./presentation";
 import { appendConversationWindow, boundConversationWindow, CONVERSATION_BYTE_BUDGET, CONVERSATION_GROUP_BUDGET, mergeLatestConversationWindow, prependConversationWindow } from "./model";
 import { isToolTerminal, mergeToolStream } from "./tool-state";
 
@@ -26,12 +26,16 @@ const groups = (page?: SessionDetailPayload) => new Set(page?.messages_page.grou
 const text = (message: SessionMessage) => Array.isArray(message.content)
   ? message.content.map(block => typeof block === "object" && block ? String("text" in block ? block.text : "thinking" in block ? block.thinking : "") : "").join("")
   : String(message.content ?? "");
+const EMPTY_MESSAGES: readonly SessionMessage[] = [];
+const activityTurnIds = (activity?: DesktopConversationActivityPayload) =>
+  new Set([activity?.active?.turn_id, activity?.latest?.turn_id, ...activity?.queued.map(turn => turn.turn_id) ?? []]);
 
 /** Selection owns a bounded reading window; pending sends outlive navigation until acknowledged. */
 export class ConversationDisplayController {
   private listeners = new Set<() => void>();
   private pending = new Map<string, PendingMessage>();
   private turns = new Map<string, DesktopConversationTurnPayload>();
+  private historyProjection?: ConversationHistoryProjection;
   // References to terminal rows in the current window, discarded on eviction/selection.
   private toolEvidence = new Map<string, ConversationRow>();
   private visible: string[] = [];
@@ -58,6 +62,7 @@ export class ConversationDisplayController {
     if (sessionId === this.state.sessionId && !newDraft) return;
     this.selection += 1;
     this.turns.clear(); this.touched.clear(); this.visible = []; this.historyRevisions.clear(); this.toolEvidence.clear();
+    this.historyProjection = undefined;
     this.state = { sessionId, viewKey: sessionId || `draft:${this.selection}`, rows: [], pending: [], connection: "attached",
       following: true, loadState: sessionId ? "loading" : "ready", error: "", jump: 0 };
     this.publish();
@@ -124,15 +129,19 @@ export class ConversationDisplayController {
         latest: active && terminal(active) ? active : activity.latest,
         queued: activity.queued.filter(turn => !terminal(this.turns.get(turn.turn_id) ?? turn)) } };
     }
-    this.pruneTurns(requestRevision);
+    this.pruneUnreferencedTurns();
+    this.confirmPersistedTurns(requestRevision);
     this.publish();
   }
   receiveActivity(activity: DesktopConversationActivityPayload): void {
     if (activity.session_id !== this.state.sessionId) return;
+    const previousIds = activityTurnIds(this.state.activity);
+    let lifecycleChanged = false;
+    const history = this.getHistoryProjection();
     for (const value of [activity.active, activity.latest, ...activity.queued]) {
       if (!value) continue;
       const previous = this.turns.get(value.turn_id);
-      const savedStatus = this.state.detail?.messages.find(message => message.turn?.turn_id === value.turn_id)?.turn?.status;
+      const savedStatus = history.savedStatus.get(value.turn_id);
       // Confirmed payloads may already have been released. A delayed running push
       // must not revive that turn or replace the persisted final text with a draft.
       const incoming = !previous && !terminal(value) && savedStatus && ["completed", "error", "cancelled"].includes(savedStatus)
@@ -140,6 +149,7 @@ export class ConversationDisplayController {
       const state = previous && terminal(previous) && !terminal(incoming) ? previous.state : incoming.state;
       const stream = mergeToolStream(previous?.stream, incoming.stream);
       const turn = previous ? { ...previous, ...incoming, state, ...(stream ? { stream } : {}) } : incoming;
+      if (!previous || previous.state !== turn.state) lifecycleChanged = true;
       if (!previous || previous.state !== turn.state || previous.stream !== turn.stream) this.touched.set(turn.turn_id, ++this.revision);
       this.turns.set(turn.turn_id, turn);
     }
@@ -148,7 +158,8 @@ export class ConversationDisplayController {
     const latest = resolve(activity.latest) ?? (active && terminal(active) ? active : null);
     this.state = { ...this.state, activity: { ...activity, active: active && !terminal(active) ? active : null, latest,
       queued: activity.queued.map(turn => resolve(turn)!).filter(turn => !terminal(turn)) } };
-    this.pruneTurns(-1);
+    const currentIds = activityTurnIds(this.state.activity);
+    if (lifecycleChanged || previousIds.size !== currentIds.size || [...currentIds].some(id => !previousIds.has(id))) this.pruneUnreferencedTurns();
     this.publish();
   }
   jumpToLatest = (): void => {
@@ -156,6 +167,7 @@ export class ConversationDisplayController {
     this.window += 1;
     this.state = { ...this.state, detail: this.state.latest, connection: "attached", following: true,
       loadState: this.state.latest || !this.state.sessionId ? "ready" : "loading", error: "", jump: this.state.jump + 1 };
+    this.pruneUnreferencedTurns();
     this.publish();
   };
   beginSend(message: string, attachments: DesktopInputAttachmentPayload[]): SendTicket {
@@ -176,6 +188,7 @@ export class ConversationDisplayController {
       if (!completedInHistory) this.receiveActivity(acknowledgeConversationSend(this.state.activity, result, accepted));
       if (this.state.detail) this.confirmPending(this.state.detail.messages);
     }
+    this.pruneUnreferencedTurns();
     this.publish();
     return selected;
   }
@@ -193,16 +206,26 @@ export class ConversationDisplayController {
       if (item.attachments.every(attachment => attachments.has(attachment.attachment_id))) this.pending.delete(id);
     }
   }
-  private pruneTurns(requestRevision: number): void {
-    const history = conversationRows(this.state.detail?.messages ?? [], [], []);
-    const stored = new Map(history.map(row => [row.id, row]));
-    const shownTurns = new Set(history.map(row => row.turnId));
-    const current = new Set([this.state.activity?.active?.turn_id, this.state.activity?.latest?.turn_id, ...this.state.activity?.queued.map(turn => turn.turn_id) ?? []]);
+  private getHistoryProjection(): ConversationHistoryProjection {
+    const messages = this.state.detail?.messages ?? EMPTY_MESSAGES;
+    if (this.historyProjection?.source !== messages) this.historyProjection = projectConversationHistory(messages);
+    return this.historyProjection;
+  }
+  private dropTurn(id: string): void {
+    this.turns.delete(id); this.touched.delete(id); this.historyRevisions.delete(id);
+  }
+  private pruneUnreferencedTurns(): void {
+    const shownTurns = this.getHistoryProjection().shownTurns;
+    const current = activityTurnIds(this.state.activity);
+    const pendingTurns = new Set([...this.pending.values()].map(item => item.turnId));
+    for (const [id, turn] of this.turns) {
+      if (terminal(turn) && !shownTurns.has(id) && !current.has(id) && !pendingTurns.has(id)) this.dropTurn(id);
+    }
+  }
+  private confirmPersistedTurns(requestRevision: number): void {
+    const stored = this.getHistoryProjection().byId;
     for (const [id, turn] of this.turns) {
       if (!terminal(turn)) continue;
-      if (!shownTurns.has(id) && !current.has(id) && ![...this.pending.values()].some(item => item.turnId === id)) {
-        this.turns.delete(id); this.touched.delete(id); this.historyRevisions.delete(id); continue;
-      }
       if ((this.touched.get(id) ?? 0) > requestRevision) continue;
       const rows = conversationRows([], [turn], []).filter(row => row.kind !== "answer_meta");
       const confirmed = rows.every(row => {
@@ -215,14 +238,14 @@ export class ConversationDisplayController {
         return isToolTerminal(liveStatus) && saved.operation?.result !== undefined
           && saved.operation?.status === liveStatus;
       });
-      if (confirmed) { this.turns.delete(id); this.touched.delete(id); this.historyRevisions.delete(id); }
+      if (confirmed) this.dropTurn(id);
     }
   }
   private publish(): void {
     const pending = [...this.pending.values()].filter(item => item.sessionId === this.state.sessionId && (item.sessionId || item.draftKey === this.state.viewKey));
     const turns = this.state.connection === "attached" ? [...this.turns.values()] : [];
     const changedDuringHistory = new Set([...this.touched].filter(([id, revision]) => revision > (this.historyRevisions.get(id) ?? -1)).map(([id]) => id));
-    const rows = conversationRows(this.state.detail?.messages ?? [], turns, this.state.connection === "attached" ? pending : [], changedDuringHistory);
+    const rows = composeConversationRows(this.getHistoryProjection(), turns, this.state.connection === "attached" ? pending : [], changedDuringHistory);
     const evidence = new Map<string, ConversationRow>();
     for (let index = 0; index < rows.length; index++) {
       const row = rows[index]!;
