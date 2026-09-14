@@ -640,7 +640,7 @@ export const ZH_TEXT = {
       base: "模型设置",
       ziniao: "紫鸟自动化",
       mabang: "马帮",
-      yacang: "雅仓库存导出",
+      yacang: "雅仓数据导出",
       feishu: "飞书",
       logging: "日志与排障"
     },
@@ -776,7 +776,7 @@ export const ZH_TEXT = {
       passwordPlaceholder: "输入马帮密码"
     },
     yacang: {
-      description: "账号与密码使用系统安全存储；配置后可自动登录并导出四仓库存动销表。",
+      description: "账号与密码使用系统安全存储；配置后可供已注册的雅仓数据导出流程自动登录。",
       mobile: "雅仓账号",
       password: "雅仓密码",
       passwordPlaceholder: "输入雅仓密码"
@@ -1472,7 +1472,7 @@ export const UI_TEXT: Record<Language, UiText> = {
         base: "Model settings",
         ziniao: "ZiNiao automation",
         mabang: "Mabang",
-        yacang: "Yacang inventory export",
+        yacang: "Yacang data export",
         feishu: "Feishu",
         logging: "Logs & diagnostics"
       },
@@ -1608,7 +1608,7 @@ export const UI_TEXT: Record<Language, UiText> = {
         passwordPlaceholder: "Enter the Mabang password"
       },
       yacang: {
-        description: "The account and password use system secure storage and enable automatic four-warehouse inventory-sales exports.",
+        description: "The account and password use system secure storage for registered Yacang data export workflows.",
         mobile: "Yacang account",
         password: "Yacang password",
         passwordPlaceholder: "Enter the Yacang password"

@@ -13,8 +13,8 @@ def _skill_text(name: str) -> str:
 
 def test_repository_skill_inventory_distinguishes_top_level_and_nested_manifests() -> None:
     skill_root = PROJECT_ROOT / "skills"
-    assert len(list(skill_root.glob("*/SKILL.md"))) == 29
-    assert len(list(skill_root.rglob("SKILL.md"))) == 56
+    assert len(list(skill_root.glob("*/SKILL.md"))) == 34
+    assert len(list(skill_root.rglob("SKILL.md"))) == 61
     assert not (skill_root / "feishu-im-read" / "SKILL.md").exists()
     assert (skill_root / "larksuite-cli" / "lark-im" / "SKILL.md").exists()
 
@@ -29,6 +29,60 @@ def test_yacang_export_skill_uses_one_declared_command_and_four_deliverables() -
     assert "terminal `files`" in text
     assert "send_files(paths=<terminal.files>)" in text
     assert "15 天销量" in text
+
+
+def test_yacang_sales_exports_have_fixed_columns_and_router_is_commandless() -> None:
+    catalog = load_catalog()
+    entry = catalog["yacang_export_sales_monthly"]
+    assert entry["command_path"] == ["yacang", "export", "sales-monthly"]
+    assert entry["owner_skills"] == ["yacang-sales-monthly-export"]
+    assert entry["artifact_paths"] == [{"field": "xlsx_paths[]", "role": "deliverable"}]
+    assert "range_days" not in entry["input_schema"]["properties"]
+
+    monthly = _skill_text("yacang-sales-monthly-export")
+    assert "7/15/30" in monthly
+    assert "send_files(paths=<terminal.files>)" in monthly
+    assert "禁止直接执行 Python 模块" in monthly
+
+    sales_90d = catalog["yacang_export_sales_90d"]
+    assert sales_90d["command_path"] == ["yacang", "export", "sales-90d"]
+    assert sales_90d["owner_skills"] == ["yacang-sales-90d-export"]
+    assert sales_90d["artifact_paths"] == [{"field": "xlsx_paths[]", "role": "deliverable"}]
+    assert "90天销量" in _skill_text("yacang-sales-90d-export")
+
+    router = _skill_text("yacang-export-workflow-map")
+    assert "commands:" not in router.split("---", 2)[1]
+    assert "禁止自行尝试相似 endpoint" in router
+    assert "不得改走其他雅仓命令冒充成功" in router
+
+
+def test_yacang_inventory_month_end_uses_confirmed_current_inventory_contract() -> None:
+    catalog = load_catalog()
+    entry = catalog["yacang_export_inventory_month_end"]
+    assert entry["command_path"] == ["yacang", "export", "inventory-month-end"]
+    assert entry["owner_skills"] == ["yacang-inventory-month-end-export"]
+    assert entry["artifact_paths"] == [{"field": "xlsx_paths[]", "role": "deliverable"}]
+    assert entry["input_schema"]["properties"]["warehouse"]["enum"] == [
+        "MY8801", "PH8805", "TH8802", "VN8806",
+    ]
+
+    text = _skill_text("yacang-inventory-month-end-export")
+    assert "当前库存" in text
+    assert "不支持历史" in text
+    assert "send_files(paths=<terminal.files>)" in text
+
+
+def test_yacang_inbound_listing_time_uses_confirmed_creation_time_contract() -> None:
+    catalog = load_catalog()
+    entry = catalog["yacang_export_inbound_listing_time"]
+    assert entry["command_path"] == ["yacang", "export", "inbound-listing-time"]
+    assert entry["owner_skills"] == ["yacang-inbound-listing-time-export"]
+    assert entry["artifact_paths"] == [{"field": "xlsx_paths[]", "role": "deliverable"}]
+
+    text = _skill_text("yacang-inbound-listing-time-export")
+    assert "创建时间" in text
+    assert "export_count=1" in text
+    assert "send_files(paths=<terminal.files>)" in text
 
 
 def test_ziniao_is_independent_and_shipment_owns_only_four_stages() -> None:

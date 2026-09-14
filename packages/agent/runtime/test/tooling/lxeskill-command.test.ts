@@ -92,6 +92,38 @@ describe("lxeskill command recognition", () => {
         attributionSkill: "yacang-inventory-sales-export",
         artifactPaths: [{ field: "xlsx_paths[]", role: "deliverable" }],
       });
+    expect(entries.find((entry) => entry.name === "yacang_export_sales_monthly"))
+      .toMatchObject({
+        command: "lxeskill yacang export sales-monthly",
+        module: "services.agent_cli.yacang.export_sales_monthly",
+        ownerSkills: ["yacang-sales-monthly-export"],
+        attributionSkill: "yacang-sales-monthly-export",
+        artifactPaths: [{ field: "xlsx_paths[]", role: "deliverable" }],
+      });
+    expect(entries.find((entry) => entry.name === "yacang_export_sales_90d"))
+      .toMatchObject({
+        command: "lxeskill yacang export sales-90d",
+        module: "services.agent_cli.yacang.export_sales_90d",
+        ownerSkills: ["yacang-sales-90d-export"],
+        attributionSkill: "yacang-sales-90d-export",
+        artifactPaths: [{ field: "xlsx_paths[]", role: "deliverable" }],
+      });
+    expect(entries.find((entry) => entry.name === "yacang_export_inventory_month_end"))
+      .toMatchObject({
+        command: "lxeskill yacang export inventory-month-end",
+        module: "services.agent_cli.yacang.export_inventory_month_end",
+        ownerSkills: ["yacang-inventory-month-end-export"],
+        attributionSkill: "yacang-inventory-month-end-export",
+        artifactPaths: [{ field: "xlsx_paths[]", role: "deliverable" }],
+      });
+    expect(entries.find((entry) => entry.name === "yacang_export_inbound_listing_time"))
+      .toMatchObject({
+        command: "lxeskill yacang export inbound-listing-time",
+        module: "services.agent_cli.yacang.export_inbound_listing_time",
+        ownerSkills: ["yacang-inbound-listing-time-export"],
+        attributionSkill: "yacang-inbound-listing-time-export",
+        artifactPaths: [{ field: "xlsx_paths[]", role: "deliverable" }],
+      });
     expect(entries.find((entry) => entry.name === "ziniao_page")).toMatchObject({
       ownerSkills: ["ziniao-browser"],
       artifactPaths: [{ field: "screenshot_path", role: "model_input" }],
