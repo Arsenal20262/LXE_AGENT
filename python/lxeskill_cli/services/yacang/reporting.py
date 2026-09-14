@@ -12,7 +12,7 @@ logger = logging.getLogger("services.yacang.export")
 
 def error_fields(exc: Exception) -> dict[str, Any]:
     if isinstance(exc, YacangError):
-        return exc.diagnostic()
+        return {**exc.diagnostic(), "error_scope": exc.scope}
     return {
         "error_code": type(exc).__name__.upper(),
         "stage": "输入校验" if isinstance(exc, (TypeError, ValueError)) else "执行",
@@ -68,7 +68,7 @@ def summarize_exports(exports: list[dict[str, Any]]) -> dict[str, Any]:
     else:
         overall = "failed"
     summary = {
-        "success": bool(success_items),
+        "success": overall == "success",
         "overall_status": overall,
         "success_count": len(success_items),
         "failed_count": len(failed_items),

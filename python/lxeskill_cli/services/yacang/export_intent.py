@@ -472,7 +472,16 @@ def _parse_data_type_intent(
     )
     bare_month_end = any(marker in text for marker in ("月底库存", "月末库存", "月末快照"))
     current_inventory = any(
-        marker in text for marker in ("当前库存", "现在库存", "库存现状", "现在还有多少货", "库存列表", "库存快照")
+        marker in text
+        for marker in (
+            "当前库存",
+            "现在库存",
+            "库存现状",
+            "现在还有多少货",
+            "还剩多少货",
+            "库存列表",
+            "库存快照",
+        )
     )
     inventory_with_sales = "库存和销量" in text or "库存与销量" in text
     inventory_with_both_sales = "库存和两种销量" in text or "库存与两种销量" in text

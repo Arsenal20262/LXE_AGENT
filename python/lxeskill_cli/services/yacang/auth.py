@@ -16,6 +16,8 @@ def login_from_environment(
     mobile: str | None = None,
     password: str | None = None,
 ) -> None:
+    if bool(getattr(client, "is_authenticated", False)):
+        return
     account = str(mobile if mobile is not None else os.environ.get("LXE_YACANG_MOBILE", "")).strip()
     secret = str(password if password is not None else os.environ.get("LXE_YACANG_PASSWORD", "")).strip()
     if not account or not secret:

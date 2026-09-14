@@ -8,7 +8,7 @@ import requests
 from services.yacang.client import YacangClient
 from services.yacang.errors import YacangError, safe_remote_detail
 from services.yacang.production import MemoryCooldownStore, MemoryRequestGate, YacangProductionGuard
-from services.yacang.reporting import failed_export
+from services.yacang.reporting import failed_export, summarize_exports
 
 
 class FailingSession:
@@ -67,3 +67,13 @@ def test_structured_log_has_context_but_no_secret(caplog) -> None:
         assert expected in rendered
     assert "hidden-token" not in rendered
     assert "example.invalid" not in rendered
+
+
+def test_legacy_summary_success_boolean_is_false_for_partial_success() -> None:
+    summary = summarize_exports([
+        {"status": "success", "xlsx_path": "success.xlsx"},
+        {"status": "failed", "error_code": "FIXTURE_FAILURE"},
+    ])
+
+    assert summary["overall_status"] == "partial_success"
+    assert summary["success"] is False

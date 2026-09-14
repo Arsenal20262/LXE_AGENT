@@ -8,14 +8,16 @@ from enum import StrEnum
 class YacangExportKind(StrEnum):
     SALES_MONTHLY = "sales-monthly"
     SALES_90D = "sales-90d"
-    INVENTORY_MONTH_END = "inventory-month-end"
+    INVENTORY_CURRENT_SNAPSHOT = "inventory-current-snapshot"
+    # Compatibility alias for existing internal callers. Its value stays canonical.
+    INVENTORY_MONTH_END = INVENTORY_CURRENT_SNAPSHOT
     INBOUND_LISTING_TIME = "inbound-listing-time"
 
 
 WAREHOUSE_EXPORTS = {
     YacangExportKind.SALES_MONTHLY,
     YacangExportKind.SALES_90D,
-    YacangExportKind.INVENTORY_MONTH_END,
+    YacangExportKind.INVENTORY_CURRENT_SNAPSHOT,
 }
 SALES_MONTHLY_WINDOWS = (7, 15, 30)
 _WINDOWS_RESERVED_NAMES = {
@@ -35,7 +37,7 @@ def business_name(kind: YacangExportKind, *, range_days: int | None = None) -> s
         raise ValueError(f"{kind.value} 不接受 range_days")
     return {
         YacangExportKind.SALES_90D: "雅仓系统-库存动销-日度90天",
-        YacangExportKind.INVENTORY_MONTH_END: "雅仓系统-库存列表",
+        YacangExportKind.INVENTORY_CURRENT_SNAPSHOT: "雅仓系统-库存列表",
         YacangExportKind.INBOUND_LISTING_TIME: "雅仓系统-产品-仓库产品",
     }[kind]
 

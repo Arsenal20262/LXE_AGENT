@@ -1,17 +1,27 @@
 from __future__ import annotations
 
 import json
-from datetime import date
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import pytest
 from openpyxl import Workbook, load_workbook
 
 from services.agent_cli.yacang.export_sales_90d import run as run_sales_90d
 from services.agent_cli.yacang.export_sales_monthly import run as run_sales_monthly
-from services.yacang.exports.sales_90d import export_sales_90d
-from services.yacang.exports.sales_monthly import export_sales_monthly
+from services.yacang.export_intent import normalize_export_intent
+from services.yacang.export_workflow import plan_export_workflow
+from services.yacang.exports.sales_90d import export_sales_90d, project_sales_90d_sources
+from services.yacang.exports.sales_monthly import (
+    export_sales_monthly,
+    project_sales_monthly_sources,
+)
+from services.yacang.exports.sales_source import (
+    InventorySalesSourceBatch,
+    acquire_inventory_sales_sources,
+)
 from services.yacang.projection import SALES_90D_HEADERS, SALES_MONTHLY_HEADERS
 from services.yacang.validation import INVENTORY_SALES_HEADERS
 from services.yacang.warehouses import WAREHOUSES
@@ -50,6 +60,7 @@ class FakeClient:
     def __init__(self) -> None:
         self.login_calls: list[tuple[str, str]] = []
         self.submissions: list[tuple[int, str, str]] = []
+        self.download_calls: list[str] = []
         self.current: tuple[int, str, str] | None = None
 
     def login(self, mobile: str, password: str) -> None:
@@ -59,6 +70,17 @@ class FakeClient:
         if self.current is None:
             return []
         warehouse_id, start_date, end_date = self.current
+        yacang_timezone = ZoneInfo("Asia/Shanghai")
+        start_timestamp = int(
+            datetime.combine(date.fromisoformat(start_date), time.min, tzinfo=yacang_timezone).timestamp()
+        )
+        end_exclusive_timestamp = int(
+            datetime.combine(
+                date.fromisoformat(end_date) + timedelta(days=1),
+                time.min,
+                tzinfo=yacang_timezone,
+            ).timestamp()
+        )
         return [{
             "id": f"{warehouse_id}-{start_date}-{end_date}",
             "name": "库存动销导出",
@@ -66,8 +88,8 @@ class FakeClient:
             "path": f"https://oss-accelerate.seaya.cn/example/{warehouse_id}.xlsx",
             "param_where": json.dumps([
                 ["warehouse_id", "in", [str(warehouse_id)]],
-                ["create_time", ">=", 1788624000],
-                ["create_time", "<", 1789315200],
+                ["create_time", ">=", start_timestamp],
+                ["create_time", "<", end_exclusive_timestamp],
             ]),
         }]
 
@@ -77,8 +99,70 @@ class FakeClient:
         return "fake-request-id"
 
     def download_xlsx(self, url: str, destination: Path) -> None:
+        self.download_calls.append(url)
         warehouse = next(item.code for item in WAREHOUSES if f"/{item.warehouse_id}.xlsx" in url)
         _write_xlsx(destination, warehouse)
+
+
+def test_planned_source_fetch_is_acquired_once_and_projected_twice(tmp_path: Path) -> None:
+    normalized = normalize_export_intent(
+        "导出 MY8801 的两种销量",
+        today=lambda: date(2026, 9, 14),
+    )
+    plan = plan_export_workflow(normalized, execution_date="2026-09-14")
+    client = FakeClient()
+
+    batch = acquire_inventory_sales_sources(
+        plan["source_fetches"],
+        mobile="account",
+        password="password",
+        output_dir=tmp_path,
+        cache_max_age_seconds=0,
+        client=client,  # type: ignore[arg-type]
+        sleep=lambda _seconds: None,
+    )
+    monthly = project_sales_monthly_sources(batch, output_dir=tmp_path)
+    daily = project_sales_90d_sources(batch, output_dir=tmp_path)
+
+    assert len(plan["source_fetches"]) == 1
+    assert client.login_calls == [("account", "password")]
+    assert client.submissions == [(26, "2026-09-07", "2026-09-14")]
+    assert len(client.download_calls) == 1
+    source_fetch_id = plan["source_fetches"][0]["source_fetch_id"]
+    assert batch.results[0]["source_fetch_id"] == source_fetch_id
+    assert monthly["exports"][0]["source_fetch_id"] == source_fetch_id
+    assert daily["exports"][0]["source_fetch_id"] == source_fetch_id
+    assert _headers(monthly["xlsx_paths"][0]) == SALES_MONTHLY_HEADERS
+    assert _headers(daily["xlsx_paths"][0]) == SALES_90D_HEADERS
+
+
+def test_failed_shared_source_fans_out_to_both_projections_without_artifacts(tmp_path: Path) -> None:
+    source_fetch_id = "inventory-sales-source:MY8801:2026-09-07:2026-09-14"
+    batch = InventorySalesSourceBatch(
+        created_start_date="2026-09-07",
+        created_end_date="2026-09-14",
+        results=(
+            {
+                "warehouse": "MY8801",
+                "status": "failed",
+                "source_fetch_id": source_fetch_id,
+                "error_code": "EXPORT_POLL_TIMEOUT",
+                "stage": "轮询导出队列",
+                "error_type": "YacangError",
+                "error": "导出任务轮询超时",
+            },
+        ),
+    )
+
+    monthly = project_sales_monthly_sources(batch, output_dir=tmp_path)
+    daily = project_sales_90d_sources(batch, output_dir=tmp_path)
+
+    assert monthly["xlsx_paths"] == []
+    assert daily["xlsx_paths"] == []
+    assert monthly["exports"][0]["source_fetch_id"] == source_fetch_id
+    assert daily["exports"][0]["source_fetch_id"] == source_fetch_id
+    assert monthly["exports"][0]["error_code"] == "EXPORT_POLL_TIMEOUT"
+    assert daily["exports"][0]["error_code"] == "EXPORT_POLL_TIMEOUT"
 
 
 def test_exports_one_7_15_30_workbook_per_warehouse_from_four_source_requests(tmp_path: Path) -> None:
@@ -157,6 +241,28 @@ def test_second_sales_projection_reuses_the_same_four_source_workbooks(tmp_path:
     assert len(client.submissions) == 4
     assert result["sales_window_days"] == 90
     assert {item["source"] for item in result["exports"]} == {"cache"}
+
+
+def test_explicit_source_range_and_warehouse_subset_are_preserved(tmp_path: Path) -> None:
+    client = FakeClient()
+    result = export_sales_monthly(
+        start_date="2026-08-01",
+        end_date="2026-09-13",
+        warehouses=["TH8802", "MY8801"],
+        mobile="account",
+        password="password",
+        output_dir=tmp_path,
+        cache_max_age_seconds=0,
+        client=client,  # type: ignore[arg-type]
+        sleep=lambda _seconds: None,
+    )
+
+    assert client.submissions == [
+        (26, "2026-08-01", "2026-09-13"),
+        (47, "2026-08-01", "2026-09-13"),
+    ]
+    assert result["warehouse_count"] == 2
+    assert [item["warehouse"] for item in result["exports"]] == ["MY8801", "TH8802"]
 
 
 @pytest.mark.parametrize(

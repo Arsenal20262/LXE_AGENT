@@ -88,40 +88,48 @@ describe("lxeskill command recognition", () => {
       .toMatchObject({
         command: "lxeskill yacang inventory-sales export",
         module: "services.agent_cli.yacang.export_inventory_sales",
-        ownerSkills: ["yacang-inventory-sales-export"],
-        attributionSkill: "yacang-inventory-sales-export",
+        visibility: "internal",
+        ownerSkills: [],
         artifactPaths: [{ field: "xlsx_paths[]", role: "deliverable" }],
+      });
+    expect(entries.find((entry) => entry.name === "yacang_export_workflow"))
+      .toMatchObject({
+        command: "lxeskill yacang export run",
+        module: "services.agent_cli.yacang.export_workflow",
+        ownerSkills: ["yacang-export-workflow-map"],
+        attributionSkill: "yacang-export-workflow-map",
+        artifactPaths: [{ field: "artifacts[].path", role: "deliverable" }],
       });
     expect(entries.find((entry) => entry.name === "yacang_export_sales_monthly"))
       .toMatchObject({
         command: "lxeskill yacang export sales-monthly",
         module: "services.agent_cli.yacang.export_sales_monthly",
-        ownerSkills: ["yacang-sales-monthly-export"],
-        attributionSkill: "yacang-sales-monthly-export",
+        visibility: "internal",
+        ownerSkills: [],
         artifactPaths: [{ field: "xlsx_paths[]", role: "deliverable" }],
       });
     expect(entries.find((entry) => entry.name === "yacang_export_sales_90d"))
       .toMatchObject({
         command: "lxeskill yacang export sales-90d",
         module: "services.agent_cli.yacang.export_sales_90d",
-        ownerSkills: ["yacang-sales-90d-export"],
-        attributionSkill: "yacang-sales-90d-export",
+        visibility: "internal",
+        ownerSkills: [],
         artifactPaths: [{ field: "xlsx_paths[]", role: "deliverable" }],
       });
     expect(entries.find((entry) => entry.name === "yacang_export_inventory_month_end"))
       .toMatchObject({
         command: "lxeskill yacang export inventory-month-end",
         module: "services.agent_cli.yacang.export_inventory_month_end",
-        ownerSkills: ["yacang-inventory-month-end-export"],
-        attributionSkill: "yacang-inventory-month-end-export",
+        visibility: "internal",
+        ownerSkills: [],
         artifactPaths: [{ field: "xlsx_paths[]", role: "deliverable" }],
       });
     expect(entries.find((entry) => entry.name === "yacang_export_inbound_listing_time"))
       .toMatchObject({
         command: "lxeskill yacang export inbound-listing-time",
         module: "services.agent_cli.yacang.export_inbound_listing_time",
-        ownerSkills: ["yacang-inbound-listing-time-export"],
-        attributionSkill: "yacang-inbound-listing-time-export",
+        visibility: "internal",
+        ownerSkills: [],
         artifactPaths: [{ field: "xlsx_paths[]", role: "deliverable" }],
       });
     expect(entries.find((entry) => entry.name === "ziniao_page")).toMatchObject({
@@ -129,6 +137,11 @@ describe("lxeskill command recognition", () => {
       artifactPaths: [{ field: "screenshot_path", role: "model_input" }],
       attributionSkill: "ziniao-browser",
     });
+
+    expect(entries
+      .filter((entry) => entry.command.startsWith("lxeskill yacang ") && entry.visibility !== "internal")
+      .map((entry) => entry.command))
+      .toEqual(["lxeskill yacang export run"]);
     expect(entries.find((entry) => entry.name === "mabang_resolve_fba_store"))
       .toMatchObject({
         attributionSkill: "replenishment-store-resolve",
