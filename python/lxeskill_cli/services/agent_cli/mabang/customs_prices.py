@@ -64,7 +64,7 @@ def read_prices(path: Path) -> list[PriceRow]:
         for index, sku, kind, cost, values, _ in _rows(workbook["备货单"], (*required, "库存sku")):
             skus = {sku}
             for raw in re.split(r"[，,;；\r\n]+", str(values.get("库存sku") or "")):
-                raw = re.sub(r"\s*[×xX*]\s*\d+(?:\.\d+)?\s*$", "", raw.strip())
+                raw = re.sub(r"\s*×\s*\d+(?:\.\d+)?\s*$", "", raw.strip())
                 if raw:
                     skus.add(key(raw))
             coverage.append((sku, kind, cost, frozenset(skus), index))

@@ -82,6 +82,16 @@ def test_price_ambiguity_is_not_first_match(tmp_path):
         match_price(rows + [rows[0]], "SKU-A", {"source_kind": "current_purchase", "purchase_price": 3})
 
 
+def test_plain_sku_ending_in_x_digits_is_not_a_quantity(tmp_path):
+    path = prices_file(tmp_path / "prices.xlsx")
+    workbook = load_workbook(path)
+    workbook["备货单"]["G2"] = "SKU-A × 70\nSKU-X123\nSKU-BX456 × 110"
+    workbook.save(path)
+    workbook.close()
+    row = read_prices(path)[0]
+    assert row.skus == {"SKU-A", "SKU-X123", "SKU-BX456"}
+
+
 def test_preview_then_fill_uses_erp_quantities_and_frozen_prices(setup):
     args, erp, downloads, calls, csv = setup
     preview = cli.preview(args)
