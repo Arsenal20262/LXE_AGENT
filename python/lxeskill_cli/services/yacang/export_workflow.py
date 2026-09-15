@@ -8,7 +8,7 @@ from services.yacang.export_intent import (
     WAREHOUSE_CODES,
     normalize_export_intent,
 )
-from services.yacang.exports.sales_source import resolve_source_date_range
+from services.yacang.exports.sales_source import resolve_source_date_range, sales_source_fetch_id
 
 
 _SALES_DATA_TYPES = frozenset({"sales-monthly", "sales-90d"})
@@ -84,14 +84,6 @@ class CanonicalExportResult(TypedDict):
 ExportPlanExecutor = Callable[[ExportPlan], CanonicalExportResult]
 
 
-def sales_source_fetch_id(
-    warehouse_code: str,
-    created_start_date: str,
-    created_end_date: str,
-) -> str:
-    return f"inventory-sales-source:{warehouse_code}:{created_start_date}:{created_end_date}"
-
-
 def plan_export_workflow(
     normalized: Mapping[str, Any],
     *,
@@ -118,7 +110,11 @@ def plan_export_workflow(
         raise ValueError("无歧义的雅仓意图必须包含 effective_request")
     data_types = _ordered_data_types(effective_request.get("data_types"))
     warehouses = _ordered_warehouses(effective_request.get("warehouses"))
-    created_date_filter = _created_date_filter(effective_request) if _has_sales(data_types) else None
+    created_date_filter = (
+        _created_date_filter(effective_request)
+        if any(data_type in _SALES_DATA_TYPES for data_type in data_types)
+        else None
+    )
     logical_tasks: list[dict[str, Any]] = []
     source_fetches: list[dict[str, Any]] = []
     known_source_fetches: set[str] = set()
@@ -355,10 +351,6 @@ def _created_date_filter(effective_request: Mapping[str, Any]) -> dict[str, Any]
         if not str(result.get(field) or "").strip():
             raise ValueError(f"created_date_filter 缺少 {field}")
     return result
-
-
-def _has_sales(data_types: Sequence[str]) -> bool:
-    return any(data_type in _SALES_DATA_TYPES for data_type in data_types)
 
 
 def _records(value: Any) -> list[dict[str, Any]]:

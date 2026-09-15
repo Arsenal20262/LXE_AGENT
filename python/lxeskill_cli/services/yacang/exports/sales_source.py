@@ -77,7 +77,7 @@ def acquire_inventory_sales_sources(
         )
         selected_warehouses = select_warehouses(warehouses)
         source_fetch_ids = {
-            warehouse.code: _source_fetch_id(warehouse.code, start.isoformat(), end.isoformat())
+            warehouse.code: sales_source_fetch_id(warehouse.code, start.isoformat(), end.isoformat())
             for warehouse in selected_warehouses
         }
     else:
@@ -193,7 +193,7 @@ def _planned_source_requests(
             start, end = current_start, current_end
         elif (start, end) != (current_start, current_end):
             raise ValueError("同一 source batch 的商品创建日期范围必须一致")
-        expected_id = _source_fetch_id(warehouse, current_start.isoformat(), current_end.isoformat())
+        expected_id = sales_source_fetch_id(warehouse, current_start.isoformat(), current_end.isoformat())
         actual_id = str(fetch.get("source_fetch_id") or "")
         if actual_id != expected_id:
             raise ValueError("source_fetch_id 与仓库及商品创建日期范围不一致")
@@ -206,8 +206,12 @@ def _planned_source_requests(
     return start, end, selected_warehouses, fetch_ids
 
 
-def _source_fetch_id(warehouse: str, start_date: str, end_date: str) -> str:
-    return f"inventory-sales-source:{warehouse}:{start_date}:{end_date}"
+def sales_source_fetch_id(
+    warehouse_code: str,
+    created_start_date: str,
+    created_end_date: str,
+) -> str:
+    return f"inventory-sales-source:{warehouse_code}:{created_start_date}:{created_end_date}"
 
 
 __all__ = [
@@ -216,4 +220,5 @@ __all__ = [
     "acquire_inventory_sales_sources",
     "download_inventory_sales_sources",
     "resolve_source_date_range",
+    "sales_source_fetch_id",
 ]

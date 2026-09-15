@@ -28,7 +28,7 @@ from services.yacang.submission import (
     submission_key,
 )
 from services.yacang.validation import validate_inventory_list_workbook
-from services.yacang.warehouses import Warehouse, select_warehouses
+from services.yacang.warehouses import select_warehouses
 from shared.datasets import dataset_dir
 
 
@@ -118,10 +118,6 @@ def _resolve_as_of_date(value: Any, *, today: Callable[[], date]) -> str:
     return requested
 
 
-def _select_warehouses(value: Any) -> tuple[Warehouse, ...]:
-    return select_warehouses(value)
-
-
 def export_inventory_current_snapshot(
     *,
     as_of_date: Any = None,
@@ -143,7 +139,7 @@ def export_inventory_current_snapshot(
     snapshot_date = _resolve_as_of_date(as_of_date, today=today)
     if warehouse is not None and warehouses is not None:
         raise ValueError("warehouse 和 warehouses 不能同时提供")
-    selected_warehouses = _select_warehouses(warehouses if warehouses is not None else warehouse)
+    selected_warehouses = select_warehouses(warehouses if warehouses is not None else warehouse)
     requests: Sequence[InventoryCurrentSnapshotRequest] = tuple(
         InventoryCurrentSnapshotRequest(spec.code, spec.warehouse_id, snapshot_date)
         for spec in selected_warehouses

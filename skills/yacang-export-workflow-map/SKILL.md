@@ -53,6 +53,4 @@ Agent 只允许调用 frontmatter 声明的统一命令。类型级 CLI 仅用�
 - 只把最后一条 `type="result"` 记录作为 terminal；业务结果在 `data`，附件在 `files`。
 - 核对 `overall_status`、`tasks`、`artifacts`、`questions` 与 `diagnostics`。
 - `terminal.files` 非空时一次调用 `send_files(paths=<terminal.files>)`；部分成功时保留并交付成功文件，同时报告失败和跳过项。
-- `overall_status=failed` 且诊断为 `YACANG_EXECUTOR_NOT_IMPLEMENTED` 表示当前执行器仍处于 fail-closed 阶段，不能冒充导出成功。
-
 真实调用默认关闭。只有运行环境显式设置 `LXE_YACANG_PROD_ENABLED=true` 且凭据完整时，底层命令才允许获取验证码、登录、提交、轮询或下载；Agent 不得根据“检测到凭据”自行开启生产访问。遇到 403、429、认证异常、导出状态未知或提交结果不明确时，遵从命令返回的停止/跳过结果，不得自行重跑。
