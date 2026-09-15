@@ -10,6 +10,7 @@ import pytest
 import services.yacang.export_executor as executor_module
 from services.agent_cli.yacang.export_workflow import run as run_export_workflow_cli
 from services.agent_cli.yacang.preview_workflow import run as run_preview_workflow_cli
+from services.yacang.auth import login_from_environment
 from services.yacang.errors import YacangError
 from services.yacang.export_executor import execute_export_plan
 from services.yacang.export_intent import normalize_export_intent
@@ -22,6 +23,7 @@ from services.yacang.export_workflow import (
     sales_source_fetch_id,
 )
 from services.yacang.exports.sales_source import InventorySalesSourceBatch
+from services.yacang.submission import YacangSubmissionStore
 
 
 FIXED_TODAY = lambda: date(2026, 9, 14)
@@ -424,6 +426,98 @@ def test_executor_acquires_shared_sales_source_once_then_projects_both_types(
     ]
     assert all("xlsx_path" not in artifact for artifact in result["artifacts"])
     assert all("raw-" not in artifact["path"] for artifact in result["artifacts"])
+
+
+@pytest.mark.parametrize(
+    ("request_text", "expected_context_uses"),
+    [
+        ("导出四个仓库最近一个月销量", 1),
+        ("导出四个仓库近90天每天销量", 1),
+        ("导出四个仓库两种销量", 1),
+        ("导出四个仓库当前库存", 4),
+        ("导出入库和上架时间", 1),
+        ("导出雅仓数据", 6),
+        ("导出 MY8801 全部数据", 3),
+    ],
+)
+def test_executor_reuses_one_authenticated_client_and_persistent_submission_store(
+    monkeypatch,
+    tmp_path: Path,
+    request_text: str,
+    expected_context_uses: int,
+) -> None:
+    plan = plan_export_workflow(normalized(request_text), execution_date="2026-09-14")
+    created_clients: list[object] = []
+    context_clients: list[object] = []
+    context_stores: list[object] = []
+
+    class ClientProbe:
+        def __init__(self) -> None:
+            self.authenticated = False
+            self.login_calls = 0
+
+        @property
+        def is_authenticated(self) -> bool:
+            return self.authenticated
+
+        def login(self, _mobile: str, _password: str) -> None:
+            self.login_calls += 1
+            self.authenticated = True
+
+    def create_client() -> ClientProbe:
+        client = ClientProbe()
+        created_clients.append(client)
+        return client
+
+    def authenticate(client: ClientProbe, submission_store: object) -> None:
+        context_clients.append(client)
+        context_stores.append(submission_store)
+        assert isinstance(submission_store, YacangSubmissionStore)
+        login_from_environment(client, mobile="account", password="password")
+
+    def acquire(_source_fetches, *, client, submission_store, **_kwargs):
+        authenticate(client, submission_store)
+        return _source_batch(plan)
+
+    def inventory(*, warehouse, client, submission_store, **_kwargs):
+        authenticate(client, submission_store)
+        return _successful_export(
+            "inventory-current-snapshot",
+            warehouse,
+            tmp_path / f"inventory-{warehouse}.xlsx",
+        )
+
+    def inbound(*, client, submission_store, **_kwargs):
+        authenticate(client, submission_store)
+        return _successful_export("inbound-listing-time", None, tmp_path / "inbound.xlsx")
+
+    monkeypatch.setattr(executor_module, "YacangClient", create_client, raising=False)
+    monkeypatch.setattr(executor_module, "acquire_inventory_sales_sources", acquire)
+    monkeypatch.setattr(
+        executor_module,
+        "project_sales_monthly_sources",
+        lambda _batch, *, warehouses, **_kwargs: _successful_export(
+            "sales-monthly", warehouses[0], tmp_path / f"monthly-{warehouses[0]}.xlsx"
+        ),
+    )
+    monkeypatch.setattr(
+        executor_module,
+        "project_sales_90d_sources",
+        lambda _batch, *, warehouses, **_kwargs: _successful_export(
+            "sales-90d", warehouses[0], tmp_path / f"daily-{warehouses[0]}.xlsx"
+        ),
+    )
+    monkeypatch.setattr(executor_module, "export_inventory_current_snapshot", inventory)
+    monkeypatch.setattr(executor_module, "export_inbound_listing_time", inbound)
+
+    result = execute_export_plan(plan)
+
+    assert result["overall_status"] == "success"
+    assert len(created_clients) == 1
+    assert len(context_clients) == expected_context_uses
+    assert len({id(client) for client in context_clients}) == 1
+    assert len({id(store) for store in context_stores}) == 1
+    assert created_clients[0].login_calls == 1
 
 
 def test_executor_preserves_fixed_type_and_warehouse_execution_order(monkeypatch, tmp_path: Path) -> None:

@@ -4,6 +4,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from services.yacang.client import YacangClient
 from services.yacang.errors import YacangError, safe_remote_detail
 from services.yacang.export_workflow import (
     CanonicalExportResult,
@@ -20,6 +21,7 @@ from services.yacang.exports.sales_source import (
     acquire_inventory_sales_sources,
 )
 from services.yacang.reporting import error_fields, is_global_error
+from services.yacang.submission import SubmissionBackend, YacangSubmissionStore
 from shared.datasets import dataset_dir
 
 
@@ -52,6 +54,8 @@ def execute_export_plan(plan: ExportPlan) -> CanonicalExportResult:
     artifacts: list[dict[str, Any]] = []
     task_results: list[dict[str, Any]] = []
     output_dir = dataset_dir("yacang_exports")
+    client = YacangClient()
+    submission_store = YacangSubmissionStore()
 
     source_batch: InventorySalesSourceBatch | None = None
     source_error: Exception | None = None
@@ -61,6 +65,8 @@ def execute_export_plan(plan: ExportPlan) -> CanonicalExportResult:
             source_batch = acquire_inventory_sales_sources(
                 unique_fetches,
                 output_dir=output_dir,
+                client=client,
+                submission_store=submission_store,
             )
         except Exception as exc:  # noqa: BLE001 - converted to sanitized canonical diagnostics
             source_error = exc
@@ -91,6 +97,8 @@ def execute_export_plan(plan: ExportPlan) -> CanonicalExportResult:
                 source_batch=source_batch,
                 execution_date=validated["execution_date"],
                 output_dir=output_dir,
+                client=client,
+                submission_store=submission_store,
             )
             result, artifact, diagnostic = _consume_task_summary(task, summary)
         except Exception as exc:  # noqa: BLE001 - converted to sanitized canonical diagnostics
@@ -133,6 +141,8 @@ def _execute_logical_task(
     source_batch: InventorySalesSourceBatch | None,
     execution_date: str,
     output_dir: Path,
+    client: YacangClient,
+    submission_store: SubmissionBackend,
 ) -> Mapping[str, Any]:
     data_type = str(task.get("data_type") or "")
     warehouse = str(task.get("warehouse") or "").strip()
@@ -169,6 +179,8 @@ def _execute_logical_task(
             warehouse=warehouse,
             output_dir=output_dir,
             today=lambda: execution_day,
+            client=client,
+            submission_store=submission_store,
         )
     if data_type == "inbound-listing-time":
         execution_day = date.fromisoformat(execution_date)
@@ -176,6 +188,8 @@ def _execute_logical_task(
             as_of_date=execution_date,
             output_dir=output_dir,
             today=lambda: execution_day,
+            client=client,
+            submission_store=submission_store,
         )
     raise ValueError(f"不支持的雅仓逻辑任务类型: {data_type}")
 
