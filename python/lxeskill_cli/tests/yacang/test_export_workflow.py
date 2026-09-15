@@ -9,6 +9,7 @@ import pytest
 
 import services.yacang.export_executor as executor_module
 from services.agent_cli.yacang.export_workflow import run as run_export_workflow_cli
+from services.agent_cli.yacang.preview_workflow import run as run_preview_workflow_cli
 from services.yacang.errors import YacangError
 from services.yacang.export_executor import execute_export_plan
 from services.yacang.export_intent import normalize_export_intent
@@ -28,6 +29,28 @@ FIXED_TODAY = lambda: date(2026, 9, 14)
 
 def normalized(text: str) -> dict:
     return normalize_export_intent(text, today=FIXED_TODAY)
+
+
+def test_preview_command_returns_plan_without_executing(monkeypatch) -> None:
+    def unexpected_executor(_plan):
+        raise AssertionError("preview must not execute")
+
+    monkeypatch.setattr(executor_module, "execute_export_plan", unexpected_executor)
+
+    result = run_preview_workflow_cli({"request_text": "导出 MY8801 的月度销量"})
+
+    assert result["success"] is True
+    assert result["plan"]["requires_clarification"] is False
+    assert result["plan"]["logical_tasks"][0]["task_id"] == "sales-monthly:MY8801"
+
+
+def test_preview_command_keeps_clarification_without_remote_tasks() -> None:
+    result = run_preview_workflow_cli({"request_text": "导出销量"})
+
+    assert result["success"] is False
+    assert result["plan"]["requires_clarification"] is True
+    assert result["plan"]["logical_tasks"] == []
+    assert result["plan"]["source_fetches"] == []
 
 
 def test_workflow_compatibility_wrapper_returns_canonical_inventory_type() -> None:

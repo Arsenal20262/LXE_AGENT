@@ -93,6 +93,7 @@ import { ToolsView } from "./features/tools/view";
 import { SyntheticPerformerWorkbench } from "./features/workbench/view";
 import { WorkbenchIndex } from "./features/workbench/index-view";
 import { InputAssetsWorkbench, useInputAssetSlots } from "./features/workbench/input-assets-view";
+import { YacangNaturalLanguageTestView } from "./features/workbench/yacang-test-view";
 import { DesktopShell } from "./desktop/shell";
 import type { DesktopSettingsSection } from "./desktop/settings-model";
 import { DashboardRootErrorBoundary } from "./root-error-boundary";
@@ -1020,6 +1021,9 @@ function App({
                 refresh={assetSlots.refresh}
                 slots={assetSlots.slots}
               />
+            ) : null}
+            {activeSection === "workbench" && workbenchView === "yacang-natural-language-test" ? (
+              <YacangNaturalLanguageTestView onBack={() => openWorkbenchView("index")} />
             ) : null}
             {activeSection === "capabilities" ? (
               <WorkspaceView
