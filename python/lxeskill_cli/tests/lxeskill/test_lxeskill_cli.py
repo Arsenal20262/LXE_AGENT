@@ -23,8 +23,8 @@ def _records(capsys) -> list[dict]:
 def test_catalog_defines_every_cli_command_and_hidden_alias() -> None:
     catalog = load_catalog()
 
-    assert len(catalog) == 43
-    assert sum(bool(entry.get("module")) for entry in catalog.values()) == 37
+    assert len(catalog) == 44
+    assert sum(bool(entry.get("module")) for entry in catalog.values()) == 38
     assert sum(entry.get("handler") == "browser" for entry in catalog.values()) == 2
     assert sum(entry.get("visibility") == "maintenance" for entry in catalog.values()) == 4
     assert len({tuple(entry["command_path"]) for entry in catalog.values()}) == len(catalog)
@@ -237,7 +237,7 @@ def test_doctor_reports_repository_contract_without_adding_a_list_command(capsys
             "command": "doctor",
             "ok": True,
             "data": {
-                    "catalog_commands": 43,
+                    "catalog_commands": 44,
                     "business_commands": 32,
                     "skill_files": 57,
                     "owner_skills": 25,
