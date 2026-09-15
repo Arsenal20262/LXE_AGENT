@@ -246,6 +246,33 @@ def test_inbound_with_chinese_warehouse_alias_remains_one_global_task() -> None:
     assert plan["source_fetches"] == []
 
 
+def test_short_warehouse_aliases_stay_canonical_in_tasks_and_source_fetch_ids() -> None:
+    plan = plan_export_workflow(
+        normalized("导出 MY 和 PH 最近一个月销量"),
+        execution_date="2026-09-14",
+    )
+
+    assert [task["warehouse"] for task in plan["logical_tasks"]] == ["MY8801", "PH8805"]
+    assert [fetch["warehouse"] for fetch in plan["source_fetches"]] == ["MY8801", "PH8805"]
+    assert [fetch["source_fetch_id"] for fetch in plan["source_fetches"]] == [
+        "inventory-sales-source:MY8801:2026-09-14:2026-09-14",
+        "inventory-sales-source:PH8805:2026-09-14:2026-09-14",
+    ]
+
+
+def test_warehouse_product_phrase_plans_only_the_global_inbound_task() -> None:
+    plan = plan_export_workflow(
+        normalized("一次性导出仓库产品"),
+        execution_date="2026-09-14",
+    )
+
+    assert [(task["data_type"], task.get("warehouse")) for task in plan["logical_tasks"]] == [
+        ("inbound-listing-time", None),
+    ]
+    assert plan["logical_tasks"][0]["effective_parameters"] == {}
+    assert plan["source_fetches"] == []
+
+
 def test_chinese_warehouse_aliases_reach_planner_as_canonical_codes_only() -> None:
     plan = plan_export_workflow(
         normalized("马来和泰国当前库存"),

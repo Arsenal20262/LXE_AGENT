@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any, Iterable
 
@@ -8,14 +9,15 @@ from typing import Any, Iterable
 class Warehouse:
     code: str
     warehouse_id: int
+    display_name: str
     aliases: tuple[str, ...] = ()
 
 
 WAREHOUSES: tuple[Warehouse, ...] = (
-    Warehouse("MY8801", 26, ("马来西亚仓", "马来西亚", "马来仓", "马来")),
-    Warehouse("PH8805", 46, ("菲律宾仓", "菲律宾", "菲仓")),
-    Warehouse("TH8802", 47, ("泰国仓", "泰国", "泰仓")),
-    Warehouse("VN8806", 80, ("越南仓", "越南", "越仓")),
+    Warehouse("MY8801", 26, "马来西亚仓", ("马来西亚仓", "马来西亚", "马来仓", "马来", "MY")),
+    Warehouse("PH8805", 46, "菲律宾仓", ("菲律宾仓", "菲律宾", "菲仓", "PH")),
+    Warehouse("TH8802", 47, "泰国仓", ("泰国仓", "泰国", "泰仓", "TH")),
+    Warehouse("VN8806", 80, "越南仓", ("越南仓", "越南", "越仓", "VN")),
 )
 WAREHOUSE_IDS = {warehouse.code: warehouse.warehouse_id for warehouse in WAREHOUSES}
 
@@ -26,8 +28,24 @@ def match_warehouse_aliases(text: str) -> tuple[str, ...]:
     return tuple(
         warehouse.code
         for warehouse in WAREHOUSES
-        if any(alias in text for alias in warehouse.aliases)
+        if any(_alias_in_text(text, alias) for alias in warehouse.aliases)
     )
+
+
+def _alias_in_text(text: str, alias: str) -> bool:
+    if alias.isascii() and alias.isalnum():
+        return re.search(
+            rf"(?<![A-Z0-9]){re.escape(alias)}(?![A-Z0-9])",
+            text,
+            re.IGNORECASE,
+        ) is not None
+    return alias in text
+
+
+def warehouse_display_name(code: str) -> str:
+    """Return the user-facing name for one canonical warehouse code."""
+
+    return select_warehouses(code)[0].display_name
 
 
 def select_warehouses(value: Any = None) -> tuple[Warehouse, ...]:
@@ -61,4 +79,5 @@ __all__ = [
     "Warehouse",
     "match_warehouse_aliases",
     "select_warehouses",
+    "warehouse_display_name",
 ]

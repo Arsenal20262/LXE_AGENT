@@ -15,7 +15,7 @@ def test_monthly_sales_filename_uses_business_name_and_warehouse() -> None:
         YacangExportKind.SALES_MONTHLY,
         warehouse_code="MY8801",
         file_date="2026-09-13",
-    ) == "雅仓系统-库存动销_MY8801_2026-09-13.xlsx"
+    ) == "雅仓系统-库存动销_马来西亚仓_2026-09-13.xlsx"
 
 
 def test_all_planned_business_names_are_centralized() -> None:
@@ -26,12 +26,12 @@ def test_all_planned_business_names_are_centralized() -> None:
         YacangExportKind.SALES_90D,
         warehouse_code="MY8801",
         file_date="2026-09-13",
-    ) == "雅仓系统-库存动销-MY8801_日度90天_2026-09-13.xlsx"
+    ) == "雅仓系统-库存动销-马来西亚仓_日度90天_2026-09-13.xlsx"
     assert export_filename(
         YacangExportKind.INVENTORY_CURRENT_SNAPSHOT,
         warehouse_code="MY8801",
         file_date="2026-09-13",
-    ) == "雅仓系统-库存列表_MY8801_2026-09-13.xlsx"
+    ) == "雅仓系统-库存列表_马来西亚仓_2026-09-13.xlsx"
     assert YacangExportKind.INVENTORY_MONTH_END is YacangExportKind.INVENTORY_CURRENT_SNAPSHOT
     assert export_filename(
         YacangExportKind.INBOUND_LISTING_TIME,

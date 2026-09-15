@@ -135,15 +135,37 @@ def test_legacy_inventory_candidate_normalizes_at_compatibility_boundary() -> No
     [
         ("导出最近30天销量", ["sales-monthly"]),
         ("导出7/15/30销量", ["sales-monthly"]),
+        ("导出7/14/30天销量", ["sales-monthly"]),
+        ("导出最近30天销售", ["sales-monthly"]),
+        ("近一个月销售情况", ["sales-monthly"]),
+        ("最近一个月出货", ["sales-monthly"]),
+        ("最近30天卖了多少", ["sales-monthly"]),
+        ("一周销量", ["sales-monthly"]),
+        ("两周销量", ["sales-monthly"]),
+        ("一个月销量", ["sales-monthly"]),
+        ("14天销量", ["sales-monthly"]),
         ("导出近90天每天销量", ["sales-90d"]),
         ("导出近三个月每天销量", ["sales-90d"]),
+        ("三个月日销", ["sales-90d"]),
+        ("90天逐日销量", ["sales-90d"]),
+        ("最近三个月销售趋势", ["sales-90d"]),
+        ("三个月每天出货情况", ["sales-90d"]),
+        ("每日销量趋势", ["sales-90d"]),
         ("导出当前库存", ["inventory-current-snapshot"]),
         ("导出现在库存", ["inventory-current-snapshot"]),
         ("导出库存现状", ["inventory-current-snapshot"]),
         ("导出库存快照", ["inventory-current-snapshot"]),
         ("现在还有多少货", ["inventory-current-snapshot"]),
         ("还剩多少货", ["inventory-current-snapshot"]),
+        ("仓里还有多少", ["inventory-current-snapshot"]),
+        ("当前剩多少", ["inventory-current-snapshot"]),
+        ("目前库存", ["inventory-current-snapshot"]),
         ("导出什么时候上架", ["inbound-listing-time"]),
+        ("什么时候进仓", ["inbound-listing-time"]),
+        ("哪天入仓", ["inbound-listing-time"]),
+        ("产品什么时候上的架", ["inbound-listing-time"]),
+        ("这批货什么时候进来的", ["inbound-listing-time"]),
+        ("一次性导出仓库产品", ["inbound-listing-time"]),
     ],
 )
 def test_supported_colloquial_types_map_to_fixed_canonical_types(
@@ -365,13 +387,16 @@ def test_custom_sales_windows_are_deterministic_unsupported_output(days: int) ->
     assert "requested_value" not in result["effective_request"]
 
 
-def test_retired_7_14_30_wording_is_not_accepted_as_monthly_report() -> None:
+def test_7_14_30_wording_selects_fixed_monthly_report_without_custom_window() -> None:
     result = normalized("导出7/14/30销量")
 
-    assert result["intent"]["data_type_intent"] == {"state": "unsupported"}
-    assert result["effective_request"]["data_types"] == []
-    assert result["preflight_issues"][0]["code"] == "UNSUPPORTED_SALES_WINDOW"
-    assert result["preflight_issues"][0]["requested_value"] == {"sales_window_days": 14}
+    assert result["intent"]["data_type_intent"] == {
+        "state": "resolved",
+        "values": ["sales-monthly"],
+    }
+    assert result["effective_request"]["data_types"] == ["sales-monthly"]
+    assert result["preflight_issues"] == []
+    assert "sales_window_days" not in result["effective_request"]
 
 
 @pytest.mark.parametrize("text", ["导出雅仓利润", "导出雅仓订单"])
@@ -426,6 +451,10 @@ def test_warehouse_defaults_subset_and_unknown_are_deterministic() -> None:
         ("导出越南仓当前库存", ["VN8806"]),
         ("导出越南当前库存", ["VN8806"]),
         ("导出越仓当前库存", ["VN8806"]),
+        ("导出 MY 当前库存", ["MY8801"]),
+        ("导出 PH 当前库存", ["PH8805"]),
+        ("导出 TH 当前库存", ["TH8802"]),
+        ("导出 VN 当前库存", ["VN8806"]),
     ],
 )
 def test_chinese_warehouse_aliases_normalize_to_canonical_codes(

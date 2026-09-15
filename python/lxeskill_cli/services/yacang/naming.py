@@ -4,6 +4,8 @@ import re
 from datetime import date
 from enum import StrEnum
 
+from services.yacang.warehouses import warehouse_display_name
+
 
 class YacangExportKind(StrEnum):
     SALES_MONTHLY = "sales-monthly"
@@ -68,15 +70,16 @@ def export_filename(
         raise ValueError(f"{kind.value} 必须指定 warehouse_code")
     if not needs_warehouse and warehouse:
         raise ValueError(f"{kind.value} 不接受 warehouse_code")
+    warehouse_name = warehouse_display_name(warehouse) if warehouse else ""
     if kind is YacangExportKind.SALES_90D:
         parts = [
-            safe_windows_component(f"雅仓系统-库存动销-{warehouse}"),
+            safe_windows_component(f"雅仓系统-库存动销-{warehouse_name}"),
             "日度90天",
         ]
     else:
         parts = [safe_windows_component(business_name(kind, range_days=range_days))]
-        if warehouse:
-            parts.append(safe_windows_component(warehouse))
+        if warehouse_name:
+            parts.append(safe_windows_component(warehouse_name))
     parts.append(normalized_date)
     return "_".join(parts) + ".xlsx"
 

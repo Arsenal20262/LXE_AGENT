@@ -184,8 +184,8 @@ def test_exports_one_7_15_30_workbook_per_warehouse_from_four_source_requests(tm
         (warehouse.warehouse_id, "2026-09-13", "2026-09-13")
         for warehouse in WAREHOUSES
     ]
-    assert Path(result["xlsx_paths"][0]).name == "雅仓系统-库存动销_MY8801_2026-09-13.xlsx"
-    assert Path(result["xlsx_paths"][-1]).name == "雅仓系统-库存动销_VN8806_2026-09-13.xlsx"
+    assert Path(result["xlsx_paths"][0]).name == "雅仓系统-库存动销_马来西亚仓_2026-09-13.xlsx"
+    assert Path(result["xlsx_paths"][-1]).name == "雅仓系统-库存动销_越南仓_2026-09-13.xlsx"
     assert all(_headers(path) == SALES_MONTHLY_HEADERS for path in result["xlsx_paths"])
     assert _first_data_row(result["xlsx_paths"][0]) == ("SKU-1", "商品", "MY8801", 7, 15, 30)
 
@@ -210,8 +210,8 @@ def test_exports_90_day_column_as_four_separate_workbooks_with_dynamic_date(tmp_
     assert result["as_of_date"] == "2026-09-13"
     assert result["sales_window_days"] == 90
     assert result["export_count"] == 4
-    assert Path(result["xlsx_paths"][0]).name == "雅仓系统-库存动销-MY8801_日度90天_2026-09-13.xlsx"
-    assert Path(result["xlsx_paths"][-1]).name == "雅仓系统-库存动销-VN8806_日度90天_2026-09-13.xlsx"
+    assert Path(result["xlsx_paths"][0]).name == "雅仓系统-库存动销-马来西亚仓_日度90天_2026-09-13.xlsx"
+    assert Path(result["xlsx_paths"][-1]).name == "雅仓系统-库存动销-越南仓_日度90天_2026-09-13.xlsx"
     assert all(_headers(path) == SALES_90D_HEADERS for path in result["xlsx_paths"])
     assert _first_data_row(result["xlsx_paths"][0]) == ("SKU-1", "商品", "MY8801", 90)
 

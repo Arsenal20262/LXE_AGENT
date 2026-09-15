@@ -128,8 +128,8 @@ def test_exports_four_current_inventory_workbooks_serially(tmp_path: Path) -> No
     assert result["business_type"] == "inventory-current-snapshot"
     assert result["snapshot_semantics"] == "current-at-execution"
     assert result["export_count"] == 4
-    assert Path(result["xlsx_paths"][0]).name == "雅仓系统-库存列表_MY8801_2026-09-13.xlsx"
-    assert Path(result["xlsx_paths"][-1]).name == "雅仓系统-库存列表_VN8806_2026-09-13.xlsx"
+    assert Path(result["xlsx_paths"][0]).name == "雅仓系统-库存列表_马来西亚仓_2026-09-13.xlsx"
+    assert Path(result["xlsx_paths"][-1]).name == "雅仓系统-库存列表_越南仓_2026-09-13.xlsx"
     assert all(_headers(path) == INVENTORY_LIST_HEADERS for path in result["xlsx_paths"])
 
 
@@ -150,7 +150,7 @@ def test_can_export_one_allowlisted_warehouse(tmp_path: Path) -> None:
     assert client.submissions == [46]
     assert result["export_count"] == 1
     assert result["exports"][0]["warehouse"] == "PH8805"
-    assert Path(result["xlsx_paths"][0]).name == "雅仓系统-库存列表_PH8805_2026-09-13.xlsx"
+    assert Path(result["xlsx_paths"][0]).name == "雅仓系统-库存列表_菲律宾仓_2026-09-13.xlsx"
 
 
 def test_inventory_partial_download_failure_continues_later_warehouses(tmp_path: Path) -> None:

@@ -54,6 +54,82 @@ _ALL_WAREHOUSE_MARKERS = (
 )
 _CREATED_WORDS = ("创建", "新建", "建档")
 _UNKNOWN_BUSINESS_MARKERS = ("订单", "退货", "采购", "出库", "利润", "成本", "费用", "账单", "运费")
+_MONTHLY_SALES_MARKERS = (
+    "7/15/30",
+    "7、15、30",
+    "7 15 30",
+    "7/14/30",
+    "7、14、30",
+    "月度销量",
+    "汇总销量",
+    "最近一个月销量",
+    "最近一个月销售",
+    "最近一个月卖得怎么样",
+    "近一个月销量",
+    "近一个月销售",
+    "最近一个月出货",
+    "最近30天销售",
+    "近30天销售",
+    "最近30天卖了多少",
+    "近30天卖了多少",
+    "一周销量",
+    "两周销量",
+    "一个月销量",
+    "近期销售表现",
+    "近期销售情况",
+)
+_DAILY_SALES_MARKERS = (
+    "日度90天",
+    "日度 90 天",
+    "90天日销量",
+    "90 天日销量",
+    "近90天",
+    "近 90 天",
+    "最近90天",
+    "最近 90 天",
+    "最近三个月每天",
+    "近三个月每天",
+    "三个月每天",
+    "最近三个月每日",
+    "近三个月每日",
+    "三个月每日",
+    "三个月日销",
+    "三个月销售趋势",
+    "每天的销量",
+    "每天销量",
+    "每日销量",
+    "逐日",
+)
+_CURRENT_INVENTORY_MARKERS = (
+    "当前库存",
+    "现在库存",
+    "库存现状",
+    "现在还有多少货",
+    "现在仓里",
+    "还剩多少货",
+    "仓里还有多少",
+    "当前剩多少",
+    "现有库存",
+    "目前库存",
+    "库存情况",
+    "库存列表",
+    "库存快照",
+)
+_INBOUND_LISTING_MARKERS = (
+    "什么时候入库",
+    "什么时候进仓",
+    "什么时候上架",
+    "哪天入仓",
+    "入库时间",
+    "入库日期",
+    "入仓日期",
+    "上架时间",
+    "上架日期",
+    "什么时候上的架",
+    "什么时候进来的",
+    "仓库产品",
+    "产品资料",
+)
 
 
 def normalize_export_intent(
@@ -441,23 +517,13 @@ def _parse_data_type_intent(
     issues: list[dict[str, Any]] = []
     ambiguous_sales = False
 
-    if "7/14/30" in text or "7、14、30" in text:
-        issues.append(
-            {
-                "kind": "unsupported",
-                "code": "UNSUPPORTED_SALES_WINDOW",
-                "requested_value": {"sales_window_days": 14},
-                "message": "当前支持最近一个月汇总销量和近三个月日度销量，不支持自定义销量天数",
-            }
-        )
-
     both_sales = bool(re.search(r"两种销量|全部销量|完整库存动销", text))
     if both_sales:
         selected.update(("sales-monthly", "sales-90d"))
 
     sales_day_matches = [int(match.group("days")) for match in _SALES_DAYS_RE.finditer(text)]
     for days in sales_day_matches:
-        if days in {7, 15, 30}:
+        if days in {7, 14, 15, 30}:
             selected.add("sales-monthly")
         elif days == 90:
             selected.add("sales-90d")
@@ -471,62 +537,16 @@ def _parse_data_type_intent(
                 }
             )
 
-    if any(
-        marker in text
-        for marker in (
-            "7/15/30",
-            "7、15、30",
-            "7 15 30",
-            "月度销量",
-            "汇总销量",
-            "最近一个月销量",
-            "最近一个月卖得怎么样",
-            "最近一周销量",
-            "最近两周销量",
-            "近一周销量",
-            "近两周销量",
-            "近期销售表现",
-            "近期销售情况",
-        )
-    ):
+    if any(marker in text for marker in _MONTHLY_SALES_MARKERS):
         selected.add("sales-monthly")
-    if any(
-        marker in text
-        for marker in (
-            "日度90天",
-            "日度 90 天",
-            "90天日销量",
-            "90 天日销量",
-            "近90天",
-            "近 90 天",
-            "最近三个月每天",
-            "近三个月每天",
-            "近三个月每日销量",
-            "每天的销量",
-            "每日销量",
-            "逐日",
-        )
-    ):
+    if any(marker in text for marker in _DAILY_SALES_MARKERS):
         selected.add("sales-90d")
 
     historical_inventory = bool(
         re.search(r"上个?月(?:月底|月末)库存|历史(?:月底|月末)?库存|\d{1,2}月\d{1,2}日(?:的)?库存", text)
     )
     bare_month_end = any(marker in text for marker in ("月底库存", "月末库存", "月末快照"))
-    current_inventory = any(
-        marker in text
-        for marker in (
-            "当前库存",
-            "现在库存",
-            "库存现状",
-            "现在还有多少货",
-            "现在仓里",
-            "还剩多少货",
-            "现有库存",
-            "库存列表",
-            "库存快照",
-        )
-    )
+    current_inventory = any(marker in text for marker in _CURRENT_INVENTORY_MARKERS)
     inventory_with_sales = "库存和销量" in text or "库存与销量" in text
     inventory_with_both_sales = "库存和两种销量" in text or "库存与两种销量" in text
     bare_inventory = (
@@ -562,7 +582,7 @@ def _parse_data_type_intent(
     else:
         inventory_intent = {"state": "omitted"}
 
-    if any(marker in text for marker in ("什么时候入库", "什么时候上架", "入库时间", "入库日期", "上架时间", "上架日期", "仓库产品", "产品资料")):
+    if any(marker in text for marker in _INBOUND_LISTING_MARKERS):
         selected.add("inbound-listing-time")
 
     fuzzy_product_sales = bool(re.search(r"(?:最近|近|过去)\s*\d+\s*天的商品销量", text))
