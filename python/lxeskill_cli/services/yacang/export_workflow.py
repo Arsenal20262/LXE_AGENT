@@ -119,10 +119,6 @@ def plan_export_workflow(
     data_types = _ordered_data_types(effective_request.get("data_types"))
     warehouses = _ordered_warehouses(effective_request.get("warehouses"))
     created_date_filter = _created_date_filter(effective_request) if _has_sales(data_types) else None
-    historical_inventory = any(
-        issue.get("code") == "UNSUPPORTED_HISTORICAL_INVENTORY" for issue in diagnostics
-    )
-
     logical_tasks: list[dict[str, Any]] = []
     source_fetches: list[dict[str, Any]] = []
     known_source_fetches: set[str] = set()
@@ -168,18 +164,17 @@ def plan_export_workflow(
 
         if data_type == _INVENTORY_DATA_TYPE:
             for warehouse in warehouses:
-                task = {
-                    "task_id": f"{data_type}:{warehouse}",
-                    "data_type": data_type,
-                    "scope": "warehouse",
-                    "warehouse": warehouse,
-                    "status": "failed" if historical_inventory else "not_run",
-                    "snapshot": "current",
-                    "effective_parameters": {"warehouse": warehouse},
-                }
-                if historical_inventory:
-                    task["error_code"] = "UNSUPPORTED_HISTORICAL_INVENTORY"
-                logical_tasks.append(task)
+                logical_tasks.append(
+                    {
+                        "task_id": f"{data_type}:{warehouse}",
+                        "data_type": data_type,
+                        "scope": "warehouse",
+                        "warehouse": warehouse,
+                        "status": "not_run",
+                        "snapshot": "current",
+                        "effective_parameters": {"warehouse": warehouse},
+                    }
+                )
             continue
 
         if data_type == _INBOUND_DATA_TYPE:

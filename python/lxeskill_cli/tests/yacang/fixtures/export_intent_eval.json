@@ -1,0 +1,99 @@
+[
+  {
+    "id": "monthly_week",
+    "text": "导出最近一周销量",
+    "expected_state": "resolved",
+    "data_types": ["sales-monthly"]
+  },
+  {
+    "id": "monthly_spoken",
+    "text": "MY8801最近一个月卖得怎么样",
+    "expected_state": "resolved",
+    "data_types": ["sales-monthly"],
+    "warehouses": ["MY8801"]
+  },
+  {
+    "id": "monthly_all_warehouses",
+    "text": "四个仓最近一个月销量",
+    "expected_state": "resolved",
+    "data_types": ["sales-monthly"],
+    "warehouses": ["MY8801", "PH8805", "TH8802", "VN8806"]
+  },
+  {
+    "id": "sales_generic",
+    "text": "导出最近销量",
+    "expected_state": "ambiguous"
+  },
+  {
+    "id": "daily_90",
+    "text": "MY8801近90天每天销量",
+    "expected_state": "resolved",
+    "data_types": ["sales-90d"],
+    "warehouses": ["MY8801"]
+  },
+  {
+    "id": "daily_three_months",
+    "text": "近三个月每天卖多少",
+    "expected_state": "resolved",
+    "data_types": ["sales-90d"]
+  },
+  {
+    "id": "daily_grainless_three_months",
+    "text": "近三个月销量",
+    "expected_state": "ambiguous"
+  },
+  {
+    "id": "inventory_current",
+    "text": "现在仓里还有多少货",
+    "expected_state": "resolved",
+    "data_types": ["inventory-current-snapshot"]
+  },
+  {
+    "id": "inventory_month_end_alias",
+    "text": "导出月末库存",
+    "expected_state": "resolved",
+    "data_types": ["inventory-current-snapshot"]
+  },
+  {
+    "id": "inventory_historical_phrase",
+    "text": "导出8月31日库存",
+    "expected_state": "resolved",
+    "data_types": ["inventory-current-snapshot"]
+  },
+  {
+    "id": "inventory_subset",
+    "text": "MY8801、TH8802当前库存",
+    "expected_state": "resolved",
+    "data_types": ["inventory-current-snapshot"],
+    "warehouses": ["MY8801", "TH8802"]
+  },
+  {
+    "id": "inbound_global",
+    "text": "查一下什么时候上架",
+    "expected_state": "resolved",
+    "data_types": ["inbound-listing-time"]
+  },
+  {
+    "id": "inbound_warehouse_ignored",
+    "text": "MY8801入库时间",
+    "expected_state": "resolved",
+    "data_types": ["inbound-listing-time"]
+  },
+  {
+    "id": "inventory_and_sales",
+    "text": "库存和销量",
+    "expected_state": "ambiguous"
+  },
+  {
+    "id": "inventory_sales_alias",
+    "text": "导出库存动销",
+    "expected_state": "ambiguous"
+  },
+  {
+    "id": "unsupported_sales_window",
+    "text": "我要56天销量",
+    "expected_state": "unsupported",
+    "diagnostic_code": "UNSUPPORTED_SALES_WINDOW",
+    "requested_sales_window_days": 56
+  }
+]

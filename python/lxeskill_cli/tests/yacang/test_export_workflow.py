@@ -77,11 +77,11 @@ def test_plan_orders_tasks_scopes_parameters_and_shared_sales_sources() -> None:
         "warehouse": "MY8801",
         "created_date_filter": {
             "mode": "default",
-            "created_start_date": "2026-09-07",
+            "created_start_date": "2026-09-14",
             "created_end_date": "2026-09-14",
             "source": "system_default",
             "input_fragments": [],
-            "normalization_rules": ["default_execution_day_minus_7"],
+            "normalization_rules": ["default_execution_day"],
         },
     }
     assert plan["logical_tasks"][4]["effective_parameters"] == {"warehouse": "MY8801"}
@@ -91,7 +91,7 @@ def test_plan_orders_tasks_scopes_parameters_and_shared_sales_sources() -> None:
     assert "created_date_filter" not in plan["logical_tasks"][6]
     assert plan["logical_tasks"][6]["warehouse_scope"] == "all"
     assert plan["source_fetches"][0]["source_fetch_id"] == sales_source_fetch_id(
-        "MY8801", "2026-09-07", "2026-09-14"
+        "MY8801", "2026-09-14", "2026-09-14"
     )
 
 
@@ -136,12 +136,12 @@ def test_unsupported_sales_window_keeps_diagnostic_without_creating_sales_task()
             "kind": "unsupported",
             "code": "UNSUPPORTED_SALES_WINDOW",
             "requested_value": {"sales_window_days": 56},
-            "message": "当前只支持 7/15/30 汇总销量和日度近 90 天销量",
+            "message": "当前支持最近一个月汇总销量和近三个月日度销量，不支持自定义销量天数",
         }
     ]
 
 
-def test_historical_inventory_is_failed_locally_while_supported_sales_remain_planned() -> None:
+def test_historical_inventory_phrasing_still_plans_current_inventory_with_sales() -> None:
     plan = plan_export_workflow(
         normalized("导出 MY8801 的上个月月底库存和月度销量"),
         execution_date="2026-09-14",
@@ -149,13 +149,27 @@ def test_historical_inventory_is_failed_locally_while_supported_sales_remain_pla
 
     assert [(task["data_type"], task["status"]) for task in plan["logical_tasks"]] == [
         ("sales-monthly", "not_run"),
-        ("inventory-current-snapshot", "failed"),
+        ("inventory-current-snapshot", "not_run"),
     ]
-    inventory = plan["logical_tasks"][1]
-    assert inventory["warehouse"] == "MY8801"
-    assert inventory["error_code"] == "UNSUPPORTED_HISTORICAL_INVENTORY"
+    assert plan["diagnostics"] == []
     assert len(plan["source_fetches"]) == 1
     assert plan["source_fetches"][0]["warehouse"] == "MY8801"
+
+
+def test_historical_inventory_only_generates_current_tasks_without_source_fetch() -> None:
+    plan = plan_export_workflow(
+        normalized("导出8月31日库存"),
+        execution_date="2026-09-14",
+    )
+
+    assert [task["task_id"] for task in plan["logical_tasks"]] == [
+        "inventory-current-snapshot:MY8801",
+        "inventory-current-snapshot:PH8805",
+        "inventory-current-snapshot:TH8802",
+        "inventory-current-snapshot:VN8806",
+    ]
+    assert plan["source_fetches"] == []
+    assert plan["diagnostics"] == []
 
 
 def test_inbound_listing_time_is_one_global_task_without_date_or_warehouse_parameters() -> None:

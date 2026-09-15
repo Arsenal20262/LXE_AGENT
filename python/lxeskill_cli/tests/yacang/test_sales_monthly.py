@@ -126,7 +126,7 @@ def test_planned_source_fetch_is_acquired_once_and_projected_twice(tmp_path: Pat
 
     assert len(plan["source_fetches"]) == 1
     assert client.login_calls == [("account", "password")]
-    assert client.submissions == [(26, "2026-09-07", "2026-09-14")]
+    assert client.submissions == [(26, "2026-09-14", "2026-09-14")]
     assert len(client.download_calls) == 1
     source_fetch_id = plan["source_fetches"][0]["source_fetch_id"]
     assert batch.results[0]["source_fetch_id"] == source_fetch_id
@@ -181,7 +181,7 @@ def test_exports_one_7_15_30_workbook_per_warehouse_from_four_source_requests(tm
     assert result["sales_window_days"] == [7, 15, 30]
     assert result["export_count"] == 4
     assert client.submissions == [
-        (warehouse.warehouse_id, "2026-09-06", "2026-09-13")
+        (warehouse.warehouse_id, "2026-09-13", "2026-09-13")
         for warehouse in WAREHOUSES
     ]
     assert Path(result["xlsx_paths"][0]).name == "雅仓系统-库存动销_MY8801_2026-09-13.xlsx"
@@ -204,7 +204,7 @@ def test_exports_90_day_column_as_four_separate_workbooks_with_dynamic_date(tmp_
 
     assert client.login_calls == [("account", "password")]
     assert client.submissions == [
-        (warehouse.warehouse_id, "2026-09-06", "2026-09-13")
+        (warehouse.warehouse_id, "2026-09-13", "2026-09-13")
         for warehouse in WAREHOUSES
     ]
     assert result["as_of_date"] == "2026-09-13"

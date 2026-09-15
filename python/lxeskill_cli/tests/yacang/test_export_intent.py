@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from datetime import date
+import json
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -13,6 +15,9 @@ from services.yacang.export_intent import (
 
 
 FIXED_TODAY = lambda: date(2026, 9, 14)
+EVAL_CASES = json.loads(
+    (Path(__file__).parent / "fixtures" / "export_intent_eval.json").read_text(encoding="utf-8")
+)
 
 
 def normalized(text: str, **kwargs: Any) -> dict[str, Any]:
@@ -33,16 +38,25 @@ def test_omitted_dimensions_apply_deterministic_defaults() -> None:
         "warehouses": list(WAREHOUSE_CODES),
         "created_date_filter": {
             "mode": "default",
-            "created_start_date": "2026-09-07",
+            "created_start_date": "2026-09-14",
             "created_end_date": "2026-09-14",
             "source": "system_default",
             "input_fragments": [],
-            "normalization_rules": ["default_execution_day_minus_7"],
+            "normalization_rules": ["default_execution_day"],
         },
     }
     assert result["questions"] == []
     assert result["preflight_issues"] == []
     assert result["requires_clarification"] is False
+
+
+@pytest.mark.parametrize("execution_day", [date(2026, 9, 15), date(2026, 10, 1)])
+def test_default_created_date_tracks_execution_day(execution_day: date) -> None:
+    result = normalize_export_intent("导出月度销量", today=lambda: execution_day)
+
+    created = result["effective_request"]["created_date_filter"]
+    assert created["created_start_date"] == execution_day.isoformat()
+    assert created["created_end_date"] == execution_day.isoformat()
 
 
 @pytest.mark.parametrize(
@@ -122,8 +136,7 @@ def test_legacy_inventory_candidate_normalizes_at_compatibility_boundary() -> No
         ("导出最近30天销量", ["sales-monthly"]),
         ("导出7/15/30销量", ["sales-monthly"]),
         ("导出近90天每天销量", ["sales-90d"]),
-        ("导出近三个月销量", ["sales-90d"]),
-        ("导出长期每日销量", ["sales-90d"]),
+        ("导出近三个月每天销量", ["sales-90d"]),
         ("导出当前库存", ["inventory-current-snapshot"]),
         ("导出现在库存", ["inventory-current-snapshot"]),
         ("导出库存现状", ["inventory-current-snapshot"]),
@@ -198,31 +211,56 @@ def test_all_data_phrases_select_all_four_types(text: str) -> None:
 
 
 @pytest.mark.parametrize("text", ["导出四仓月底库存", "导出月末库存", "导出月末快照"])
-def test_bare_month_end_inventory_is_ambiguous(text: str) -> None:
+def test_inventory_wording_always_maps_to_current_snapshot(text: str) -> None:
     result = normalized(text)
 
     assert result["intent"]["data_type_intent"] == {
         "state": "resolved",
         "values": ["inventory-current-snapshot"],
     }
-    assert result["intent"]["inventory_snapshot_intent"] == {"state": "ambiguous"}
-    assert result["requires_clarification"] is True
+    assert result["intent"]["inventory_snapshot_intent"] == {"state": "current"}
+    assert result["effective_request"]["data_types"] == ["inventory-current-snapshot"]
+    assert result["requires_clarification"] is False
 
 
 @pytest.mark.parametrize("text", ["导出上个月月底库存", "导出8月31日库存"])
-def test_historical_inventory_is_explicitly_unsupported(text: str) -> None:
+def test_historical_inventory_phrases_use_current_snapshot_provider_semantics(text: str) -> None:
     result = normalized(text)
 
-    assert result["intent"]["inventory_snapshot_intent"] == {"state": "historical"}
+    assert result["intent"]["inventory_snapshot_intent"] == {"state": "current"}
     assert result["effective_request"]["data_types"] == ["inventory-current-snapshot"]
     assert result["requires_clarification"] is False
-    assert result["preflight_issues"] == [
-        {
-            "kind": "unsupported",
-            "code": "UNSUPPORTED_HISTORICAL_INVENTORY",
-            "message": "当前雅仓接口不支持历史库存快照",
+    assert result["preflight_issues"] == []
+
+
+@pytest.mark.parametrize("case", EVAL_CASES, ids=lambda case: case["id"])
+def test_data_driven_natural_language_eval(case: dict[str, Any]) -> None:
+    result = normalized(case["text"])
+
+    assert result["intent"]["data_type_intent"]["state"] == case["expected_state"]
+    if case["expected_state"] == "resolved":
+        assert result["effective_request"]["data_types"] == case["data_types"]
+        if "warehouses" in case:
+            assert result["effective_request"]["warehouses"] == case["warehouses"]
+    if case["expected_state"] == "ambiguous":
+        assert result["requires_clarification"] is True
+        assert result["effective_request"] is None
+    if case["expected_state"] == "unsupported":
+        assert result["requires_clarification"] is False
+        assert result["preflight_issues"][0]["code"] == case["diagnostic_code"]
+        assert result["preflight_issues"][0]["requested_value"] == {
+            "sales_window_days": case["requested_sales_window_days"]
         }
-    ]
+
+
+def test_sales_clarification_uses_business_labels_not_internal_windows() -> None:
+    result = normalized("导出最近销量")
+
+    assert result["requires_clarification"] is True
+    assert result["questions"][0]["message"] == (
+        "请确认需要最近一个月销量，还是近三个月每天销量；也可以说明两种销量都要。"
+    )
+    assert "7/15/30" not in result["questions"][0]["message"]
 
 
 def test_relative_creation_days_are_calculated_only_by_deterministic_layer() -> None:
@@ -294,7 +332,7 @@ def test_custom_sales_windows_are_deterministic_unsupported_output(days: int) ->
             "kind": "unsupported",
             "code": "UNSUPPORTED_SALES_WINDOW",
             "requested_value": {"sales_window_days": days},
-            "message": "当前只支持 7/15/30 汇总销量和日度近 90 天销量",
+            "message": "当前支持最近一个月汇总销量和近三个月日度销量，不支持自定义销量天数",
         }
     ]
     assert "requested_value" not in result["effective_request"]
@@ -385,8 +423,8 @@ def test_agent_inventory_candidate_cannot_override_historical_raw_intent() -> No
         inventory_snapshot_intent={"state": "current"},
     )
 
-    assert result["requires_clarification"] is True
-    assert any(question["code"] == "INVENTORY_INTENT_CONFLICT" for question in result["questions"])
+    assert result["requires_clarification"] is False
+    assert result["intent"]["inventory_snapshot_intent"] == {"state": "current"}
 
 
 def test_omitted_candidate_does_not_hide_strong_raw_signal() -> None:

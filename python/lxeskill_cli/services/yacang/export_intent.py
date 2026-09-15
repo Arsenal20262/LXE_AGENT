@@ -438,7 +438,7 @@ def _parse_data_type_intent(
                 "kind": "unsupported",
                 "code": "UNSUPPORTED_SALES_WINDOW",
                 "requested_value": {"sales_window_days": 14},
-                "message": "当前只支持 7/15/30 汇总销量和日度近 90 天销量",
+                "message": "当前支持最近一个月汇总销量和近三个月日度销量，不支持自定义销量天数",
             }
         )
 
@@ -458,13 +458,44 @@ def _parse_data_type_intent(
                     "kind": "unsupported",
                     "code": "UNSUPPORTED_SALES_WINDOW",
                     "requested_value": {"sales_window_days": days},
-                    "message": "当前只支持 7/15/30 汇总销量和日度近 90 天销量",
+                    "message": "当前支持最近一个月汇总销量和近三个月日度销量，不支持自定义销量天数",
                 }
             )
 
-    if any(marker in text for marker in ("7/15/30", "7、15、30", "7 15 30", "月度销量", "汇总销量", "最近一个月销量")):
+    if any(
+        marker in text
+        for marker in (
+            "7/15/30",
+            "7、15、30",
+            "7 15 30",
+            "月度销量",
+            "汇总销量",
+            "最近一个月销量",
+            "最近一个月卖得怎么样",
+            "最近一周销量",
+            "最近两周销量",
+            "近一周销量",
+            "近两周销量",
+            "近期销售表现",
+            "近期销售情况",
+        )
+    ):
         selected.add("sales-monthly")
-    if any(marker in text for marker in ("日度90天", "日度 90 天", "近90天", "近 90 天", "近三个月销量", "近三个月每日销量", "每天的销量", "每日销量", "长期每日销量", "长期销量")):
+    if any(
+        marker in text
+        for marker in (
+            "日度90天",
+            "日度 90 天",
+            "近90天",
+            "近 90 天",
+            "最近三个月每天",
+            "近三个月每天",
+            "近三个月每日销量",
+            "每天的销量",
+            "每日销量",
+            "逐日",
+        )
+    ):
         selected.add("sales-90d")
 
     historical_inventory = bool(
@@ -478,7 +509,9 @@ def _parse_data_type_intent(
             "现在库存",
             "库存现状",
             "现在还有多少货",
+            "现在仓里",
             "还剩多少货",
+            "现有库存",
             "库存列表",
             "库存快照",
         )
@@ -495,18 +528,7 @@ def _parse_data_type_intent(
     if historical_inventory or bare_month_end or current_inventory or inventory_with_sales or bare_inventory:
         selected.add("inventory-current-snapshot")
 
-    if historical_inventory:
-        inventory_intent = {"state": "historical"}
-    elif bare_month_end:
-        inventory_intent = {"state": "ambiguous"}
-        questions.append(
-            _question(
-                "inventory_snapshot",
-                "AMBIGUOUS_INVENTORY_SNAPSHOT",
-                "请确认需要当前库存，还是历史月末库存；当前能力不支持历史库存快照。",
-            )
-        )
-    elif current_inventory or inventory_with_sales or inventory_with_both_sales or bare_inventory:
+    if historical_inventory or bare_month_end or current_inventory or inventory_with_sales or inventory_with_both_sales or bare_inventory:
         inventory_intent = {"state": "current"}
     else:
         inventory_intent = {"state": "omitted"}
@@ -540,7 +562,7 @@ def _parse_data_type_intent(
             _question(
                 "data_type",
                 "AMBIGUOUS_SALES_TYPE",
-                "请确认需要 7/15/30、日度近 90 天，还是两种销量都要。",
+                "请确认需要最近一个月销量，还是近三个月每天销量；也可以说明两种销量都要。",
             )
         )
         return {"state": "ambiguous"}, ordered, inventory_intent, issues
@@ -668,15 +690,6 @@ def merge_and_resolve_intent(
                 "入库/上架时间是全局数据，不接受仓库筛选。",
             )
         )
-    if inventory_selected and inventory_intent["state"] == "historical":
-        preflight_issues.append(
-            _issue(
-                "unsupported",
-                "UNSUPPORTED_HISTORICAL_INVENTORY",
-                "当前雅仓接口不支持历史库存快照",
-            )
-        )
-
     effective_request: dict[str, Any] = {
         "data_types": data_types,
         "warehouses": warehouses,
@@ -827,7 +840,7 @@ def _effective_created_date_filter(
             "created_end_date": end.isoformat(),
             "source": "system_default",
             "input_fragments": [],
-            "normalization_rules": ["default_execution_day_minus_7"],
+            "normalization_rules": ["default_execution_day"],
         }
     if intent["mode"] == "relative_days":
         end = today()

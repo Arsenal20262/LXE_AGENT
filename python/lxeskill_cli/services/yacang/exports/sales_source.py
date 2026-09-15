@@ -17,7 +17,7 @@ from services.yacang.submission import SubmissionBackend
 from services.yacang.warehouses import select_warehouses
 
 
-DEFAULT_SOURCE_RANGE_DAYS = 7
+DEFAULT_SOURCE_RANGE_DAYS = 0
 
 
 @dataclass(frozen=True)
