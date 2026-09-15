@@ -8,15 +8,26 @@ from typing import Any, Iterable
 class Warehouse:
     code: str
     warehouse_id: int
+    aliases: tuple[str, ...] = ()
 
 
 WAREHOUSES: tuple[Warehouse, ...] = (
-    Warehouse("MY8801", 26),
-    Warehouse("PH8805", 46),
-    Warehouse("TH8802", 47),
-    Warehouse("VN8806", 80),
+    Warehouse("MY8801", 26, ("马来西亚仓", "马来西亚", "马来仓", "马来")),
+    Warehouse("PH8805", 46, ("菲律宾仓", "菲律宾", "菲仓")),
+    Warehouse("TH8802", 47, ("泰国仓", "泰国", "泰仓")),
+    Warehouse("VN8806", 80, ("越南仓", "越南", "越仓")),
 )
 WAREHOUSE_IDS = {warehouse.code: warehouse.warehouse_id for warehouse in WAREHOUSES}
+
+
+def match_warehouse_aliases(text: str) -> tuple[str, ...]:
+    """Return canonical codes for warehouse aliases mentioned in user text."""
+
+    return tuple(
+        warehouse.code
+        for warehouse in WAREHOUSES
+        if any(alias in text for alias in warehouse.aliases)
+    )
 
 
 def select_warehouses(value: Any = None) -> tuple[Warehouse, ...]:
@@ -44,4 +55,10 @@ def select_warehouses(value: Any = None) -> tuple[Warehouse, ...]:
     return tuple(warehouse for warehouse in WAREHOUSES if warehouse.code in requested_set)
 
 
-__all__ = ["WAREHOUSES", "WAREHOUSE_IDS", "Warehouse", "select_warehouses"]
+__all__ = [
+    "WAREHOUSES",
+    "WAREHOUSE_IDS",
+    "Warehouse",
+    "match_warehouse_aliases",
+    "select_warehouses",
+]

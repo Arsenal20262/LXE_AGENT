@@ -5,7 +5,7 @@ from datetime import date, timedelta
 from typing import Any, Callable, Mapping
 
 from services.yacang.exports.sales_source import resolve_source_date_range
-from services.yacang.warehouses import WAREHOUSES
+from services.yacang.warehouses import WAREHOUSES, match_warehouse_aliases
 
 
 ALL_DATA_TYPES = (
@@ -43,7 +43,15 @@ _DATE_TOKEN_RE = re.compile(r"\d{4}-\d{1,2}-\d{1,2}|(?:\d{4}年)?\d{1,2}月\d{1,
 _SALES_DAYS_RE = re.compile(r"(?<!\d)(?P<days>\d{1,3})\s*天(?:的)?(?:每天|每日|日度)?销量")
 
 _ALL_DATA_MARKERS = ("全部数据", "所有数据", "完整数据", "全套", "四类", "导一套")
-_ALL_WAREHOUSE_MARKERS = ("四仓", "四个仓库", "全部仓库", "所有仓库", "全部四仓", "四仓都要")
+_ALL_WAREHOUSE_MARKERS = (
+    "四仓",
+    "四个仓",
+    "四个仓库",
+    "全部仓库",
+    "所有仓库",
+    "全部四仓",
+    "四仓都要",
+)
 _CREATED_WORDS = ("创建", "新建", "建档")
 _UNKNOWN_BUSINESS_MARKERS = ("订单", "退货", "采购", "出库", "利润", "成本", "费用", "账单", "运费")
 
@@ -235,6 +243,7 @@ def _parse_warehouse_intent(
     questions: list[dict[str, str]],
 ) -> tuple[dict[str, Any], bool]:
     mentioned = {match.upper() for match in _WAREHOUSE_RE.findall(text.upper())}
+    mentioned.update(match_warehouse_aliases(text))
     unknown = sorted(mentioned.difference(WAREHOUSE_CODES))
     selected = [code for code in WAREHOUSE_CODES if code in mentioned]
     all_requested = any(marker in text for marker in _ALL_WAREHOUSE_MARKERS)
@@ -260,7 +269,7 @@ def _parse_warehouse_intent(
         return {"state": "resolved", "values": selected}, True
     if all_requested:
         return {"state": "resolved", "values": list(WAREHOUSE_CODES)}, True
-    vague = re.search(r"美国仓|马来西亚仓|马来仓|泰国仓|越南仓|菲律宾仓|某仓|\d+号仓", text)
+    vague = re.search(r"美国仓|美仓|某仓|\d+号仓", text)
     if vague:
         questions.append(
             _question(
@@ -486,6 +495,8 @@ def _parse_data_type_intent(
         for marker in (
             "日度90天",
             "日度 90 天",
+            "90天日销量",
+            "90 天日销量",
             "近90天",
             "近 90 天",
             "最近三个月每天",
@@ -556,7 +567,9 @@ def _parse_data_type_intent(
 
     fuzzy_product_sales = bool(re.search(r"(?:最近|近|过去)\s*\d+\s*天的商品销量", text))
     bare_inventory_sales = "库存动销" in text and not both_sales and not selected.intersection({"sales-monthly", "sales-90d"})
-    generic_sales = "销量" in text and not selected.intersection({"sales-monthly", "sales-90d"}) and not issues
+    generic_sales = (
+        "销量" in text or "最近卖得怎么样" in text or "最近销售情况" in text
+    ) and not selected.intersection({"sales-monthly", "sales-90d"}) and not issues
     if inventory_with_sales and not inventory_with_both_sales:
         ambiguous_sales = True
     elif fuzzy_product_sales or bare_inventory_sales or generic_sales:
@@ -694,18 +707,6 @@ def merge_and_resolve_intent(
                 "invalid",
                 "INVALID_INVENTORY_INTENT_SCOPE",
                 "库存快照意图只能用于库存任务。",
-            )
-        )
-    warehouse_explicit = bool(parsed["_warehouse_explicit"]) or (
-        candidates["warehouse_intent"] is not None
-        and candidates["warehouse_intent"]["state"] == "resolved"
-    )
-    if inbound_only and warehouse_explicit:
-        preflight_issues.append(
-            _issue(
-                "unsupported",
-                "UNSUPPORTED_INBOUND_WAREHOUSE_FILTER",
-                "入库/上架时间是全局数据，不接受仓库筛选。",
             )
         )
     effective_request: dict[str, Any] = {

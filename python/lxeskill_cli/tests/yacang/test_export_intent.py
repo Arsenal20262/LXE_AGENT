@@ -410,6 +410,94 @@ def test_warehouse_defaults_subset_and_unknown_are_deterministic() -> None:
     assert unknown["effective_request"] is None
 
 
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("导出马来西亚仓当前库存", ["MY8801"]),
+        ("导出马来西亚当前库存", ["MY8801"]),
+        ("导出马来仓当前库存", ["MY8801"]),
+        ("导出马来当前库存", ["MY8801"]),
+        ("导出菲律宾仓当前库存", ["PH8805"]),
+        ("导出菲律宾当前库存", ["PH8805"]),
+        ("导出菲仓当前库存", ["PH8805"]),
+        ("导出泰国仓当前库存", ["TH8802"]),
+        ("导出泰国当前库存", ["TH8802"]),
+        ("导出泰仓当前库存", ["TH8802"]),
+        ("导出越南仓当前库存", ["VN8806"]),
+        ("导出越南当前库存", ["VN8806"]),
+        ("导出越仓当前库存", ["VN8806"]),
+    ],
+)
+def test_chinese_warehouse_aliases_normalize_to_canonical_codes(
+    text: str,
+    expected: list[str],
+) -> None:
+    result = normalized(text)
+
+    assert result["requires_clarification"] is False
+    assert result["effective_request"]["warehouses"] == expected
+    assert result["intent"]["warehouse_intent"] == {
+        "state": "resolved",
+        "values": expected,
+    }
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("马来和菲律宾当前库存", ["MY8801", "PH8805"]),
+        ("马来、泰国、越南当前库存", ["MY8801", "TH8802", "VN8806"]),
+        ("马来西亚仓和PH8805的月度销量", ["MY8801", "PH8805"]),
+        ("马来西亚仓和MY8801的月度销量", ["MY8801"]),
+    ],
+)
+def test_chinese_and_code_warehouse_combinations_are_ordered_and_deduplicated(
+    text: str,
+    expected: list[str],
+) -> None:
+    result = normalized(text)
+
+    assert result["requires_clarification"] is False
+    assert result["effective_request"]["warehouses"] == expected
+
+
+@pytest.mark.parametrize("marker", ["四仓", "四个仓", "全部仓库", "所有仓库"])
+def test_all_warehouse_markers_expand_to_all_canonical_codes(marker: str) -> None:
+    result = normalized(f"导出{marker}当前库存")
+
+    assert result["requires_clarification"] is False
+    assert result["effective_request"]["warehouses"] == list(WAREHOUSE_CODES)
+
+
+def test_specific_alias_and_all_warehouses_remain_a_scope_conflict() -> None:
+    result = normalized("导出马来仓和全部仓库当前库存")
+
+    assert result["requires_clarification"] is True
+    assert result["effective_request"] is None
+    assert any(
+        question["code"] == "WAREHOUSE_SCOPE_CONFLICT"
+        for question in result["questions"]
+    )
+
+
+@pytest.mark.parametrize("text", ["导出美国仓当前库存", "导出某仓当前库存"])
+def test_unrecognized_warehouse_phrases_remain_ambiguous(text: str) -> None:
+    result = normalized(text)
+
+    assert result["requires_clarification"] is True
+    assert result["effective_request"] is None
+    assert result["intent"]["warehouse_intent"] == {"state": "ambiguous"}
+
+
+def test_inbound_warehouse_alias_is_non_failing_request_context() -> None:
+    result = normalized("导出马来仓入库时间")
+
+    assert result["requires_clarification"] is False
+    assert result["effective_request"]["data_types"] == ["inbound-listing-time"]
+    assert result["effective_request"]["warehouses"] == ["MY8801"]
+    assert result["preflight_issues"] == []
+
+
 def test_agent_candidate_conflicting_with_strong_raw_signal_is_rejected_as_ambiguous() -> None:
     result = normalized(
         "导出近90天每天销量",
@@ -479,11 +567,6 @@ def test_omitted_candidate_does_not_hide_strong_raw_signal() -> None:
             "导出月度销量",
             {"inventory_snapshot_intent": {"state": "current"}},
             "INVALID_INVENTORY_INTENT_SCOPE",
-        ),
-        (
-            "导出 MY8801 上架时间",
-            {},
-            "UNSUPPORTED_INBOUND_WAREHOUSE_FILTER",
         ),
         (
             "导出最近7天创建商品的上架时间",

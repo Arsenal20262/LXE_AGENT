@@ -95,5 +95,66 @@
     "expected_state": "unsupported",
     "diagnostic_code": "UNSUPPORTED_SALES_WINDOW",
     "requested_sales_window_days": 56
+  },
+  {
+    "id": "warehouse_alias_malaysia_spoken",
+    "text": "帮我看马来最近一个月销量",
+    "expected_state": "resolved",
+    "data_types": ["sales-monthly"],
+    "warehouses": ["MY8801"]
+  },
+  {
+    "id": "warehouse_alias_philippines_daily",
+    "text": "查菲律宾仓90天日销量",
+    "expected_state": "resolved",
+    "data_types": ["sales-90d"],
+    "warehouses": ["PH8805"]
+  },
+  {
+    "id": "warehouse_alias_multi_inventory",
+    "text": "马来和泰国当前库存",
+    "expected_state": "resolved",
+    "data_types": ["inventory-current-snapshot"],
+    "warehouses": ["MY8801", "TH8802"]
+  },
+  {
+    "id": "warehouse_alias_all_inventory",
+    "text": "四个仓的库存",
+    "expected_state": "resolved",
+    "data_types": ["inventory-current-snapshot"],
+    "warehouses": ["MY8801", "PH8805", "TH8802", "VN8806"]
+  },
+  {
+    "id": "warehouse_alias_vietnam_ambiguous_sales",
+    "text": "越南最近卖得怎么样",
+    "expected_state": "ambiguous"
+  },
+  {
+    "id": "warehouse_alias_thailand_daily",
+    "text": "泰仓最近90天每天销量",
+    "expected_state": "resolved",
+    "data_types": ["sales-90d"],
+    "warehouses": ["TH8802"]
+  },
+  {
+    "id": "warehouse_alias_mixed_with_code",
+    "text": "马来西亚仓和PH8805的月度销量",
+    "expected_state": "resolved",
+    "data_types": ["sales-monthly"],
+    "warehouses": ["MY8801", "PH8805"]
+  },
+  {
+    "id": "warehouse_alias_inbound_global",
+    "text": "马来仓入库时间",
+    "expected_state": "resolved",
+    "data_types": ["inbound-listing-time"],
+    "warehouses": ["MY8801"]
+  },
+  {
+    "id": "warehouse_alias_philippines_stock_spoken",
+    "text": "菲律宾现在还有多少货",
+    "expected_state": "resolved",
+    "data_types": ["inventory-current-snapshot"],
+    "warehouses": ["PH8805"]
   }
 ]

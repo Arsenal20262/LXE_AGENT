@@ -223,6 +223,45 @@ def test_inbound_listing_time_is_one_global_task_without_date_or_warehouse_param
     assert plan["source_fetches"] == []
 
 
+def test_inbound_with_chinese_warehouse_alias_remains_one_global_task() -> None:
+    plan = plan_export_workflow(
+        normalized("导出马来仓入库时间"),
+        execution_date="2026-09-14",
+    )
+
+    assert plan["requires_clarification"] is False
+    assert plan["diagnostics"] == []
+    assert plan["logical_tasks"] == [
+        {
+            "task_id": "inbound-listing-time:global",
+            "data_type": "inbound-listing-time",
+            "scope": "global",
+            "warehouse_scope": "all",
+            "status": "not_run",
+            "effective_parameters": {},
+        }
+    ]
+    assert plan["source_fetches"] == []
+
+
+def test_chinese_warehouse_aliases_reach_planner_as_canonical_codes_only() -> None:
+    plan = plan_export_workflow(
+        normalized("马来和泰国当前库存"),
+        execution_date="2026-09-14",
+    )
+
+    assert [task["warehouse"] for task in plan["logical_tasks"]] == ["MY8801", "TH8802"]
+    assert [task["effective_parameters"] for task in plan["logical_tasks"]] == [
+        {"warehouse": "MY8801"},
+        {"warehouse": "TH8802"},
+    ]
+    assert plan["source_fetches"] == []
+    assert all(
+        value not in str(plan)
+        for value in ("马来", "马来仓", "马来西亚", "泰国", "泰仓")
+    )
+
+
 def test_current_inventory_is_per_warehouse_without_created_dates_or_sales_source() -> None:
     plan = plan_export_workflow(normalized("四个仓库还剩多少货"), execution_date="2026-09-14")
 
