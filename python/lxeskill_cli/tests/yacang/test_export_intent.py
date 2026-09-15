@@ -211,26 +211,48 @@ def test_all_data_phrases_select_all_four_types(text: str) -> None:
 
 
 @pytest.mark.parametrize("text", ["导出四仓月底库存", "导出月末库存", "导出月末快照"])
-def test_inventory_wording_always_maps_to_current_snapshot(text: str) -> None:
+def test_bare_month_end_inventory_requires_clarification(text: str) -> None:
     result = normalized(text)
 
-    assert result["intent"]["data_type_intent"] == {
-        "state": "resolved",
-        "values": ["inventory-current-snapshot"],
-    }
+    assert result["intent"]["inventory_snapshot_intent"] == {"state": "ambiguous"}
+    assert result["effective_request"] is None
+    assert result["requires_clarification"] is True
+    assert result["questions"] == [
+        {
+            "dimension": "inventory_snapshot",
+            "code": "AMBIGUOUS_INVENTORY_SNAPSHOT",
+            "message": "请确认需要当前库存，还是指定历史月份的月末库存。",
+        }
+    ]
+
+
+@pytest.mark.parametrize("text", ["导出当前库存", "现在库存多少", "还剩多少货"])
+def test_current_inventory_phrases_resolve_current_snapshot(text: str) -> None:
+    result = normalized(text)
+
     assert result["intent"]["inventory_snapshot_intent"] == {"state": "current"}
     assert result["effective_request"]["data_types"] == ["inventory-current-snapshot"]
     assert result["requires_clarification"] is False
 
 
-@pytest.mark.parametrize("text", ["导出上个月月底库存", "导出8月31日库存"])
-def test_historical_inventory_phrases_use_current_snapshot_provider_semantics(text: str) -> None:
+@pytest.mark.parametrize(
+    "text",
+    ["导出上个月月底库存", "导出上月月末库存", "导出8月31日库存"],
+)
+def test_historical_inventory_phrases_are_unsupported_without_current_snapshot(text: str) -> None:
     result = normalized(text)
 
-    assert result["intent"]["inventory_snapshot_intent"] == {"state": "current"}
-    assert result["effective_request"]["data_types"] == ["inventory-current-snapshot"]
+    assert result["intent"]["data_type_intent"] == {"state": "unsupported"}
+    assert result["intent"]["inventory_snapshot_intent"] == {"state": "historical"}
+    assert result["effective_request"]["data_types"] == []
     assert result["requires_clarification"] is False
-    assert result["preflight_issues"] == []
+    assert result["preflight_issues"] == [
+        {
+            "kind": "unsupported",
+            "code": "UNSUPPORTED_HISTORICAL_INVENTORY",
+            "message": "当前雅仓能力不支持指定历史日期或历史月末库存快照。",
+        }
+    ]
 
 
 @pytest.mark.parametrize("case", EVAL_CASES, ids=lambda case: case["id"])
@@ -238,6 +260,10 @@ def test_data_driven_natural_language_eval(case: dict[str, Any]) -> None:
     result = normalized(case["text"])
 
     assert result["intent"]["data_type_intent"]["state"] == case["expected_state"]
+    if case.get("expected_requires_clarification"):
+        assert result["requires_clarification"] is True
+        assert result["effective_request"] is None
+        return
     if case["expected_state"] == "resolved":
         assert result["effective_request"]["data_types"] == case["data_types"]
         if "warehouses" in case:
@@ -248,9 +274,10 @@ def test_data_driven_natural_language_eval(case: dict[str, Any]) -> None:
     if case["expected_state"] == "unsupported":
         assert result["requires_clarification"] is False
         assert result["preflight_issues"][0]["code"] == case["diagnostic_code"]
-        assert result["preflight_issues"][0]["requested_value"] == {
-            "sales_window_days": case["requested_sales_window_days"]
-        }
+        if "requested_sales_window_days" in case:
+            assert result["preflight_issues"][0]["requested_value"] == {
+                "sales_window_days": case["requested_sales_window_days"]
+            }
 
 
 def test_sales_clarification_uses_business_labels_not_internal_windows() -> None:
@@ -424,7 +451,9 @@ def test_agent_inventory_candidate_cannot_override_historical_raw_intent() -> No
     )
 
     assert result["requires_clarification"] is False
-    assert result["intent"]["inventory_snapshot_intent"] == {"state": "current"}
+    assert result["intent"]["inventory_snapshot_intent"] == {"state": "historical"}
+    assert result["effective_request"]["data_types"] == []
+    assert result["preflight_issues"][0]["code"] == "UNSUPPORTED_HISTORICAL_INVENTORY"
 
 
 def test_omitted_candidate_does_not_hide_strong_raw_signal() -> None:

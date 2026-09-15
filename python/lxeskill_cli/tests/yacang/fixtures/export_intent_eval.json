@@ -52,13 +52,13 @@
     "id": "inventory_month_end_alias",
     "text": "导出月末库存",
     "expected_state": "resolved",
-    "data_types": ["inventory-current-snapshot"]
+    "expected_requires_clarification": true
   },
   {
     "id": "inventory_historical_phrase",
     "text": "导出8月31日库存",
-    "expected_state": "resolved",
-    "data_types": ["inventory-current-snapshot"]
+    "expected_state": "unsupported",
+    "diagnostic_code": "UNSUPPORTED_HISTORICAL_INVENTORY"
   },
   {
     "id": "inventory_subset",

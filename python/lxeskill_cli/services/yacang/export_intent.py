@@ -525,10 +525,28 @@ def _parse_data_type_intent(
         and not bare_month_end
         and not historical_inventory
     )
-    if historical_inventory or bare_month_end or current_inventory or inventory_with_sales or bare_inventory:
+    if (bare_month_end and not historical_inventory) or current_inventory or inventory_with_sales or bare_inventory:
         selected.add("inventory-current-snapshot")
 
-    if historical_inventory or bare_month_end or current_inventory or inventory_with_sales or inventory_with_both_sales or bare_inventory:
+    if historical_inventory:
+        inventory_intent = {"state": "historical"}
+        issues.append(
+            _issue(
+                "unsupported",
+                "UNSUPPORTED_HISTORICAL_INVENTORY",
+                "当前雅仓能力不支持指定历史日期或历史月末库存快照。",
+            )
+        )
+    elif bare_month_end:
+        inventory_intent = {"state": "ambiguous"}
+        questions.append(
+            _question(
+                "inventory_snapshot",
+                "AMBIGUOUS_INVENTORY_SNAPSHOT",
+                "请确认需要当前库存，还是指定历史月份的月末库存。",
+            )
+        )
+    elif current_inventory or inventory_with_sales or inventory_with_both_sales or bare_inventory:
         inventory_intent = {"state": "current"}
     else:
         inventory_intent = {"state": "omitted"}
@@ -670,7 +688,7 @@ def merge_and_resolve_intent(
                     "商品创建日期筛选只能用于销量任务。",
                 )
             )
-    if inventory_intent["state"] != "omitted" and not inventory_selected:
+    if inventory_intent["state"] not in {"omitted", "historical"} and not inventory_selected:
         preflight_issues.append(
             _issue(
                 "invalid",
@@ -791,6 +809,8 @@ def _merge_inventory_intent(
     candidate: Mapping[str, Any] | None,
     questions: list[dict[str, str]],
 ) -> dict[str, Any]:
+    if parsed["state"] == "historical":
+        return dict(parsed)
     if candidate is None or candidate["state"] == "omitted":
         return dict(parsed)
     if parsed["state"] == "omitted":

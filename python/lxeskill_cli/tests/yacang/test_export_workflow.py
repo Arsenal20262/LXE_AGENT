@@ -164,7 +164,7 @@ def test_unsupported_sales_window_keeps_diagnostic_without_creating_sales_task()
     ]
 
 
-def test_historical_inventory_phrasing_still_plans_current_inventory_with_sales() -> None:
+def test_historical_inventory_keeps_supported_sales_without_planning_inventory() -> None:
     plan = plan_export_workflow(
         normalized("导出 MY8801 的上个月月底库存和月度销量"),
         execution_date="2026-09-14",
@@ -172,27 +172,39 @@ def test_historical_inventory_phrasing_still_plans_current_inventory_with_sales(
 
     assert [(task["data_type"], task["status"]) for task in plan["logical_tasks"]] == [
         ("sales-monthly", "not_run"),
-        ("inventory-current-snapshot", "not_run"),
     ]
-    assert plan["diagnostics"] == []
+    assert plan["diagnostics"] == [
+        {
+            "kind": "unsupported",
+            "code": "UNSUPPORTED_HISTORICAL_INVENTORY",
+            "message": "当前雅仓能力不支持指定历史日期或历史月末库存快照。",
+        }
+    ]
     assert len(plan["source_fetches"]) == 1
     assert plan["source_fetches"][0]["warehouse"] == "MY8801"
 
 
-def test_historical_inventory_only_generates_current_tasks_without_source_fetch() -> None:
+def test_historical_inventory_only_generates_no_tasks_or_source_fetch() -> None:
     plan = plan_export_workflow(
         normalized("导出8月31日库存"),
         execution_date="2026-09-14",
     )
 
-    assert [task["task_id"] for task in plan["logical_tasks"]] == [
-        "inventory-current-snapshot:MY8801",
-        "inventory-current-snapshot:PH8805",
-        "inventory-current-snapshot:TH8802",
-        "inventory-current-snapshot:VN8806",
-    ]
+    assert plan["logical_tasks"] == []
     assert plan["source_fetches"] == []
-    assert plan["diagnostics"] == []
+    assert plan["diagnostics"][0]["code"] == "UNSUPPORTED_HISTORICAL_INVENTORY"
+
+
+def test_bare_month_end_inventory_stops_planning_for_clarification() -> None:
+    plan = plan_export_workflow(
+        normalized("导出月末库存"),
+        execution_date="2026-09-14",
+    )
+
+    assert plan["requires_clarification"] is True
+    assert plan["logical_tasks"] == []
+    assert plan["source_fetches"] == []
+    assert plan["questions"][0]["code"] == "AMBIGUOUS_INVENTORY_SNAPSHOT"
 
 
 def test_inbound_listing_time_is_one_global_task_without_date_or_warehouse_parameters() -> None:
