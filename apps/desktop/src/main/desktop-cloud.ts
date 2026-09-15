@@ -1,4 +1,5 @@
 import { parseManagedManifest, managedTargetKey, type ManagedLlmState } from "@lxe/core";
+import { CloudHttpError, cloudErrorMessage, limitCloudText, parseCloudError } from "./cloud-errors";
 import { randomUUID } from "node:crypto";
 import { hostname } from "node:os";
 import { join } from "node:path";
@@ -359,7 +360,8 @@ export class DesktopCloudService {
       const result = async (response: Response): Promise<string> => {
         if (!response.ok) {
           const prefix = response.status === 404 ? "公司云端尚未支持自动身份迁移" : "设备身份迁移失败";
-          throw new Error(`${prefix}（HTTP ${response.status}）：${this.diagnosticError(new Error(await response.text()))}`);
+          const parsed = parseCloudError(await response.text().catch(() => ""), [legacy, candidate, cloud.data_server_url]);
+          throw new CloudHttpError(parsed, response.status, `${prefix}（HTTP ${response.status}）：${parsed.diagnostic}`);
         }
         const body = objectValue(await response.json());
         if (!body || body.device_id !== cloud.device_id || body.machine_id !== machine.machine_id
@@ -382,9 +384,12 @@ export class DesktopCloudService {
       if (!target) throw new Error("迁移后的设备身份未能读取");
       return await this.probeStatus(target, this.options.logger);
     } catch (error) {
-      const message = this.diagnosticError(error);
-      this.options.logger.warn("cloud_identity_migration_failed", { observed_error: message });
-      return this.setConnection("error", `身份迁移未完成，将自动重试。${message}`, true);
+      const message = error instanceof CloudHttpError ? error.message : this.diagnosticError(error);
+      this.options.logger.warn("cloud_identity_migration_failed", {
+        observed_error: error instanceof CloudHttpError ? error.detail.diagnostic : message,
+        ...(error instanceof CloudHttpError ? { http_status: error.httpStatus, error_code: error.detail.code } : {}),
+      });
+      return this.setConnection("error", limitCloudText(`身份迁移未完成，将自动重试。${message}`, 300), true);
     }
   }
 
@@ -728,22 +733,10 @@ export class DesktopCloudService {
     startedAt: number,
     target: CloudProbeTarget,
   ): Promise<DesktopCloudState> {
-    const observedError = this.redactSensitiveText(
-      await response.text().catch(() => ""),
-      target,
-    );
-    let errorCode: unknown;
-    try {
-      const payload = objectValue(JSON.parse(observedError));
-      errorCode = objectValue(payload?.detail)?.code;
-    } catch {
-      // Non-JSON failures keep the existing HTTP fallback and diagnostic body.
-    }
-    const upgradeRequired = response.status === 409 && errorCode === "device_permission_contract_incompatible";
+    const parsed = parseCloudError(await response.text().catch(() => ""), [target.apiToken, target.dataServerUrl]);
+    const observedError = parsed.diagnostic;
     const offline = response.status >= 500;
-    const lastError = upgradeRequired
-      ? "当前 Agent 版本过旧，请升级后重试"
-      : offline
+    const fallback = offline
       ? "公司云端暂时不可用"
       : operation === "status" && response.status === 404
         ? "公司云端版本不兼容，请联系管理员升级服务"
@@ -754,8 +747,10 @@ export class DesktopCloudService {
             : operation === "status"
               ? `公司云端状态检查失败（HTTP ${response.status}）`
               : `公司云端拒绝激活（HTTP ${response.status}）`;
+    const lastError = cloudErrorMessage(parsed, response.status, fallback);
     logger.warn(operation === "status" ? "cloud_status_check_failed" : "cloud_device_activation_failed", {
       ...(operation === "activation" ? { failed_stage: "activate_device" } : {}),
+      ...(parsed.code ? { error_code: parsed.code } : {}),
       duration_ms: Math.max(0, this.now() - startedAt),
       http_status: response.status,
       connection: offline ? "offline" : "error",

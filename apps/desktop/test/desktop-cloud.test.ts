@@ -922,6 +922,7 @@ describe("DesktopCloudService", () => {
   });
 
   test.each([
+    [JSON.stringify({ detail: { code: "future_error", user_message: "New activation hint", message: "Diagnostic" } }), "New activation hint"],
     [JSON.stringify({ detail: { code: "device_permission_contract_incompatible", required_version: 2, observed_version: 1, message: "Upgrade required" } }), "当前 Agent 版本过旧，请升级后重试"],
     [JSON.stringify({ detail: { code: "device_already_bound", message: "Do not render this raw message" } }), "该设备文件已绑定到另一台电脑"],
     ["not JSON", "该设备文件已绑定到另一台电脑"],
@@ -944,6 +945,27 @@ describe("DesktopCloudService", () => {
     expect(state).toMatchObject({ connection: "error", last_error: expected });
     expect(events.at(-1)?.fields).toMatchObject({ http_status: 409, observed_error: body });
     expect(state.last_error).not.toContain("Do not render");
+  });
+
+  test.each([401, 403, 409, 503])("server hints do not alter HTTP %i connection or credentials", async status => {
+    const root = mkdtempSync(join(tmpdir(), "lxe-cloud-custom-hint-"));
+    roots.push(root);
+    const config = new DesktopConfigStore(root, join(root, "workspace"), safeStorage, { platform: "win32" });
+    config.saveCloudEnrollment({ deviceId: enrollmentPayload.device.id, deviceName: enrollmentPayload.device.name,
+      vpnIp: "10.88.0.8", dataServerUrl: enrollmentPayload.data_server.url, tunnelName: "lxe-agent", apiKey: enrollmentPayload.data_server.api_token });
+    const events: LogEvent[] = [];
+    let hint = "Server user hint";
+    const service = cloudService({ dataRoot: root, supported: true, config, enrollments: new DesktopCloudEnrollmentManager(),
+      logger: testLogger(events), provisioner: { provision: async () => undefined }, onConfigured: async () => undefined,
+      fetch: async () => Response.json({ detail: { code: "future_error", message: "Original diagnostic", user_message: hint } }, { status }),
+    });
+    const before = config.cloudIdentityCredential();
+    expect(await service.check()).toMatchObject({ connection: status >= 500 ? "offline" : "error", last_error: hint });
+    hint = "Updated hint without a client release";
+    expect(await service.check()).toMatchObject({ connection: status >= 500 ? "offline" : "error", last_error: hint });
+    expect(config.cloudIdentityCredential()).toBe(before);
+    expect(events.at(-1)?.fields).toMatchObject({ http_status: status, error_code: "future_error" });
+    expect(events.at(-1)?.fields.observed_error).toContain("Original diagnostic");
   });
 
   test("logs an HTTP credential rejection without changing the public cloud state", async () => {
