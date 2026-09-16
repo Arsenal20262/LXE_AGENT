@@ -18,10 +18,12 @@ export interface DesktopYacangTestPageServiceOptions {
   dataRoot: string;
   managedPath: string;
   environment: () => NodeJS.ProcessEnv;
+  skillScope: () => Promise<readonly string[]>;
 }
 
 export function buildYacangTestPageEnvironment(
   options: DesktopYacangTestPageServiceOptions,
+  skillScope: readonly string[],
   parentEnvironment: NodeJS.ProcessEnv = process.env,
 ): NodeJS.ProcessEnv {
   const temporaryRoot = join(options.dataRoot, "tmp");
@@ -39,6 +41,7 @@ export function buildYacangTestPageEnvironment(
     PYTHONNOUSERSITE: "1",
     PYTHONIOENCODING: "utf-8",
     PYTHONUTF8: "1",
+    LXESKILL_SKILL_SCOPE: [...new Set(skillScope.map((name) => name.trim()).filter(Boolean))].join(","),
   };
 }
 
@@ -66,9 +69,10 @@ export class DesktopYacangTestPageService {
   private async run(action: "preview" | "run", input: Record<string, string>): Promise<Record<string, unknown>> {
     const temporaryRoot = join(this.options.dataRoot, "tmp");
     mkdirSync(temporaryRoot, { recursive: true });
+    const skillScope = await this.options.skillScope();
     const child = spawn(this.options.pythonPath, ["-I", "-B", "-m", "lxeskill", "yacang", "export", action, "--stdin-json"], {
       cwd: this.options.dataRoot,
-      env: buildYacangTestPageEnvironment(this.options),
+      env: buildYacangTestPageEnvironment(this.options, skillScope),
       stdio: ["pipe", "pipe", "pipe"], windowsHide: true,
     });
     let outputBytes = 0;
@@ -84,8 +88,8 @@ export class DesktopYacangTestPageService {
     child.stdin.end(JSON.stringify(input));
     const code = await new Promise<number>((resolve, reject) => { child.once("error", reject); child.once("close", value => resolve(value ?? -1)); });
     lines.close();
-    const result = terminal && record(terminal.data, "Yacang CLI result");
-    if (code !== 0 || !terminal || terminal.ok !== true || !result) throw new Error(safeError(stderr || "雅仓命令未返回有效结果"));
+    if (code !== 0 || !terminal || terminal.ok !== true) throw commandError(terminal, stderr);
+    const result = record(terminal.data, "Yacang CLI result");
     return result;
   }
 }
@@ -96,5 +100,26 @@ function record(value: unknown, label: string): Record<string, unknown> {
 }
 
 function safeError(value: string): string {
-  return value.replace(/(password|token|cookie|authorization)\s*[:=]\s*\S+/giu, "$1=[已脱敏]").trim().slice(-4096);
+  return value
+    .replace(/\bBearer\s+\S+/giu, "Bearer [已脱敏]")
+    .replace(/((?:password|token|cookie|authorization|secret)["']?\s*[:=]\s*)(?:["'][^"'\r\n]*["']|[^\s,}\r\n]+)/giu, "$1[已脱敏]")
+    .trim()
+    .slice(-4096);
+}
+
+function commandError(terminal: Record<string, unknown> | undefined, stderr: string): Error {
+  const rawError = terminal?.error;
+  const structured = rawError && typeof rawError === "object" && !Array.isArray(rawError)
+    ? rawError as Record<string, unknown>
+    : undefined;
+  const code = typeof structured?.code === "string" && structured.code.trim()
+    ? structured.code.trim()
+    : "YACANG_CLI_ERROR";
+  const message = safeError(
+    typeof structured?.message === "string" && structured.message.trim()
+      ? structured.message
+      : stderr || "雅仓命令未返回有效结果",
+  );
+  const diagnostics = safeError(stderr);
+  return new Error(JSON.stringify({ code, message, ...(diagnostics ? { diagnostics } : {}) }));
 }

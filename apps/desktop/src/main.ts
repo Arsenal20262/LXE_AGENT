@@ -373,6 +373,10 @@ async function bootstrap(): Promise<void> {
     dataRoot: paths.dataRoot,
     managedPath: paths.managedPath,
     environment: () => config.environment(),
+    skillScope: async () => {
+      const skills = await gateway.dashboardCall({ operation: "skills.list", input: {} });
+      return skills.items.map((skill) => skill.name);
+    },
   });
   const checkCloudAfterResume = (): void => { void cloud.check(); };
   powerMonitor.on("resume", checkCloudAfterResume);
