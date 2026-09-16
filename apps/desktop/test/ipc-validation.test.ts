@@ -127,6 +127,11 @@ describe("desktop IPC validation", () => {
         app_path: " C:\\Ziniao.exe ",
         webdriver_path: " C:\\drivers ",
       },
+      yacang: {
+        action: "save",
+        mobile: " 13800138000 ",
+        password: " yacang-secret ",
+      },
       logging: { profile: "standard", retention_days: 7 },
     })).toEqual({
       workspace_root: "C:\\workspace",
@@ -138,6 +143,11 @@ describe("desktop IPC validation", () => {
         app_version: "v6",
         app_path: "C:\\Ziniao.exe",
         webdriver_path: "C:\\drivers",
+      },
+      yacang: {
+        action: "save",
+        mobile: "13800138000",
+        password: "yacang-secret",
       },
       logging: { profile: "standard", retention_days: 7 },
     });

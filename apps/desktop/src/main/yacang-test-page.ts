@@ -17,6 +17,29 @@ export interface DesktopYacangTestPageServiceOptions {
   pythonPath: string;
   dataRoot: string;
   managedPath: string;
+  environment: () => NodeJS.ProcessEnv;
+}
+
+export function buildYacangTestPageEnvironment(
+  options: DesktopYacangTestPageServiceOptions,
+  parentEnvironment: NodeJS.ProcessEnv = process.env,
+): NodeJS.ProcessEnv {
+  const temporaryRoot = join(options.dataRoot, "tmp");
+  return {
+    ...parentEnvironment,
+    ...options.environment(),
+    LXE_DATA_ROOT: options.dataRoot,
+    LXE_SQLITE_DB_PATH: join(options.dataRoot, "db", "lxeskill.sqlite3"),
+    LXE_MANAGED_PATH: options.managedPath,
+    PATH: [options.managedPath, parentEnvironment.PATH].filter(Boolean).join(process.platform === "win32" ? ";" : ":"),
+    TMP: temporaryRoot,
+    TEMP: temporaryRoot,
+    TMPDIR: temporaryRoot,
+    PYTHONDONTWRITEBYTECODE: "1",
+    PYTHONNOUSERSITE: "1",
+    PYTHONIOENCODING: "utf-8",
+    PYTHONUTF8: "1",
+  };
 }
 
 type PreviewRecord = { requestText: string; expiresAt: number };
@@ -45,15 +68,8 @@ export class DesktopYacangTestPageService {
     mkdirSync(temporaryRoot, { recursive: true });
     const child = spawn(this.options.pythonPath, ["-I", "-B", "-m", "lxeskill", "yacang", "export", action, "--stdin-json"], {
       cwd: this.options.dataRoot,
-      env: {
-        ...process.env,
-        LXE_DATA_ROOT: this.options.dataRoot,
-        LXE_SQLITE_DB_PATH: join(this.options.dataRoot, "db", "lxeskill.sqlite3"),
-        LXE_MANAGED_PATH: this.options.managedPath,
-        PATH: [this.options.managedPath, process.env.PATH].filter(Boolean).join(process.platform === "win32" ? ";" : ":"),
-        TMP: temporaryRoot, TEMP: temporaryRoot, TMPDIR: temporaryRoot,
-        PYTHONDONTWRITEBYTECODE: "1", PYTHONNOUSERSITE: "1", PYTHONIOENCODING: "utf-8", PYTHONUTF8: "1",
-      }, stdio: ["pipe", "pipe", "pipe"], windowsHide: true,
+      env: buildYacangTestPageEnvironment(this.options),
+      stdio: ["pipe", "pipe", "pipe"], windowsHide: true,
     });
     let outputBytes = 0;
     let terminal: Record<string, unknown> | undefined;

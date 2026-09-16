@@ -126,6 +126,7 @@ export function validateSetupInput(value: unknown): DesktopSetupInput {
   };
   const ziniao = input.ziniao === undefined ? undefined : integrationAction(input.ziniao, "Ziniao setup");
   const mabang = input.mabang === undefined ? undefined : integrationAction(input.mabang, "Mabang setup");
+  const yacang = input.yacang === undefined ? undefined : integrationAction(input.yacang, "Yacang setup");
   const feishu = input.feishu === undefined ? undefined : integrationAction(input.feishu, "Feishu setup");
   const logging = input.logging === undefined ? undefined : objectValue(input.logging, "Logging setup");
   const rawZiniaoVersion = ziniao?.action === "save"
@@ -153,6 +154,14 @@ export function validateSetupInput(value: unknown): DesktopSetupInput {
     account: boundedText(mabang.account, "Mabang account", 1_024),
     ...(mabangPassword ? { password: mabangPassword } : {}),
   } : mabang?.action === "clear" ? { action: "clear" as const } : undefined;
+  const yacangPassword = yacang?.action === "save"
+    ? boundedText(yacang.password, "Yacang password", 16_384)
+    : "";
+  const yacangInput = yacang?.action === "save" ? {
+    action: "save" as const,
+    mobile: boundedText(yacang.mobile, "Yacang mobile", 1_024),
+    ...(yacangPassword ? { password: yacangPassword } : {}),
+  } : yacang?.action === "clear" ? { action: "clear" as const } : undefined;
   const feishuSecret = feishu?.action === "save"
     ? boundedText(feishu.app_secret, "Feishu App Secret", 16_384)
     : "";
@@ -178,6 +187,7 @@ export function validateSetupInput(value: unknown): DesktopSetupInput {
     workspace_root: workspaceRoot,
     ...(ziniaoInput ? { ziniao: ziniaoInput } : {}),
     ...(mabangInput ? { mabang: mabangInput } : {}),
+    ...(yacangInput ? { yacang: yacangInput } : {}),
     ...(feishuInput ? { feishu: feishuInput } : {}),
     ...(loggingInput ? { logging: loggingInput } : {}),
   };

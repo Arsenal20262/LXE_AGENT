@@ -372,6 +372,7 @@ async function bootstrap(): Promise<void> {
     pythonPath: paths.managedPythonPath,
     dataRoot: paths.dataRoot,
     managedPath: paths.managedPath,
+    environment: () => config.environment(),
   });
   const checkCloudAfterResume = (): void => { void cloud.check(); };
   powerMonitor.on("resume", checkCloudAfterResume);
