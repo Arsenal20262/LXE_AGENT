@@ -27,11 +27,11 @@ def test_yacang_has_one_discoverable_skill_and_one_natural_language_command() ->
     for path in (PROJECT_ROOT / "skills").rglob("SKILL.md"):
         frontmatter = path.read_text(encoding="utf-8").split("---", 2)[1]
         metadata = yaml.safe_load(frontmatter) or {}
-        if metadata.get("type") == "yacang_operations":
-            manifests.append((metadata["name"], path))
+        if metadata.get("name", "").startswith("yacang-"):
+            manifests.append((metadata["name"], metadata.get("type"), path))
 
-    assert [(name, path.parent.name) for name, path in manifests] == [
-        ("yacang-export-workflow-map", "yacang-export-workflow-map")
+    assert [(name, skill_type, path.parent.name) for name, skill_type, path in manifests] == [
+        ("yacang-export-workflow-map", "amazon_replenish", "yacang-export-workflow-map")
     ]
 
     router = _skill_text("yacang-export-workflow-map")
