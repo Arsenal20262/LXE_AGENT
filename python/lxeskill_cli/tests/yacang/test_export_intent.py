@@ -130,27 +130,95 @@ def test_legacy_inventory_candidate_normalizes_at_compatibility_boundary() -> No
     assert result["effective_request"]["data_types"] == ["inventory-current-snapshot"]
 
 
+@pytest.mark.parametrize("legacy_type", ["sales-monthly", "sales-90d"])
+def test_legacy_sales_candidates_normalize_to_inventory_sales(legacy_type: str) -> None:
+    result = normalized(
+        "导出销量",
+        data_type_intent={"state": "resolved", "values": [legacy_type]},
+    )
+
+    assert result["intent"]["data_type_intent"] == {
+        "state": "resolved",
+        "values": ["inventory-sales"],
+    }
+    assert result["effective_request"]["data_types"] == ["inventory-sales"]
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        ["sales-monthly", "sales-90d"],
+        ["inventory-sales", "sales-monthly"],
+    ],
+)
+def test_distinct_legacy_sales_aliases_collapse_to_one_inventory_sales_type(values: list[str]) -> None:
+    result = normalized(
+        "导出销量",
+        data_type_intent={"state": "resolved", "values": values},
+    )
+
+    assert result["intent"]["data_type_intent"]["values"] == ["inventory-sales"]
+    assert result["effective_request"]["data_types"] == ["inventory-sales"]
+
+
+def test_genuinely_duplicate_sales_candidate_is_still_rejected() -> None:
+    with pytest.raises(ValueError, match="不允许重复"):
+        normalized(
+            "导出销量",
+            data_type_intent={"state": "resolved", "values": ["sales-monthly", "sales-monthly"]},
+        )
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["90天逐日销量", "90天每天销量", "日销量明细", "逐日销量"],
+)
+def test_daily_sales_detail_is_unsupported_not_a_cumulative_report(text: str) -> None:
+    result = normalized(text)
+
+    assert result["requires_clarification"] is False
+    assert result["intent"]["data_type_intent"] == {"state": "unsupported"}
+    assert result["effective_request"]["data_types"] == []
+    assert result["preflight_issues"][0]["code"] == "UNSUPPORTED_DATA_TYPE"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "导出销量",
+        "导出7天销量",
+        "导出15天销量",
+        "导出30天销量",
+        "导出60天销量",
+        "导出90天销量",
+        "导出库存动销",
+        "导出库存和销量",
+        "导出动销数据",
+    ],
+)
+def test_sales_language_resolves_to_complete_inventory_sales(text: str) -> None:
+    result = normalized(text)
+
+    assert result["requires_clarification"] is False
+    assert result["effective_request"]["data_types"] == ["inventory-sales"]
+
+
 @pytest.mark.parametrize(
     ("text", "expected"),
     [
-        ("导出最近30天销量", ["sales-monthly"]),
-        ("导出7/15/30销量", ["sales-monthly"]),
-        ("导出7/14/30天销量", ["sales-monthly"]),
-        ("导出最近30天销售", ["sales-monthly"]),
-        ("近一个月销售情况", ["sales-monthly"]),
-        ("最近一个月出货", ["sales-monthly"]),
-        ("最近30天卖了多少", ["sales-monthly"]),
-        ("一周销量", ["sales-monthly"]),
-        ("两周销量", ["sales-monthly"]),
-        ("一个月销量", ["sales-monthly"]),
-        ("14天销量", ["sales-monthly"]),
-        ("导出近90天每天销量", ["sales-90d"]),
-        ("导出近三个月每天销量", ["sales-90d"]),
-        ("三个月日销", ["sales-90d"]),
-        ("90天逐日销量", ["sales-90d"]),
-        ("最近三个月销售趋势", ["sales-90d"]),
-        ("三个月每天出货情况", ["sales-90d"]),
-        ("每日销量趋势", ["sales-90d"]),
+        ("导出最近30天销量", ["inventory-sales"]),
+        ("导出7/15/30销量", ["inventory-sales"]),
+        ("导出60天销量", ["inventory-sales"]),
+        ("导出最近30天销售", ["inventory-sales"]),
+        ("近一个月销售情况", ["inventory-sales"]),
+        ("最近一个月出货", ["inventory-sales"]),
+        ("最近30天卖了多少", ["inventory-sales"]),
+        ("一周销量", ["inventory-sales"]),
+        ("两周销量", ["inventory-sales"]),
+        ("一个月销量", ["inventory-sales"]),
+        ("导出近90天销量", ["inventory-sales"]),
+        ("导出近三个月销量", ["inventory-sales"]),
+        ("最近三个月销售趋势", ["inventory-sales"]),
         ("导出当前库存", ["inventory-current-snapshot"]),
         ("导出现在库存", ["inventory-current-snapshot"]),
         ("导出库存现状", ["inventory-current-snapshot"]),
@@ -181,10 +249,9 @@ def test_supported_colloquial_types_map_to_fixed_canonical_types(
 @pytest.mark.parametrize(
     "text",
     [
-        "导出库存动销",
-        "导出最近销量",
-        "导出库存和销量",
-        "导出最近7天的商品销量",
+        "导出最近卖得怎么样",
+        "导出最近销售情况",
+        "导出库存相关",
     ],
 )
 def test_true_semantic_ambiguity_requires_clarification(text: str) -> None:
@@ -195,34 +262,33 @@ def test_true_semantic_ambiguity_requires_clarification(text: str) -> None:
     assert result["questions"]
 
 
-def test_generic_sales_with_relative_creation_filter_preserves_both_states() -> None:
+def test_generic_sales_with_relative_creation_filter_resolves_complete_report() -> None:
     result = normalized("最近7天创建的商品销量")
 
-    assert result["intent"]["data_type_intent"] == {"state": "ambiguous"}
+    assert result["intent"]["data_type_intent"] == {
+        "state": "resolved",
+        "values": ["inventory-sales"],
+    }
     assert result["intent"]["created_date_filter"] == {
         "state": "resolved",
         "mode": "relative_days",
         "days": 7,
     }
-    assert result["requires_clarification"] is True
-    assert result["effective_request"] is None
+    assert result["requires_clarification"] is False
+    assert result["effective_request"]["data_types"] == ["inventory-sales"]
 
 
-def test_inventory_plus_both_sales_selects_exactly_three_types() -> None:
+def test_inventory_plus_both_sales_selects_one_complete_report() -> None:
     result = normalized("库存和两种销量都要")
 
-    assert result["effective_request"]["data_types"] == [
-        "sales-monthly",
-        "sales-90d",
-        "inventory-current-snapshot",
-    ]
+    assert result["effective_request"]["data_types"] == ["inventory-sales"]
 
 
 @pytest.mark.parametrize(
     "text",
     ["全部数据", "所有数据", "完整数据", "全套", "四类", "导一套", "雅仓都要"],
 )
-def test_all_data_phrases_select_all_four_types(text: str) -> None:
+def test_all_data_phrases_select_all_three_types(text: str) -> None:
     result = normalized(text)
 
     assert result["intent"]["data_type_intent"] == {
@@ -303,12 +369,10 @@ def test_data_driven_natural_language_eval(case: dict[str, Any]) -> None:
 
 
 def test_sales_clarification_uses_business_labels_not_internal_windows() -> None:
-    result = normalized("导出最近销量")
+    result = normalized("导出最近卖得怎么样")
 
     assert result["requires_clarification"] is True
-    assert result["questions"][0]["message"] == (
-        "请确认需要最近一个月销量，还是近三个月每天销量；也可以说明两种销量都要。"
-    )
+    assert result["questions"][0]["message"] == "请确认是否需要导出完整库存动销报表。"
     assert "7/15/30" not in result["questions"][0]["message"]
 
 
@@ -369,7 +433,7 @@ def test_incomplete_invalid_or_cross_year_ranges_require_clarification(text: str
     assert result["effective_request"] is None
 
 
-@pytest.mark.parametrize("days", [45, 56, 60, 120])
+@pytest.mark.parametrize("days", [45, 56, 120])
 def test_custom_sales_windows_are_deterministic_unsupported_output(days: int) -> None:
     result = normalized(f"导出{days}天销量")
 
@@ -381,20 +445,20 @@ def test_custom_sales_windows_are_deterministic_unsupported_output(days: int) ->
             "kind": "unsupported",
             "code": "UNSUPPORTED_SALES_WINDOW",
             "requested_value": {"sales_window_days": days},
-            "message": "当前支持最近一个月汇总销量和近三个月日度销量，不支持自定义销量天数",
+            "message": "当前完整库存动销报表只包含固定的销量窗口，不支持自定义销量天数",
         }
     ]
     assert "requested_value" not in result["effective_request"]
 
 
-def test_7_14_30_wording_selects_fixed_monthly_report_without_custom_window() -> None:
-    result = normalized("导出7/14/30销量")
+def test_7_15_30_wording_selects_complete_inventory_sales_report() -> None:
+    result = normalized("导出7/15/30销量")
 
     assert result["intent"]["data_type_intent"] == {
         "state": "resolved",
-        "values": ["sales-monthly"],
+        "values": ["inventory-sales"],
     }
-    assert result["effective_request"]["data_types"] == ["sales-monthly"]
+    assert result["effective_request"]["data_types"] == ["inventory-sales"]
     assert result["preflight_issues"] == []
     assert "sales_window_days" not in result["effective_request"]
 
@@ -527,15 +591,14 @@ def test_inbound_warehouse_alias_is_non_failing_request_context() -> None:
     assert result["preflight_issues"] == []
 
 
-def test_agent_candidate_conflicting_with_strong_raw_signal_is_rejected_as_ambiguous() -> None:
+def test_legacy_agent_candidate_aligns_with_canonical_raw_sales_signal() -> None:
     result = normalized(
-        "导出近90天每天销量",
+        "导出近90天销量",
         data_type_intent={"state": "resolved", "values": ["sales-monthly"]},
     )
 
-    assert result["requires_clarification"] is True
-    assert result["effective_request"] is None
-    assert any(question["code"] == "DATA_TYPE_INTENT_CONFLICT" for question in result["questions"])
+    assert result["requires_clarification"] is False
+    assert result["effective_request"]["data_types"] == ["inventory-sales"]
 
 
 def test_agent_warehouse_candidate_cannot_override_explicit_raw_warehouse() -> None:
@@ -619,7 +682,7 @@ def test_mixed_sales_and_inbound_keeps_shared_filters_at_request_scope_only() ->
     result = normalized("导出 MY8801 最近7天创建商品的月度销量和上架时间")
 
     assert result["effective_request"] == {
-        "data_types": ["sales-monthly", "inbound-listing-time"],
+        "data_types": ["inventory-sales", "inbound-listing-time"],
         "warehouses": ["MY8801"],
         "created_date_filter": {
             "mode": "relative_days",

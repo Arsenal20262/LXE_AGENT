@@ -3,44 +3,46 @@
     "id": "monthly_week",
     "text": "导出最近一周销量",
     "expected_state": "resolved",
-    "data_types": ["sales-monthly"]
+    "data_types": ["inventory-sales"]
   },
   {
     "id": "monthly_spoken",
     "text": "MY8801最近一个月卖得怎么样",
     "expected_state": "resolved",
-    "data_types": ["sales-monthly"],
+    "data_types": ["inventory-sales"],
     "warehouses": ["MY8801"]
   },
   {
     "id": "monthly_all_warehouses",
     "text": "四个仓最近一个月销量",
     "expected_state": "resolved",
-    "data_types": ["sales-monthly"],
+    "data_types": ["inventory-sales"],
     "warehouses": ["MY8801", "PH8805", "TH8802", "VN8806"]
   },
   {
     "id": "sales_generic",
     "text": "导出最近销量",
-    "expected_state": "ambiguous"
+    "expected_state": "resolved",
+    "data_types": ["inventory-sales"]
   },
   {
     "id": "daily_90",
     "text": "MY8801近90天每天销量",
-    "expected_state": "resolved",
-    "data_types": ["sales-90d"],
+    "expected_state": "unsupported",
+    "diagnostic_code": "UNSUPPORTED_DATA_TYPE",
     "warehouses": ["MY8801"]
   },
   {
     "id": "daily_three_months",
     "text": "近三个月每天卖多少",
-    "expected_state": "resolved",
-    "data_types": ["sales-90d"]
+    "expected_state": "unsupported",
+    "diagnostic_code": "UNSUPPORTED_DATA_TYPE"
   },
   {
     "id": "daily_grainless_three_months",
     "text": "近三个月销量",
-    "expected_state": "ambiguous"
+    "expected_state": "resolved",
+    "data_types": ["inventory-sales"]
   },
   {
     "id": "inventory_current",
@@ -82,12 +84,14 @@
   {
     "id": "inventory_and_sales",
     "text": "库存和销量",
-    "expected_state": "ambiguous"
+    "expected_state": "resolved",
+    "data_types": ["inventory-sales"]
   },
   {
     "id": "inventory_sales_alias",
     "text": "导出库存动销",
-    "expected_state": "ambiguous"
+    "expected_state": "resolved",
+    "data_types": ["inventory-sales"]
   },
   {
     "id": "unsupported_sales_window",
@@ -100,14 +104,14 @@
     "id": "warehouse_alias_malaysia_spoken",
     "text": "帮我看马来最近一个月销量",
     "expected_state": "resolved",
-    "data_types": ["sales-monthly"],
+    "data_types": ["inventory-sales"],
     "warehouses": ["MY8801"]
   },
   {
     "id": "warehouse_alias_philippines_daily",
     "text": "查菲律宾仓90天日销量",
-    "expected_state": "resolved",
-    "data_types": ["sales-90d"],
+    "expected_state": "unsupported",
+    "diagnostic_code": "UNSUPPORTED_DATA_TYPE",
     "warehouses": ["PH8805"]
   },
   {
@@ -132,15 +136,15 @@
   {
     "id": "warehouse_alias_thailand_daily",
     "text": "泰仓最近90天每天销量",
-    "expected_state": "resolved",
-    "data_types": ["sales-90d"],
+    "expected_state": "unsupported",
+    "diagnostic_code": "UNSUPPORTED_DATA_TYPE",
     "warehouses": ["TH8802"]
   },
   {
     "id": "warehouse_alias_mixed_with_code",
     "text": "马来西亚仓和PH8805的月度销量",
     "expected_state": "resolved",
-    "data_types": ["sales-monthly"],
+    "data_types": ["inventory-sales"],
     "warehouses": ["MY8801", "PH8805"]
   },
   {
@@ -161,14 +165,14 @@
     "id": "warehouse_alias_my_short",
     "text": "MY最近一个月销量",
     "expected_state": "resolved",
-    "data_types": ["sales-monthly"],
+    "data_types": ["inventory-sales"],
     "warehouses": ["MY8801"]
   },
   {
     "id": "warehouse_alias_ph_short",
     "text": "PH近90天每天销量",
-    "expected_state": "resolved",
-    "data_types": ["sales-90d"],
+    "expected_state": "unsupported",
+    "diagnostic_code": "UNSUPPORTED_DATA_TYPE",
     "warehouses": ["PH8805"]
   },
   {
@@ -189,55 +193,75 @@
     "id": "monthly_recent_30_sales",
     "text": "最近30天销售",
     "expected_state": "resolved",
-    "data_types": ["sales-monthly"]
+    "data_types": ["inventory-sales"]
   },
   {
     "id": "monthly_near_month_sales_status",
     "text": "近一个月销售情况",
     "expected_state": "resolved",
-    "data_types": ["sales-monthly"]
+    "data_types": ["inventory-sales"]
   },
   {
     "id": "monthly_recent_month_shipments",
     "text": "最近一个月出货",
     "expected_state": "resolved",
-    "data_types": ["sales-monthly"]
+    "data_types": ["inventory-sales"]
   },
   {
     "id": "monthly_14_days_alias",
     "text": "14天销量",
-    "expected_state": "resolved",
-    "data_types": ["sales-monthly"]
+    "expected_state": "unsupported",
+    "diagnostic_code": "UNSUPPORTED_SALES_WINDOW",
+    "requested_sales_window_days": 14
   },
   {
     "id": "monthly_7_14_30_alias",
     "text": "7/14/30天销量",
-    "expected_state": "resolved",
-    "data_types": ["sales-monthly"]
+    "expected_state": "unsupported",
+    "diagnostic_code": "UNSUPPORTED_SALES_WINDOW",
+    "requested_sales_window_days": 14
   },
   {
     "id": "daily_three_months_daily_sales",
     "text": "三个月日销",
-    "expected_state": "resolved",
-    "data_types": ["sales-90d"]
+    "expected_state": "unsupported",
+    "diagnostic_code": "UNSUPPORTED_DATA_TYPE"
   },
   {
     "id": "daily_90_day_by_day",
     "text": "90天逐日销量",
-    "expected_state": "resolved",
-    "data_types": ["sales-90d"]
+    "expected_state": "unsupported",
+    "diagnostic_code": "UNSUPPORTED_DATA_TYPE"
   },
   {
     "id": "daily_three_month_sales_trend",
     "text": "最近三个月销售趋势",
     "expected_state": "resolved",
-    "data_types": ["sales-90d"]
+    "data_types": ["inventory-sales"]
   },
   {
     "id": "daily_sales_trend",
     "text": "每日销量趋势",
-    "expected_state": "resolved",
-    "data_types": ["sales-90d"]
+    "expected_state": "unsupported",
+    "diagnostic_code": "UNSUPPORTED_DATA_TYPE"
+  },
+  {
+    "id": "daily_90_every_day",
+    "text": "90天每天销量",
+    "expected_state": "unsupported",
+    "diagnostic_code": "UNSUPPORTED_DATA_TYPE"
+  },
+  {
+    "id": "daily_sales_detail",
+    "text": "日销量明细",
+    "expected_state": "unsupported",
+    "diagnostic_code": "UNSUPPORTED_DATA_TYPE"
+  },
+  {
+    "id": "daily_sales_by_day",
+    "text": "逐日销量",
+    "expected_state": "unsupported",
+    "diagnostic_code": "UNSUPPORTED_DATA_TYPE"
   },
   {
     "id": "inventory_warehouse_remaining",

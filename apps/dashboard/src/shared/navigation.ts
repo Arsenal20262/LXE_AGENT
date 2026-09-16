@@ -5,7 +5,7 @@ export type CapabilityView = "models" | "skills" | "tools" | "connections";
 export type ActivityView = "stats";
 
 /** Workbench starts on the tool index and drills into one tool at a time. */
-export type WorkbenchView = "index" | "synthetic-performer" | "input-assets" | "yacang-natural-language-test";
+export type WorkbenchView = "index" | "synthetic-performer" | "input-assets";
 
 export type DashboardRouteSelection = {
   section: DashboardSection;
@@ -34,7 +34,7 @@ const CAPABILITY_VIEWS = new Set<CapabilityView>([
 
 const ACTIVITY_VIEWS = new Set<ActivityView>(["stats"]);
 
-const WORKBENCH_VIEWS = new Set<WorkbenchView>(["index", "synthetic-performer", "input-assets", "yacang-natural-language-test"]);
+const WORKBENCH_VIEWS = new Set<WorkbenchView>(["index", "synthetic-performer", "input-assets"]);
 
 function objectRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" ? value as Record<string, unknown> : {};

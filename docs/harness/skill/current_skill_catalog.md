@@ -71,12 +71,10 @@ LXE formally maintains these modules' command and failure contracts. Their resul
 
 ## Yacang Operations
 
-- `yacang-export-workflow-map`: routes supported Yacang export requests and fails closed for business types whose remote contracts are not yet confirmed.
-- `yacang-sales-monthly-export`: returns one local 7/15/30 projection per fixed warehouse from the validated source exports.
-- `yacang-sales-90d-export`: returns a separate 90-day sales projection per fixed warehouse from the same validated source exports.
-- `yacang-inventory-month-end-export`: exports one validated current-inventory workbook per fixed warehouse; it rejects historical snapshot dates because the remote endpoint has no date parameter.
-- `yacang-inbound-listing-time-export`: exports one validated active warehouse-product workbook and exposes its native creation-time field as the confirmed inbound/listing time.
-- `yacang-inventory-sales-export`: preserves the first-version arbitrary creation-date-range inventory-sales export as a compatibility entry.
+- `yacang-export-workflow-map` is the only Agent-discoverable Yacang Skill. Its unified command plans three canonical types: `inventory-sales`, `inventory-current-snapshot`, and `inbound-listing-time`.
+- `inventory-sales` publishes one complete inventory-sales XLSX artifact. The source workbook retains all 16 original columns: SKU, product name, warehouse, cumulative 3/7/15/30/60/90-day sales, stock, occupied, in transit, frozen, available, stockout quantity, and creation date. One warehouse keeps the validated source workbook byte-for-byte; multiple warehouses merge complete rows into one sheet in fixed warehouse order. The source has no daily sales detail.
+- Current inventory remains a per-warehouse snapshot; historical snapshot dates are unsupported because the remote endpoint has no date parameter. Inbound/listing time remains one global warehouse-product export.
+- Legacy type-level `sales-monthly`, `sales-90d`, `inventory-month-end`, and inventory-sales commands remain internal compatibility entries, not additional Agent-discoverable natural-language Skills or separate formal sales projections.
 
 ## Runtime Visibility
 

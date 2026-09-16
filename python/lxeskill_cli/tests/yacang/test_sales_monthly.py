@@ -22,7 +22,11 @@ from services.yacang.exports.sales_source import (
     InventorySalesSourceBatch,
     acquire_inventory_sales_sources,
 )
-from services.yacang.projection import SALES_90D_HEADERS, SALES_MONTHLY_HEADERS
+from services.yacang.projection import (
+    SALES_90D_HEADERS,
+    SALES_MONTHLY_HEADERS,
+    publish_inventory_sales_workbook,
+)
 from services.yacang.validation import INVENTORY_SALES_HEADERS
 from services.yacang.warehouses import WAREHOUSES
 
@@ -54,6 +58,46 @@ def _first_data_row(path: str) -> tuple[Any, ...]:
         return tuple(next(rows))
     finally:
         workbook.close()
+
+
+def test_single_warehouse_inventory_sales_preserves_source_bytes(tmp_path: Path) -> None:
+    source = tmp_path / "source.xlsx"
+    destination = tmp_path / "published.xlsx"
+    _write_xlsx(source, "MY8801")
+    expected = source.read_bytes()
+
+    row_count = publish_inventory_sales_workbook(
+        [("MY8801", source)],
+        destination,
+    )
+
+    assert row_count == 1
+    assert destination.read_bytes() == expected
+    assert _headers(str(destination)) == INVENTORY_SALES_HEADERS
+
+
+def test_multi_warehouse_inventory_sales_merges_complete_rows_in_fixed_order(tmp_path: Path) -> None:
+    thailand = tmp_path / "thailand.xlsx"
+    malaysia = tmp_path / "malaysia.xlsx"
+    destination = tmp_path / "combined.xlsx"
+    _write_xlsx(thailand, "TH8802")
+    _write_xlsx(malaysia, "MY8801")
+
+    row_count = publish_inventory_sales_workbook(
+        [("TH8802", thailand), ("MY8801", malaysia)],
+        destination,
+    )
+
+    workbook = load_workbook(destination, read_only=True, data_only=True)
+    try:
+        assert workbook.sheetnames == ["库存动销"]
+        rows = list(workbook["库存动销"].iter_rows(values_only=True))
+    finally:
+        workbook.close()
+    assert row_count == 2
+    assert tuple(rows[0]) == INVENTORY_SALES_HEADERS
+    assert [row[2] for row in rows[1:]] == ["MY8801", "TH8802"]
+    assert all(len(row) == 16 for row in rows)
 
 
 class FakeClient:
@@ -187,7 +231,9 @@ def test_exports_one_7_15_30_workbook_per_warehouse_from_four_source_requests(tm
     assert Path(result["xlsx_paths"][0]).name == "雅仓系统-库存动销_马来西亚仓_2026-09-13.xlsx"
     assert Path(result["xlsx_paths"][-1]).name == "雅仓系统-库存动销_越南仓_2026-09-13.xlsx"
     assert all(_headers(path) == SALES_MONTHLY_HEADERS for path in result["xlsx_paths"])
-    assert _first_data_row(result["xlsx_paths"][0]) == ("SKU-1", "商品", "MY8801", 7, 15, 30)
+    assert _first_data_row(result["xlsx_paths"][0]) == (
+        "SKU-1", "商品", "MY8801", 1, 7, 15, 30, 60, 90, 10, 0, 0, 0, 10, 0, "2026-09-01",
+    )
 
 
 def test_exports_90_day_column_as_four_separate_workbooks_with_dynamic_date(tmp_path: Path) -> None:
@@ -210,10 +256,12 @@ def test_exports_90_day_column_as_four_separate_workbooks_with_dynamic_date(tmp_
     assert result["as_of_date"] == "2026-09-13"
     assert result["sales_window_days"] == 90
     assert result["export_count"] == 4
-    assert Path(result["xlsx_paths"][0]).name == "雅仓系统-库存动销-马来西亚仓_日度90天_2026-09-13.xlsx"
-    assert Path(result["xlsx_paths"][-1]).name == "雅仓系统-库存动销-越南仓_日度90天_2026-09-13.xlsx"
+    assert Path(result["xlsx_paths"][0]).name == "雅仓系统-库存动销_马来西亚仓_2026-09-13.xlsx"
+    assert Path(result["xlsx_paths"][-1]).name == "雅仓系统-库存动销_越南仓_2026-09-13.xlsx"
     assert all(_headers(path) == SALES_90D_HEADERS for path in result["xlsx_paths"])
-    assert _first_data_row(result["xlsx_paths"][0]) == ("SKU-1", "商品", "MY8801", 90)
+    assert _first_data_row(result["xlsx_paths"][0]) == (
+        "SKU-1", "商品", "MY8801", 1, 7, 15, 30, 60, 90, 10, 0, 0, 0, 10, 0, "2026-09-01",
+    )
 
 
 def test_second_sales_projection_reuses_the_same_four_source_workbooks(tmp_path: Path) -> None:

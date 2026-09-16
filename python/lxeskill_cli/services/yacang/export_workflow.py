@@ -11,7 +11,7 @@ from services.yacang.export_intent import (
 from services.yacang.exports.sales_source import resolve_source_date_range, sales_source_fetch_id
 
 
-_SALES_DATA_TYPES = frozenset({"sales-monthly", "sales-90d"})
+_INVENTORY_SALES_DATA_TYPE = "inventory-sales"
 _INVENTORY_DATA_TYPE = "inventory-current-snapshot"
 _INBOUND_DATA_TYPE = "inbound-listing-time"
 EXPORT_PLAN_SCHEMA_VERSION = "1"
@@ -112,7 +112,7 @@ def plan_export_workflow(
     warehouses = _ordered_warehouses(effective_request.get("warehouses"))
     created_date_filter = (
         _created_date_filter(effective_request)
-        if any(data_type in _SALES_DATA_TYPES for data_type in data_types)
+        if _INVENTORY_SALES_DATA_TYPE in data_types
         else None
     )
     logical_tasks: list[dict[str, Any]] = []
@@ -120,7 +120,7 @@ def plan_export_workflow(
     known_source_fetches: set[str] = set()
 
     for data_type in data_types:
-        if data_type in _SALES_DATA_TYPES:
+        if data_type == _INVENTORY_SALES_DATA_TYPE:
             assert created_date_filter is not None
             for warehouse in warehouses:
                 fetch_id = sales_source_fetch_id(

@@ -14,19 +14,19 @@ from services.yacang.export_workflow import (
 )
 from services.yacang.exports.inbound_listing_time import export_inbound_listing_time
 from services.yacang.exports.inventory_month_end import export_inventory_current_snapshot
-from services.yacang.exports.sales_90d import project_sales_90d_sources
-from services.yacang.exports.sales_monthly import project_sales_monthly_sources
 from services.yacang.exports.sales_source import (
     InventorySalesSourceBatch,
     acquire_inventory_sales_sources,
 )
+from services.yacang.naming import inventory_sales_filename
+from services.yacang.projection import publish_inventory_sales_workbook
 from services.yacang.reporting import error_fields, is_global_error
 from services.yacang.submission import SubmissionBackend, YacangSubmissionStore
 from shared.datasets import dataset_dir
 
 
 _TASK_STATUSES = frozenset({"not_run", "success", "failed", "skipped"})
-_SALES_DATA_TYPES = frozenset({"sales-monthly", "sales-90d"})
+_INVENTORY_SALES_DATA_TYPE = "inventory-sales"
 _GLOBAL_ERROR_CODES = frozenset({
     "EXPORT_STATUS_UNKNOWN",
     "EXPORT_SUBMIT_UNKNOWN",
@@ -53,6 +53,7 @@ def execute_export_plan(plan: ExportPlan) -> CanonicalExportResult:
     diagnostics = [dict(item) for item in validated["diagnostics"]]
     artifacts: list[dict[str, Any]] = []
     task_results: list[dict[str, Any]] = []
+    inventory_sales_successes: list[tuple[int, dict[str, Any], dict[str, Any]]] = []
     output_dir = dataset_dir("yacang_exports")
     client = YacangClient()
     submission_store = YacangSubmissionStore()
@@ -83,12 +84,27 @@ def execute_export_plan(plan: ExportPlan) -> CanonicalExportResult:
             task_results.append(_preflight_failed_task(task))
             continue
 
-        if str(task.get("data_type")) in _SALES_DATA_TYPES and source_error is not None:
+        if str(task.get("data_type")) == _INVENTORY_SALES_DATA_TYPE and source_error is not None:
             result, diagnostic = _failed_task(task, source_error)
             task_results.append(result)
             diagnostics.append(diagnostic)
             if is_global_error(source_error) or _is_global_diagnostic(diagnostic):
                 stopped = True
+            continue
+
+        if str(task.get("data_type")) == _INVENTORY_SALES_DATA_TYPE:
+            try:
+                result, source, diagnostic = _consume_inventory_sales_source(task, source_batch)
+            except Exception as exc:  # noqa: BLE001 - converted to sanitized canonical diagnostics
+                result, diagnostic = _failed_task(task, exc)
+                source = None
+            task_results.append(result)
+            if source is not None:
+                inventory_sales_successes.append((len(task_results) - 1, task, source))
+            if diagnostic is not None:
+                diagnostics.append(diagnostic)
+                if _is_global_diagnostic(diagnostic):
+                    stopped = True
             continue
 
         try:
@@ -112,6 +128,21 @@ def execute_export_plan(plan: ExportPlan) -> CanonicalExportResult:
             diagnostics.append(diagnostic)
             if _is_global_diagnostic(diagnostic):
                 stopped = True
+
+    if inventory_sales_successes:
+        try:
+            artifact = _publish_inventory_sales_artifact(
+                inventory_sales_successes,
+                task_results=task_results,
+                output_dir=output_dir,
+                execution_date=validated["execution_date"],
+            )
+            artifacts.insert(0, artifact)
+        except Exception as exc:  # noqa: BLE001 - local publication failure stays diagnosable
+            for task_index, task, _source in inventory_sales_successes:
+                failed_result, diagnostic = _failed_task(task, exc)
+                task_results[task_index] = failed_result
+                diagnostics.append(diagnostic)
 
     return canonical_export_result(
         overall_status=_overall_status(task_results, diagnostics),
@@ -146,32 +177,6 @@ def _execute_logical_task(
 ) -> Mapping[str, Any]:
     data_type = str(task.get("data_type") or "")
     warehouse = str(task.get("warehouse") or "").strip()
-    if data_type == "sales-monthly":
-        if source_batch is None:
-            raise YacangError(
-                "执行销量任务",
-                "缺少共享物理销量源",
-                code="EXPORT_STATUS_UNKNOWN",
-                scope="global",
-            )
-        return project_sales_monthly_sources(
-            source_batch,
-            warehouses=[warehouse],
-            output_dir=output_dir,
-        )
-    if data_type == "sales-90d":
-        if source_batch is None:
-            raise YacangError(
-                "执行销量任务",
-                "缺少共享物理销量源",
-                code="EXPORT_STATUS_UNKNOWN",
-                scope="global",
-            )
-        return project_sales_90d_sources(
-            source_batch,
-            warehouses=[warehouse],
-            output_dir=output_dir,
-        )
     if data_type == "inventory-current-snapshot":
         execution_day = date.fromisoformat(execution_date)
         return export_inventory_current_snapshot(
@@ -192,6 +197,78 @@ def _execute_logical_task(
             submission_store=submission_store,
         )
     raise ValueError(f"不支持的雅仓逻辑任务类型: {data_type}")
+
+
+def _consume_inventory_sales_source(
+    task: Mapping[str, Any],
+    source_batch: InventorySalesSourceBatch | None,
+) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any] | None]:
+    if source_batch is None:
+        raise YacangError(
+            "执行库存动销任务",
+            "缺少共享物理库存动销源",
+            code="EXPORT_STATUS_UNKNOWN",
+            scope="global",
+        )
+    warehouse = str(task.get("warehouse") or "").strip()
+    source = next(
+        (dict(item) for item in source_batch.results if str(item.get("warehouse") or "") == warehouse),
+        None,
+    )
+    if source is None:
+        raise YacangError(
+            "执行库存动销任务",
+            f"共享物理源缺少仓库 {warehouse}",
+            code="YACANG_RESULT_INVALID",
+        )
+    raw_status = str(source.get("status") or "failed")
+    status = raw_status if raw_status in _TASK_STATUSES else "failed"
+    if status == "success":
+        xlsx_path = str(source.get("xlsx_path") or "").strip()
+        if not xlsx_path:
+            raise YacangError(
+                "执行库存动销任务",
+                "成功物理源缺少已验证的 XLSX 路径",
+                code="YACANG_RESULT_INVALID",
+            )
+        return _task_result(task, status="success"), source, None
+    code = str(source.get("error_code") or "YACANG_EXPORT_FAILED")
+    diagnostic = _diagnostic_from_fields(task, source, code=code)
+    return _task_result(task, status=status, diagnostic_codes=[code]), None, diagnostic
+
+
+def _publish_inventory_sales_artifact(
+    successes: Sequence[tuple[int, Mapping[str, Any], Mapping[str, Any]]],
+    *,
+    task_results: list[dict[str, Any]],
+    output_dir: Path,
+    execution_date: str,
+) -> dict[str, Any]:
+    warehouse_codes = [str(task["warehouse"]) for _index, task, _source in successes]
+    path = output_dir / inventory_sales_filename(warehouse_codes, file_date=execution_date)
+    row_count = publish_inventory_sales_workbook(
+        [
+            (str(task["warehouse"]), Path(str(source["xlsx_path"])))
+            for _index, task, source in successes
+        ],
+        path,
+    )
+    artifact_id = "artifact:inventory-sales"
+    task_ids = [str(task["task_id"]) for _index, task, _source in successes]
+    for task_index, _task, _source in successes:
+        task_results[task_index]["artifact_ids"] = [artifact_id]
+    return {
+        "artifact_id": artifact_id,
+        "task_id": task_ids[0],
+        "task_ids": task_ids,
+        "data_type": _INVENTORY_SALES_DATA_TYPE,
+        "path": str(path),
+        "filename": path.name,
+        **({"warehouse": warehouse_codes[0]} if len(warehouse_codes) == 1 else {}),
+        "warehouses": warehouse_codes,
+        "row_count": row_count,
+        "source": "yacang",
+    }
 
 
 def _consume_task_summary(

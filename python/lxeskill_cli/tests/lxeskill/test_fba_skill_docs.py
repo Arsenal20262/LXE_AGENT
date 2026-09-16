@@ -49,6 +49,11 @@ def test_yacang_has_one_discoverable_skill_and_one_natural_language_command() ->
     }
     assert workflow["input_schema"]["additionalProperties"] is False
     assert workflow["input_schema"]["properties"]["data_type_intent"]["oneOf"]
+    data_type_values = workflow["input_schema"]["properties"]["data_type_intent"]["oneOf"][2][
+        "properties"
+    ]["values"]["items"]["enum"]
+    assert data_type_values[0] == "inventory-sales"
+    assert {"sales-monthly", "sales-90d"}.issubset(data_type_values)
     assert workflow["input_schema"]["properties"]["warehouse_intent"]["oneOf"]
     assert workflow["input_schema"]["properties"]["created_date_filter"]["oneOf"]
     assert workflow["input_schema"]["properties"]["inventory_snapshot_intent"] == {

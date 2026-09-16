@@ -1,4 +1,4 @@
-import { ChevronRight, FolderTree, Tag, TestTube2 } from "lucide-react";
+import { ChevronRight, FolderTree, Tag } from "lucide-react";
 import type { ReactNode } from "react";
 import type { WorkbenchView } from "../../shared/navigation";
 import { useUiText } from "../../shared/i18n";
@@ -37,13 +37,6 @@ export function WorkbenchIndex({
       name: copy.tools.inputAssets.name,
       summary: copy.tools.inputAssets.summary,
       status: assetStatus,
-    },
-    {
-      id: "yacang-natural-language-test",
-      icon: <TestTube2 size={18} />,
-      name: "雅仓自然语言测试",
-      summary: "输入自然语言，预览系统的雅仓任务规划，并在确认后执行导出。",
-      status: "预览不会发起真实导出",
     },
   ];
 

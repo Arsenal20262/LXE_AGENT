@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 import pytest
+from openpyxl import Workbook, load_workbook
 
 import services.yacang.export_executor as executor_module
 from services.agent_cli.yacang.export_workflow import run as run_export_workflow_cli
@@ -24,6 +25,7 @@ from services.yacang.export_workflow import (
 )
 from services.yacang.exports.sales_source import InventorySalesSourceBatch
 from services.yacang.submission import YacangSubmissionStore
+from services.yacang.validation import INVENTORY_SALES_HEADERS
 
 
 FIXED_TODAY = lambda: date(2026, 9, 14)
@@ -43,11 +45,11 @@ def test_preview_command_returns_plan_without_executing(monkeypatch) -> None:
 
     assert result["success"] is True
     assert result["plan"]["requires_clarification"] is False
-    assert result["plan"]["logical_tasks"][0]["task_id"] == "sales-monthly:MY8801"
+    assert result["plan"]["logical_tasks"][0]["task_id"] == "inventory-sales:MY8801"
 
 
 def test_preview_command_keeps_clarification_without_remote_tasks() -> None:
-    result = run_preview_workflow_cli({"request_text": "导出销量"})
+    result = run_preview_workflow_cli({"request_text": "最近卖得怎么样"})
 
     assert result["success"] is False
     assert result["plan"]["requires_clarification"] is True
@@ -59,12 +61,31 @@ def test_workflow_compatibility_wrapper_returns_canonical_inventory_type() -> No
     request = normalize_export_request("导出当前库存", today=FIXED_TODAY)
 
     assert WORKFLOW_DATA_TYPES == (
-        "sales-monthly",
-        "sales-90d",
+        "inventory-sales",
         "inventory-current-snapshot",
         "inbound-listing-time",
     )
     assert request["data_types"] == ["inventory-current-snapshot"]
+
+
+def test_inventory_sales_plan_keeps_one_task_and_source_per_warehouse() -> None:
+    plan = plan_export_workflow(
+        normalized("导出马来和泰国的库存动销"),
+        execution_date="2026-09-14",
+    )
+
+    assert [(task["task_id"], task["data_type"]) for task in plan["logical_tasks"]] == [
+        ("inventory-sales:MY8801", "inventory-sales"),
+        ("inventory-sales:TH8802", "inventory-sales"),
+    ]
+    assert [fetch["warehouse"] for fetch in plan["source_fetches"]] == ["MY8801", "TH8802"]
+    assert all(task["source_fetch_id"] == fetch["source_fetch_id"] for task, fetch in zip(
+        plan["logical_tasks"], plan["source_fetches"], strict=True
+    ))
+    assert all(
+        task["data_type"] not in {"sales-monthly", "sales-90d"}
+        for task in plan["logical_tasks"]
+    )
 
 
 def test_plan_orders_tasks_scopes_parameters_and_shared_sales_sources() -> None:
@@ -74,10 +95,8 @@ def test_plan_orders_tasks_scopes_parameters_and_shared_sales_sources() -> None:
     )
 
     assert [(task["data_type"], task.get("warehouse")) for task in plan["logical_tasks"]] == [
-        ("sales-monthly", "MY8801"),
-        ("sales-monthly", "TH8802"),
-        ("sales-90d", "MY8801"),
-        ("sales-90d", "TH8802"),
+        ("inventory-sales", "MY8801"),
+        ("inventory-sales", "TH8802"),
         ("inventory-current-snapshot", "MY8801"),
         ("inventory-current-snapshot", "TH8802"),
         ("inbound-listing-time", None),
@@ -95,10 +114,8 @@ def test_plan_orders_tasks_scopes_parameters_and_shared_sales_sources() -> None:
     assert plan["execution_date"] == "2026-09-14"
     assert len(plan["source_fetches"]) == 2
 
-    monthly_my = plan["logical_tasks"][0]
-    daily_my = plan["logical_tasks"][2]
-    assert monthly_my["source_fetch_id"] == daily_my["source_fetch_id"]
-    assert monthly_my["effective_parameters"] == {
+    inventory_sales_my = plan["logical_tasks"][0]
+    assert inventory_sales_my["effective_parameters"] == {
         "warehouse": "MY8801",
         "created_date_filter": {
             "mode": "default",
@@ -109,19 +126,19 @@ def test_plan_orders_tasks_scopes_parameters_and_shared_sales_sources() -> None:
             "normalization_rules": ["default_execution_day"],
         },
     }
-    assert plan["logical_tasks"][4]["effective_parameters"] == {"warehouse": "MY8801"}
-    assert plan["logical_tasks"][4]["snapshot"] == "current"
-    assert plan["logical_tasks"][6]["effective_parameters"] == {}
-    assert "warehouse" not in plan["logical_tasks"][6]
-    assert "created_date_filter" not in plan["logical_tasks"][6]
-    assert plan["logical_tasks"][6]["warehouse_scope"] == "all"
+    assert plan["logical_tasks"][2]["effective_parameters"] == {"warehouse": "MY8801"}
+    assert plan["logical_tasks"][2]["snapshot"] == "current"
+    assert plan["logical_tasks"][4]["effective_parameters"] == {}
+    assert "warehouse" not in plan["logical_tasks"][4]
+    assert "created_date_filter" not in plan["logical_tasks"][4]
+    assert plan["logical_tasks"][4]["warehouse_scope"] == "all"
     assert plan["source_fetches"][0]["source_fetch_id"] == sales_source_fetch_id(
         "MY8801", "2026-09-14", "2026-09-14"
     )
 
 
 def test_ambiguous_intent_stops_before_planning_any_remote_source() -> None:
-    plan = plan_export_workflow(normalized("导出库存动销"), execution_date="2026-09-14")
+    plan = plan_export_workflow(normalized("最近卖得怎么样"), execution_date="2026-09-14")
 
     assert plan["requires_clarification"] is True
     assert plan["questions"]
@@ -129,18 +146,13 @@ def test_ambiguous_intent_stops_before_planning_any_remote_source() -> None:
     assert plan["source_fetches"] == []
 
 
-def test_default_plan_splits_first_three_types_across_all_four_warehouses() -> None:
+def test_default_plan_splits_inventory_sales_and_inventory_across_all_four_warehouses() -> None:
     plan = plan_export_workflow(normalized("导出雅仓数据"), execution_date="2026-09-14")
 
     assert [
         task["warehouse"]
         for task in plan["logical_tasks"]
-        if task["data_type"] == "sales-monthly"
-    ] == ["MY8801", "PH8805", "TH8802", "VN8806"]
-    assert [
-        task["warehouse"]
-        for task in plan["logical_tasks"]
-        if task["data_type"] == "sales-90d"
+        if task["data_type"] == "inventory-sales"
     ] == ["MY8801", "PH8805", "TH8802", "VN8806"]
     assert [
         task["warehouse"]
@@ -161,9 +173,31 @@ def test_unsupported_sales_window_keeps_diagnostic_without_creating_sales_task()
             "kind": "unsupported",
             "code": "UNSUPPORTED_SALES_WINDOW",
             "requested_value": {"sales_window_days": 56},
-            "message": "当前支持最近一个月汇总销量和近三个月日度销量，不支持自定义销量天数",
+            "message": "当前完整库存动销报表只包含固定的销量窗口，不支持自定义销量天数",
         }
     ]
+
+
+@pytest.mark.parametrize("text", ["90天逐日销量", "90天每天销量", "日销量明细", "逐日销量"])
+def test_daily_detail_does_not_plan_cumulative_sales_source(text: str) -> None:
+    plan = plan_export_workflow(normalized(text), execution_date="2026-09-14")
+
+    assert plan["logical_tasks"] == []
+    assert plan["source_fetches"] == []
+    assert [item["code"] for item in plan["diagnostics"]] == ["UNSUPPORTED_DATA_TYPE"]
+
+
+def test_unsupported_daily_detail_does_not_block_independent_current_inventory() -> None:
+    plan = plan_export_workflow(
+        normalized("导出 MY8801 当前库存和90天每天销量"),
+        execution_date="2026-09-14",
+    )
+
+    assert [(task["data_type"], task["warehouse"]) for task in plan["logical_tasks"]] == [
+        ("inventory-current-snapshot", "MY8801"),
+    ]
+    assert plan["source_fetches"] == []
+    assert [item["code"] for item in plan["diagnostics"]] == ["UNSUPPORTED_DATA_TYPE"]
 
 
 def test_historical_inventory_keeps_supported_sales_without_planning_inventory() -> None:
@@ -173,7 +207,7 @@ def test_historical_inventory_keeps_supported_sales_without_planning_inventory()
     )
 
     assert [(task["data_type"], task["status"]) for task in plan["logical_tasks"]] == [
-        ("sales-monthly", "not_run"),
+        ("inventory-sales", "not_run"),
     ]
     assert plan["diagnostics"] == [
         {
@@ -312,7 +346,7 @@ def test_clarification_short_circuits_before_executor() -> None:
         raise AssertionError("executor must not run while clarification is required")
 
     result = run_export_workflow(
-        "导出库存动销",
+        "最近卖得怎么样",
         today=FIXED_TODAY,
         executor=unexpected_executor,
     )
@@ -378,15 +412,32 @@ def _successful_export(data_type: str, warehouse: str | None, path: Path) -> dic
     }
 
 
-def _source_batch(plan: dict, *, failed_warehouse: str | None = None) -> InventorySalesSourceBatch:
+def _source_batch(
+    plan: dict,
+    *,
+    source_dir: Path | None = None,
+    failed_warehouse: str | None = None,
+) -> InventorySalesSourceBatch:
     results = []
     for fetch in plan["source_fetches"]:
         failed = fetch["warehouse"] == failed_warehouse
+        source_path = None
+        if not failed:
+            source_path = (source_dir or Path.cwd()) / f"raw-{fetch['warehouse']}.xlsx"
+            workbook = Workbook()
+            sheet = workbook.active
+            sheet.append(INVENTORY_SALES_HEADERS)
+            sheet.append((
+                "SKU-1", "商品", fetch["warehouse"], 3, 7, 15, 30, 60, 90,
+                10, 0, 0, 0, 10, 0, "2026-09-01",
+            ))
+            workbook.save(source_path)
+            workbook.close()
         results.append({
             "source_fetch_id": fetch["source_fetch_id"],
             "warehouse": fetch["warehouse"],
             "status": "failed" if failed else "success",
-            "xlsx_path": f"raw-{fetch['warehouse']}.xlsx" if not failed else None,
+            "xlsx_path": str(source_path) if source_path is not None else None,
             "source": "fixture",
             **(
                 {
@@ -407,7 +458,7 @@ def _source_batch(plan: dict, *, failed_warehouse: str | None = None) -> Invento
     )
 
 
-def test_executor_acquires_shared_sales_source_once_then_projects_both_types(
+def test_executor_acquires_each_source_once_and_returns_one_complete_artifact(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
@@ -420,46 +471,69 @@ def test_executor_acquires_shared_sales_source_once_then_projects_both_types(
 
     def acquire(source_fetches, **_kwargs):
         calls.append(("source", [item["source_fetch_id"] for item in source_fetches]))
-        return _source_batch(plan)
+        return _source_batch(plan, source_dir=tmp_path)
 
-    def monthly(_batch, *, warehouses, **_kwargs):
-        calls.append(("sales-monthly", warehouses[0]))
-        return _successful_export("sales-monthly", warehouses[0], tmp_path / "monthly.xlsx")
-
-    def daily(_batch, *, warehouses, **_kwargs):
-        calls.append(("sales-90d", warehouses[0]))
-        return _successful_export("sales-90d", warehouses[0], tmp_path / "daily.xlsx")
+    def publish(sources, destination):
+        calls.append(("publish", [warehouse for warehouse, _path in sources]))
+        destination.write_bytes(Path(sources[0][1]).read_bytes())
+        return 1
 
     monkeypatch.setattr(executor_module, "acquire_inventory_sales_sources", acquire)
-    monkeypatch.setattr(executor_module, "project_sales_monthly_sources", monthly)
-    monkeypatch.setattr(executor_module, "project_sales_90d_sources", daily)
+    monkeypatch.setattr(executor_module, "publish_inventory_sales_workbook", publish)
 
     result = execute_export_plan(plan)
 
     assert calls == [
         ("source", [plan["source_fetches"][0]["source_fetch_id"]]),
-        ("sales-monthly", "MY8801"),
-        ("sales-90d", "MY8801"),
+        ("publish", ["MY8801"]),
     ]
     assert result["overall_status"] == "success"
-    assert [task["status"] for task in result["tasks"]] == ["success", "success"]
-    assert [artifact["data_type"] for artifact in result["artifacts"]] == [
-        "sales-monthly",
-        "sales-90d",
-    ]
-    assert [artifact["path"] for artifact in result["artifacts"]] == [
-        str(tmp_path / "monthly.xlsx"),
-        str(tmp_path / "daily.xlsx"),
-    ]
+    assert [task["status"] for task in result["tasks"]] == ["success"]
+    assert [artifact["data_type"] for artifact in result["artifacts"]] == ["inventory-sales"]
+    assert len(result["artifacts"]) == 1
     assert all("xlsx_path" not in artifact for artifact in result["artifacts"])
-    assert all("raw-" not in artifact["path"] for artifact in result["artifacts"])
+    assert all(".source-cache" not in artifact["path"] for artifact in result["artifacts"])
+
+
+def test_executor_merges_multi_warehouse_sources_into_one_complete_artifact(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    plan = plan_export_workflow(
+        normalized("导出马来和泰国的库存动销"),
+        execution_date="2026-09-14",
+    )
+    monkeypatch.setattr(executor_module, "dataset_dir", lambda _dataset: tmp_path)
+    monkeypatch.setattr(
+        executor_module,
+        "acquire_inventory_sales_sources",
+        lambda _fetches, **_kwargs: _source_batch(plan, source_dir=tmp_path),
+    )
+
+    result = execute_export_plan(plan)
+
+    assert result["overall_status"] == "success"
+    assert [task["status"] for task in result["tasks"]] == ["success", "success"]
+    assert len(result["artifacts"]) == 1
+    artifact = result["artifacts"][0]
+    assert artifact["data_type"] == "inventory-sales"
+    assert artifact["warehouses"] == ["MY8801", "TH8802"]
+    assert artifact["filename"] == "雅仓系统-库存动销_马来西亚仓-泰国仓_2026-09-14.xlsx"
+    assert all(task["artifact_ids"] == [artifact["artifact_id"]] for task in result["tasks"])
+    workbook = load_workbook(artifact["path"], read_only=True, data_only=True)
+    try:
+        rows = list(workbook["库存动销"].iter_rows(values_only=True))
+    finally:
+        workbook.close()
+    assert tuple(rows[0]) == INVENTORY_SALES_HEADERS
+    assert [row[2] for row in rows[1:]] == ["MY8801", "TH8802"]
 
 
 @pytest.mark.parametrize(
     ("request_text", "expected_context_uses"),
     [
         ("导出四个仓库最近一个月销量", 1),
-        ("导出四个仓库近90天每天销量", 1),
+        ("导出四个仓库近90天销量", 1),
         ("导出四个仓库两种销量", 1),
         ("导出四个仓库当前库存", 4),
         ("导出入库和上架时间", 1),
@@ -504,7 +578,7 @@ def test_executor_reuses_one_authenticated_client_and_persistent_submission_stor
 
     def acquire(_source_fetches, *, client, submission_store, **_kwargs):
         authenticate(client, submission_store)
-        return _source_batch(plan)
+        return _source_batch(plan, source_dir=tmp_path)
 
     def inventory(*, warehouse, client, submission_store, **_kwargs):
         authenticate(client, submission_store)
@@ -522,17 +596,8 @@ def test_executor_reuses_one_authenticated_client_and_persistent_submission_stor
     monkeypatch.setattr(executor_module, "acquire_inventory_sales_sources", acquire)
     monkeypatch.setattr(
         executor_module,
-        "project_sales_monthly_sources",
-        lambda _batch, *, warehouses, **_kwargs: _successful_export(
-            "sales-monthly", warehouses[0], tmp_path / f"monthly-{warehouses[0]}.xlsx"
-        ),
-    )
-    monkeypatch.setattr(
-        executor_module,
-        "project_sales_90d_sources",
-        lambda _batch, *, warehouses, **_kwargs: _successful_export(
-            "sales-90d", warehouses[0], tmp_path / f"daily-{warehouses[0]}.xlsx"
-        ),
+        "publish_inventory_sales_workbook",
+        lambda sources, destination: destination.write_bytes(Path(sources[0][1]).read_bytes()) or 1,
     )
     monkeypatch.setattr(executor_module, "export_inventory_current_snapshot", inventory)
     monkeypatch.setattr(executor_module, "export_inbound_listing_time", inbound)
@@ -554,24 +619,16 @@ def test_executor_preserves_fixed_type_and_warehouse_execution_order(monkeypatch
     monkeypatch.setattr(
         executor_module,
         "acquire_inventory_sales_sources",
-        lambda _fetches, **_kwargs: (calls.append("source") or _source_batch(plan)),
-    )
-    monkeypatch.setattr(
-        executor_module,
-        "project_sales_monthly_sources",
-        lambda _batch, *, warehouses, **_kwargs: (
-            calls.append(f"sales-monthly:{warehouses[0]}")
-            or _successful_export("sales-monthly", warehouses[0], tmp_path / f"monthly-{warehouses[0]}.xlsx")
+        lambda _fetches, **_kwargs: (
+            calls.append("source") or _source_batch(plan, source_dir=tmp_path)
         ),
     )
-    monkeypatch.setattr(
-        executor_module,
-        "project_sales_90d_sources",
-        lambda _batch, *, warehouses, **_kwargs: (
-            calls.append(f"sales-90d:{warehouses[0]}")
-            or _successful_export("sales-90d", warehouses[0], tmp_path / f"daily-{warehouses[0]}.xlsx")
-        ),
-    )
+    def publish(sources, destination):
+        calls.append("publish-inventory-sales")
+        destination.write_bytes(Path(sources[0][1]).read_bytes())
+        return len(sources)
+
+    monkeypatch.setattr(executor_module, "publish_inventory_sales_workbook", publish)
     monkeypatch.setattr(
         executor_module,
         "export_inventory_current_snapshot",
@@ -595,16 +652,19 @@ def test_executor_preserves_fixed_type_and_warehouse_execution_order(monkeypatch
 
     assert calls == [
         "source",
-        "sales-monthly:MY8801", "sales-monthly:PH8805",
-        "sales-monthly:TH8802", "sales-monthly:VN8806",
-        "sales-90d:MY8801", "sales-90d:PH8805", "sales-90d:TH8802", "sales-90d:VN8806",
         "inventory-current-snapshot:MY8801", "inventory-current-snapshot:PH8805",
         "inventory-current-snapshot:TH8802", "inventory-current-snapshot:VN8806",
         "inbound-listing-time:global",
+        "publish-inventory-sales",
     ]
     assert result["overall_status"] == "success"
-    assert len(result["tasks"]) == 13
-    assert len(result["artifacts"]) == 13
+    assert [task["data_type"] for task in result["tasks"]] == [
+        "inventory-sales", "inventory-sales", "inventory-sales", "inventory-sales",
+        "inventory-current-snapshot", "inventory-current-snapshot",
+        "inventory-current-snapshot", "inventory-current-snapshot",
+        "inbound-listing-time",
+    ]
+    assert len(result["artifacts"]) == 6
 
 
 def test_local_source_failure_continues_and_preserves_success_artifacts(monkeypatch, tmp_path: Path) -> None:
@@ -615,46 +675,33 @@ def test_local_source_failure_continues_and_preserves_success_artifacts(monkeypa
     monkeypatch.setattr(
         executor_module,
         "acquire_inventory_sales_sources",
-        lambda _fetches, **_kwargs: _source_batch(plan, failed_warehouse="MY8801"),
+        lambda _fetches, **_kwargs: _source_batch(
+            plan,
+            source_dir=tmp_path,
+            failed_warehouse="MY8801",
+        ),
     )
 
-    def projector(data_type: str, batch, *, warehouses, **_kwargs):
-        warehouse = warehouses[0]
-        calls.append(f"{data_type}:{warehouse}")
-        source = next(item for item in batch.results if item["warehouse"] == warehouse)
-        if source["status"] != "success":
-            return {"overall_status": "failed", "exports": [dict(source)], "xlsx_paths": []}
-        return _successful_export(data_type, warehouse, tmp_path / f"{data_type}-{warehouse}.xlsx")
+    def publish(sources, destination):
+        calls.extend(warehouse for warehouse, _path in sources)
+        destination.write_bytes(Path(sources[0][1]).read_bytes())
+        return len(sources)
 
-    monkeypatch.setattr(
-        executor_module,
-        "project_sales_monthly_sources",
-        lambda batch, **kwargs: projector("sales-monthly", batch, **kwargs),
-    )
-    monkeypatch.setattr(
-        executor_module,
-        "project_sales_90d_sources",
-        lambda batch, **kwargs: projector("sales-90d", batch, **kwargs),
-    )
+    monkeypatch.setattr(executor_module, "publish_inventory_sales_workbook", publish)
 
     result = execute_export_plan(plan)
 
-    assert calls == [
-        "sales-monthly:MY8801", "sales-monthly:TH8802",
-        "sales-90d:MY8801", "sales-90d:TH8802",
-    ]
-    assert [task["status"] for task in result["tasks"]] == [
-        "failed", "success", "failed", "success",
-    ]
+    assert calls == ["TH8802"]
+    assert [task["status"] for task in result["tasks"]] == ["failed", "success"]
     assert result["overall_status"] == "partial_success"
-    assert len(result["artifacts"]) == 2
+    assert len(result["artifacts"]) == 1
 
 
 def test_global_source_status_stops_later_logical_tasks(monkeypatch, tmp_path: Path) -> None:
     plan = plan_export_workflow(
-        normalized("导出 MY8801、TH8802 的两种销量"), execution_date="2026-09-14"
+        normalized("导出 MY8801、TH8802 的库存动销和当前库存"), execution_date="2026-09-14"
     )
-    batch = _source_batch(plan)
+    batch = _source_batch(plan, source_dir=tmp_path)
     source_results = [dict(item) for item in batch.results]
     source_results[1].update({
         "status": "failed",
@@ -676,28 +723,21 @@ def test_global_source_status_stops_later_logical_tasks(monkeypatch, tmp_path: P
         lambda _fetches, **_kwargs: batch,
     )
 
-    def projector(data_type: str, source_batch, *, warehouses, **_kwargs):
-        warehouse = warehouses[0]
-        calls.append(f"{data_type}:{warehouse}")
-        source = next(item for item in source_batch.results if item["warehouse"] == warehouse)
-        if source["status"] != "success":
-            return {"overall_status": "failed", "exports": [dict(source)], "xlsx_paths": []}
-        return _successful_export(data_type, warehouse, tmp_path / f"{data_type}-{warehouse}.xlsx")
+    def publish(sources, destination):
+        calls.extend(warehouse for warehouse, _path in sources)
+        destination.write_bytes(Path(sources[0][1]).read_bytes())
+        return len(sources)
 
+    monkeypatch.setattr(executor_module, "publish_inventory_sales_workbook", publish)
     monkeypatch.setattr(
         executor_module,
-        "project_sales_monthly_sources",
-        lambda source_batch, **kwargs: projector("sales-monthly", source_batch, **kwargs),
-    )
-    monkeypatch.setattr(
-        executor_module,
-        "project_sales_90d_sources",
-        lambda source_batch, **kwargs: projector("sales-90d", source_batch, **kwargs),
+        "export_inventory_current_snapshot",
+        lambda **_kwargs: calls.append("unexpected-inventory"),
     )
 
     result = execute_export_plan(plan)
 
-    assert calls == ["sales-monthly:MY8801", "sales-monthly:TH8802"]
+    assert calls == ["MY8801"]
     assert [task["status"] for task in result["tasks"]] == [
         "success", "failed", "skipped", "skipped",
     ]
@@ -838,7 +878,7 @@ def test_mixed_supported_and_unsupported_is_partial_success(monkeypatch, tmp_pat
 
 
 def test_unified_cli_returns_canonical_clarification_envelope() -> None:
-    result = run_export_workflow_cli({"request_text": "导出库存动销"})
+    result = run_export_workflow_cli({"request_text": "最近卖得怎么样"})
 
     assert result["success"] is False
     assert set(result).issuperset({

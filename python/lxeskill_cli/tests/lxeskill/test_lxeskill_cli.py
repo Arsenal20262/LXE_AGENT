@@ -141,7 +141,7 @@ def test_yacang_unified_cli_returns_canonical_clarification_envelope(capsys) -> 
         "export",
         "run",
         "--request-text",
-        "导出库存动销",
+        "最近卖得怎么样",
     ]) == lxeskill.EXIT_BUSINESS
 
     (record,) = _records(capsys)

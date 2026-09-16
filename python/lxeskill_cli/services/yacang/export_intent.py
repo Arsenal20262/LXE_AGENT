@@ -9,14 +9,17 @@ from services.yacang.warehouses import WAREHOUSES, match_warehouse_aliases
 
 
 ALL_DATA_TYPES = (
-    "sales-monthly",
-    "sales-90d",
+    "inventory-sales",
     "inventory-current-snapshot",
     "inbound-listing-time",
 )
 WAREHOUSE_CODES = tuple(warehouse.code for warehouse in WAREHOUSES)
 
-_LEGACY_DATA_TYPES = {"inventory-month-end": "inventory-current-snapshot"}
+_LEGACY_DATA_TYPES = {
+    "sales-monthly": "inventory-sales",
+    "sales-90d": "inventory-sales",
+    "inventory-month-end": "inventory-current-snapshot",
+}
 _AGENT_SELECTION_STATES = {"omitted", "resolved", "ambiguous"}
 _INVENTORY_STATES = {"current", "historical", "omitted", "ambiguous"}
 _CREATED_MODES = {"default", "relative_days", "explicit_range"}
@@ -41,6 +44,10 @@ _CN_YEARLESS_RANGE_RE = re.compile(
 )
 _DATE_TOKEN_RE = re.compile(r"\d{4}-\d{1,2}-\d{1,2}|(?:\d{4}年)?\d{1,2}月\d{1,2}日?")
 _SALES_DAYS_RE = re.compile(r"(?<!\d)(?P<days>\d{1,3})\s*天(?:的)?(?:每天|每日|日度)?销量")
+_SALES_DAY_SEQUENCE_RE = re.compile(
+    r"(?P<windows>\d{1,3}(?:\s*[/、]\s*\d{1,3})+)\s*天?(?:的)?销量"
+)
+_DAILY_SALES_DETAIL_RE = re.compile(r"逐日|每天|每日|日度|日销量|日销")
 
 _ALL_DATA_MARKERS = ("全部数据", "所有数据", "完整数据", "全套", "四类", "导一套")
 _ALL_WAREHOUSE_MARKERS = (
@@ -58,8 +65,6 @@ _MONTHLY_SALES_MARKERS = (
     "7/15/30",
     "7、15、30",
     "7 15 30",
-    "7/14/30",
-    "7、14、30",
     "月度销量",
     "汇总销量",
     "最近一个月销量",
@@ -208,9 +213,9 @@ def _validate_selection_candidate(
     if any(not isinstance(item, str) for item in values):
         raise ValueError(f"{name}.values 只能包含字符串")
     aliases = aliases or {}
-    normalized = [aliases.get(item, item) for item in values]
-    if len(set(normalized)) != len(normalized):
+    if len(set(values)) != len(values):
         raise ValueError(f"{name}.values 不允许重复")
+    normalized = list(dict.fromkeys(aliases.get(item, item) for item in values))
     unknown = sorted(set(normalized).difference(allowed_values))
     if unknown:
         raise ValueError(f"{name}.values 包含不支持的值: {', '.join(unknown)}")
@@ -505,7 +510,13 @@ def _parse_data_type_intent(
     text: str,
     questions: list[dict[str, str]],
 ) -> tuple[dict[str, Any], list[str], dict[str, Any], list[dict[str, Any]]]:
-    if _requests_all_data(text):
+    explicit_inventory_sales = bool(
+        re.search(r"库存动销|库存和销量|库存与销量|动销数据|销量", text)
+    )
+    daily_sales_detail = bool(_DAILY_SALES_DETAIL_RE.search(text)) and bool(
+        explicit_inventory_sales or re.search(r"销售|出货|卖|日销|日度", text)
+    )
+    if _requests_all_data(text) and not daily_sales_detail:
         return (
             {"state": "resolved", "values": list(ALL_DATA_TYPES)},
             list(ALL_DATA_TYPES),
@@ -517,46 +528,60 @@ def _parse_data_type_intent(
     issues: list[dict[str, Any]] = []
     ambiguous_sales = False
 
-    both_sales = bool(re.search(r"两种销量|全部销量|完整库存动销", text))
-    if both_sales:
-        selected.update(("sales-monthly", "sales-90d"))
+    if daily_sales_detail:
+        issues.append(
+            {
+                "kind": "unsupported",
+                "code": "UNSUPPORTED_DATA_TYPE",
+                "requested_value": {"sales_granularity": "daily"},
+                "message": "当前雅仓库存动销只提供固定窗口的累计销量，不提供逐日销量明细",
+            }
+        )
 
-    sales_day_matches = [int(match.group("days")) for match in _SALES_DAYS_RE.finditer(text)]
+    sequence_match = _SALES_DAY_SEQUENCE_RE.search(text)
+    sales_day_matches = (
+        [int(value) for value in re.findall(r"\d{1,3}", sequence_match.group("windows"))]
+        if sequence_match
+        else [int(match.group("days")) for match in _SALES_DAYS_RE.finditer(text)]
+    )
+    unsupported_days = [days for days in sales_day_matches if days not in {7, 15, 30, 60, 90}]
+    if unsupported_days:
+        sales_day_matches = unsupported_days
     for days in sales_day_matches:
-        if days in {7, 14, 15, 30}:
-            selected.add("sales-monthly")
-        elif days == 90:
-            selected.add("sales-90d")
+        if days in {7, 15, 30, 60, 90}:
+            if not daily_sales_detail:
+                selected.add("inventory-sales")
         else:
             issues.append(
                 {
                     "kind": "unsupported",
                     "code": "UNSUPPORTED_SALES_WINDOW",
                     "requested_value": {"sales_window_days": days},
-                    "message": "当前支持最近一个月汇总销量和近三个月日度销量，不支持自定义销量天数",
+                    "message": "当前完整库存动销报表只包含固定的销量窗口，不支持自定义销量天数",
                 }
             )
 
-    if any(marker in text for marker in _MONTHLY_SALES_MARKERS):
-        selected.add("sales-monthly")
-    if any(marker in text for marker in _DAILY_SALES_MARKERS):
-        selected.add("sales-90d")
+    if not issues and any(marker in text for marker in _MONTHLY_SALES_MARKERS):
+        selected.add("inventory-sales")
+    if not issues and any(marker in text for marker in _DAILY_SALES_MARKERS):
+        selected.add("inventory-sales")
+    if explicit_inventory_sales and not issues:
+        selected.add("inventory-sales")
 
     historical_inventory = bool(
         re.search(r"上个?月(?:月底|月末)库存|历史(?:月底|月末)?库存|\d{1,2}月\d{1,2}日(?:的)?库存", text)
     )
     bare_month_end = any(marker in text for marker in ("月底库存", "月末库存", "月末快照"))
     current_inventory = any(marker in text for marker in _CURRENT_INVENTORY_MARKERS)
-    inventory_with_sales = "库存和销量" in text or "库存与销量" in text
-    inventory_with_both_sales = "库存和两种销量" in text or "库存与两种销量" in text
     bare_inventory = (
         "库存" in text
         and "库存动销" not in text
+        and re.search(r"库存.*销量", text) is None
         and "库存相关" not in text
         and not bare_month_end
         and not historical_inventory
     )
-    if (bare_month_end and not historical_inventory) or current_inventory or inventory_with_sales or bare_inventory:
+    if (bare_month_end and not historical_inventory) or current_inventory or bare_inventory:
         selected.add("inventory-current-snapshot")
 
     if historical_inventory:
@@ -577,7 +602,7 @@ def _parse_data_type_intent(
                 "请确认需要当前库存，还是指定历史月份的月末库存。",
             )
         )
-    elif current_inventory or inventory_with_sales or inventory_with_both_sales or bare_inventory:
+    elif current_inventory or bare_inventory:
         inventory_intent = {"state": "current"}
     else:
         inventory_intent = {"state": "omitted"}
@@ -585,14 +610,10 @@ def _parse_data_type_intent(
     if any(marker in text for marker in _INBOUND_LISTING_MARKERS):
         selected.add("inbound-listing-time")
 
-    fuzzy_product_sales = bool(re.search(r"(?:最近|近|过去)\s*\d+\s*天的商品销量", text))
-    bare_inventory_sales = "库存动销" in text and not both_sales and not selected.intersection({"sales-monthly", "sales-90d"})
-    generic_sales = (
-        "销量" in text or "最近卖得怎么样" in text or "最近销售情况" in text
-    ) and not selected.intersection({"sales-monthly", "sales-90d"}) and not issues
-    if inventory_with_sales and not inventory_with_both_sales:
-        ambiguous_sales = True
-    elif fuzzy_product_sales or bare_inventory_sales or generic_sales:
+    vague_sales = (
+        "最近卖得怎么样" in text or "最近销售情况" in text
+    ) and "销量" not in text and not selected.intersection({"inventory-sales"}) and not issues
+    if vague_sales:
         ambiguous_sales = True
     if "库存相关" in text:
         ambiguous_sales = True
@@ -605,7 +626,7 @@ def _parse_data_type_intent(
                 "kind": "unsupported",
                 "code": "UNSUPPORTED_DATA_TYPE",
                 "requested_value": {"business_terms": unknown_terms},
-                "message": "请求的数据类型不在当前雅仓导出的四类支持范围内",
+                "message": "请求的数据类型不在当前雅仓导出的三类支持范围内",
             }
         )
     if ambiguous_sales:
@@ -613,7 +634,7 @@ def _parse_data_type_intent(
             _question(
                 "data_type",
                 "AMBIGUOUS_SALES_TYPE",
-                "请确认需要最近一个月销量，还是近三个月每天销量；也可以说明两种销量都要。",
+                "请确认是否需要导出完整库存动销报表。",
             )
         )
         return {"state": "ambiguous"}, ordered, inventory_intent, issues
@@ -700,7 +721,7 @@ def merge_and_resolve_intent(
 
     data_types = _effective_data_types(data_intent, parsed)
     warehouses = _effective_selection(warehouse_intent, WAREHOUSE_CODES)
-    sales_selected = any(item in {"sales-monthly", "sales-90d"} for item in data_types)
+    sales_selected = "inventory-sales" in data_types
     inventory_selected = "inventory-current-snapshot" in data_types
     inbound_only = data_types == ["inbound-listing-time"]
 
