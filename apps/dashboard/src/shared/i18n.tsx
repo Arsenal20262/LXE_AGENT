@@ -9,7 +9,7 @@ export type Language = "zh" | "en";
 
 export const ZH_TEXT = {
   userSkills: {
-    add: "添加技能", userDirectory: "用户目录", enabledState: "启用技能", use: "在对话中使用",
+    add: "添加技能", userDirectory: "用户目录", use: "在对话中使用",
     delete: "移至回收目录", disabled: "已禁用", unavailable: "不可用",
     permission: "当前设备权限或连接器状态不允许使用。", files: "技能文件", binary: "此文件为二进制资源，请在本地查看。",
     truncated: "预览已截断，仅显示前 256 KiB。", recycled: "已移至回收目录，可通过对话恢复：",
@@ -551,6 +551,8 @@ export const ZH_TEXT = {
     lastError: "最近错误"
   },
   skillModal: {
+    more: "更多", info: "技能信息", hideInfo: "收起技能信息",
+    technicalName: "技能标识", category: "分类", origin: "来源",
     location: "位置",
     references: "引用文件",
     commands: "业务命令",
@@ -842,7 +844,7 @@ export const UI_TEXT: Record<Language, UiText> = {
   zh: ZH_TEXT,
   en: {
     userSkills: {
-      add: "Add skill", userDirectory: "User directory", enabledState: "Enable skill", use: "Use in conversation",
+      add: "Add skill", userDirectory: "User directory", use: "Use in conversation",
       delete: "Move to recycle folder", disabled: "Disabled", unavailable: "Unavailable",
       permission: "Unavailable under the current device permissions or connector settings.", files: "Skill files", binary: "This is a binary resource. View it locally.",
       truncated: "Preview truncated to the first 256 KiB.", recycled: "Moved to the recycle folder. Ask in a conversation to restore:",
@@ -1383,6 +1385,8 @@ export const UI_TEXT: Record<Language, UiText> = {
       lastError: "Last error"
     },
     skillModal: {
+      more: "More", info: "Skill information", hideInfo: "Hide skill information",
+      technicalName: "Skill identifier", category: "Category", origin: "Source",
       location: "Location",
       references: "References",
       commands: "Business commands",

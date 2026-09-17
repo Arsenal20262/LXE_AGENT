@@ -762,10 +762,10 @@ function App({
     { id: "activity", label: t.nav.activity, icon: <ChartColumn size={16} /> },
   ];
   const capabilityItems: Array<{ id: CapabilityView; label: string }> = [
-    { id: "models", label: t.nav.models },
     { id: "skills", label: t.nav.skills },
     { id: "tools", label: t.nav.tools },
     { id: "connections", label: t.nav.connections },
+    { id: "models", label: t.nav.models },
   ];
   const pageTitle = activeSection === "home"
     ? t.home.title

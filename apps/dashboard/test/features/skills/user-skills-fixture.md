@@ -10,12 +10,16 @@ Open the printed local URL. This fixture uses the real user-skill file service a
 
 Checked on macOS in a standalone Chromium browser (2026-09-17):
 
-- Valid, broken YAML and shadowed entries share the Default group with official entries. The group count matches the cards, including two distinct entries with the same name. Management controls appear only in managed-entry details.
-- The + menu supports keyboard focus, Escape and outside clicks. Add skill and Use preserve an existing Chinese draft and append their prompts without sending.
-- Markdown and assets/template.md render in the preview. The narrow viewport remains usable.
-- Disable immediately blocks Use. Recycle removes the entry and reports its recovery path.
-- English labels and a 390px viewport retain usable menu and detail actions. Official details have no enable switch or recycle action.
-- External manifest edits cause stale-version operations to show the actual error, refresh the content, and allow retry. Removing the final managed entry leaves no separate empty section.
+- Official, shared, valid user, disabled user, broken YAML and shadowed entries remain distinguishable. The two `official-demo` entries open different content. No detail exposes an enable switch; existing disabled state remains unchanged and blocks Use.
+- Tabs appear as Skills, Tools, Connections, Models in both languages. The + menu still appends Add skill to a draft; Use preserves that draft and never sends automatically.
+- All skill sources share the same detail layout. Markdown is shown first; source, copy and skill information are in More. Technical identity, category, source, path and commands are hidden until information is expanded. Official/shared entries have no recycle or Use action.
+- More supports arrow keys, Home/End, Tab, outside click and Escape. Escape closes the menu before the dialog; closing the dialog returns focus to its card.
+- Copy uses the selected file, including attached templates; clipboard rejection displays its actual message. Official references and user attachments render correctly; binary resources disable copy, and oversized content shows the truncation notice.
+- English details remain usable at 390px and 320px, including wrapped descriptions, More and footer actions.
+- External manifest edits cause stale-version deletion to show the actual error, refresh the content, and allow retry. Recycle closes the detail, removes the card and reports its recovery path.
+- The browser run issued no `skills.user.setEnabled` calls and left the fixture's persisted disabled configuration byte-for-byte unchanged.
+
+The fixture's `disabled-demo` is deliberately disabled through the file service during setup to check compatibility with existing installations; the Dashboard has no enable/disable operation. All fixture skills and recycle contents are disposable.
 
 Automated coverage additionally checks stale mutation rejection, restart persistence, shared sources, canonical path activation, native file/exec creation and editing, and shared Python/Bun format fixtures.
 
