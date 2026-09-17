@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+import io
 from pathlib import Path
 from typing import Any
+from zipfile import ZipFile
 
 import pytest
 import requests
@@ -30,6 +32,7 @@ class FakeResponse:
         headers: dict[str, str] | None = None,
         json_error: Exception | None = None,
         set_cookie: str | None = None,
+        content: bytes = b"",
     ) -> None:
         self.status_code = status_code
         self._payload = payload
@@ -37,11 +40,16 @@ class FakeResponse:
         self.headers = dict(headers or {})
         self.json_error = json_error
         self.set_cookie = set_cookie
+        self.content = content
 
     def json(self) -> Any:
         if self.json_error is not None:
             raise self.json_error
         return self._payload
+
+    def iter_content(self, *, chunk_size: int):
+        for start in range(0, len(self.content), chunk_size):
+            yield self.content[start : start + chunk_size]
 
 
 class FakeSession:
@@ -300,3 +308,136 @@ def test_transport_failure_after_retries_maps_to_truthful_redacted_error() -> No
     assert sleeps == [1.0, 2.0]
     assert "fixture-password" not in str(captured.value)
     assert "[REDACTED]" in str(captured.value)
+
+
+def _minimal_xlsx_bytes() -> bytes:
+    buffer = io.BytesIO()
+    with ZipFile(buffer, "w") as archive:
+        archive.writestr("[Content_Types].xml", "<Types />")
+    return buffer.getvalue()
+
+
+def test_download_validates_https_trusted_host_and_does_not_send_api_token() -> None:
+    content = _minimal_xlsx_bytes()
+    session = FakeSession(
+        [
+            FakeResponse(
+                200,
+                text="",
+                content=content,
+                headers={
+                    "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    "Content-Length": str(len(content)),
+                },
+            )
+        ]
+    )
+    client = _client(session)
+    client._api_token = "fixture-api-token"
+
+    downloaded, content_type = client.download_bytes("https://tms-cos.mabangerp.com/export/fixture.xlsx")
+
+    assert downloaded == content
+    assert content_type == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    assert session.calls[0]["method"] == "GET"
+    assert "token" not in session.calls[0]["headers"]
+    assert session.calls[0]["allow_redirects"] is False
+
+    with pytest.raises(ZhihuiTmsConfigError, match="HTTPS"):
+        client.download_bytes("http://tms-cos.mabangerp.com/export/fixture.xlsx")
+    with pytest.raises(ZhihuiTmsConfigError, match="可信"):
+        client.download_bytes("https://evil.example.test/export/fixture.xlsx")
+
+
+def test_download_rejects_redirect_wrong_mime_and_oversized_response() -> None:
+    content = _minimal_xlsx_bytes()
+    redirect_session = FakeSession([FakeResponse(302, text="redirect", headers={"Location": "https://evil.example.test"})])
+    with pytest.raises(ZhihuiTmsHttpError, match="302"):
+        _client(redirect_session).download_bytes("https://tms-cos.mabangerp.com/export/fixture.xlsx")
+
+    wrong_mime = FakeSession(
+        [
+            FakeResponse(
+                200,
+                text="",
+                content=content,
+                headers={"Content-Type": "text/plain"},
+            )
+        ]
+    )
+    with pytest.raises(ZhihuiTmsSchemaError, match="MIME"):
+        _client(wrong_mime).download_bytes("https://tms-cos.mabangerp.com/export/fixture.xlsx")
+
+    oversized = FakeSession(
+        [
+            FakeResponse(
+                200,
+                text="",
+                content=content,
+                headers={
+                    "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    "Content-Length": str(len(content) + 1),
+                },
+            )
+        ]
+    )
+    with pytest.raises(ZhihuiTmsSchemaError, match="大小"):
+        _client(oversized).download_bytes(
+            "https://tms-cos.mabangerp.com/export/fixture.xlsx",
+            max_bytes=len(content),
+        )
+
+
+def test_download_retries_temporary_status_and_validates_xls_signature() -> None:
+    sleeps: list[float] = []
+    xls_content = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + (b"x" * 32)
+    session = FakeSession(
+        [
+            FakeResponse(503, {"code": "TEMP", "msg": "文件暂时不可用"}),
+            FakeResponse(
+                200,
+                text="",
+                content=xls_content,
+                headers={"Content-Type": "application/vnd.ms-excel"},
+            ),
+        ]
+    )
+    client = _client(session, sleeps=sleeps)
+
+    downloaded, content_type = client.download_bytes("https://tms-cos.mabangerp.com/export/fixture.xls")
+
+    assert downloaded == xls_content
+    assert content_type == "application/vnd.ms-excel"
+    assert sleeps == [1.0]
+
+
+def test_download_retries_transient_stream_read_failure() -> None:
+    class StreamingFailure(FakeResponse):
+        def iter_content(self, *, chunk_size: int):
+            raise requests.ConnectionError("fixture stream reset")
+
+    sleeps: list[float] = []
+    content = _minimal_xlsx_bytes()
+    session = FakeSession(
+        [
+            StreamingFailure(
+                200,
+                text="",
+                content=b"",
+                headers={"Content-Type": "application/octet-stream"},
+            ),
+            FakeResponse(
+                200,
+                text="",
+                content=content,
+                headers={"Content-Type": "application/octet-stream"},
+            ),
+        ]
+    )
+
+    downloaded, _ = _client(session, sleeps=sleeps).download_bytes(
+        "https://tms-cos.mabangerp.com/export/fixture.xlsx"
+    )
+
+    assert downloaded == content
+    assert sleeps == [1.0]

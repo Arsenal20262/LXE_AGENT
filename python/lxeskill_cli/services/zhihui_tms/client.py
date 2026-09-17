@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import io
 import random
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
+from urllib.parse import urlsplit
+from zipfile import is_zipfile
 
 import requests
 
@@ -21,7 +24,17 @@ from .schemas import LoginResult, parse_login_response
 
 DEFAULT_BASE_URL = "https://tms.mabangerp.com/tmsapi"
 DEFAULT_TIMEOUT: tuple[float, float] = (5.0, 30.0)
+DEFAULT_MAX_DOWNLOAD_BYTES = 50_000_000
+DEFAULT_DOWNLOAD_HOSTS = ("tms-cos.mabangerp.com",)
 RETRYABLE_STATUS_CODES = frozenset({408, 429, 500, 502, 503, 504})
+_XLS_SIGNATURE = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
+_ALLOWED_DOWNLOAD_MIME_TYPES = frozenset(
+    {
+        "application/octet-stream",
+        "application/vnd.ms-excel",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -189,6 +202,155 @@ class ZhihuiTmsClient:
             operation="智汇 TMS 商品分页导出",
         )
 
+    def download_bytes(
+        self,
+        url: str,
+        *,
+        allowed_hosts: Sequence[str] = DEFAULT_DOWNLOAD_HOSTS,
+        max_bytes: int = DEFAULT_MAX_DOWNLOAD_BYTES,
+        operation: str = "智汇 TMS 文件下载",
+    ) -> tuple[bytes, str]:
+        parsed = urlsplit(str(url or "").strip())
+        if parsed.scheme.lower() != "https":
+            raise ZhihuiTmsConfigError(
+                "tms_download_url_invalid",
+                f"{operation} 只允许 HTTPS 下载地址",
+            )
+        if parsed.username or parsed.password or parsed.port not in (None, 443):
+            raise ZhihuiTmsConfigError(
+                "tms_download_url_invalid",
+                f"{operation} 下载地址不能包含用户信息或非标准端口",
+            )
+        host = (parsed.hostname or "").lower().rstrip(".")
+        trusted_hosts = {str(item).strip().lower().rstrip(".") for item in allowed_hosts if str(item).strip()}
+        if not host or host not in trusted_hosts:
+            raise ZhihuiTmsConfigError(
+                "tms_download_host_untrusted",
+                f"{operation} 下载地址不属于可信域名",
+            )
+        if isinstance(max_bytes, bool) or not isinstance(max_bytes, int) or max_bytes < 1:
+            raise ZhihuiTmsConfigError(
+                "tms_download_size_invalid",
+                f"{operation} max_bytes 必须是正整数",
+            )
+
+        headers = {
+            "Accept": ", ".join(sorted(_ALLOWED_DOWNLOAD_MIME_TYPES)),
+        }
+        secrets = (self._api_token,)
+        for attempt in range(1, self.retry_policy.max_attempts + 1):
+            try:
+                response = self.session.request(
+                    "GET",
+                    str(url).strip(),
+                    headers=headers,
+                    timeout=self.timeout,
+                    allow_redirects=False,
+                    stream=True,
+                )
+            except (requests.Timeout, requests.ConnectionError) as exc:
+                if attempt < self.retry_policy.max_attempts:
+                    self._sleep_for_retry(attempt)
+                    continue
+                raise ZhihuiTmsTransportError(
+                    "tms_download_transport_error",
+                    f"{operation} 网络请求失败: {exc}",
+                    secrets=secrets,
+                ) from exc
+            except requests.RequestException as exc:
+                raise ZhihuiTmsTransportError(
+                    "tms_download_transport_error",
+                    f"{operation} HTTP 客户端失败: {exc}",
+                    secrets=secrets,
+                ) from exc
+
+            status_code = int(response.status_code)
+            if status_code in self.retry_policy.retryable_status_codes and attempt < self.retry_policy.max_attempts:
+                self._close_response(response)
+                self._sleep_for_retry(attempt, retry_after=response.headers.get("Retry-After"))
+                continue
+            if not 200 <= status_code < 300:
+                body = str(getattr(response, "text", "") or "")
+                self._close_response(response)
+                raise ZhihuiTmsHttpError(
+                    f"tms_download_http_{status_code}",
+                    f"{operation} HTTP {status_code}: {body}",
+                    http_status=status_code,
+                    secrets=secrets,
+                )
+
+            content_type = str(response.headers.get("Content-Type", "")).split(";", 1)[0].strip().lower()
+            if content_type not in _ALLOWED_DOWNLOAD_MIME_TYPES:
+                self._close_response(response)
+                raise ZhihuiTmsSchemaError(
+                    "tms_download_mime_invalid",
+                    f"{operation} 响应 MIME 不支持: {content_type or '<missing>'}",
+                    http_status=status_code,
+                    secrets=secrets,
+                )
+            raw_length = response.headers.get("Content-Length")
+            try:
+                declared_length = int(raw_length) if raw_length is not None else None
+            except (TypeError, ValueError):
+                declared_length = None
+            if declared_length is not None and declared_length > max_bytes:
+                self._close_response(response)
+                raise ZhihuiTmsSchemaError(
+                    "tms_download_size_exceeded",
+                    f"{operation} 响应大小超过上限: {declared_length} > {max_bytes}",
+                    http_status=status_code,
+                    secrets=secrets,
+                )
+
+            chunks: list[bytes] = []
+            total_size = 0
+            try:
+                for chunk in response.iter_content(chunk_size=64 * 1024):
+                    if not chunk:
+                        continue
+                    total_size += len(chunk)
+                    if total_size > max_bytes:
+                        raise ZhihuiTmsSchemaError(
+                            "tms_download_size_exceeded",
+                            f"{operation} 响应大小超过上限: {total_size} > {max_bytes}",
+                            http_status=status_code,
+                            secrets=secrets,
+                        )
+                    chunks.append(bytes(chunk))
+            except (
+                requests.Timeout,
+                requests.ConnectionError,
+                requests.exceptions.ChunkedEncodingError,
+            ) as exc:
+                if attempt < self.retry_policy.max_attempts:
+                    self._sleep_for_retry(attempt)
+                    continue
+                raise ZhihuiTmsTransportError(
+                    "tms_download_transport_error",
+                    f"{operation} 读取文件失败: {exc}",
+                    secrets=secrets,
+                ) from exc
+            finally:
+                self._close_response(response)
+            content = b"".join(chunks)
+            if content.startswith(_XLS_SIGNATURE):
+                return content, content_type
+            if is_zipfile(io.BytesIO(content)):
+                return content, content_type
+            raise ZhihuiTmsSchemaError(
+                "tms_download_signature_invalid",
+                f"{operation} 文件头不是有效的 XLS/XLSX",
+                http_status=status_code,
+                secrets=secrets,
+            )
+        raise AssertionError("unreachable")
+
+    @staticmethod
+    def _close_response(response: Any) -> None:
+        close = getattr(response, "close", None)
+        if callable(close):
+            close()
+
     def _post_json(
         self,
         path: str,
@@ -321,4 +483,11 @@ class ZhihuiTmsClient:
         return dict(payload)
 
 
-__all__ = ["DEFAULT_BASE_URL", "DEFAULT_TIMEOUT", "RetryPolicy", "ZhihuiTmsClient"]
+__all__ = [
+    "DEFAULT_BASE_URL",
+    "DEFAULT_DOWNLOAD_HOSTS",
+    "DEFAULT_MAX_DOWNLOAD_BYTES",
+    "DEFAULT_TIMEOUT",
+    "RetryPolicy",
+    "ZhihuiTmsClient",
+]

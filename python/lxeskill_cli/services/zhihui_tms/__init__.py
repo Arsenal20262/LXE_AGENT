@@ -15,6 +15,12 @@ from .product_export import (
     ZhihuiTmsPaginationError,
     export_stockwarehouse_pages,
 )
+from .xlsx_delivery import (
+    ZhihuiTmsArtifact,
+    ZhihuiTmsDeliveryError,
+    ZhihuiTmsDeliveryResult,
+    deliver_product_exports,
+)
 
 __all__ = [
     "DEFAULT_BASE_URL",
@@ -33,4 +39,8 @@ __all__ = [
     "ZhihuiTmsExportResult",
     "ZhihuiTmsPaginationError",
     "export_stockwarehouse_pages",
+    "ZhihuiTmsArtifact",
+    "ZhihuiTmsDeliveryError",
+    "ZhihuiTmsDeliveryResult",
+    "deliver_product_exports",
 ]
