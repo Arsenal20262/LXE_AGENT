@@ -652,7 +652,7 @@ export const ZH_TEXT = {
       base: "模型设置",
       ziniao: "紫鸟自动化",
       mabang: "马帮",
-      yacang: "雅仓数据导出",
+      yacang: "雅仓",
       feishu: "飞书",
       logging: "日志与排障"
     },
