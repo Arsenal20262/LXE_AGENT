@@ -378,6 +378,19 @@
       "visibility": "business", "session_mode": "none",
       "owner_skills": ["replenishment-unlinked-shipment-download"], "artifact_paths": [{"field": "status_results[].raw_file_path", "role": "deliverable"}, {"field": "snapshot.snapshot_xlsx_path", "role": "deliverable"}], "timeout_ms": 300000, "exposed": true,
       "input_schema": {"type": "object", "properties": {"store_name": {"type": "string"}, "timeout_sec": {"type": "number"}, "poll_interval_sec": {"type": "number"}, "output_dir": {"type": "string"}}, "required": ["store_name"], "additionalProperties": false}
+    },
+    {
+      "name": "zhihui_export_products", "module": "services.agent_cli.zhihui.export_products",
+      "command_path": ["tms", "philippines", "products-export"],
+      "legacy_aliases": ["zhihui_export_products"],
+      "visibility": "business", "session_mode": "none",
+      "owner_skills": ["zhihui-tms-product-export"],
+      "artifact_paths": [{"field": "artifacts[].path", "role": "deliverable"}],
+      "deliver_artifacts_on_failure": true, "timeout_ms": 1200000, "exposed": true,
+      "input_schema": {"type": "object", "properties": {
+        "action": {"type": "string", "enum": ["preview", "execute"], "description": "默认 preview；execute 需要运行时生产开关与安全注入的凭据。"},
+        "request": {"type": "string", "description": "用户原始商品数据需求；销量和历史库存措辞只用于归一化，不代表独立历史报表。"}
+      }, "additionalProperties": false}
     }
   ],
   "datasets": {
