@@ -12,7 +12,6 @@ Checked on macOS in the browser:
 
 - Valid, broken YAML and shadowed entries appear together with actual diagnostics.
 - An existing Chinese draft survives navigation. Use appends one prompt; refresh and remount do not duplicate it. Send count stays zero.
-- Edit appends the name and actual manifest path while preserving the draft and send count.
 - Markdown and assets/template.md render in the preview. The narrow viewport remains usable.
 - Disable immediately blocks Use. Recycle removes the entry and reports its recovery path.
 

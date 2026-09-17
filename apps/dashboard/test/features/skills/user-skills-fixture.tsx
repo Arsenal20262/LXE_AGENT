@@ -26,8 +26,7 @@ function Fixture() {
       modelLoading={false} models={[]} modelSaving={false} thinkingSaving={false} runtimeReady runtimeUnavailableMessage=""
       onModelChange={() => {}} onThinkingLevelChange={() => {}} onSend={async () => { setSent(n => n + 1); }} onStop={noop} />
       : <UserSkillsView onConversation={(action, skill) => {
-        const prompt = action === "create" ? t.userSkills.createPrompt : action === "edit" && skill
-          ? t.userSkills.editPrompt(skill.name, skill.location) : t.userSkills.usePrompt(skill!.name);
+        const prompt = action === "create" ? t.userSkills.createPrompt : t.userSkills.usePrompt(skill!.name);
         appendComposerDraftPrompt(sessionStorage, "skill-acceptance-draft", prompt); showConversation(true);
       }} />}
     <details><summary>调用记录</summary><pre>{calls.join("\n")}</pre></details>

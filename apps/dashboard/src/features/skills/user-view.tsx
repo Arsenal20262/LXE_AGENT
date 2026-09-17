@@ -8,7 +8,7 @@ import { markdownWithoutFrontMatter } from "../../shared/markdown";
 import { markdownComponents, markdownRehypePlugins, markdownRemarkPlugins } from "../../shared/ui/markdown";
 import { useDialogFocus } from "../../shared/ui/use-dialog-focus";
 
-export type SkillConversationAction = "create" | "use" | "edit";
+export type SkillConversationAction = "create" | "use";
 
 function UserSkillPreview({ skill, close }: { skill: UserSkillPayload; close: () => void }) {
   const t = useUiText();
@@ -68,7 +68,6 @@ export function UserSkillsView({ onConversation }: { onConversation: (action: Sk
         <div className="user-skill-actions">
           <button onClick={() => setSelected(skill)}>{t.userSkills.view}</button>
           <button disabled={!skill.available} onClick={() => onConversation("use", skill)}>{t.userSkills.use}</button>
-          <button onClick={() => onConversation("edit", skill)}>{t.userSkills.edit}</button>
           <button disabled={mutation.isPending} onClick={() => mutation.mutate({ skill, action: "toggle" })}>{skill.enabled ? t.userSkills.disable : t.userSkills.enable}</button>
           <button disabled={mutation.isPending} onClick={() => mutation.mutate({ skill, action: "delete" })}>{t.userSkills.delete}</button>
         </div>

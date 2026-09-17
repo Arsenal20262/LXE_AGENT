@@ -433,7 +433,6 @@ function App({
 
   function startSkillConversation(action: SkillConversationAction, skill?: SkillPayload) {
     const prompt = action === "create" ? t.userSkills.createPrompt
-      : action === "edit" && skill ? t.userSkills.editPrompt(skill.name, skill.location)
       : skill ? t.userSkills.usePrompt(skill.name) : "";
     if (!prompt) return;
     if (!newConversation) {
