@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import contextlib
+from hashlib import sha256
 import os
 from pathlib import Path
 import re
 from typing import Any
 from uuid import uuid4
 
-from services.zhihui_tms.client import ZhihuiTmsClient
+from services.zhihui_tms.client import DEFAULT_MAX_HTTP_ATTEMPTS, ZhihuiTmsClient
 from services.zhihui_tms.errors import redact_text
 from services.zhihui_tms.planner import plan_product_export
 from services.zhihui_tms.product_export import export_stockwarehouse_pages
@@ -32,6 +33,13 @@ def _existing_pages(output_dir: Path, date_label: str) -> list[dict[str, Any]]:
     return pages
 
 
+def _account_lock_path(account: str) -> Path:
+    data_root = Path(os.environ.get("LXE_DATA_ROOT", "").strip()).expanduser()
+    lock_root = data_root if data_root.is_absolute() else artifact_root()
+    account_hash = sha256(account.strip().casefold().encode("utf-8")).hexdigest()
+    return lock_root / "locks" / "zhihui_tms" / f"{account_hash}.lock"
+
+
 def run(arguments: dict[str, Any]) -> dict[str, Any]:
     """Catalog entrypoint; credentials are process environment only."""
     try:
@@ -49,6 +57,7 @@ def run(arguments: dict[str, Any]) -> dict[str, Any]:
         "max_pages": plan.max_pages,
         "max_records": plan.max_records,
         "max_requests": plan.max_requests,
+        "max_http_attempts": DEFAULT_MAX_HTTP_ATTEMPTS,
         "max_runtime_seconds": plan.max_runtime,
         "artifacts": [],
     }
@@ -75,7 +84,7 @@ def run(arguments: dict[str, Any]) -> dict[str, Any]:
     output_dir = artifact_root() / "zhihui_tms" / uuid4().hex
     client: Any = None
     try:
-        with interprocess_lock(artifact_root() / "zhihui_tms" / ".run.lock", timeout_seconds=0):
+        with interprocess_lock(_account_lock_path(account), timeout_seconds=0):
             client = ZhihuiTmsClient()
             client.login(account, password)
             export_result = export_stockwarehouse_pages(
@@ -101,6 +110,7 @@ def run(arguments: dict[str, Any]) -> dict[str, Any]:
                 "artifacts": artifacts,
                 "total_records": export_result.total_records,
                 "request_count": export_result.request_count,
+                "http_attempt_count": getattr(client, "request_attempt_count", None),
                 "total_rows": delivery.total_rows,
             }
     except InterProcessLockTimeout:
@@ -116,6 +126,7 @@ def run(arguments: dict[str, Any]) -> dict[str, Any]:
             **summary,
             "code": getattr(exc, "code", "tms_export_failed"),
             "exception": redact_text(f"{type(exc).__name__}: {exc}", secrets=(account, password)),
+            "http_attempt_count": getattr(client, "request_attempt_count", None),
             "artifacts": _existing_pages(output_dir, plan.date_label),
         }
     finally:

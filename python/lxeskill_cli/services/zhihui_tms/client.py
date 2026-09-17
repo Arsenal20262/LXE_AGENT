@@ -26,6 +26,7 @@ from .schemas import LoginResult, parse_login_response
 DEFAULT_BASE_URL = "https://tms.mabangerp.com/tmsapi"
 DEFAULT_TIMEOUT: tuple[float, float] = (5.0, 30.0)
 DEFAULT_MIN_REQUEST_INTERVAL_SECONDS = 2.0
+DEFAULT_MAX_HTTP_ATTEMPTS = 400
 DEFAULT_MAX_DOWNLOAD_BYTES = 50_000_000
 DEFAULT_DOWNLOAD_HOSTS = ("tms-cos.mabangerp.com",)
 RETRYABLE_STATUS_CODES = frozenset({408, 429, 500, 502, 503, 504})
@@ -74,6 +75,7 @@ class ZhihuiTmsClient:
         random_fn: Callable[[], float] = random.random,
         clock: Callable[[], float] = time.monotonic,
         min_request_interval_seconds: float = DEFAULT_MIN_REQUEST_INTERVAL_SECONDS,
+        max_http_attempts: int = DEFAULT_MAX_HTTP_ATTEMPTS,
     ) -> None:
         normalized_base_url = str(base_url or "").strip().rstrip("/")
         if not normalized_base_url.startswith(("https://", "http://")):
@@ -96,6 +98,11 @@ class ZhihuiTmsClient:
                 "tms_request_interval_invalid",
                 "智汇 TMS 请求最小间隔必须是非负有限秒数",
             )
+        if isinstance(max_http_attempts, bool) or not isinstance(max_http_attempts, int) or max_http_attempts < 1:
+            raise ZhihuiTmsConfigError(
+                "tms_http_attempt_limit_invalid",
+                "智汇 TMS HTTP 请求尝试次数上限必须是正整数",
+            )
         self.base_url = normalized_base_url
         self.session = session or requests.Session()
         self.timeout = (float(timeout[0]), float(timeout[1]))
@@ -105,7 +112,13 @@ class ZhihuiTmsClient:
         self._clock = clock
         self.min_request_interval_seconds = float(min_request_interval_seconds)
         self._last_request_started: float | None = None
+        self.max_http_attempts = max_http_attempts
+        self._request_attempt_count = 0
         self._api_token = ""
+
+    @property
+    def request_attempt_count(self) -> int:
+        return self._request_attempt_count
 
     @property
     def api_token(self) -> str:
@@ -374,6 +387,11 @@ class ZhihuiTmsClient:
             close()
 
     def _pace_request(self) -> None:
+        if self._request_attempt_count >= self.max_http_attempts:
+            raise ZhihuiTmsConfigError(
+                "tms_http_attempt_limit",
+                f"智汇 TMS HTTP 请求尝试次数达到上限: {self.max_http_attempts}",
+            )
         now = self._clock()
         if self._last_request_started is not None:
             remaining = self.min_request_interval_seconds - (now - self._last_request_started)
@@ -381,6 +399,7 @@ class ZhihuiTmsClient:
                 self._sleeper(remaining)
                 now = self._clock()
         self._last_request_started = now
+        self._request_attempt_count += 1
 
     def _post_json(
         self,
@@ -524,6 +543,7 @@ class ZhihuiTmsClient:
 __all__ = [
     "DEFAULT_BASE_URL",
     "DEFAULT_MIN_REQUEST_INTERVAL_SECONDS",
+    "DEFAULT_MAX_HTTP_ATTEMPTS",
     "DEFAULT_DOWNLOAD_HOSTS",
     "DEFAULT_MAX_DOWNLOAD_BYTES",
     "DEFAULT_TIMEOUT",

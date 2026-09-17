@@ -84,6 +84,19 @@ def test_execute_refuses_second_concurrent_run_before_login(monkeypatch, tmp_pat
     assert result["artifacts"] == []
 
 
+def test_account_lock_is_shared_across_workspaces_without_exposing_account(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("LXE_DATA_ROOT", str(tmp_path / "desktop-data"))
+    monkeypatch.setattr(export_products, "artifact_root", lambda: tmp_path / "workspace-a")
+    first = export_products._account_lock_path("fixture-account")
+    monkeypatch.setattr(export_products, "artifact_root", lambda: tmp_path / "workspace-b")
+    second = export_products._account_lock_path("fixture-account")
+    other = export_products._account_lock_path("another-account")
+    assert first == second
+    assert first != other
+    assert "fixture-account" not in str(first)
+    assert first.is_relative_to(tmp_path / "desktop-data")
+
+
 def test_execute_composes_login_export_and_delivery_with_artifact_paths(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("ZHIHUI_TMS_PRODUCTION_ENABLED", "1")
     monkeypatch.setenv("ZHIHUI_TMS_ACCOUNT", "fixture-account")

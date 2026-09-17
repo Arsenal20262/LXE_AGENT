@@ -366,6 +366,29 @@ def test_download_429_stops_without_retry() -> None:
     assert len(session.calls) == 1
 
 
+def test_http_attempt_budget_counts_retries_before_sending_another_request() -> None:
+    session = FakeSession([
+        FakeResponse(503, {"code": "TEMP", "msg": "暂不可用"}),
+        FakeResponse(200, {"code": "200", "datas": []}),
+        FakeResponse(200, {"code": "200", "datas": []}),
+    ])
+    client = ZhihuiTmsClient(
+        session=session,
+        retry_policy=RetryPolicy(max_attempts=3, backoff_seconds=0, jitter_ratio=0),
+        sleeper=lambda _seconds: None,
+        min_request_interval_seconds=0,
+        max_http_attempts=2,
+    )
+    client._api_token = "fixture-api-token"
+
+    client.find_my_stockwarehouse_list(page=1)
+    with pytest.raises(ZhihuiTmsConfigError, match="HTTP 请求尝试次数"):
+        client.find_my_stockwarehouse_list(page=2)
+
+    assert client.request_attempt_count == 2
+    assert len(session.calls) == 2
+
+
 def _minimal_xlsx_bytes() -> bytes:
     buffer = io.BytesIO()
     with ZipFile(buffer, "w") as archive:
