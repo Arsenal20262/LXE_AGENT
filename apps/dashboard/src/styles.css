@@ -11564,12 +11564,31 @@ pre {
 }
 
 /* Personal skill management uses the existing catalog and modal surfaces. */
-.user-skills-section { margin-bottom: 24px; padding: 20px; }
-.user-skills-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
-.user-skills-header h2 { margin: 0 0 8px; }
-.user-skills-header p { margin: 0; color: var(--text-soft); }
+.workspace-header-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; min-width: 0; }
+.skill-add-menu { position: relative; flex-shrink: 0; }
+.skill-add-menu-popup { position: absolute; z-index: 30; top: calc(100% + 8px); right: 0; min-width: 9rem; padding: 6px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); box-shadow: 0 8px 24px var(--shadow-soft); }
+.skill-add-menu-popup button { display: block; width: 100%; padding: 8px 12px; border: 0; border-radius: 6px; background: transparent; color: var(--text-strong); font: inherit; text-align: left; cursor: pointer; }
+.skill-add-menu-popup button:hover, .skill-add-menu-popup button:focus-visible { background: var(--surface-muted); }
+.skill-detail-header-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.user-skill-modal { display: flex; flex-direction: column; }
+.user-skill-modal .modal-header { flex-shrink: 0; }
+.user-skill-modal .modal-content { min-height: 0; }
+.skill-enabled-switch { display: flex; align-items: center; width: 2.25rem; height: 1.375rem; padding: .1875rem; border: 1px solid var(--border); border-radius: 999px; background: var(--surface-muted); cursor: pointer; }
+.skill-enabled-switch span { width: .875rem; height: .875rem; border-radius: 50%; background: var(--text-soft); }
+.skill-enabled-switch[aria-checked="true"] { background: var(--accent-strong); }
+.skill-enabled-switch[aria-checked="true"] span { margin-left: auto; background: white; }
+.skill-enabled-switch:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.skill-enabled-switch:disabled { opacity: .5; cursor: default; }
+.skill-detail-footer.user-skill-actions { justify-content: space-between; flex-shrink: 0; margin: 0; padding: 16px 20px; border-top: 1px solid var(--border); }
+.skill-detail-footer .skill-recycle-button { color: var(--text-soft); }
+.skill-detail-footer > button:last-child { margin-left: auto; }
+@media (max-width: 600px) {
+  .workspace-view-header { flex-wrap: wrap; gap: 10px; }
+  .workspace-header-actions { flex-wrap: wrap; gap: 8px; }
+  .workspace-header-actions .workspace-subnav-item { padding-inline: 8px; }
+}
 .user-skill-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
-.user-skill-actions button, .user-skills-header button, .user-skill-actions select { font: inherit; border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; color: inherit; background: var(--surface); cursor: pointer; }
+.user-skill-actions button, .user-skill-actions select { font: inherit; border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; color: inherit; background: var(--surface); cursor: pointer; }
 .user-skill-actions button:disabled { opacity: .5; cursor: default; }
 .user-skill-location, .user-skill-error { overflow-wrap: anywhere; white-space: pre-wrap; font-size: .75rem; }
 .user-skill-error { color: var(--text-soft); }

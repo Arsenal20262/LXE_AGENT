@@ -27,6 +27,12 @@ const server = await createServer({ root: resolve("apps/dashboard"), server: { h
         let body = ""; for await (const chunk of req) body += chunk;
         const call = parseDashboardRpcCall(JSON.parse(body)); let result: unknown;
         switch (call.operation) {
+          case "skills.list": { const items = catalog.list(); result = { items, total: items.length }; break; }
+          case "skills.content": {
+            result = catalog.get(call.input.name);
+            if (!result) throw new Error(`Skill not found: ${call.input.name}`);
+            break;
+          }
           case "skills.user.list": { const items = files.list(); result = { items, total: items.length }; break; }
           case "skills.user.content": result = files.content(call.input.id, {}, call.input.path); break;
           case "skills.user.setEnabled": result = files.setEnabled(call.input.id, call.input.version, call.input.enabled); break;

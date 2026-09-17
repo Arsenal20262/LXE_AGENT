@@ -84,8 +84,8 @@ import {
   SessionDetailView,
   SessionsIndex
 } from "./features/sessions/view";
-import { SkillsView } from "./features/skills/view";
-import { UserSkillsView, type SkillConversationAction } from "./features/skills/user-view";
+import { SkillsCatalogView, type SkillConversationAction } from "./features/skills/user-view";
+import { AddSkillMenu } from "./features/skills/add-menu";
 import { appendComposerDraftPrompt } from "./features/sessions/composer-draft";
 import type { SkillPayload } from "@lxe/desktop-protocol";
 import { StatsView } from "./features/stats/view";
@@ -114,12 +114,14 @@ const DOCS_HOME_PATH = "README.md";
 
 function WorkspaceView<T extends string>({
   activeView,
+  actions,
   children,
   items,
   label,
   onSelect,
 }: {
   activeView: T;
+  actions?: ReactNode;
   children: ReactNode;
   items: ReadonlyArray<{ id: T; label: string }>;
   label: string;
@@ -129,7 +131,7 @@ function WorkspaceView<T extends string>({
     <section className="workspace-view">
       <header className="workspace-view-header">
         <h2>{label}</h2>
-        <nav aria-label={label} className="workspace-subnav">
+        <div className="workspace-header-actions"><nav aria-label={label} className="workspace-subnav">
           {items.map((item) => (
             <button
               aria-current={activeView === item.id ? "page" : undefined}
@@ -141,7 +143,7 @@ function WorkspaceView<T extends string>({
               {item.label}
             </button>
           ))}
-        </nav>
+        </nav>{actions}</div>
       </header>
       <div className="workspace-view-content">{children}</div>
     </section>
@@ -1026,6 +1028,8 @@ function App({
                 items={capabilityItems}
                 label={t.nav.capabilities}
                 onSelect={openCapabilityView}
+                actions={capabilityView === "skills" ? <AddSkillMenu disabled={!dashboardRuntimeReady}
+                  onAdd={() => startSkillConversation("create")} /> : undefined}
               >
                 {capabilityView === "models" ? (
                   !dashboardRuntimeReady ? <EmptyState label={t.conversation.unavailable} />
@@ -1041,11 +1045,12 @@ function App({
                   !dashboardRuntimeReady ? <EmptyState label={t.conversation.unavailable} />
                     : skillsQuery.isPending || commandsQuery.isPending ? <EmptyState label={t.common.loading} />
                     : skillsQuery.data && commandsQuery.data
-                      ? <><UserSkillsView onConversation={startSkillConversation} /><SkillsView
-                          skills={skillsQuery.data.items.filter(skill => skill.source !== "user")}
+                      ? <SkillsCatalogView
+                          skills={skillsQuery.data.items}
                           commands={commandsQuery.data.items}
                           onOpen={setDetailTarget}
-                        /></>
+                          onConversation={startSkillConversation}
+                        />
                       : <EmptyState label={t.common.errorPrefix(t.errors.api, queryError(skillsQuery.error || commandsQuery.error))} />
                 ) : null}
                 {capabilityView === "tools" ? (

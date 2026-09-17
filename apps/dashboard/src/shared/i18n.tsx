@@ -9,9 +9,8 @@ export type Language = "zh" | "en";
 
 export const ZH_TEXT = {
   userSkills: {
-    title: "我的技能", hint: "通过对话创建技能，保存后供后续任务使用。", create: "创建技能",
-    empty: "还没有自己的技能。描述你想复用的工作方法，即可开始创建。", view: "查看", use: "在对话中使用",
-    enable: "启用", disable: "禁用", delete: "移至回收目录", available: "可用", disabled: "已禁用", unavailable: "不可用",
+    add: "添加技能", userDirectory: "用户目录", enabledState: "启用技能", use: "在对话中使用",
+    delete: "移至回收目录", disabled: "已禁用", unavailable: "不可用",
     permission: "当前设备权限或连接器状态不允许使用。", files: "技能文件", binary: "此文件为二进制资源，请在本地查看。",
     truncated: "预览已截断，仅显示前 256 KiB。", recycled: "已移至回收目录，可通过对话恢复：",
     shared: "共享技能", official: "官方技能",
@@ -843,9 +842,8 @@ export const UI_TEXT: Record<Language, UiText> = {
   zh: ZH_TEXT,
   en: {
     userSkills: {
-      title: "My skills", hint: "Create skills in a conversation, then save them for later tasks.", create: "Create skill",
-      empty: "No personal skills yet. Describe a workflow you want to reuse to get started.", view: "View", use: "Use in conversation",
-      enable: "Enable", disable: "Disable", delete: "Move to recycle folder", available: "Available", disabled: "Disabled", unavailable: "Unavailable",
+      add: "Add skill", userDirectory: "User directory", enabledState: "Enable skill", use: "Use in conversation",
+      delete: "Move to recycle folder", disabled: "Disabled", unavailable: "Unavailable",
       permission: "Unavailable under the current device permissions or connector settings.", files: "Skill files", binary: "This is a binary resource. View it locally.",
       truncated: "Preview truncated to the first 256 KiB.", recycled: "Moved to the recycle folder. Ask in a conversation to restore:",
       shared: "Shared skill", official: "Official skill",
