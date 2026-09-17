@@ -455,6 +455,14 @@ export interface DesktopSetupState {
     account: string;
     password_configured: boolean;
   };
+  zhihui_tms: {
+    managed: boolean;
+    configured: boolean;
+    issues: string[];
+    account: string;
+    password_configured: boolean;
+    production_enabled: boolean;
+  };
   feishu: {
     managed: boolean;
     configured: boolean;
@@ -485,6 +493,10 @@ export type DesktopMabangSetupInput =
   | { action: "clear" }
   | { action: "save"; account: string; password?: string };
 
+export type DesktopZhihuiTmsSetupInput =
+  | { action: "clear" }
+  | { action: "save"; account: string; password?: string; production_enabled: boolean };
+
 export type DesktopFeishuSetupInput =
   | { action: "clear" }
   | { action: "save"; app_id: string; app_secret?: string };
@@ -493,6 +505,7 @@ export interface DesktopSetupInput {
   workspace_root: string;
   ziniao?: DesktopZiniaoSetupInput;
   mabang?: DesktopMabangSetupInput;
+  zhihui_tms?: DesktopZhihuiTmsSetupInput;
   feishu?: DesktopFeishuSetupInput;
   logging?: {
     profile: DesktopLogProfile;

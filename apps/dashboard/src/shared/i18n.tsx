@@ -641,6 +641,7 @@ export const ZH_TEXT = {
     integrationNames: {
       ziniao: "紫鸟",
       mabang: "马帮",
+      zhihui_tms: "智汇 TMS",
       feishu: "飞书"
     },
     sectionTitles: {
@@ -650,6 +651,7 @@ export const ZH_TEXT = {
       base: "模型设置",
       ziniao: "紫鸟自动化",
       mabang: "马帮",
+      zhihui_tms: "智汇 TMS",
       feishu: "飞书",
       logging: "日志与排障"
     },
@@ -783,6 +785,13 @@ export const ZH_TEXT = {
       account: "马帮账号",
       password: "马帮密码",
       passwordPlaceholder: "输入马帮密码"
+    },
+    zhihui_tms: {
+      description: "只支持菲律宾商品全量导出。保存账号和密码后，需单独启用生产 API 调用；执行任务会访问真实 TMS。",
+      account: "智汇 TMS 账号",
+      password: "智汇 TMS 密码",
+      passwordPlaceholder: "输入智汇 TMS 密码",
+      productionEnable: "启用智汇 TMS 生产 API 调用"
     },
     feishu: {
       description: "App ID 与 App Secret 必须成对填写；整组留空即可跳过。",
@@ -1475,6 +1484,7 @@ export const UI_TEXT: Record<Language, UiText> = {
       integrationNames: {
         ziniao: "ZiNiao",
         mabang: "Mabang",
+        zhihui_tms: "Zhihui TMS",
         feishu: "Feishu"
       },
       sectionTitles: {
@@ -1484,6 +1494,7 @@ export const UI_TEXT: Record<Language, UiText> = {
         base: "Model settings",
         ziniao: "ZiNiao automation",
         mabang: "Mabang",
+        zhihui_tms: "Zhihui TMS",
         feishu: "Feishu",
         logging: "Logs & diagnostics"
       },
@@ -1617,6 +1628,13 @@ export const UI_TEXT: Record<Language, UiText> = {
         account: "Mabang account",
         password: "Mabang password",
         passwordPlaceholder: "Enter the Mabang password"
+      },
+      zhihui_tms: {
+        description: "Only the Philippines full product export is supported. Save the credentials, then separately enable production API calls; executing a task accesses the live TMS.",
+        account: "Zhihui TMS account",
+        password: "Zhihui TMS password",
+        passwordPlaceholder: "Enter the Zhihui TMS password",
+        productionEnable: "Enable Zhihui TMS production API calls"
       },
       feishu: {
         description: "App ID and App Secret must be filled in together; leave the whole group blank to skip.",

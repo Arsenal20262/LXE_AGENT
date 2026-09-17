@@ -14,6 +14,18 @@ import {
 } from "../src/main/ipc-validation";
 
 describe("desktop IPC validation", () => {
+  test("requires an explicit boolean for Zhihui production access", () => {
+    expect(validateSetupInput({
+      workspace_root: "/workspace",
+      zhihui_tms: { action: "save", account: "fixture", password: "fixture-secret", production_enabled: false },
+    })).toMatchObject({
+      zhihui_tms: { action: "save", account: "fixture", password: "fixture-secret", production_enabled: false },
+    });
+    expect(() => validateSetupInput({
+      workspace_root: "/workspace",
+      zhihui_tms: { action: "save", account: "fixture", production_enabled: "true" },
+    })).toThrow("production switch");
+  });
   test("accepts only resolved desktop appearances", () => {
     expect(validateDesktopAppearance("light")).toBe("light");
     expect(validateDesktopAppearance("dark")).toBe("dark");

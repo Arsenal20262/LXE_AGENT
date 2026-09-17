@@ -108,6 +108,7 @@ export function validateSetupInput(value: unknown): DesktopSetupInput {
   };
   const ziniao = input.ziniao === undefined ? undefined : integrationAction(input.ziniao, "Ziniao setup");
   const mabang = input.mabang === undefined ? undefined : integrationAction(input.mabang, "Mabang setup");
+  const zhihuiTms = input.zhihui_tms === undefined ? undefined : integrationAction(input.zhihui_tms, "Zhihui TMS setup");
   const feishu = input.feishu === undefined ? undefined : integrationAction(input.feishu, "Feishu setup");
   const logging = input.logging === undefined ? undefined : objectValue(input.logging, "Logging setup");
   const rawZiniaoVersion = ziniao?.action === "save"
@@ -135,6 +136,18 @@ export function validateSetupInput(value: unknown): DesktopSetupInput {
     account: boundedText(mabang.account, "Mabang account", 1_024),
     ...(mabangPassword ? { password: mabangPassword } : {}),
   } : mabang?.action === "clear" ? { action: "clear" as const } : undefined;
+  const zhihuiTmsPassword = zhihuiTms?.action === "save"
+    ? boundedText(zhihuiTms.password, "Zhihui TMS password", 16_384)
+    : "";
+  if (zhihuiTms?.action === "save" && typeof zhihuiTms.production_enabled !== "boolean") {
+    throw new Error("Zhihui TMS production switch must be a boolean");
+  }
+  const zhihuiTmsInput = zhihuiTms?.action === "save" ? {
+    action: "save" as const,
+    account: boundedText(zhihuiTms.account, "Zhihui TMS account", 1_024),
+    production_enabled: zhihuiTms.production_enabled as boolean,
+    ...(zhihuiTmsPassword ? { password: zhihuiTmsPassword } : {}),
+  } : zhihuiTms?.action === "clear" ? { action: "clear" as const } : undefined;
   const feishuSecret = feishu?.action === "save"
     ? boundedText(feishu.app_secret, "Feishu App Secret", 16_384)
     : "";
@@ -160,6 +173,7 @@ export function validateSetupInput(value: unknown): DesktopSetupInput {
     workspace_root: workspaceRoot,
     ...(ziniaoInput ? { ziniao: ziniaoInput } : {}),
     ...(mabangInput ? { mabang: mabangInput } : {}),
+    ...(zhihuiTmsInput ? { zhihui_tms: zhihuiTmsInput } : {}),
     ...(feishuInput ? { feishu: feishuInput } : {}),
     ...(loggingInput ? { logging: loggingInput } : {}),
   };

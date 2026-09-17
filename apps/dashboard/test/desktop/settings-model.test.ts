@@ -65,6 +65,14 @@ const setupState = (patch: Partial<DesktopSetupState> = {}): DesktopSetupState =
     account: "seller",
     password_configured: false,
   },
+  zhihui_tms: {
+    managed: false,
+    configured: false,
+    issues: [],
+    account: "",
+    password_configured: false,
+    production_enabled: false,
+  },
   feishu: {
     managed: true,
     configured: true,
@@ -126,6 +134,8 @@ describe("desktop settings navigation model", () => {
     expect(form.workspaceRoot).toBe("/workspace");
     expect(form.localApiKey).toBe("");
     expect(form.mabangPassword).toBe("");
+    expect(form.zhihuiTmsPassword).toBe("");
+    expect(form.zhihuiTmsProductionEnabled).toBe(false);
     expect(form.feishuAppSecret).toBe("");
   });
 
@@ -135,6 +145,7 @@ describe("desktop settings navigation model", () => {
     expect(desktopSettingsSectionStatus(text, "base", setup)).toBe(text.sectionStatus.complete);
     expect(desktopSettingsSectionStatus(text, "ziniao", setup)).toBe(text.sectionStatus.optional);
     expect(desktopSettingsSectionStatus(text, "mabang", setup)).toBe(text.sectionStatus.incomplete);
+    expect(desktopSettingsSectionStatus(text, "zhihui_tms", setup)).toBe(text.sectionStatus.optional);
     expect(desktopSettingsSectionStatus(text, "feishu", setup)).toBe(text.sectionStatus.configured);
     expect(desktopSettingsSectionStatus(text, "logging", setup)).toBe(text.logProfiles.standard);
   });

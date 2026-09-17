@@ -41,6 +41,36 @@ const legacyPermission = (
 });
 
 describe("DesktopConfigStore", () => {
+  test("stores Zhihui password encrypted and injects production access only when enabled", () => {
+    const root = createRoot();
+    const store = new DesktopConfigStore(root, join(root, "workspace"), safeStorage, { platform: "darwin" });
+    const saved = store.save({
+      workspace_root: join(root, "workspace"),
+      zhihui_tms: { action: "save", account: "fixture-tms-account", password: "fixture-tms-secret", production_enabled: false },
+    });
+    expect(saved.zhihui_tms).toMatchObject({ managed: true, configured: false, password_configured: true, production_enabled: false });
+    expect(JSON.stringify(saved)).not.toContain("fixture-tms-secret");
+    expect(readFileSync(join(root, "config", "settings.json"), "utf8")).not.toContain("fixture-tms-secret");
+    expect(store.environment()).toMatchObject({
+      ZHIHUI_TMS_ACCOUNT: "",
+      ZHIHUI_TMS_PASSWORD: "",
+      ZHIHUI_TMS_PRODUCTION_ENABLED: "0",
+    });
+    const enabled = store.save({
+      workspace_root: join(root, "workspace"),
+      zhihui_tms: { action: "save", account: "fixture-tms-account", production_enabled: true },
+    });
+    expect(enabled.zhihui_tms).toMatchObject({ configured: true, password_configured: true, production_enabled: true });
+    expect(store.environment()).toMatchObject({
+      ZHIHUI_TMS_ACCOUNT: "fixture-tms-account",
+      ZHIHUI_TMS_PASSWORD: "fixture-tms-secret",
+      ZHIHUI_TMS_PRODUCTION_ENABLED: "1",
+    });
+    const cleared = store.save({ workspace_root: join(root, "workspace"), zhihui_tms: { action: "clear" } });
+    expect(cleared.zhihui_tms).toMatchObject({ configured: false, password_configured: false, production_enabled: false });
+    expect(store.environment().ZHIHUI_TMS_PRODUCTION_ENABLED).toBe("0");
+  });
+
   test("keeps every secret encrypted and maps complete integrations and diagnostic logs", () => {
     const root = createRoot();
     const appPath = join(root, "ziniao.exe");

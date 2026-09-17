@@ -71,12 +71,15 @@ export class DesktopSetupService {
     const workspaceAvailable = this.validation.workspaceAvailable(workspaceRoot);
     const ziniao = config.integrations.ziniao;
     const mabang = config.integrations.mabang;
+    const zhihuiTms = config.integrations.zhihui_tms;
     const feishu = config.integrations.feishu;
     const ziniaoIssues = ziniao.managed ? this.validation.ziniaoIssues(ziniao, secrets) : [];
     const mabangIssues = mabang.managed ? this.validation.mabangIssues(mabang, secrets) : [];
+    const zhihuiTmsIssues = zhihuiTms.managed ? this.validation.zhihuiTmsIssues(zhihuiTms, secrets) : [];
     const feishuIssues = feishu.managed ? this.validation.feishuIssues(feishu, secrets) : [];
     const ziniaoConfigured = ziniao.managed && ziniaoIssues.length === 0;
     const mabangConfigured = mabang.managed && mabangIssues.length === 0;
+    const zhihuiTmsConfigured = zhihuiTms.managed && zhihuiTmsIssues.length === 0 && zhihuiTms.production_enabled;
     const feishuConfigured = feishu.managed && feishuIssues.length === 0;
     return {
       complete: Boolean(
@@ -112,6 +115,14 @@ export class DesktopSetupService {
         issues: mabangIssues,
         account: mabang.account,
         password_configured: Boolean(secrets.mabang_password),
+      },
+      zhihui_tms: {
+        managed: zhihuiTms.managed,
+        configured: zhihuiTmsConfigured,
+        issues: zhihuiTmsIssues,
+        account: zhihuiTms.account,
+        password_configured: Boolean(secrets.zhihui_tms_password),
+        production_enabled: zhihuiTms.production_enabled,
       },
       feishu: {
         managed: feishu.managed,
@@ -175,6 +186,22 @@ export class DesktopSetupService {
       if (!account || !password) throw new Error("马帮账号和密码必须同时填写");
       config.integrations.mabang = { managed: true, account };
       if (inputPassword) secrets.mabang_password = inputPassword;
+    }
+
+    if (input.zhihui_tms?.action === "clear") {
+      config.integrations.zhihui_tms = { managed: true, account: "", production_enabled: false };
+      secrets.zhihui_tms_password = "";
+    } else if (input.zhihui_tms?.action === "save") {
+      const account = text(input.zhihui_tms.account);
+      const inputPassword = text(input.zhihui_tms.password);
+      const password = inputPassword || effectiveSecrets.zhihui_tms_password;
+      if (!account || !password) throw new Error("智汇 TMS 账号和密码必须同时填写");
+      config.integrations.zhihui_tms = {
+        managed: true,
+        account,
+        production_enabled: input.zhihui_tms.production_enabled === true,
+      };
+      if (inputPassword) secrets.zhihui_tms_password = inputPassword;
     }
 
     if (input.feishu?.action === "clear") {
@@ -482,9 +509,13 @@ export class DesktopSetupService {
     const activeThinkingLevel = activePreference?.thinking_level ?? "off";
     const ziniao = config.integrations.ziniao;
     const mabang = config.integrations.mabang;
+    const zhihuiTms = config.integrations.zhihui_tms;
     const feishu = config.integrations.feishu;
     const ziniaoConfigured = ziniao.managed && this.validation.ziniaoIssues(ziniao, secrets).length === 0;
     const mabangConfigured = mabang.managed && this.validation.mabangIssues(mabang, secrets).length === 0;
+    const zhihuiTmsConfigured = zhihuiTms.managed
+      && zhihuiTms.production_enabled
+      && this.validation.zhihuiTmsIssues(zhihuiTms, secrets).length === 0;
     const feishuConfigured = feishu.managed && this.validation.feishuIssues(feishu, secrets).length === 0;
     const diagnostic = config.logging.profile === "diagnostic";
     const logsEnabled = config.logging.profile !== "off";
@@ -514,6 +545,9 @@ export class DesktopSetupService {
       ZINIAO_WEBDRIVER_PATH: ziniaoConfigured ? ziniao.webdriver_path : "",
       MABANG_ACCOUNT: mabangConfigured ? mabang.account : "",
       MABANG_PASSWORD: mabangConfigured ? secrets.mabang_password : "",
+      ZHIHUI_TMS_PRODUCTION_ENABLED: zhihuiTmsConfigured ? "1" : "0",
+      ZHIHUI_TMS_ACCOUNT: zhihuiTmsConfigured ? zhihuiTms.account : "",
+      ZHIHUI_TMS_PASSWORD: zhihuiTmsConfigured ? secrets.zhihui_tms_password : "",
       LXE_FEISHU_GATEWAY_ENABLED: feishuConfigured ? "1" : "0",
       FEISHU_APP_ID: feishuConfigured ? feishu.app_id : "",
       FEISHU_APP_SECRET: feishuConfigured ? secrets.feishu_app_secret : "",

@@ -50,6 +50,7 @@ export type DesktopSettingsSection =
   | "base"
   | "ziniao"
   | "mabang"
+  | "zhihui_tms"
   | "feishu"
   | "logging";
 
@@ -67,6 +68,9 @@ export interface DesktopSettingsFormValue {
   ziniaoWebDriverPath: string;
   mabangAccount: string;
   mabangPassword: string;
+  zhihuiTmsAccount: string;
+  zhihuiTmsPassword: string;
+  zhihuiTmsProductionEnabled: boolean;
   feishuAppId: string;
   feishuAppSecret: string;
   logProfile: DesktopLogProfile;
@@ -85,6 +89,9 @@ export const desktopSettingsForm = (state: DesktopSetupState): DesktopSettingsFo
   ziniaoWebDriverPath: state.ziniao.webdriver_path,
   mabangAccount: state.mabang.account,
   mabangPassword: "",
+  zhihuiTmsAccount: state.zhihui_tms.account,
+  zhihuiTmsPassword: "",
+  zhihuiTmsProductionEnabled: state.zhihui_tms.production_enabled,
   feishuAppId: state.feishu.app_id,
   feishuAppSecret: "",
   logProfile: state.logging.profile,
@@ -102,6 +109,7 @@ const SECTION_FIELDS: Record<EditableDesktopSettingsSection, readonly (keyof Des
     "ziniaoWebDriverPath",
   ],
   mabang: ["mabangAccount", "mabangPassword"],
+  zhihui_tms: ["zhihuiTmsAccount", "zhihuiTmsPassword", "zhihuiTmsProductionEnabled"],
   feishu: ["feishuAppId", "feishuAppSecret"],
   logging: ["logProfile", "logRetentionDays"],
 };
