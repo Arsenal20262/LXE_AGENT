@@ -11564,7 +11564,9 @@ pre {
 }
 
 /* Personal skill management uses the existing catalog and modal surfaces. */
-.workspace-header-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; min-width: 0; }
+.workspace-header-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; width: 100%; }
+.workspace-header-actions .workspace-subnav { overflow-x: auto; }
+.workspace-header-actions .workspace-subnav-item { flex-shrink: 0; }
 .skill-add-menu { position: relative; flex-shrink: 0; }
 .skill-add-menu-popup { position: absolute; z-index: 30; top: calc(100% + 8px); right: 0; min-width: 9rem; padding: 6px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); box-shadow: 0 8px 24px var(--shadow-soft); }
 .skill-add-menu-popup button { display: block; width: 100%; padding: 8px 12px; border: 0; border-radius: 6px; background: transparent; color: var(--text-strong); font: inherit; text-align: left; cursor: pointer; }
@@ -11584,7 +11586,7 @@ pre {
 .skill-detail-footer > button:last-child { margin-left: auto; }
 @media (max-width: 600px) {
   .workspace-view-header { flex-wrap: wrap; gap: 10px; }
-  .workspace-header-actions { flex-wrap: wrap; gap: 8px; }
+  .workspace-header-actions { gap: 8px; }
   .workspace-header-actions .workspace-subnav-item { padding-inline: 8px; }
 }
 .user-skill-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 12px 0; }

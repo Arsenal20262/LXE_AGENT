@@ -130,7 +130,6 @@ function WorkspaceView<T extends string>({
   return (
     <section className="workspace-view">
       <header className="workspace-view-header">
-        <h2>{label}</h2>
         <div className="workspace-header-actions"><nav aria-label={label} className="workspace-subnav">
           {items.map((item) => (
             <button

@@ -36,8 +36,8 @@ function Fixture() {
     {conversation ? <ConversationComposer contextDetail={null} activity={null} conversationKey="skill-acceptance-draft" currentModel={null}
       modelLoading={false} models={[]} modelSaving={false} thinkingSaving={false} runtimeReady runtimeUnavailableMessage=""
       onModelChange={() => {}} onThinkingLevelChange={() => {}} onSend={async () => { setSent(n => n + 1); }} onStop={noop} />
-      : <section className="workspace-view"><header className="workspace-view-header"><h2>{t.nav.capabilities}</h2>
-        <div className="workspace-header-actions"><nav className="workspace-subnav">
+      : <section className="workspace-view"><header className="workspace-view-header">
+        <div className="workspace-header-actions"><nav aria-label={t.nav.capabilities} className="workspace-subnav">
           {[t.nav.models, t.nav.skills, t.nav.tools, t.nav.connections].map(label =>
             <button key={label} className={label === t.nav.skills ? "workspace-subnav-item active" : "workspace-subnav-item"}>{label}</button>)}
         </nav>
