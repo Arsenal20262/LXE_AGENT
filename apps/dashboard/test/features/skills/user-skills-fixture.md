@@ -12,7 +12,8 @@ Checked on macOS in a standalone Chromium browser (2026-09-17):
 
 - Official, shared, valid user, disabled user, broken YAML and shadowed entries remain distinguishable. The two `official-demo` entries open different content. No detail exposes an enable switch; existing disabled state remains unchanged and blocks Use.
 - Tabs appear as Skills, Tools, Connections, Models in both languages. The + menu still appends Add skill to a draft; Use preserves that draft and never sends automatically.
-- All skill sources share the same detail layout. Markdown is shown first; source, copy and skill information are in More. Technical identity, category, source, path and commands are hidden until information is expanded. Official/shared entries have no recycle or Use action.
+- Skill categories and cards use neutral backgrounds without gradients or left accent bars; detail bodies share the dialog background. Icon colors and Markdown reading aids remain. Verify both light and dark themes.
+- All skill sources share the same detail layout. Markdown is shown first, omitting only the opening H1 of SKILL.md; source and copy retain the full document and attached-file headings remain visible; source, copy and skill information are in More. Technical identity, category, source, path and commands are hidden until information is expanded. Official/shared entries have no recycle or Use action.
 - More supports arrow keys, Home/End, Tab, outside click and Escape. Escape closes the menu before the dialog; closing the dialog returns focus to its card.
 - Copy uses the selected file, including attached templates; clipboard rejection displays its actual message. Official references and user attachments render correctly; binary resources disable copy, and oversized content shows the truncation notice.
 - English details remain usable at 390px and 320px, including wrapped descriptions, More and footer actions.

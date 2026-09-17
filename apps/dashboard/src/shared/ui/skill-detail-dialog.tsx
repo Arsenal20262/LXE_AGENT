@@ -5,9 +5,11 @@ import type { SkillPayload } from "../../api/payloads";
 import { copyTextToClipboard } from "../content";
 import { skillTypeLabel } from "../format";
 import { useUiText } from "../i18n";
-import { markdownWithoutFrontMatter } from "../markdown";
+import { markdownWithoutFrontMatter, remarkOmitLeadingSkillTitle } from "../markdown";
 import { markdownComponents, markdownRehypePlugins, markdownRemarkPlugins } from "./markdown";
 import { useDialogFocus } from "./use-dialog-focus";
+
+const skillPreviewRemarkPlugins = [...markdownRemarkPlugins, remarkOmitLeadingSkillTitle];
 
 type MenuItem = { label: string; disabled?: boolean; action: () => void };
 
@@ -135,7 +137,7 @@ export function SkillDetailDialog({ skill, title, close, files, selectedFile, on
           : content !== undefined ? <div className="skill-detail-body">
             {source || !/\.md$/iu.test(selectedFile) ? <pre className="skill-content-pre">{content}</pre>
               : <div className="skill-markdown"><ReactMarkdown components={markdownComponents}
-                remarkPlugins={markdownRemarkPlugins} rehypePlugins={markdownRehypePlugins}>
+                remarkPlugins={selectedFile === "SKILL.md" ? skillPreviewRemarkPlugins : markdownRemarkPlugins} rehypePlugins={markdownRehypePlugins}>
                 {selectedFile === "SKILL.md" ? markdownWithoutFrontMatter(content) : content}
               </ReactMarkdown></div>}
           </div> : null}
