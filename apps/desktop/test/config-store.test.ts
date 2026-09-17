@@ -176,6 +176,104 @@ describe("DesktopConfigStore", () => {
     })).toThrow("紫鸟配置缺少");
   });
 
+  test("persists Shangman non-secrets separately and emits only the new runtime contract", () => {
+    const root = createRoot();
+    const store = new DesktopConfigStore(root, join(root, "workspace"), safeStorage);
+    const basicAuth = "Basic ZHVtbXk6cGFzcw==";
+    const processedPassword = "processed-password";
+    const state = store.save({
+      workspace_root: join(root, "workspace"),
+      shangman: {
+        action: "save",
+        tenant_id: "tenant-1",
+        username: "processed-user",
+        processed_password: processedPassword,
+        basic_auth: basicAuth,
+      },
+    });
+
+    expect(state.shangman).toMatchObject({
+      managed: true,
+      configured: true,
+      tenant_id: "tenant-1",
+      username: "processed-user",
+      password_configured: true,
+      basic_auth_configured: true,
+      issues: [],
+    });
+    const settings = readFileSync(join(root, "config", "settings.json"), "utf8");
+    expect(settings).toContain("tenant-1");
+    expect(settings).not.toContain(processedPassword);
+    expect(settings).not.toContain(basicAuth);
+    expect(JSON.stringify(state)).not.toContain(processedPassword);
+    expect(JSON.stringify(state)).not.toContain(basicAuth);
+    expect(store.environment()).toMatchObject({
+      LXE_SHANGMAN_TENANT_ID: "tenant-1",
+      LXE_SHANGMAN_USERNAME: "processed-user",
+      LXE_SHANGMAN_PROCESSED_PASSWORD: processedPassword,
+      LXE_SHANGMAN_BASIC_AUTH: basicAuth,
+      LXE_SHANGMAN_PROD_ENABLED: "false",
+    });
+    expect(store.environment()).not.toHaveProperty("LXE_SHANGMAN_PASSWORD");
+    expect(store.environment()).not.toHaveProperty("LXE_SHANGMAN_BASIC_USERNAME");
+    expect(store.environment()).not.toHaveProperty("LXE_SHANGMAN_BASIC_PASSWORD");
+
+    const patched = store.save({
+      workspace_root: join(root, "workspace"),
+      shangman: { action: "save", tenant_id: "tenant-2", username: "next-user" },
+    });
+    expect(patched.shangman.configured).toBeTrue();
+    expect(store.environment()).toMatchObject({
+      LXE_SHANGMAN_TENANT_ID: "tenant-2",
+      LXE_SHANGMAN_PROCESSED_PASSWORD: processedPassword,
+      LXE_SHANGMAN_BASIC_AUTH: basicAuth,
+    });
+
+    const cleared = store.save({
+      workspace_root: join(root, "workspace"),
+      shangman: { action: "clear" },
+    });
+    expect(cleared.shangman).toMatchObject({ managed: true, configured: false });
+    expect(store.environment()).toMatchObject({
+      LXE_SHANGMAN_TENANT_ID: "",
+      LXE_SHANGMAN_USERNAME: "",
+      LXE_SHANGMAN_PROCESSED_PASSWORD: "",
+      LXE_SHANGMAN_BASIC_AUTH: "",
+    });
+  });
+
+  test("does not activate Shangman with an invalid injected Basic Authorization", () => {
+    const root = createRoot();
+    const configuredStore = new DesktopConfigStore(root, join(root, "workspace"), safeStorage);
+    configuredStore.save({
+      workspace_root: join(root, "workspace"),
+      shangman: {
+        action: "save",
+        tenant_id: "tenant-1",
+        username: "user-1",
+        processed_password: "processed-password",
+        basic_auth: "Basic ZHVtbXk6cGFzcw==",
+      },
+    });
+    const store = new DesktopConfigStore(root, join(root, "workspace"), safeStorage, {
+      secretEnvironment: {
+        LXE_SHANGMAN_PROCESSED_PASSWORD: "processed-password",
+        LXE_SHANGMAN_BASIC_AUTH: "Bearer token",
+      },
+    });
+
+    expect(store.state().shangman).toMatchObject({
+      configured: false,
+      issues: ["Basic Authorization 格式无效"],
+    });
+    expect(store.environment()).toMatchObject({
+      LXE_SHANGMAN_TENANT_ID: "",
+      LXE_SHANGMAN_USERNAME: "",
+      LXE_SHANGMAN_PROCESSED_PASSWORD: "",
+      LXE_SHANGMAN_BASIC_AUTH: "",
+    });
+  });
+
   test("retires legacy model credentials and dotenv files before startup", () => {
     const root = createRoot();
     const configRoot = join(root, "config");
@@ -367,7 +465,7 @@ describe("DesktopConfigStore", () => {
     });
     expect(existsSync(join(root, ".env.local"))).toBeFalse();
     expect(JSON.parse(readFileSync(join(root, "config", "settings.json"), "utf8"))).toMatchObject({
-      schema_version: 8,
+      schema_version: 9,
       llm: {
         provider: "kimi_coding",
         profiles: { kimi_coding: { model: "k3", thinking_level: "max" } },

@@ -250,7 +250,13 @@ export function createExecTools(dependencies: ExecToolDependencies): ToolDefinit
           signal: context.handle.signal,
           toolCallId: context.tool_call_id ?? "",
           ...(context.turn_id === undefined ? {} : { turnId: context.turn_id }),
-          ...(options.execEnv ? { env: options.execEnv({ skillNames: context.skill_names ?? [] }) } : {}),
+          ...(options.execEnv ? {
+            env: options.execEnv({
+              skillNames: context.skill_names ?? [],
+              sessionId: context.session_id,
+              turnId: context.turn_id ?? "",
+            }),
+          } : {}),
         });
         return await commandResult(
           payload,

@@ -76,7 +76,7 @@ The commit SHA is reported in the stage completion response. This document is in
   - `lxeskill shangman export preview --request-text "<完整原始请求>"`
   - `lxeskill shangman export run --request-text "<完整原始请求>"`
 - All supported sales, inventory, month-end, inbound-time, and listing-time wording maps to one canonical `goods-export` intent and one `goods-export` task. The original request text is retained.
-- `preview` is deterministic and makes no network request. `run` first checks `LXE_SHANGMAN_PROD_ENABLED`, then these runtime-only variables: `LXE_SHANGMAN_TENANT_ID`, `LXE_SHANGMAN_USERNAME`, `LXE_SHANGMAN_PASSWORD`, `LXE_SHANGMAN_BASIC_USERNAME`, and `LXE_SHANGMAN_BASIC_PASSWORD`; it then requires the later interaction layer's captcha input before invoking the stage-one client. The public Catalog schema accepts only the complete `request_text`; captcha is not a public command argument.
+- `preview` is deterministic and makes no network request. `run` first checks `LXE_SHANGMAN_PROD_ENABLED`, then the runtime-only variables `LXE_SHANGMAN_TENANT_ID`, `LXE_SHANGMAN_USERNAME`, `LXE_SHANGMAN_PROCESSED_PASSWORD`, and `LXE_SHANGMAN_BASIC_AUTH`; it then requires the later interaction layer's captcha input before invoking the stage-one client. The public Catalog schema accepts only the complete `request_text`; captcha is not a public command argument.
 - Missing gate, credentials, or captcha returns a recoverable `data.error` with a specific code. Terminal failure messages preserve the nested business diagnostic with credential values redacted. No Desktop files are read and no real ERP request was made.
 
 ### Stage 2 files
@@ -107,6 +107,46 @@ The commit SHA is reported in the stage completion response. This document is in
 
 ### Stage 2 limits and next step
 
-- Desktop secure credential configuration, Cloud enrollment, production gate ownership, captcha image display and manual input, and authorized real end-to-end export remain for stage 3.
+- Desktop secure credential configuration, production gate ownership, captcha image display, and manual input were implemented in stage 3 below; Cloud enrollment and an authorized real end-to-end export remain outside this stage.
 - A parallel duplicate implementation (`export_intent.py` / `export_*` adapters and tests) was reviewed, its coverage was retained in the canonical workflow tests, and the duplicate files were removed so the Catalog module names and public Skill cannot diverge.
-- Stage 2 changes are verified but not staged or committed. Proposed commit: `feat: add Shangman unified export skill contract`.
+- Stage 2 was committed as `ad593fc7` (`feat: add Shangman unified export skill contract`).
+
+## Stage 3: Desktop-safe runtime and captcha recovery
+
+- Worktree/Pool: `/Users/hym/PycharmProjects/LXE_AGENT/.worktrees/pool-2`, branch `codex/shangman-erp-export-client`.
+- The Desktop settings schema is now version 9. Shangman tenant ID and username are non-secret settings; the processed password and complete `Basic ...` Authorization value are encrypted safe-storage secrets. Setup state exposes only configured booleans and validation issues, never secret values. Blank secret patches preserve existing secrets and clear removes both secrets.
+- The runtime contract is exactly:
+  - `LXE_SHANGMAN_TENANT_ID`
+  - `LXE_SHANGMAN_USERNAME`
+  - `LXE_SHANGMAN_PROCESSED_PASSWORD`
+  - `LXE_SHANGMAN_BASIC_AUTH`
+- `LXE_SHANGMAN_PROD_ENABLED` remains a source/development gate and is normalized to `true`/`false`; it is not persisted in settings. Retired split variables (`LXE_SHANGMAN_PASSWORD`, `LXE_SHANGMAN_BASIC_USERNAME`, `LXE_SHANGMAN_BASIC_PASSWORD`) are removed from the Desktop gateway process environment.
+- The Python client now uses the new credential shape and sends the supplied Basic value in `Authorization` for ERP requests. The public Catalog command still accepts only `request_text`; captcha code, image, key, and credentials are not public command inputs.
+- `RuntimeCaptchaCodeProvider` uses only the Desktop-provided loopback channel. It sends the captcha image/key to the local broker, returns opaque typed states (`captcha_input_required`, `captcha_input_pending`, `captcha_expired`, `captcha_channel_unavailable`), and only receives the code internally after the broker reports an accepted answer.
+- `ShangmanCaptchaBroker` is an in-process agent service. It binds to `127.0.0.1` on a bounded random port, requires a per-process bearer token, keeps one challenge per session in memory for five minutes, supports one answer and one consume, and never includes the answer in snapshots. The native `shangman_captcha` tool is Desktop-only, deferred until the owning Skill is active, and accepts only an opaque `challenge_id`.
+- Dashboard JSON-RPC adds session-scoped captcha snapshots and a bounded answer operation. The current session panel displays the image and keeps the entered code in ephemeral React state only; it is not written to the transcript, session storage, or browser storage. After the native tool returns, the Skill reruns the exact same canonical export command once so the Python provider consumes the one-time answer.
+
+### Stage 3 call chain
+
+`DesktopConfigStore` → `DesktopGateway` → agent-cli `execEnv` → `lxeskill shangman export run` → `RuntimeCaptchaCodeProvider` → authenticated loopback broker → opaque challenge in the run result → deferred native `shangman_captcha` → current-session Dashboard panel → answer → exact command rerun → broker consume → ERP login/export.
+
+### Stage 3 files
+
+- Desktop config/runtime: `apps/desktop/src/main/config-store/model.ts`, `secrets.ts`, `setup.ts`, `validation.ts`, `ipc-validation.ts`, `runtime-environment-policy.ts`, `desktop-gateway.ts`, and their focused tests; `apps/gateway/src/bootstrap/env.ts` and its test.
+- Runtime and protocol: `packages/agent/runtime/src/tooling/shangman-captcha.ts`, its test, `packages/agent/runtime/src/tooling/coding/public-types.ts`, `exec-tools.ts`, `apps/agent-cli/src/runtime-host.ts`, `dashboard-service.ts`, and `packages/foundation/desktop-protocol/src/{index,dashboard-rpc}.ts` with protocol tests.
+- Dashboard: `apps/dashboard/src/features/sessions/shangman-captcha.tsx`, session/query/settings/i18n/style changes, and settings tests.
+- Python and Skill contract: `python/lxeskill_cli/services/shangman/captcha_channel.py`, the updated `goods_export.py` and workflow, focused tests, and `skills/shangman-goods-export-workflow-map/SKILL.md`.
+- Plan: `docs/superpowers/plans/2026-09-17-shangman-desktop-runtime.md`.
+
+### Stage 3 verification
+
+- `bun test apps/desktop/test/config-store.test.ts apps/desktop/test/config-store-validation.test.ts apps/desktop/test/ipc-validation.test.ts apps/desktop/test/runtime-environment-policy.test.ts` → `34 pass`.
+- The final combined Desktop/dashboard/protocol/runtime focused suite → `64 pass, 1 skip, 0 fail`; the skipped case is the opt-in loopback test. The opt-in command `LXE_RUN_LOOPBACK_TESTS=1 bun test packages/agent/runtime/test/tooling/shangman-captcha.test.ts` passed `2 pass` when run with loopback-only sandbox escalation because this Bun sandbox rejects all port binds by default.
+- `UV_CACHE_DIR=/private/tmp/lxe-agent-uv-cache uv run pytest python/lxeskill_cli/tests/lxeskill/test_fba_skill_docs.py python/lxeskill_cli/tests/shangman` → `41 passed`.
+- Typechecks passed for `packages/agent/runtime`, `apps/agent-cli`, `apps/dashboard`, `apps/desktop`, and `packages/foundation/desktop-protocol`.
+- `git diff --check` passed. No real ERP request, credential, token, or production probe was made.
+
+### Stage 3 known limits and handoff
+
+- The selected `packages/agent/runtime/test/tooling/coding-tools.test.ts` run was not fully green in this sandbox: 43 tests passed and 2 failed because the host has no `fd`/`fdfind` executable. This is an existing managed-tool prerequisite; rerun with the Desktop-provided `LXE_FD_PATH` before claiming a full coding-tools suite.
+- Stage 3 is ready for the final commit and merge workflow. After the commit, rebase onto the latest `main`, resolve any conflicts explicitly, and run the required final validation before merge.

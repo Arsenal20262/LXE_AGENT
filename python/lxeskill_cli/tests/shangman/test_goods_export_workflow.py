@@ -4,6 +4,7 @@ from pathlib import Path
 
 from lxeskill.business import load_catalog
 from services.agent_cli.shangman import _workflow, goods_export_preview, goods_export_run
+from services.shangman.goods_export import CaptchaInputRequired
 
 
 def test_preview_is_deterministic_and_does_not_construct_client(monkeypatch) -> None:
@@ -102,9 +103,8 @@ def test_run_reports_missing_captcha_after_gate_and_credentials(monkeypatch) -> 
     for name, value in {
         "LXE_SHANGMAN_TENANT_ID": "tenant",
         "LXE_SHANGMAN_USERNAME": "user",
-        "LXE_SHANGMAN_PASSWORD": "password",
-        "LXE_SHANGMAN_BASIC_USERNAME": "basic-user",
-        "LXE_SHANGMAN_BASIC_PASSWORD": "basic-password",
+        "LXE_SHANGMAN_PROCESSED_PASSWORD": "password",
+        "LXE_SHANGMAN_BASIC_AUTH": "Basic ZHVtbXk6cGFzcw==",
     }.items():
         monkeypatch.setenv(name, value)
 
@@ -112,7 +112,7 @@ def test_run_reports_missing_captcha_after_gate_and_credentials(monkeypatch) -> 
 
     assert result["success"] is False
     assert result["status"] == "blocked"
-    assert result["error"]["code"] == "captcha_input_required"
+    assert result["error"]["code"] == "captcha_channel_unavailable"
     assert result["error"]["recoverable"] is True
 
 
@@ -121,9 +121,12 @@ def test_run_reuses_first_stage_client_and_returns_one_artifact(monkeypatch, tmp
     for name, value in {
         "LXE_SHANGMAN_TENANT_ID": "tenant",
         "LXE_SHANGMAN_USERNAME": "user",
-        "LXE_SHANGMAN_PASSWORD": "password",
-        "LXE_SHANGMAN_BASIC_USERNAME": "basic-user",
-        "LXE_SHANGMAN_BASIC_PASSWORD": "basic-password",
+        "LXE_SHANGMAN_PROCESSED_PASSWORD": "password",
+        "LXE_SHANGMAN_BASIC_AUTH": "Basic ZHVtbXk6cGFzcw==",
+        "LXE_SHANGMAN_CAPTCHA_CHANNEL_URL": "http://127.0.0.1:1",
+        "LXE_SHANGMAN_CAPTCHA_CHANNEL_TOKEN": "channel-token",
+        "LXE_AGENT_SESSION_ID": "session-id",
+        "LXE_AGENT_TURN_ID": "turn-id",
     }.items():
         monkeypatch.setenv(name, value)
     artifact = tmp_path / "智慧印尼-商品-20260917-150000.xlsx"
@@ -143,7 +146,7 @@ def test_run_reuses_first_stage_client_and_returns_one_artifact(monkeypatch, tmp
 
     monkeypatch.setattr(_workflow, "ShangmanClient", FakeClient)
 
-    result = goods_export_run.run({"request_text": "请导出30天销量", "captcha_code": "1234"})
+    result = goods_export_run.run({"request_text": "请导出30天销量"})
 
     assert result["success"] is True
     assert result["status"] == "completed"
@@ -157,9 +160,12 @@ def test_run_redacts_runtime_credentials_but_keeps_client_diagnostic(monkeypatch
     for name, value in {
         "LXE_SHANGMAN_TENANT_ID": "tenant-secret",
         "LXE_SHANGMAN_USERNAME": "user-secret",
-        "LXE_SHANGMAN_PASSWORD": "password-secret",
-        "LXE_SHANGMAN_BASIC_USERNAME": "basic-user-secret",
-        "LXE_SHANGMAN_BASIC_PASSWORD": "basic-password-secret",
+        "LXE_SHANGMAN_PROCESSED_PASSWORD": "password-secret",
+        "LXE_SHANGMAN_BASIC_AUTH": "Basic ZHVtbXk6cGFzcw==",
+        "LXE_SHANGMAN_CAPTCHA_CHANNEL_URL": "http://127.0.0.1:1",
+        "LXE_SHANGMAN_CAPTCHA_CHANNEL_TOKEN": "channel-token",
+        "LXE_AGENT_SESSION_ID": "session-id",
+        "LXE_AGENT_TURN_ID": "turn-id",
     }.items():
         monkeypatch.setenv(name, value)
 
@@ -172,13 +178,47 @@ def test_run_redacts_runtime_credentials_but_keeps_client_diagnostic(monkeypatch
 
     monkeypatch.setattr(_workflow, "ShangmanClient", FailingClient)
 
-    result = goods_export_run.run({"request_text": "导出库存", "captcha_code": "1234"})
+    result = goods_export_run.run({"request_text": "导出库存"})
 
     assert result["error"] == {
         "code": "erp_execution_failed",
         "message": "login failed for <redacted>: status=502",
         "recoverable": True,
     }
+
+
+def test_run_returns_only_an_opaque_challenge_when_captcha_is_required(monkeypatch) -> None:
+    monkeypatch.setenv("LXE_SHANGMAN_PROD_ENABLED", "true")
+    for name, value in {
+        "LXE_SHANGMAN_TENANT_ID": "tenant",
+        "LXE_SHANGMAN_USERNAME": "user",
+        "LXE_SHANGMAN_PROCESSED_PASSWORD": "password",
+        "LXE_SHANGMAN_BASIC_AUTH": "Basic ZHVtbXk6cGFzcw==",
+        "LXE_SHANGMAN_CAPTCHA_CHANNEL_URL": "http://127.0.0.1:1",
+        "LXE_SHANGMAN_CAPTCHA_CHANNEL_TOKEN": "channel-token",
+        "LXE_AGENT_SESSION_ID": "session-id",
+        "LXE_AGENT_TURN_ID": "turn-id",
+    }.items():
+        monkeypatch.setenv(name, value)
+
+    class WaitingClient:
+        def __init__(self, **kwargs):
+            del kwargs
+
+        async def export_goods(self):
+            raise CaptchaInputRequired("opaque-challenge-id")
+
+    monkeypatch.setattr(_workflow, "ShangmanClient", WaitingClient)
+
+    result = goods_export_run.run({"request_text": "导出库存"})
+
+    assert result["error"] == {
+        "code": "captcha_input_required",
+        "message": "Captcha input is required in the Desktop panel",
+        "recoverable": True,
+        "challenge_id": "opaque-challenge-id",
+    }
+    assert "captcha_code" not in str(result)
 
 
 def test_run_rejects_ambiguous_request_before_gate(monkeypatch) -> None:

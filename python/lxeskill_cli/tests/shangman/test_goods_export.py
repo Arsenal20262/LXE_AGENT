@@ -132,9 +132,8 @@ def make_client(session: FakeSession, output_dir: Path) -> ShangmanClient:
         credentials=ShangmanCredentials(
             tenant_id="tenant-1",
             username="processed-user",
-            password="processed-password",
-            basic_username="basic-user",
-            basic_password="basic-password",
+            processed_password="processed-password",
+            basic_auth="Basic ZHVtbXk6cGFzcw==",
         ),
         captcha_provider=StaticCaptchaCodeProvider("1234"),
         session=session,
@@ -185,11 +184,12 @@ def test_export_goods_authenticates_downloads_and_returns_canonical_payload(tmp_
         "Captcha-Key": "captcha-key",
         "Captcha-Code": "1234",
         "Tenant-Id": "tenant-1",
+        "Authorization": "Basic ZHVtbXk6cGFzcw==",
     }
-    assert login_call["auth"].login == "basic-user"
-    assert login_call["auth"].password == "basic-password"
+    assert "auth" not in login_call
     assert export_call["headers"]["Blade-Auth"] == "bearer access-token"
     assert export_call["headers"]["Tenant-Id"] == "tenant-1"
+    assert export_call["headers"]["Authorization"] == "Basic ZHVtbXk6cGFzcw=="
     assert "auth" not in download_call
     assert "headers" not in download_call
     assert download_call["allow_redirects"] is False
@@ -254,9 +254,8 @@ def test_default_download_hosts_accept_exact_oss_host_only(tmp_path: Path) -> No
         credentials=ShangmanCredentials(
             tenant_id="tenant-1",
             username="processed-user",
-            password="processed-password",
-            basic_username="basic-user",
-            basic_password="basic-password",
+            processed_password="processed-password",
+            basic_auth="Basic ZHVtbXk6cGFzcw==",
         ),
         captcha_provider=StaticCaptchaCodeProvider("1234"),
         session=session,

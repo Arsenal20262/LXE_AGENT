@@ -41,7 +41,7 @@ REQUIRED_BUSINESS_HEADERS = (
 
 
 class CaptchaCodeProvider(Protocol):
-    async def get_code(self, image: str) -> str:
+    async def get_code(self, image: str, *, captcha_key: str = "") -> str:
         """Return captcha text supplied by the caller for the displayed image."""
 
 
@@ -49,8 +49,9 @@ class CaptchaCodeProvider(Protocol):
 class StaticCaptchaCodeProvider:
     code: str
 
-    async def get_code(self, image: str) -> str:
+    async def get_code(self, image: str, *, captcha_key: str = "") -> str:
         del image
+        del captcha_key
         return self.code
 
 
@@ -60,9 +61,8 @@ class ShangmanCredentials:
 
     tenant_id: str
     username: str
-    password: str
-    basic_username: str
-    basic_password: str
+    processed_password: str
+    basic_auth: str
 
 
 class ShangmanError(RuntimeError):
@@ -74,6 +74,32 @@ class ShangmanHttpError(ShangmanError):
 
 
 class ShangmanAuthError(ShangmanError):
+    pass
+
+
+class ShangmanCaptchaError(ShangmanAuthError):
+    """A recoverable captcha interaction state, not an ERP failure."""
+
+
+class CaptchaInputRequired(ShangmanCaptchaError):
+    def __init__(self, challenge_id: str) -> None:
+        super().__init__("captcha input is required")
+        self.challenge_id = challenge_id
+
+
+class CaptchaInputPending(ShangmanCaptchaError):
+    def __init__(self, challenge_id: str) -> None:
+        super().__init__("captcha input is still pending")
+        self.challenge_id = challenge_id
+
+
+class CaptchaInputExpired(ShangmanCaptchaError):
+    def __init__(self, challenge_id: str) -> None:
+        super().__init__("captcha input expired")
+        self.challenge_id = challenge_id
+
+
+class CaptchaChannelUnavailable(ShangmanCaptchaError):
     pass
 
 
@@ -166,10 +192,6 @@ class ShangmanClient:
             for host in (trusted_download_hosts or {default_host, "oss.erp.shangmanet.com"})
             if str(host).strip()
         }
-        self._basic_auth = aiohttp.BasicAuth(
-            credentials.basic_username,
-            credentials.basic_password,
-        )
 
     @property
     def _sensitive_values(self) -> tuple[str, ...]:
@@ -177,9 +199,8 @@ class ShangmanClient:
         return (
             credentials.tenant_id,
             credentials.username,
-            credentials.password,
-            credentials.basic_username,
-            credentials.basic_password,
+            credentials.processed_password,
+            credentials.basic_auth,
         )
 
     def _url(self, path: str) -> str:
@@ -202,17 +223,25 @@ class ShangmanClient:
         return payload
 
     async def _login(self) -> str:
-        captcha_url = self._url(CAPTCHA_PATH)
-        async with self.session.get(captcha_url) as response:
-            captcha = await self._json_response(response, action="captcha")
-        captcha_key = str(captcha.get("key") or "").strip()
-        captcha_image = str(captcha.get("image") or "").strip()
-        if not captcha_key or not captcha_image:
-            message = _redact(_response_message(captcha, "missing captcha key or image"), self._sensitive_values)
-            raise ShangmanAuthError(f"captcha response incomplete: {message}")
-
+        captcha_key = ""
+        captcha_code = ""
+        resume = getattr(self.captcha_provider, "resume", None)
         try:
-            captcha_code = str(await self.captcha_provider.get_code(captcha_image) or "").strip()
+            resumed = await resume() if callable(resume) else None
+            if resumed:
+                captcha_key, captcha_code = resumed
+            else:
+                captcha_url = self._url(CAPTCHA_PATH)
+                async with self.session.get(captcha_url) as response:
+                    captcha = await self._json_response(response, action="captcha")
+                captcha_key = str(captcha.get("key") or "").strip()
+                captcha_image = str(captcha.get("image") or "").strip()
+                if not captcha_key or not captcha_image:
+                    message = _redact(_response_message(captcha, "missing captcha key or image"), self._sensitive_values)
+                    raise ShangmanAuthError(f"captcha response incomplete: {message}")
+                captcha_code = str(await self.captcha_provider.get_code(captcha_image, captcha_key=captcha_key) or "").strip()
+        except ShangmanCaptchaError:
+            raise
         except Exception as exc:
             message = _redact(str(exc), self._sensitive_values)
             raise ShangmanAuthError(f"captcha provider failed: {message}") from exc
@@ -223,7 +252,7 @@ class ShangmanClient:
         params = {
             "tenantId": credentials.tenant_id,
             "username": credentials.username,
-            "password": credentials.password,
+            "password": credentials.processed_password,
             "grant_type": "captcha",
             "scope": "all",
             "type": "account",
@@ -232,12 +261,12 @@ class ShangmanClient:
             "Captcha-Key": captcha_key,
             "Captcha-Code": captcha_code,
             "Tenant-Id": credentials.tenant_id,
+            "Authorization": credentials.basic_auth,
         }
         async with self.session.post(
             self._url(TOKEN_PATH),
             params=params,
             headers=headers,
-            auth=self._basic_auth,
         ) as response:
             token_payload = await self._json_response(response, action="login")
         access_token = str(token_payload.get("access_token") or "").strip()
@@ -304,11 +333,11 @@ class ShangmanClient:
         headers = {
             "Blade-Auth": f"bearer {access_token}",
             "Tenant-Id": credentials.tenant_id,
+            "Authorization": credentials.basic_auth,
         }
         async with self.session.post(
             self._url(GOODS_EXPORT_PATH),
             headers=headers,
-            auth=self._basic_auth,
         ) as response:
             export_payload = await self._json_response(response, action="goods export")
         try:
@@ -322,7 +351,7 @@ class ShangmanClient:
 
         download_options: dict[str, Any] = {"allow_redirects": False}
         if download_host == urlsplit(self.base_url).hostname:
-            download_options.update(headers=headers, auth=self._basic_auth)
+            download_options.update(headers=headers)
         async with self.session.get(download_url, **download_options) as response:
             status = int(getattr(response, "status", 0) or 0)
             body = await response.read()
@@ -370,9 +399,14 @@ class ShangmanClient:
 
 __all__ = [
     "CaptchaCodeProvider",
+    "CaptchaChannelUnavailable",
+    "CaptchaInputExpired",
+    "CaptchaInputPending",
+    "CaptchaInputRequired",
     "GoodsExportWorkbookError",
     "ShangmanAuthError",
     "ShangmanBusinessError",
+    "ShangmanCaptchaError",
     "ShangmanClient",
     "ShangmanCredentials",
     "ShangmanDownloadUrlError",

@@ -1,5 +1,9 @@
 from .goods_export import (
     CaptchaCodeProvider,
+    CaptchaChannelUnavailable,
+    CaptchaInputExpired,
+    CaptchaInputPending,
+    CaptchaInputRequired,
     GoodsExportWorkbookError,
     ShangmanAuthError,
     ShangmanBusinessError,
@@ -11,9 +15,14 @@ from .goods_export import (
     ShangmanHttpError,
     StaticCaptchaCodeProvider,
 )
+from .captcha_channel import RuntimeCaptchaCodeProvider
 
 __all__ = [
     "CaptchaCodeProvider",
+    "CaptchaChannelUnavailable",
+    "CaptchaInputExpired",
+    "CaptchaInputPending",
+    "CaptchaInputRequired",
     "GoodsExportWorkbookError",
     "ShangmanAuthError",
     "ShangmanBusinessError",
@@ -24,4 +33,5 @@ __all__ = [
     "ShangmanExportResult",
     "ShangmanHttpError",
     "StaticCaptchaCodeProvider",
+    "RuntimeCaptchaCodeProvider",
 ]

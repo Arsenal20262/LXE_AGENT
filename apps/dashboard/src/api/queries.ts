@@ -49,9 +49,11 @@ export function queryError(error: unknown): string {
 
 export function useUserQuestionsQuery(enabled: boolean, selectedSessionId: string) {
   const query = useQuery({
-    queryKey: dashboardQueryKeys.sessions.questions,
+    queryKey: dashboardQueryKeys.sessions.questionsFor(selectedSessionId),
     queryFn: async ({ signal }) => {
-      const result = await callDashboard({ operation: "sessions.questions", input: {} });
+      const result = await callDashboard({ operation: "sessions.questions", input: selectedSessionId
+        ? { session_id: selectedSessionId }
+        : {} });
       signal.throwIfAborted();
       return result;
     },
@@ -71,6 +73,15 @@ export function useUserQuestionActions() {
   const stop = useMutation({ retry: false, mutationFn: (input: { session_id: string; turn_id: string }) =>
     callDashboard({ operation: "sessions.stop", input }) });
   return { answer: answer.mutateAsync, stop: stop.mutateAsync };
+}
+
+export function useShangmanCaptchaActions() {
+  const submit = useMutation({ retry: false, mutationFn: (input: {
+    session_id: string;
+    challenge_id: string;
+    code: string;
+  }) => callDashboard({ operation: "sessions.shangman_captcha.answer", input }) });
+  return { submit: submit.mutateAsync };
 }
 
 export function useAttachmentPreviewQuery(

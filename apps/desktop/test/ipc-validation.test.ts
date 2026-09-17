@@ -141,6 +141,34 @@ describe("desktop IPC validation", () => {
       workspace_root: "C:\\workspace",
       logging: { profile: "verbose", retention_days: 7 },
     })).toThrow("Log profile is unsupported");
+    expect(validateSetupInput({
+      workspace_root: "C:\\workspace",
+      shangman: {
+        action: "save",
+        tenant_id: " tenant-1 ",
+        username: " user ",
+        processed_password: " processed-password ",
+        basic_auth: " Basic ZHVtbXk6cGFzcw== ",
+      },
+    })).toEqual({
+      workspace_root: "C:\\workspace",
+      shangman: {
+        action: "save",
+        tenant_id: "tenant-1",
+        username: "user",
+        processed_password: "processed-password",
+        basic_auth: "Basic ZHVtbXk6cGFzcw==",
+      },
+    });
+    expect(() => validateSetupInput({
+      workspace_root: "C:\\workspace",
+      shangman: {
+        action: "save",
+        tenant_id: "tenant-1",
+        username: "user",
+        basic_auth: "Bearer token",
+      },
+    })).toThrow("Basic Authorization");
   });
 
   test("validates local model credentials independently from setup", () => {

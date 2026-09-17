@@ -51,6 +51,7 @@ export type DesktopSettingsSection =
   | "ziniao"
   | "mabang"
   | "feishu"
+  | "shangman"
   | "logging";
 
 export type EditableDesktopSettingsSection = Exclude<DesktopSettingsSection, "status" | "appearance" | "cloud">;
@@ -69,6 +70,10 @@ export interface DesktopSettingsFormValue {
   mabangPassword: string;
   feishuAppId: string;
   feishuAppSecret: string;
+  shangmanTenantId: string;
+  shangmanUsername: string;
+  shangmanProcessedPassword: string;
+  shangmanBasicAuth: string;
   logProfile: DesktopLogProfile;
   logRetentionDays: DesktopLogRetentionDays;
 }
@@ -87,6 +92,10 @@ export const desktopSettingsForm = (state: DesktopSetupState): DesktopSettingsFo
   mabangPassword: "",
   feishuAppId: state.feishu.app_id,
   feishuAppSecret: "",
+  shangmanTenantId: state.shangman.tenant_id,
+  shangmanUsername: state.shangman.username,
+  shangmanProcessedPassword: "",
+  shangmanBasicAuth: "",
   logProfile: state.logging.profile,
   logRetentionDays: state.logging.retention_days,
 });
@@ -103,6 +112,7 @@ const SECTION_FIELDS: Record<EditableDesktopSettingsSection, readonly (keyof Des
   ],
   mabang: ["mabangAccount", "mabangPassword"],
   feishu: ["feishuAppId", "feishuAppSecret"],
+  shangman: ["shangmanTenantId", "shangmanUsername", "shangmanProcessedPassword", "shangmanBasicAuth"],
   logging: ["logProfile", "logRetentionDays"],
 };
 

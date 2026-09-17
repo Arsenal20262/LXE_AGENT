@@ -6,9 +6,17 @@ import re
 from typing import Any
 
 from services.shangman.goods_export import (
+    CaptchaChannelUnavailable,
+    CaptchaInputExpired,
+    CaptchaInputPending,
+    CaptchaInputRequired,
     ShangmanClient,
     ShangmanCredentials,
-    StaticCaptchaCodeProvider,
+)
+from services.shangman.captcha_channel import (
+    CHANNEL_TOKEN_ENV,
+    CHANNEL_URL_ENV,
+    RuntimeCaptchaCodeProvider,
 )
 from services.shangman.intent import build_goods_export_plan
 
@@ -16,9 +24,14 @@ from services.shangman.intent import build_goods_export_plan
 _CREDENTIAL_ENV = (
     "LXE_SHANGMAN_TENANT_ID",
     "LXE_SHANGMAN_USERNAME",
-    "LXE_SHANGMAN_PASSWORD",
-    "LXE_SHANGMAN_BASIC_USERNAME",
-    "LXE_SHANGMAN_BASIC_PASSWORD",
+    "LXE_SHANGMAN_PROCESSED_PASSWORD",
+    "LXE_SHANGMAN_BASIC_AUTH",
+)
+_CHANNEL_ENV = (
+    CHANNEL_URL_ENV,
+    CHANNEL_TOKEN_ENV,
+    "LXE_AGENT_SESSION_ID",
+    "LXE_AGENT_TURN_ID",
 )
 
 
@@ -43,14 +56,23 @@ def preview(arguments: dict[str, Any]) -> dict[str, Any]:
     return {"success": plan["status"] == "ready", **plan}
 
 
-def _blocked(plan: dict[str, Any], code: str, message: str) -> dict[str, Any]:
+def _blocked(
+    plan: dict[str, Any],
+    code: str,
+    message: str,
+    *,
+    challenge_id: str | None = None,
+) -> dict[str, Any]:
+    error: dict[str, Any] = {"code": code, "message": message, "recoverable": True}
+    if challenge_id:
+        error["challenge_id"] = challenge_id
     return {
         "success": False,
         "status": "blocked",
         "request_text": plan.get("request_text", ""),
         "intent": plan.get("intent"),
         "plan": plan.get("plan"),
-        "error": {"code": code, "message": message, "recoverable": True},
+        "error": error,
     }
 
 
@@ -74,27 +96,53 @@ def run(arguments: dict[str, Any]) -> dict[str, Any]:
             "missing runtime credentials: " + ", ".join(missing),
         )
 
-    captcha_code = str(arguments.get("captcha_code") or "").strip()
-    if not captcha_code:
+    missing_channel = [name for name in _CHANNEL_ENV if not str(os.environ.get(name) or "").strip()]
+    if missing_channel:
         return _blocked(
             plan,
-            "captcha_input_required",
-            "captcha_code must be supplied after the caller receives the captcha image",
+            "captcha_channel_unavailable",
+            "Desktop captcha input channel is unavailable",
         )
 
     credentials = ShangmanCredentials(
         tenant_id=os.environ["LXE_SHANGMAN_TENANT_ID"],
         username=os.environ["LXE_SHANGMAN_USERNAME"],
-        password=os.environ["LXE_SHANGMAN_PASSWORD"],
-        basic_username=os.environ["LXE_SHANGMAN_BASIC_USERNAME"],
-        basic_password=os.environ["LXE_SHANGMAN_BASIC_PASSWORD"],
+        processed_password=os.environ["LXE_SHANGMAN_PROCESSED_PASSWORD"],
+        basic_auth=os.environ["LXE_SHANGMAN_BASIC_AUTH"],
     )
     try:
         result = asyncio.run(
             ShangmanClient(
                 credentials=credentials,
-                captcha_provider=StaticCaptchaCodeProvider(captcha_code),
+                captcha_provider=RuntimeCaptchaCodeProvider(),
             ).export_goods()
+        )
+    except CaptchaInputRequired as exc:
+        return _blocked(
+            plan,
+            "captcha_input_required",
+            "Captcha input is required in the Desktop panel",
+            challenge_id=exc.challenge_id,
+        )
+    except CaptchaInputPending as exc:
+        return _blocked(
+            plan,
+            "captcha_input_pending",
+            "Captcha input is still pending in the Desktop panel",
+            challenge_id=exc.challenge_id,
+        )
+    except CaptchaInputExpired as exc:
+        return _blocked(
+            plan,
+            "captcha_expired",
+            "Captcha input expired; rerun the export to request a new challenge",
+            challenge_id=exc.challenge_id,
+        )
+    except CaptchaChannelUnavailable:
+        return _blocked(
+            plan,
+            "captcha_channel_unavailable",
+            "Desktop captcha input channel is unavailable",
         )
     except Exception as exc:  # noqa: BLE001 — preserve the client diagnostic in the CLI envelope.
         return {

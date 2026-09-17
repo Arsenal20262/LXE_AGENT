@@ -22,8 +22,14 @@ commands:
 - `run` 的业务结果可能等待生产授权、运行环境凭据或人工验证码输入；保留 `data.error.code`、`data.error.message` 和 `data.error.recoverable`，向用户说明需要的下一步，不猜验证码、不绕过权限、不重复启动请求。
 - 只有 `ok=true` 且 `files` 有真实路径时才说文件已生成。没有 artifact 时不能猜测文件名或路径。
 
+## 验证码恢复
+
+- 如果 `run` 的最终业务结果是 `data.error.code == "captcha_input_required"`，读取其中不透明的 `data.error.challenge_id`，立即调用原生 `shangman_captcha`，只传 `challenge_id`。
+- 不要把验证码图片、验证码文字、`captcha_key` 或任何凭据放进 `ask_user_question`、命令参数、回复文本或日志；不要自行识别、猜测、重试验证码，也不要把 `captcha_code` 加回公开命令输入。
+- `shangman_captcha` 返回 accepted 后，使用完全相同的原始请求再次调用上面的唯一 run 命令。`captcha_input_pending`、`captcha_expired` 或 `captcha_channel_unavailable` 按原错误的可恢复性向用户报告；不要循环重试。
+
 ## 交付边界
 
 - 文件名由底层客户端统一为 `智慧印尼-商品-YYYYMMDD-HHMMSS.xlsx`。
 - 交付的是平台原始 XLSX；不在 Skill 层重写、补列、合并或伪造日度历史数据。
-- 生产门禁、Desktop 凭据设置、Cloud enrollment、验证码图片展示与人工输入由后续阶段接入；本 Skill 只保留可恢复等待状态。
+- 生产门禁和 Desktop 凭据设置由 Desktop 管理；验证码图片只在当前会话的临时 Desktop 面板展示，人工输入通过一次性本地通道返回给当前导出，不进入会话 transcript 或浏览器存储。

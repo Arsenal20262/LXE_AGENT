@@ -32,6 +32,7 @@ import {
   OfficialMcpConnector,
   OneShotCliRunner,
   registerCodingTools,
+  registerShangmanCaptchaTool,
   registerToolSearch,
   registerUserQuestionTool,
   UserQuestionService,
@@ -45,6 +46,8 @@ import {
   type RuntimeEmitter,
   type RuntimeHandle,
   type TurnOutcome,
+  ShangmanCaptchaBroker,
+  SHANGMAN_CAPTCHA_SKILL,
 } from "@lxe/runtime";
 import { DashboardService } from "./dashboard-service";
 import { loadAgentFeishuConfig } from "./feishu-runtime-config";
@@ -129,7 +132,12 @@ export function createAgentRuntimeHost(
     void Promise.resolve().then(() => options.onSessionChanged?.(sessionId, "questions"))
       .catch(error => logger.warn("question_notification_failed", { session_id: sessionId, error }));
   });
+  const shangmanCaptcha = new ShangmanCaptchaBroker(sessionId => {
+    void Promise.resolve().then(() => options.onSessionChanged?.(sessionId, "questions"))
+      .catch(error => logger.warn("captcha_notification_failed", { session_id: sessionId, error }));
+  });
   registerUserQuestionTool(tools, questions);
+  registerShangmanCaptchaTool(tools, shangmanCaptcha);
   const skillCatalog = new SkillCatalog(options.dataRoot, options.userSkillsRoot, {
     ...(environment.LXE_FD_PATH ? { fdPath: environment.LXE_FD_PATH } : {}),
     repositorySkillsRoot: options.skillsRoot,
@@ -207,14 +215,20 @@ export function createAgentRuntimeHost(
     businessCommandCatalog: cliCommands,
     execShell,
     lxeSkillStatus: () => lxeSkillRuntime.snapshot(),
-    execEnv: ({ skillNames }) => ({ LXESKILL_SKILL_SCOPE: skillNames.join(",") }),
+    execEnv: ({ skillNames, sessionId, turnId }) => {
+      const env: Record<string, string> = { LXESKILL_SKILL_SCOPE: skillNames.join(",") };
+      if (skillNames.includes(SHANGMAN_CAPTCHA_SKILL) || shangmanCaptcha.hasSession(sessionId)) {
+        Object.assign(env, shangmanCaptcha.environmentFor(sessionId), { LXE_AGENT_TURN_ID: turnId });
+      }
+      return env;
+    },
     ...(options.onBackgroundTaskChanged ? { onExecComplete: options.onBackgroundTaskChanged } : {}),
   });
   let skillRefreshTimer: ReturnType<typeof setInterval> | undefined;
   const runtimeServices: Array<{
     start(registry: ToolRegistry): Promise<void>;
     stop(): Promise<void>;
-  }> = [processes, lxeSkillRuntime, {
+  }> = [processes, lxeSkillRuntime, shangmanCaptcha, {
     async start() {
       skillCatalog.refreshIfNeeded();
       skillRefreshTimer = setInterval(() => {
@@ -234,6 +248,7 @@ export function createAgentRuntimeHost(
   let workspaceInstances!: WorkspaceInstanceManager;
   const dashboardService = new DashboardService({
     questions,
+    shangmanCaptcha,
     stateRoot: options.dataRoot,
     llmConfigRoot: options.llmConfigRoot,
     skillsRoot: options.skillsRoot,
