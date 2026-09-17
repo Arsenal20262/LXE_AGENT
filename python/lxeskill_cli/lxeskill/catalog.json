@@ -378,6 +378,25 @@
       "visibility": "business", "session_mode": "none",
       "owner_skills": ["replenishment-unlinked-shipment-download"], "artifact_paths": [{"field": "status_results[].raw_file_path", "role": "deliverable"}, {"field": "snapshot.snapshot_xlsx_path", "role": "deliverable"}], "timeout_ms": 300000, "exposed": true,
       "input_schema": {"type": "object", "properties": {"store_name": {"type": "string"}, "timeout_sec": {"type": "number"}, "poll_interval_sec": {"type": "number"}, "output_dir": {"type": "string"}}, "required": ["store_name"], "additionalProperties": false}
+    },
+    {
+      "name": "shangman_goods_export_preview", "module": "services.agent_cli.shangman.goods_export_preview",
+      "command_path": ["shangman", "export", "preview"],
+      "legacy_aliases": ["shangman_goods_export_preview"],
+      "visibility": "business", "session_mode": "none",
+      "owner_skills": ["shangman-goods-export-workflow-map"],
+      "timeout_ms": 30000, "exposed": true,
+      "input_schema": {"type": "object", "properties": {"request_text": {"type": "string", "minLength": 1, "description": "完整原始用户请求；preview 不访问 ERP。"}}, "required": ["request_text"], "additionalProperties": false}
+    },
+    {
+      "name": "shangman_goods_export_run", "module": "services.agent_cli.shangman.goods_export_run",
+      "command_path": ["shangman", "export", "run"],
+      "legacy_aliases": ["shangman_goods_export_run"],
+      "visibility": "business", "session_mode": "none",
+      "owner_skills": ["shangman-goods-export-workflow-map"],
+      "artifact_paths": [{"field": "artifact_path", "role": "deliverable"}],
+      "timeout_ms": 300000, "exposed": true,
+      "input_schema": {"type": "object", "properties": {"request_text": {"type": "string", "minLength": 1, "description": "完整原始用户请求。验证码由后续交互层处理，不属于公开命令输入。"}}, "required": ["request_text"], "additionalProperties": false}
     }
   ],
   "datasets": {

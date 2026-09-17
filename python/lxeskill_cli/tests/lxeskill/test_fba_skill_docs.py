@@ -13,10 +13,20 @@ def _skill_text(name: str) -> str:
 
 def test_repository_skill_inventory_distinguishes_top_level_and_nested_manifests() -> None:
     skill_root = PROJECT_ROOT / "skills"
-    assert len(list(skill_root.glob("*/SKILL.md"))) == 29
-    assert len(list(skill_root.rglob("SKILL.md"))) == 56
+    assert len(list(skill_root.glob("*/SKILL.md"))) == 30
+    assert len(list(skill_root.rglob("SKILL.md"))) == 57
     assert not (skill_root / "feishu-im-read" / "SKILL.md").exists()
     assert (skill_root / "larksuite-cli" / "lark-im" / "SKILL.md").exists()
+
+
+def test_shangman_goods_export_is_the_single_owner_with_formal_permission_domain() -> None:
+    text = _skill_text("shangman-goods-export-workflow-map")
+    frontmatter = text.split("---", 2)[1]
+
+    assert "name: shangman-goods-export-workflow-map" in frontmatter
+    assert "type: amazon_replenish" in frontmatter
+    assert frontmatter.count("lxeskill shangman export") == 2
+    assert "request_text" in text
 
 
 def test_ziniao_is_independent_and_shipment_owns_only_four_stages() -> None:

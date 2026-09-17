@@ -66,3 +66,47 @@ No real ERP request was made, no credential or token was written to source, fixt
 ## Git commit
 
 The commit SHA is reported in the stage completion response. This document is included in that commit, so it cannot contain its own SHA; use `git log -1 --format=%H codex/shangman-erp-export-client` to retrieve it from the repository.
+
+## Stage 2: Unified public entry and CLI contract
+
+- Worktree/Pool: `/Users/hym/PycharmProjects/LXE_AGENT/.worktrees/pool-2`, branch `codex/shangman-erp-export-client`.
+- Base commit: `d9e61d4c0c1d6006ee74d5f95834f12bb379c6a0`.
+- Public Skill: `shangman-goods-export-workflow-map`, authorization type `amazon_replenish`.
+- Public commands:
+  - `lxeskill shangman export preview --request-text "<完整原始请求>"`
+  - `lxeskill shangman export run --request-text "<完整原始请求>"`
+- All supported sales, inventory, month-end, inbound-time, and listing-time wording maps to one canonical `goods-export` intent and one `goods-export` task. The original request text is retained.
+- `preview` is deterministic and makes no network request. `run` first checks `LXE_SHANGMAN_PROD_ENABLED`, then these runtime-only variables: `LXE_SHANGMAN_TENANT_ID`, `LXE_SHANGMAN_USERNAME`, `LXE_SHANGMAN_PASSWORD`, `LXE_SHANGMAN_BASIC_USERNAME`, and `LXE_SHANGMAN_BASIC_PASSWORD`; it then requires the later interaction layer's captcha input before invoking the stage-one client. The public Catalog schema accepts only the complete `request_text`; captcha is not a public command argument.
+- Missing gate, credentials, or captcha returns a recoverable `data.error` with a specific code. Terminal failure messages preserve the nested business diagnostic with credential values redacted. No Desktop files are read and no real ERP request was made.
+
+### Stage 2 files
+
+- `python/lxeskill_cli/services/shangman/intent.py`
+- `python/lxeskill_cli/services/agent_cli/shangman/__init__.py`
+- `python/lxeskill_cli/services/agent_cli/shangman/_workflow.py`
+- `python/lxeskill_cli/services/agent_cli/shangman/goods_export_preview.py`
+- `python/lxeskill_cli/services/agent_cli/shangman/goods_export_run.py`
+- `python/lxeskill_cli/tests/shangman/test_intent.py`
+- `python/lxeskill_cli/tests/shangman/test_goods_export_workflow.py`
+- `python/lxeskill_cli/lxeskill/business.py`
+- `python/lxeskill_cli/lxeskill/catalog.json`
+- `skills/shangman-goods-export-workflow-map/SKILL.md`
+- `python/lxeskill_cli/tests/lxeskill/test_fba_skill_docs.py`
+- `python/lxeskill_cli/tests/lxeskill/test_lxeskill_cli.py`
+- `packages/agent/runtime/test/tooling/lxeskill-command.test.ts`
+- `docs/superpowers/plans/2026-09-17-shangman-goods-export-contract.md`
+- `docs/handoff/CURRENT_HANDOFF.md`
+
+### Stage 2 verification
+
+- `UV_CACHE_DIR=/private/tmp/lxe-uv-cache uv run pytest python/lxeskill_cli/tests/lxeskill python/lxeskill_cli/tests/infra python/lxeskill_cli/tests/shangman` → `336 passed`, 4 existing aiohttp deprecation warnings. The command required sandbox-outside execution only because the existing aiohttp test binds a localhost port.
+- `bun test packages/agent/runtime/test/tooling/lxeskill-command.test.ts` → `4 pass`.
+- `UV_CACHE_DIR=/private/tmp/lxe-uv-cache uv run lxeskill shangman export preview --request-text '请导出90天日度销量'` → terminal `ok=true`, canonical `goods-export` plan with the source-field limitation notice, no files.
+- `uv run lxeskill shangman export run --request-text '请导出当前库存'` → terminal `ok=false`, `data.error.code=production_gate_required`, no files and no ERP request.
+- `git diff --check` passed; sensitive-data scan found only variable names, protocol field names, redaction logic, and explicitly synthetic test values; no runtime credential or token was used or recorded.
+
+### Stage 2 limits and next step
+
+- Desktop secure credential configuration, Cloud enrollment, production gate ownership, captcha image display and manual input, and authorized real end-to-end export remain for stage 3.
+- A parallel duplicate implementation (`export_intent.py` / `export_*` adapters and tests) was reviewed, its coverage was retained in the canonical workflow tests, and the duplicate files were removed so the Catalog module names and public Skill cannot diverge.
+- Stage 2 changes are verified but not staged or committed. Proposed commit: `feat: add Shangman unified export skill contract`.
