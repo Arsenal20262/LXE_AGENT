@@ -146,7 +146,10 @@ The commit SHA is reported in the stage completion response. This document is in
 - Typechecks passed for `packages/agent/runtime`, `apps/agent-cli`, `apps/dashboard`, `apps/desktop`, and `packages/foundation/desktop-protocol`.
 - `git diff --check` passed. No real ERP request, credential, token, or production probe was made.
 
-### Stage 3 known limits and handoff
+### Stage 3 finalization
 
-- The selected `packages/agent/runtime/test/tooling/coding-tools.test.ts` run was not fully green in this sandbox: 43 tests passed and 2 failed because the host has no `fd`/`fdfind` executable. This is an existing managed-tool prerequisite; rerun with the Desktop-provided `LXE_FD_PATH` before claiming a full coding-tools suite.
-- Stage 3 is ready for the final commit and merge workflow. After the commit, rebase onto the latest `main`, resolve any conflicts explicitly, and run the required final validation before merge.
+- Core implementation was committed as `61bf85a3` (`feat: add Shangman desktop captcha runtime`).
+- The merge review found two missed integration updates: Desktop repository/cloud tests still expected settings schema 8, and the new public Skill lacked its Dashboard Chinese display label. Both were corrected; a schema 8 → 9 migration test was added.
+- After fetching `origin/main`, rebase reported the branch was up to date. Full verification from the worktree root: `UV_CACHE_DIR=/private/tmp/lxe-agent-uv-cache uv run --frozen pytest -q python/lxeskill_cli/tests` → `1685 passed, 2 skipped`; `LXE_FD_PATH=<prepared pinned fd> bun test` → `1583 pass, 13 skip, 0 fail`; `bun run typecheck` passed for all packages. The pinned fd was prepared with `bun run desktop:tools:fd` from the checked-in lockfile.
+- Python's localhost tests and Bun's local HTTP tests require an environment that permits loopback binding. The default sandbox rejected those binds; the final full runs used local-loopback test permission. The opt-in Shangman HTTP broker test passed separately during Stage 3 with `LXE_RUN_LOOPBACK_TESTS=1`.
+- No real ERP request, credential configuration, production probe, or push was performed.

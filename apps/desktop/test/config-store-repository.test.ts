@@ -41,7 +41,7 @@ describe("DesktopConfigRepository", () => {
     const repository = new DesktopConfigRepository(root, safeStorage, "darwin");
     expect(repository.hadExistingConfig).toBeFalse();
     expect(repository.readConfig()).toMatchObject({
-      schema_version: 8,
+      schema_version: 9,
       migration_version: 0,
       llm: {
         provider: "deepseek",
@@ -62,7 +62,7 @@ describe("DesktopConfigRepository", () => {
       cloud: { sync_interval_seconds: 1 },
     }));
     expect(repository.readConfig()).toMatchObject({
-      schema_version: 8,
+      schema_version: 9,
       migration_version: 0,
       llm: {
         provider: "deepseek",
@@ -88,7 +88,7 @@ describe("DesktopConfigRepository", () => {
 
     const repository = new DesktopConfigRepository(root, safeStorage, "darwin");
     expect(repository.readConfig()).toMatchObject({
-      schema_version: 8,
+      schema_version: 9,
       llm: {
         provider: "deepseek",
         credential_source: "local",
@@ -107,12 +107,12 @@ describe("DesktopConfigRepository", () => {
 
     const repository = new DesktopConfigRepository(root, safeStorage, "win32");
     expect(repository.readConfig()).toMatchObject({
-      schema_version: 8,
+      schema_version: 9,
       cloud: { switch_in_progress: false },
     });
   });
 
-  test("migrates schema 7 profiles to schema 8 without losing provider preferences", () => {
+  test("migrates schema 7 profiles to schema 9 without losing provider preferences", () => {
     const root = createRoot();
     const legacy = structuredClone(cloneConfig()) as unknown as Record<string, unknown>;
     legacy.schema_version = 7;
@@ -128,7 +128,7 @@ describe("DesktopConfigRepository", () => {
 
     const repository = new DesktopConfigRepository(root, safeStorage, "darwin");
     expect(repository.readConfig()).toMatchObject({
-      schema_version: 8,
+      schema_version: 9,
       llm: {
         provider: "kimi_coding",
         last_local_provider: "kimi_coding",
@@ -136,6 +136,23 @@ describe("DesktopConfigRepository", () => {
           deepseek: { model: "deepseek-v4-pro", thinking_level: "max" },
           kimi_coding: { model: "k3", thinking_level: "high" },
         },
+      },
+    });
+  });
+
+  test("migrates schema 8 settings to schema 9 with an unconfigured Shangman integration", () => {
+    const root = createRoot();
+    const legacy = structuredClone(cloneConfig()) as unknown as Record<string, unknown>;
+    legacy.schema_version = 8;
+    delete (legacy.integrations as Record<string, unknown>).shangman;
+    mkdirSync(join(root, "config"), { recursive: true });
+    writeFileSync(join(root, "config", "settings.json"), JSON.stringify(legacy));
+
+    const repository = new DesktopConfigRepository(root, safeStorage, "darwin");
+    expect(repository.readConfig()).toMatchObject({
+      schema_version: 9,
+      integrations: {
+        shangman: { managed: false, tenant_id: "", username: "" },
       },
     });
   });
