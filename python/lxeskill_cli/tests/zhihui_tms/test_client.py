@@ -80,6 +80,7 @@ def _client(session: FakeSession, *, sleeps: list[float] | None = None) -> Zhihu
         retry_policy=RetryPolicy(max_attempts=3, backoff_seconds=1.0, jitter_ratio=0.0),
         sleeper=(sleeps if sleeps is not None else []).append,
         random_fn=lambda: 0.5,
+        min_request_interval_seconds=0,
     )
 
 
@@ -207,30 +208,30 @@ def test_retryable_status_uses_bounded_exponential_delay_then_returns_success() 
     client = _client(session, sleeps=sleeps)
     client._api_token = "fixture-api-token"
 
-    result = client.post_json("/temporary", {}, operation="临时请求")
+    result = client.find_my_stockwarehouse_list(page=1)
 
     assert result["code"] == "200"
     assert len(session.calls) == 2
     assert sleeps == [1.0]
 
 
-def test_retry_after_is_honored_for_429_and_transport_failures_are_retryable() -> None:
+def test_rate_limit_stops_without_retry() -> None:
     sleeps: list[float] = []
     session = FakeSession(
         [
             FakeResponse(429, {"code": "RATE_LIMIT", "msg": "请求过于频繁"}, headers={"Retry-After": "3"}),
-            requests.ConnectionError("connection reset token=fixture-api-token"),
-            FakeResponse(200, {"code": "200", "msg": "成功", "data": {}}),
         ]
     )
     client = _client(session, sleeps=sleeps)
     client._api_token = "fixture-api-token"
 
-    result = client.post_json("/temporary", {}, operation="限流请求")
+    with pytest.raises(ZhihuiTmsHttpError) as captured:
+        client.find_my_stockwarehouse_list(page=1)
 
-    assert result["code"] == "200"
-    assert len(session.calls) == 3
-    assert sleeps == [3.0, 2.0]
+    assert captured.value.http_status == 429
+    assert "请求过于频繁" in str(captured.value)
+    assert len(session.calls) == 1
+    assert sleeps == []
 
 
 def test_authentication_http_error_stops_without_retry_and_redacts_token() -> None:
@@ -290,7 +291,7 @@ def test_invalid_json_preserves_redacted_observed_body_and_truncates_it() -> Non
     assert "[truncated " in str(captured.value)
 
 
-def test_transport_failure_after_retries_maps_to_truthful_redacted_error() -> None:
+def test_login_timeout_stops_without_retry_and_preserves_redacted_error() -> None:
     sleeps: list[float] = []
     session = FakeSession(
         [
@@ -304,10 +305,65 @@ def test_transport_failure_after_retries_maps_to_truthful_redacted_error() -> No
     with pytest.raises(ZhihuiTmsTransportError) as captured:
         client.login("fixture-user", "fixture-password", local_time="2026-09-17 12:34:56")
 
-    assert len(session.calls) == 3
-    assert sleeps == [1.0, 2.0]
+    assert len(session.calls) == 1
+    assert sleeps == []
     assert "fixture-password" not in str(captured.value)
     assert "[REDACTED]" in str(captured.value)
+
+
+def test_export_generation_http_failure_stops_without_retry() -> None:
+    session = FakeSession(
+        [
+            FakeResponse(503, {"code": "TEMP", "msg": "导出状态未知"}),
+            FakeResponse(200, {"code": "200", "pop": "duplicate-export"}),
+        ]
+    )
+    client = _client(session)
+    client._api_token = "fixture-api-token"
+
+    with pytest.raises(ZhihuiTmsHttpError, match="导出状态未知"):
+        client.export_stockwarehouse([123])
+
+    assert len(session.calls) == 1
+
+
+def test_request_pacing_applies_to_retry_and_next_operation() -> None:
+    now = [0.0]
+    sleeps: list[float] = []
+
+    def sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+        now[0] += seconds
+
+    session = FakeSession(
+        [
+            FakeResponse(503, {"code": "TEMP", "msg": "暂不可用"}),
+            FakeResponse(200, {"code": "200", "datas": []}),
+            FakeResponse(200, {"code": "200", "datas": []}),
+        ]
+    )
+    client = ZhihuiTmsClient(
+        session=session,
+        retry_policy=RetryPolicy(max_attempts=3, backoff_seconds=1.0, jitter_ratio=0.0),
+        sleeper=sleep,
+        clock=lambda: now[0],
+        min_request_interval_seconds=2.0,
+    )
+    client._api_token = "fixture-api-token"
+
+    client.find_my_stockwarehouse_list(page=1)
+    client.find_my_stockwarehouse_list(page=2)
+
+    assert len(session.calls) == 3
+    assert sleeps == [1.0, 1.0, 2.0]
+
+
+def test_download_429_stops_without_retry() -> None:
+    session = FakeSession([FakeResponse(429, text="slow down", headers={"Retry-After": "10"})])
+    with pytest.raises(ZhihuiTmsHttpError) as captured:
+        _client(session).download_bytes("https://tms-cos.mabangerp.com/export/fixture.xlsx")
+    assert captured.value.http_status == 429
+    assert len(session.calls) == 1
 
 
 def _minimal_xlsx_bytes() -> bytes:
