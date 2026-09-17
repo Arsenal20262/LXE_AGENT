@@ -83,7 +83,8 @@ describe("Zhihui confirmation router", () => {
       const action = args[args.indexOf("--action") + 1]!;
       calls.push(action);
       return action === "preview" ? result(action) : {
-        ...result(action, false), files: ["/artifacts/page-1.xlsx"],
+        ...result(action, false), files: ["/artifacts/partial-merged.xlsx"],
+        data: { ...result(action, false).data, partial_pages: 1, partial_rows: 42 },
         error: { code: "tms_blocked", message: "HTTP 429; token=secret" },
       };
     } });
@@ -95,8 +96,9 @@ describe("Zhihui confirmation router", () => {
     expect(calls).toEqual(["preview", "execute"]);
     expect(response.status).toBe("error");
     expect(response.reply).toContain("HTTP 429");
+    expect(response.reply).toContain("部分合并 XLSX");
     expect(response.reply).not.toContain("secret");
-    expect(response.files).toEqual(["/artifacts/page-1.xlsx"]);
+    expect(response.files).toEqual(["/artifacts/partial-merged.xlsx"]);
   });
 
   test("does not invoke the CLI when the owner Skill is outside the workspace scope", async () => {

@@ -140,10 +140,10 @@ describe("Desktop Zhihui confirmation route", () => {
     await runtime.stop();
   });
 
-  test("failed export still delivers verified existing page files", async () => {
-    const artifactRoot = mkdtempSync(join(tmpdir(), "lxe-zhihui-pages-"));
-    const page = join(artifactRoot, "page-1.xlsx");
-    writeFileSync(page, "fixture");
+  test("failed export still delivers one verified partial merge", async () => {
+    const artifactRoot = mkdtempSync(join(tmpdir(), "lxe-zhihui-partial-"));
+    const partial = join(artifactRoot, "partial-merged.xlsx");
+    writeFileSync(partial, "fixture");
     const store = new MemoryStore();
     const emitted: EmitRequest[] = [];
     const runtime = new TypeScriptAgentRuntime({
@@ -155,7 +155,9 @@ describe("Desktop Zhihui confirmation route", () => {
         router: new ZhihuiTmsConfirmationRouter({ execute: async args => {
           const action = args[args.indexOf("--action") + 1]!;
           return action === "preview" ? cliResult(action) : {
-            ...cliResult(action, false), files: [page], error: { code: "blocked", message: "HTTP 429" },
+            ...cliResult(action, false), files: [partial],
+            data: { ...cliResult(action, false).data, partial_pages: 1, partial_rows: 42 },
+            error: { code: "blocked", message: "HTTP 429" },
           };
         } }),
         ask: async () => "确认执行导出",
@@ -166,9 +168,10 @@ describe("Desktop Zhihui confirmation route", () => {
       const outcome = await runtime.runTurn(desktopJob(), handle());
       expect(outcome.status).toBe("error");
       expect(outcome.reply).toContain("HTTP 429");
-      const canonicalPage = realpathSync(page);
-      expect(store.artifacts.map(artifact => artifact.path)).toEqual([canonicalPage]);
-      expect(emitted.find(item => item.emit_kind === "tool" && item.files.includes(canonicalPage))?.files).toEqual([canonicalPage]);
+      expect(outcome.reply).toContain("部分合并 XLSX");
+      const canonicalPartial = realpathSync(partial);
+      expect(store.artifacts.map(artifact => artifact.path)).toEqual([canonicalPartial]);
+      expect(emitted.find(item => item.emit_kind === "tool" && item.files.includes(canonicalPartial))?.files).toEqual([canonicalPartial]);
     } finally {
       await runtime.stop();
       rmSync(artifactRoot, { recursive: true, force: true });

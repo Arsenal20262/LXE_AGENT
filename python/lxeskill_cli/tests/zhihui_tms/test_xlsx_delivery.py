@@ -52,7 +52,7 @@ def _export_result(*pages: tuple[int, str]) -> ZhihuiTmsExportResult:
     )
 
 
-def test_delivers_page_artifacts_and_one_ordered_merged_workbook(tmp_path: Path) -> None:
+def test_delivers_only_one_ordered_merged_workbook(tmp_path: Path) -> None:
     first_url = "https://tms-cos.mabangerp.com/export/page-1.xls"
     second_url = "https://tms-cos.mabangerp.com/export/page-2.xls"
     client = FakeDownloadClient(
@@ -69,16 +69,14 @@ def test_delivers_page_artifacts_and_one_ordered_merged_workbook(tmp_path: Path)
         date_label="20260917",
     )
 
-    assert [artifact.kind for artifact in result.artifacts] == ["page", "page", "merged"]
-    assert [Path(artifact.path).name for artifact in result.page_artifacts] == [
-        "智慧tms-商品-第1页-20260917.xlsx",
-        "智慧tms-商品-第2页-20260917.xlsx",
-    ]
+    assert [artifact.kind for artifact in result.artifacts] == ["merged"]
+    assert result.page_artifacts == ()
     assert result.merged_artifact is not None
     assert Path(result.merged_artifact.path).name == "智慧tms-商品-合并-20260917.xlsx"
     assert result.headers == ("SKU", "库存")
     assert result.total_rows == 2
-    assert [Path(artifact.path).is_file() for artifact in result.artifacts] == [True, True, True]
+    assert [Path(artifact.path).is_file() for artifact in result.artifacts] == [True]
+    assert not list(tmp_path.glob("智慧tms-商品-第*页-*.xlsx"))
 
     workbook = load_workbook(result.merged_artifact.path, read_only=True, data_only=False)
     assert list(workbook.active.values) == [("SKU", "库存"), ("A", 1), ("B", 2)]
@@ -105,7 +103,7 @@ def test_delivery_progress_reports_saved_pages_and_merge_without_urls(tmp_path: 
     assert first_url not in str(events)
 
 
-def test_header_mismatch_keeps_downloaded_pages_and_does_not_publish_merge(tmp_path: Path) -> None:
+def test_header_mismatch_delivers_one_validated_partial_merge(tmp_path: Path) -> None:
     first_url = "https://tms-cos.mabangerp.com/export/page-1.xls"
     second_url = "https://tms-cos.mabangerp.com/export/page-2.xls"
     client = FakeDownloadClient(
@@ -115,7 +113,7 @@ def test_header_mismatch_keeps_downloaded_pages_and_does_not_publish_merge(tmp_p
         }
     )
 
-    with pytest.raises(ZhihuiTmsDeliveryError, match="表头"):
+    with pytest.raises(ZhihuiTmsDeliveryError, match="表头") as captured:
         deliver_product_exports(
             client,
             _export_result((1, first_url), (2, second_url)),
@@ -123,12 +121,18 @@ def test_header_mismatch_keeps_downloaded_pages_and_does_not_publish_merge(tmp_p
             date_label="20260917",
         )
 
-    assert (tmp_path / "智慧tms-商品-第1页-20260917.xlsx").is_file()
-    assert (tmp_path / "智慧tms-商品-第2页-20260917.xlsx").is_file()
+    assert captured.value.partial_pages == 1
+    assert captured.value.partial_rows == 1
+    assert [artifact.kind for artifact in captured.value.partial_artifacts] == ["merged_partial"]
+    partial = Path(captured.value.partial_artifacts[0].path)
+    assert partial.name == "智慧tms-商品-部分合并-20260917.xlsx"
+    assert partial.is_file()
+    assert list(load_workbook(partial, read_only=True).active.values) == [("SKU", "库存"), ("A", 1)]
+    assert not list(tmp_path.glob("智慧tms-商品-第*页-*.xlsx"))
     assert not (tmp_path / "智慧tms-商品-合并-20260917.xlsx").exists()
 
 
-def test_download_failure_does_not_delete_prior_page_artifact(tmp_path: Path) -> None:
+def test_download_failure_delivers_one_validated_partial_merge(tmp_path: Path) -> None:
     first_url = "https://tms-cos.mabangerp.com/export/page-1.xls"
     second_url = "https://tms-cos.mabangerp.com/export/page-2.xls"
 
@@ -140,7 +144,7 @@ def test_download_failure_does_not_delete_prior_page_artifact(tmp_path: Path) ->
             return self.payloads[url]
 
     client = FailingClient({first_url: (_xlsx_bytes([["SKU"], ["A"]]), "application/vnd.ms-excel")})
-    with pytest.raises(ZhihuiTmsSchemaError, match="fixture download failed"):
+    with pytest.raises(ZhihuiTmsSchemaError, match="fixture download failed") as captured:
         deliver_product_exports(
             client,
             _export_result((1, first_url), (2, second_url)),
@@ -148,7 +152,12 @@ def test_download_failure_does_not_delete_prior_page_artifact(tmp_path: Path) ->
             date_label="20260917",
         )
 
-    assert (tmp_path / "智慧tms-商品-第1页-20260917.xlsx").is_file()
+    assert captured.value.partial_pages == 1
+    assert captured.value.partial_rows == 1
+    partial = Path(captured.value.partial_artifacts[0].path)
+    assert partial.is_file()
+    assert list(load_workbook(partial, read_only=True).active.values) == [("SKU",), ("A",)]
+    assert not list(tmp_path.glob("智慧tms-商品-第*页-*.xlsx"))
     assert not (tmp_path / "智慧tms-商品-合并-20260917.xlsx").exists()
 
 

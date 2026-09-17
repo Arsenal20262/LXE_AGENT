@@ -5,7 +5,6 @@ import contextlib
 from hashlib import sha256
 import os
 from pathlib import Path
-import re
 from typing import Any
 from uuid import uuid4
 
@@ -18,20 +17,16 @@ from shared.process_lock import InterProcessLockTimeout, interprocess_lock
 from shared.workspace import artifact_root
 
 
-def _existing_pages(output_dir: Path, date_label: str) -> list[dict[str, Any]]:
+def _existing_delivery(output_dir: Path, date_label: str) -> list[dict[str, Any]]:
     if not output_dir.is_dir():
         return []
-    pages: list[dict[str, Any]] = []
-    candidates: list[tuple[int, Path]] = []
-    pattern = re.compile(rf"^智慧tms-商品-第(\d+)页-{date_label}\.xlsx$")
-    for path in output_dir.glob(f"智慧tms-商品-第*页-{date_label}.xlsx"):
-        match = pattern.fullmatch(path.name)
-        if match and path.is_file():
-            candidates.append((int(match.group(1)), path))
-    for page, path in sorted(candidates):
-        if path.is_file():
-            pages.append({"path": str(path.resolve()), "kind": "page", "page": page, "total_pages": None})
-    return pages
+    partial = output_dir / f"智慧tms-商品-部分合并-{date_label}.xlsx"
+    merged = output_dir / f"智慧tms-商品-合并-{date_label}.xlsx"
+    if partial.is_file():
+        return [{"path": str(partial.resolve()), "kind": "merged_partial", "page": None, "total_pages": None}]
+    if merged.is_file():
+        return [{"path": str(merged.resolve()), "kind": "merged", "page": None, "total_pages": None}]
+    return []
 
 
 def _account_lock_path(account: str) -> Path:
@@ -145,13 +140,20 @@ def _run(
             "exception": "智汇 TMS 商品导出正在执行，请等待当前任务结束",
         }
     except Exception as exc:  # noqa: BLE001 — the CLI must return the observed redacted failure
+        partial_artifacts = [
+            {"path": item.path, "kind": item.kind, "page": item.page, "total_pages": item.total_pages}
+            for item in getattr(exc, "partial_artifacts", ())
+        ]
+        artifacts = partial_artifacts or _existing_delivery(output_dir, plan.date_label)
         return {
             "success": False,
             **summary,
             "code": getattr(exc, "code", "tms_export_failed"),
             "exception": redact_text(f"{type(exc).__name__}: {exc}", secrets=(account, password)),
             "http_attempt_count": getattr(client, "request_attempt_count", None),
-            "artifacts": _existing_pages(output_dir, plan.date_label),
+            "artifacts": artifacts,
+            "partial_pages": getattr(exc, "partial_pages", None),
+            "partial_rows": getattr(exc, "partial_rows", None),
         }
     finally:
         session = getattr(client, "session", None)

@@ -194,6 +194,69 @@ def _atomic_write_workbook(path: Path, workbook_rows: _WorkbookRows) -> None:
             temp_path.unlink(missing_ok=True)
 
 
+def _merged_rows(headers: tuple[str, ...], pages: Sequence[_WorkbookRows]) -> _WorkbookRows:
+    return _WorkbookRows(
+        headers=headers,
+        rows=tuple(row for workbook_rows in pages for row in workbook_rows.rows),
+    )
+
+
+def _write_merged_artifact(
+    destination: Path,
+    *,
+    date_label: str,
+    headers: tuple[str, ...],
+    pages: Sequence[_WorkbookRows],
+    total_pages: int,
+    partial: bool,
+) -> tuple[ZhihuiTmsArtifact, int]:
+    workbook_rows = _merged_rows(headers, pages)
+    prefix = "部分合并" if partial else "合并"
+    path = (destination / f"智慧tms-商品-{prefix}-{date_label}.xlsx").resolve()
+    _atomic_write_workbook(path, workbook_rows)
+    return (
+        ZhihuiTmsArtifact(
+            path=str(path),
+            kind="merged_partial" if partial else "merged",
+            page=None,
+            total_pages=total_pages,
+        ),
+        len(workbook_rows.rows),
+    )
+
+
+def _attach_partial_delivery(
+    error: Exception,
+    *,
+    destination: Path,
+    date_label: str,
+    headers: tuple[str, ...] | None,
+    pages: Sequence[_WorkbookRows],
+    total_pages: int,
+) -> None:
+    """Attach one validated partial workbook when a later page fails.
+
+    The original exception stays authoritative. A failure writing the optional
+    partial artifact must never hide the observed platform error.
+    """
+    if headers is None or not pages or not any(workbook_rows.rows for workbook_rows in pages):
+        return
+    try:
+        artifact, rows = _write_merged_artifact(
+            destination,
+            date_label=date_label,
+            headers=headers,
+            pages=pages,
+            total_pages=total_pages,
+            partial=True,
+        )
+    except Exception:  # noqa: BLE001 - preserve the original platform failure
+        return
+    setattr(error, "partial_artifacts", (artifact,))
+    setattr(error, "partial_pages", len(pages))
+    setattr(error, "partial_rows", rows)
+
+
 def deliver_product_exports(
     client: ZhihuiTmsClient,
     export_result: ZhihuiTmsExportResult,
@@ -214,72 +277,55 @@ def deliver_product_exports(
             total_rows=0,
         )
 
-    page_artifacts: list[ZhihuiTmsArtifact] = []
     page_rows: list[_WorkbookRows] = []
     expected_headers: tuple[str, ...] | None = None
-    seen_paths: set[str] = set()
-
-    for page in export_result.pages:
-        url = _extract_download_url(page.pop)
-        content, _content_type = client.download_bytes(url)
-        workbook_rows = _read_workbook(content, source=url)
-        page_path = (destination / f"智慧tms-商品-第{page.page}页-{label}.xlsx").resolve()
-        if str(page_path) in seen_paths:
-            raise _delivery_error(
-                "tms_artifact_duplicate_path",
-                f"智汇 TMS 分页 artifact 路径重复: {page_path}",
-            )
-        seen_paths.add(str(page_path))
-        _atomic_write_workbook(page_path, workbook_rows)
-        page_rows.append(workbook_rows)
-        page_artifacts.append(
-            ZhihuiTmsArtifact(
-                path=str(page_path),
-                kind="page",
-                page=page.page,
-                total_pages=total_pages,
-            )
+    try:
+        for page in export_result.pages:
+            url = _extract_download_url(page.pop)
+            content, _content_type = client.download_bytes(url)
+            workbook_rows = _read_workbook(content, source=url)
+            if expected_headers is None:
+                expected_headers = workbook_rows.headers
+            elif workbook_rows.headers != expected_headers:
+                raise _delivery_error(
+                    "tms_workbook_header_mismatch",
+                    f"智汇 TMS 第{page.page}页表头与前页不一致: {workbook_rows.headers!r} != {expected_headers!r}",
+                    payload={"page": page.page, "headers": workbook_rows.headers},
+                )
+            page_rows.append(workbook_rows)
+            if on_event is not None:
+                on_event({
+                    "stage": "downloaded", "page": page.page,
+                    "total_pages": total_pages, "rows": len(workbook_rows.rows),
+                })
+    except Exception as exc:  # noqa: BLE001 - retain the observed download/schema failure
+        _attach_partial_delivery(
+            exc,
+            destination=destination,
+            date_label=label,
+            headers=expected_headers,
+            pages=page_rows,
+            total_pages=total_pages,
         )
-        if on_event is not None:
-            on_event({
-                "stage": "downloaded", "page": page.page,
-                "total_pages": total_pages, "rows": len(workbook_rows.rows),
-            })
-        if expected_headers is None:
-            expected_headers = workbook_rows.headers
-        elif workbook_rows.headers != expected_headers:
-            raise _delivery_error(
-                "tms_workbook_header_mismatch",
-                f"智汇 TMS 第{page.page}页表头与前页不一致: {workbook_rows.headers!r} != {expected_headers!r}",
-                payload={"page": page.page, "headers": workbook_rows.headers},
-            )
+        raise
 
     assert expected_headers is not None
-    merged_rows = _WorkbookRows(
+    merged_artifact, total_rows = _write_merged_artifact(
+        destination,
+        date_label=label,
         headers=expected_headers,
-        rows=tuple(row for workbook_rows in page_rows for row in workbook_rows.rows),
-    )
-    merged_path = (destination / f"智慧tms-商品-合并-{label}.xlsx").resolve()
-    if str(merged_path) in seen_paths:
-        raise _delivery_error(
-            "tms_artifact_duplicate_path",
-            f"智汇 TMS 合并 artifact 路径重复: {merged_path}",
-        )
-    _atomic_write_workbook(merged_path, merged_rows)
-    if on_event is not None:
-        on_event({"stage": "merged", "total_pages": total_pages, "rows": len(merged_rows.rows)})
-    merged_artifact = ZhihuiTmsArtifact(
-        path=str(merged_path),
-        kind="merged",
-        page=None,
+        pages=page_rows,
         total_pages=total_pages,
+        partial=False,
     )
+    if on_event is not None:
+        on_event({"stage": "merged", "total_pages": total_pages, "rows": total_rows})
     return ZhihuiTmsDeliveryResult(
-        artifacts=tuple(page_artifacts) + (merged_artifact,),
-        page_artifacts=tuple(page_artifacts),
+        artifacts=(merged_artifact,),
+        page_artifacts=(),
         merged_artifact=merged_artifact,
         headers=expected_headers,
-        total_rows=len(merged_rows.rows),
+        total_rows=total_rows,
     )
 
 

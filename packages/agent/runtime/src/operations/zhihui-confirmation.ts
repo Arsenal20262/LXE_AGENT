@@ -82,17 +82,27 @@ export class ZhihuiTmsConfirmationRouter {
     if (execution.command !== "tms philippines products-export") {
       return { status: "error", reply: "智汇 TMS 执行结果格式不符合预期", files: [] };
     }
-    if (!execution.ok) return {
-      status: "error", reply: `智汇 TMS 商品导出失败：${observedError(execution)}`,
-      files: execution.files,
-    };
+    if (!execution.ok) {
+      const partialPages = execution.data.partial_pages;
+      const partialRows = execution.data.partial_rows;
+      const hasPartialMerge = execution.files.length === 1
+        && typeof partialPages === "number" && Number.isSafeInteger(partialPages) && partialPages > 0
+        && typeof partialRows === "number" && Number.isSafeInteger(partialRows) && partialRows >= 0;
+      return {
+        status: "error",
+        reply: hasPartialMerge
+          ? `智汇 TMS 商品导出未完整完成，已交付部分合并 XLSX（${partialPages} 页、${partialRows} 行）：${observedError(execution)}`
+          : `智汇 TMS 商品导出失败：${observedError(execution)}`,
+        files: execution.files,
+      };
+    }
     if (execution.data.action !== "execute" || execution.data.warehouse !== "PH"
       || execution.data.export_kind !== "philippines_product_full_export") {
       return { status: "error", reply: "智汇 TMS 执行结果格式不符合预期", files: [] };
     }
     return {
       status: "completed",
-      reply: `智汇 TMS 菲律宾商品导出完成，已生成 ${execution.files.length} 个 XLSX 文件。文件仅包含接口实际提供的字段。`,
+      reply: "智汇 TMS 菲律宾商品导出完成，已生成合并 XLSX 文件。文件仅包含接口实际提供的字段。",
       files: execution.files,
     };
   }

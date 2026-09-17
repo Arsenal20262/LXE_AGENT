@@ -98,18 +98,18 @@ def test_catalog_cli_completes_fake_login_export_download_and_xlsx_delivery(
     assert result["ok"] is True
     assert result["data"]["total_records"] == 2
     assert result["data"]["http_attempt_count"] == 4
-    assert len(result["files"]) == 2
+    assert len(result["files"]) == 1
     assert result["files"] == [item["path"] for item in result["data"]["artifacts"]]
-    assert [item["kind"] for item in result["data"]["artifacts"]] == ["page", "merged"]
+    assert [item["kind"] for item in result["data"]["artifacts"]] == ["merged"]
     assert all(Path(path).is_file() and path.endswith(".xlsx") for path in result["files"])
-    merged = load_workbook(result["files"][1], read_only=True)
+    merged = load_workbook(result["files"][0], read_only=True)
     assert list(merged.active.values) == [("商品ID", "库存"), (101, 5), (102, 8)]
     assert [method for method, _url, _options in session.calls] == ["POST", "POST", "POST", "GET"]
     assert "token" not in session.calls[-1][2]["headers"]
     assert "fixture-secret" not in json.dumps(result, ensure_ascii=False)
 
 
-def test_catalog_cli_failure_delivers_only_real_page_artifact(monkeypatch, tmp_path: Path, capsys) -> None:
+def test_catalog_cli_failure_delivers_only_real_partial_merge(monkeypatch, tmp_path: Path, capsys) -> None:
     first_url = "https://tms-cos.mabangerp.com/fixture-1.xls"
     second_url = "https://tms-cos.mabangerp.com/fixture-2.xls"
 
@@ -159,5 +159,7 @@ def test_catalog_cli_failure_delivers_only_real_page_artifact(monkeypatch, tmp_p
     assert result["data"]["code"] == "tms_download_invalid"
     assert len(result["files"]) == 1
     assert Path(result["files"][0]).is_file()
-    assert "第1页" in Path(result["files"][0]).name
-    assert not list(tmp_path.rglob("*合并*.xlsx"))
+    assert "部分合并" in Path(result["files"][0]).name
+    partial = load_workbook(result["files"][0], read_only=True)
+    assert list(partial.active.values) == [("商品ID", "库存"), (101, 5), (102, 8)]
+    assert not list(tmp_path.rglob("智慧tms-商品-第*页-*.xlsx"))

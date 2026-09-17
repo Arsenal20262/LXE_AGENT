@@ -131,14 +131,11 @@ def test_execute_composes_login_export_and_delivery_with_artifact_paths(monkeypa
         assert actual_client is client
         assert export_result.total_records == 2
         output_dir.mkdir(parents=True)
-        page = output_dir / f"智慧tms-商品-第1页-{date_label}.xlsx"
         merged = output_dir / f"智慧tms-商品-合并-{date_label}.xlsx"
-        page.write_bytes(b"page")
         merged.write_bytes(b"merged")
         calls.append(("delivery", output_dir))
         return SimpleNamespace(
             artifacts=(
-                SimpleNamespace(path=str(page), kind="page", page=1, total_pages=1),
                 SimpleNamespace(path=str(merged), kind="merged", page=None, total_pages=1),
             ),
             total_rows=2,
@@ -150,7 +147,7 @@ def test_execute_composes_login_export_and_delivery_with_artifact_paths(monkeypa
     result = export_products.run({"action": "execute"})
     assert result["success"] is True
     assert result["total_records"] == 2
-    assert len(result["artifacts"]) == 2
+    assert len(result["artifacts"]) == 1
     assert all(Path(item["path"]).is_absolute() for item in result["artifacts"])
     assert calls[0] == ("login", "fixture-account", "fixture-secret")
     assert calls[1][0] == "export"
@@ -158,7 +155,7 @@ def test_execute_composes_login_export_and_delivery_with_artifact_paths(monkeypa
     assert "fixture-secret" not in str(result)
 
 
-def test_execute_failure_reports_only_existing_pages_and_redacts_secret(monkeypatch, tmp_path: Path) -> None:
+def test_execute_failure_reports_only_partial_merge_and_redacts_secret(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("ZHIHUI_TMS_PRODUCTION_ENABLED", "1")
     monkeypatch.setenv("ZHIHUI_TMS_ACCOUNT", "fixture-account")
     monkeypatch.setenv("ZHIHUI_TMS_PASSWORD", "fixture-secret")
@@ -171,16 +168,23 @@ def test_execute_failure_reports_only_existing_pages_and_redacts_secret(monkeypa
 
     def fail_delivery(_client, _result, *, output_dir, date_label, on_event):
         output_dir.mkdir(parents=True)
-        (output_dir / f"智慧tms-商品-第1页-{date_label}.xlsx").write_bytes(b"page")
+        partial = output_dir / f"智慧tms-商品-部分合并-{date_label}.xlsx"
+        partial.write_bytes(b"merged")
         on_event({"stage": "downloaded", "page": 1, "total_pages": 1, "rows": 1})
-        raise RuntimeError("fixture-secret workbook error")
+        error = RuntimeError("fixture-secret workbook error")
+        error.partial_artifacts = (SimpleNamespace(path=str(partial), kind="merged_partial", page=None, total_pages=1),)
+        error.partial_pages = 1
+        error.partial_rows = 1
+        raise error
 
     monkeypatch.setattr(export_products, "deliver_product_exports", fail_delivery)
     events: list[dict[str, object]] = []
     result = export_products.run_with_events({"action": "execute"}, events.append)
     assert result["success"] is False
     assert len(result["artifacts"]) == 1
-    assert result["artifacts"][0]["kind"] == "page"
+    assert result["artifacts"][0]["kind"] == "merged_partial"
+    assert result["partial_pages"] == 1
+    assert result["partial_rows"] == 1
     assert "fixture-secret" not in str(result)
     assert "[REDACTED]" in result["exception"]
     assert [event["stage"] for event in events] == [

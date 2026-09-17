@@ -863,13 +863,14 @@ function DesktopSettingsForm({
               />
             </label>
           </div>
-          <label>
+          <label className="desktop-integration-production-toggle">
+            <span>{t.desktop.zhihui_tms.productionEnable}</span>
             <input
+              aria-label={t.desktop.zhihui_tms.productionEnable}
               checked={form.zhihuiTmsProductionEnabled}
               onChange={(event) => onChange({ zhihuiTmsProductionEnabled: event.target.checked })}
               type="checkbox"
             />
-            {t.desktop.zhihui_tms.productionEnable}
           </label>
           {setup.zhihui_tms.managed ? (
             <button className="desktop-clear-integration" onClick={() => onClearIntegration("zhihui_tms")} type="button">
