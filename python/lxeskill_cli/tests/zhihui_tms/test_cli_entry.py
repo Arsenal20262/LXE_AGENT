@@ -13,6 +13,7 @@ from services.zhihui_tms.planner import plan_product_export
 from lxeskill import cli as lxeskill_cli
 from lxeskill.business import load_catalog
 from shared.process_lock import InterProcessLockTimeout
+from shared.repository import repository_root
 
 
 @pytest.mark.parametrize(
@@ -199,3 +200,10 @@ def test_catalog_and_cli_preview_keep_credentials_out_of_arguments(monkeypatch, 
     assert records[-1]["ok"] is True
     assert records[-1]["data"]["action"] == "preview"
     assert records[-1]["files"] == []
+
+
+def test_zhihui_skill_manifest_covers_natural_product_export_wording() -> None:
+    text = (repository_root() / "skills" / "zhihui-tms-product-export" / "SKILL.md").read_text(encoding="utf-8")
+    for phrase in ("导出智汇商品", "下载菲律宾商品资料", "商品 SKU", "商品 Excel/XLSX", "把商品表导出来"):
+        assert phrase in text
+    assert "不处理订单、物流、发货、采购、财务报表" in text

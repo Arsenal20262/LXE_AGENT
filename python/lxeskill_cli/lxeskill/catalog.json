@@ -389,7 +389,7 @@
       "deliver_artifacts_on_failure": true, "timeout_ms": 1200000, "exposed": true,
       "input_schema": {"type": "object", "properties": {
         "action": {"type": "string", "enum": ["preview", "execute"], "description": "默认 preview；execute 需要运行时生产开关与安全注入的凭据。"},
-        "request": {"type": "string", "description": "用户原始商品数据需求；销量和历史库存措辞只用于归一化，不代表独立历史报表。"}
+        "request": {"type": "string", "description": "用户原始商品数据需求，支持导出、下载、拉取、整理商品清单或生成 Excel/XLSX 等自然语言；SKU、销量、库存、入库时间、上架时间等字段归一到商品全量导出，不代表独立历史报表。"}
       }, "additionalProperties": false}
     }
   ],
