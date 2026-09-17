@@ -134,6 +134,60 @@ def test_post_requires_authenticated_session() -> None:
         client.post_json("/private", {}, operation="认证请求")
 
 
+def test_product_endpoint_methods_send_documented_payloads() -> None:
+    session = FakeSession(
+        [
+            FakeResponse(200, {"code": "200", "datas": [], "totalNum": 0}),
+            FakeResponse(200, {"code": "200", "pop": "fixture-export-url"}),
+        ]
+    )
+    client = _client(session)
+    client._api_token = "fixture-api-token"
+
+    client.find_my_stockwarehouse_list(page=2)
+    client.export_stockwarehouse([123, "456"])
+
+    assert session.calls[0]["url"].endswith("/findMyStockwarehouseList")
+    assert session.calls[0]["json"] == {
+        "page": 2,
+        "pageSize": 1000,
+        "isConfirm": 1,
+        "classId": None,
+        "orderBys": "2",
+        "status": 1,
+        "gridproperty": -1,
+        "if_produce": "-1",
+        "providerId": "",
+        "stockQuantity": -1,
+    }
+    assert session.calls[1]["url"].endswith("/exportStockwarehouse")
+    assert session.calls[1]["json"] == {
+        "startNum": None,
+        "pageSize": 1000,
+        "classId": None,
+        "gridproperty": -1,
+        "idsList": [123, "456"],
+        "isCombo": 1,
+        "ischecked": False,
+        "orderBys": "2",
+        "status": 1,
+        "stockValueArr": [
+            "stockSku",
+            "sale3",
+            "sale1",
+            "availableinventory",
+            "sale2",
+            "warehouse",
+            "stockQuantity",
+            "allotShippingQuantity",
+            "stockCost",
+            "purchasePrice",
+            "lastInTime",
+            "sale5",
+        ],
+    }
+
+
 def test_retryable_status_uses_bounded_exponential_delay_then_returns_success() -> None:
     sleeps: list[float] = []
     session = FakeSession(

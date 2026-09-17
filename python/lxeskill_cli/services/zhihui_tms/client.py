@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import random
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
@@ -134,6 +134,59 @@ class ZhihuiTmsClient:
             operation=operation,
             login=False,
             secrets=(self._api_token,),
+        )
+
+    def find_my_stockwarehouse_list(self, *, page: int) -> dict[str, Any]:
+        if isinstance(page, bool) or not isinstance(page, int) or page < 1:
+            raise ValueError("智汇 TMS 商品列表页码必须是正整数")
+        return self.post_json(
+            "/findMyStockwarehouseList",
+            {
+                "page": page,
+                "pageSize": 1000,
+                "isConfirm": 1,
+                "classId": None,
+                "orderBys": "2",
+                "status": 1,
+                "gridproperty": -1,
+                "if_produce": "-1",
+                "providerId": "",
+                "stockQuantity": -1,
+            },
+            operation="智汇 TMS 商品列表",
+        )
+
+    def export_stockwarehouse(self, product_ids: Sequence[Any]) -> dict[str, Any]:
+        if isinstance(product_ids, (str, bytes, bytearray)) or not product_ids:
+            raise ValueError("智汇 TMS 商品导出至少需要一个商品 ID")
+        return self.post_json(
+            "/exportStockwarehouse",
+            {
+                "startNum": None,
+                "pageSize": 1000,
+                "classId": None,
+                "gridproperty": -1,
+                "idsList": list(product_ids),
+                "isCombo": 1,
+                "ischecked": False,
+                "orderBys": "2",
+                "status": 1,
+                "stockValueArr": [
+                    "stockSku",
+                    "sale3",
+                    "sale1",
+                    "availableinventory",
+                    "sale2",
+                    "warehouse",
+                    "stockQuantity",
+                    "allotShippingQuantity",
+                    "stockCost",
+                    "purchasePrice",
+                    "lastInTime",
+                    "sale5",
+                ],
+            },
+            operation="智汇 TMS 商品分页导出",
         )
 
     def _post_json(
