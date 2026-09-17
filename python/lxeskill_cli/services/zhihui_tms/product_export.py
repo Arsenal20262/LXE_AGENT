@@ -189,6 +189,7 @@ def export_stockwarehouse_pages(
     max_requests: int = DEFAULT_MAX_REQUESTS,
     max_runtime: float = DEFAULT_MAX_RUNTIME,
     clock: Clock = time.monotonic,
+    on_event: Callable[[dict[str, Any]], None] | None = None,
 ) -> ZhihuiTmsExportResult:
     """Fetch bounded product pages and request one export for each non-empty page."""
     _validate_limits(
@@ -277,6 +278,11 @@ def export_stockwarehouse_pages(
                 f"智汇 TMS 商品导出记录数上限: {max_records}",
             )
         seen_ids.update(page_keys)
+        if on_event is not None:
+            on_event({
+                "stage": "listed", "page": page_number,
+                "page_records": len(ids), "total_records": len(seen_ids),
+            })
 
         allow_request()
         export_response = client.export_stockwarehouse(list(ids))
@@ -288,6 +294,8 @@ def export_stockwarehouse_pages(
                 payload=export_response,
             )
         _extract_pop(export_response)
+        if on_event is not None:
+            on_event({"stage": "exported", "page": page_number, "page_records": len(ids)})
         pages.append(
             ZhihuiTmsExportPage(
                 page=page_number,

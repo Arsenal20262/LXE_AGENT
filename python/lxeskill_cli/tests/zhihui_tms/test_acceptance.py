@@ -10,6 +10,8 @@ from openpyxl import Workbook, load_workbook
 from lxeskill import cli as lxeskill_cli
 from services.agent_cli.zhihui import export_products
 from services.zhihui_tms.client import ZhihuiTmsClient
+from services.zhihui_tms.errors import ZhihuiTmsSchemaError
+from services.zhihui_tms.product_export import ZhihuiTmsExportPage, ZhihuiTmsExportResult
 from shared.workspace import activate_external_workspace, activate_project_workspace
 
 
@@ -84,6 +86,15 @@ def test_catalog_cli_completes_fake_login_export_download_and_xlsx_delivery(
 
     assert exit_code == 0
     result = records[-1]
+    progress = records[:-1]
+    assert [record["stage"] for record in progress] == [
+        "login_started", "authenticated", "listed", "exported",
+        "delivery_started", "downloaded", "merged",
+    ]
+    assert all(record["type"] == "progress" and record["protocol_version"] == "1" for record in progress)
+    assert all("fixture-secret" not in json.dumps(record, ensure_ascii=False) for record in progress)
+    assert all("fixture-token" not in json.dumps(record, ensure_ascii=False) for record in progress)
+    assert all("https://" not in json.dumps(record, ensure_ascii=False) for record in progress)
     assert result["ok"] is True
     assert result["data"]["total_records"] == 2
     assert result["data"]["http_attempt_count"] == 4
@@ -96,3 +107,57 @@ def test_catalog_cli_completes_fake_login_export_download_and_xlsx_delivery(
     assert [method for method, _url, _options in session.calls] == ["POST", "POST", "POST", "GET"]
     assert "token" not in session.calls[-1][2]["headers"]
     assert "fixture-secret" not in json.dumps(result, ensure_ascii=False)
+
+
+def test_catalog_cli_failure_delivers_only_real_page_artifact(monkeypatch, tmp_path: Path, capsys) -> None:
+    first_url = "https://tms-cos.mabangerp.com/fixture-1.xls"
+    second_url = "https://tms-cos.mabangerp.com/fixture-2.xls"
+
+    class FakeClient:
+        request_attempt_count = 0
+
+        def login(self, _account: str, _password: str) -> None:
+            return None
+
+        def download_bytes(self, url: str) -> tuple[bytes, str]:
+            if url == first_url:
+                return _workbook_bytes(), "application/vnd.ms-excel"
+            raise ZhihuiTmsSchemaError("tms_download_invalid", "fixture second download failed")
+
+    def fake_export(_client: FakeClient, **_kwargs: Any) -> ZhihuiTmsExportResult:
+        return ZhihuiTmsExportResult(
+            pages=(
+                ZhihuiTmsExportPage(1, (101,), {"pop": first_url}),
+                ZhihuiTmsExportPage(2, (102,), {"pop": second_url}),
+            ),
+            total_records=2,
+            reported_total_num=2,
+            request_count=4,
+        )
+
+    monkeypatch.setenv("ZHIHUI_TMS_PRODUCTION_ENABLED", "1")
+    monkeypatch.setenv("ZHIHUI_TMS_ACCOUNT", "fixture-account")
+    monkeypatch.setenv("ZHIHUI_TMS_PASSWORD", "fixture-secret")
+    monkeypatch.setenv("LXE_DATA_ROOT", str(tmp_path / "desktop-data"))
+    monkeypatch.delenv("LXESKILL_SKILL_SCOPE", raising=False)
+    monkeypatch.setattr(export_products, "ZhihuiTmsClient", FakeClient)
+    monkeypatch.setattr(export_products, "export_stockwarehouse_pages", fake_export)
+    activate_external_workspace(tmp_path)
+    try:
+        exit_code = lxeskill_cli._main(["tms", "philippines", "products-export", "--action", "execute"])
+        records = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.strip()]
+    finally:
+        activate_project_workspace()
+
+    assert exit_code != 0
+    assert [record["stage"] for record in records[:-1]] == [
+        "login_started", "authenticated", "delivery_started", "downloaded",
+    ]
+    result = records[-1]
+    assert result["ok"] is False
+    assert result["error"]["message"].find("fixture second download failed") >= 0
+    assert result["data"]["code"] == "tms_download_invalid"
+    assert len(result["files"]) == 1
+    assert Path(result["files"][0]).is_file()
+    assert "第1页" in Path(result["files"][0]).name
+    assert not list(tmp_path.rglob("*合并*.xlsx"))

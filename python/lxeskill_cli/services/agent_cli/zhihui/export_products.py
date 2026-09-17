@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 import contextlib
 from hashlib import sha256
 import os
@@ -42,6 +43,19 @@ def _account_lock_path(account: str) -> Path:
 
 def run(arguments: dict[str, Any]) -> dict[str, Any]:
     """Catalog entrypoint; credentials are process environment only."""
+    return _run(arguments, on_event=None)
+
+
+def run_with_events(
+    arguments: dict[str, Any], on_event: Callable[[dict[str, Any]], None],
+) -> dict[str, Any]:
+    """Catalog entrypoint with credential-free progress records."""
+    return _run(arguments, on_event=on_event)
+
+
+def _run(
+    arguments: dict[str, Any], *, on_event: Callable[[dict[str, Any]], None] | None,
+) -> dict[str, Any]:
     try:
         plan = plan_product_export(arguments)
     except (TypeError, ValueError) as exc:
@@ -83,22 +97,32 @@ def run(arguments: dict[str, Any]) -> dict[str, Any]:
 
     output_dir = artifact_root() / "zhihui_tms" / uuid4().hex
     client: Any = None
+
+    def emit(event: dict[str, Any]) -> None:
+        if on_event is not None:
+            on_event(event)
+
     try:
         with interprocess_lock(_account_lock_path(account), timeout_seconds=0):
             client = ZhihuiTmsClient()
+            emit({"stage": "login_started"})
             client.login(account, password)
+            emit({"stage": "authenticated"})
             export_result = export_stockwarehouse_pages(
                 client,
                 max_pages=plan.max_pages,
                 max_records=plan.max_records,
                 max_requests=plan.max_requests,
                 max_runtime=plan.max_runtime,
+                **({"on_event": emit} if on_event is not None else {}),
             )
+            emit({"stage": "delivery_started", "total_pages": len(export_result.pages)})
             delivery = deliver_product_exports(
                 client,
                 export_result,
                 output_dir=output_dir,
                 date_label=plan.date_label,
+                **({"on_event": emit} if on_event is not None else {}),
             )
             artifacts = [
                 {"path": item.path, "kind": item.kind, "page": item.page, "total_pages": item.total_pages}
@@ -137,4 +161,4 @@ def run(arguments: dict[str, Any]) -> dict[str, Any]:
                 close()
 
 
-__all__ = ["run"]
+__all__ = ["run", "run_with_events"]

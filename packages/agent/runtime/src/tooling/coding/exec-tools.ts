@@ -240,6 +240,8 @@ export function createExecTools(dependencies: ExecToolDependencies): ToolDefinit
         }
         const maxOutputTokens = outputTokenBudget(input);
         const command = execShell.normalizeCommand(context.workspace.worktree, rawCommand);
+        const zhihuiProgress = classifyLxeSkillInput(input, businessCommands)?.commandId
+          === "tms philippines products-export";
         const payload = await processes.execute({
           command,
           cwd: paths.resolveExecutableCwd(context.workspace, input.cwd ?? "."),
@@ -249,6 +251,7 @@ export function createExecTools(dependencies: ExecToolDependencies): ToolDefinit
           yieldMs,
           signal: context.handle.signal,
           toolCallId: context.tool_call_id ?? "",
+          trackZhihuiProgress: zhihuiProgress,
           ...(context.turn_id === undefined ? {} : { turnId: context.turn_id }),
           ...(options.execEnv ? { env: options.execEnv({ skillNames: context.skill_names ?? [] }) } : {}),
         });

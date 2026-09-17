@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import re
 import tempfile
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from io import BytesIO
@@ -200,6 +200,7 @@ def deliver_product_exports(
     *,
     output_dir: str | Path,
     date_label: str,
+    on_event: Callable[[dict[str, Any]], None] | None = None,
 ) -> ZhihuiTmsDeliveryResult:
     label = _validate_date_label(date_label)
     destination = _resolve_output_dir(output_dir)
@@ -239,6 +240,11 @@ def deliver_product_exports(
                 total_pages=total_pages,
             )
         )
+        if on_event is not None:
+            on_event({
+                "stage": "downloaded", "page": page.page,
+                "total_pages": total_pages, "rows": len(workbook_rows.rows),
+            })
         if expected_headers is None:
             expected_headers = workbook_rows.headers
         elif workbook_rows.headers != expected_headers:
@@ -260,6 +266,8 @@ def deliver_product_exports(
             f"智汇 TMS 合并 artifact 路径重复: {merged_path}",
         )
     _atomic_write_workbook(merged_path, merged_rows)
+    if on_event is not None:
+        on_event({"stage": "merged", "total_pages": total_pages, "rows": len(merged_rows.rows)})
     merged_artifact = ZhihuiTmsArtifact(
         path=str(merged_path),
         kind="merged",

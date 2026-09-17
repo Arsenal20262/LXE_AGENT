@@ -45,6 +45,7 @@ import {
   type RuntimeEmitter,
   type RuntimeHandle,
   type TurnOutcome,
+  type ZhihuiTmsProgressEvent,
 } from "@lxe/runtime";
 import { DashboardService } from "./dashboard-service";
 import { loadAgentFeishuConfig } from "./feishu-runtime-config";
@@ -64,6 +65,7 @@ export interface AgentRuntimeHostOptions {
   allowedSkillTypes?: ReadonlySet<string>;
   managedLlmState?: ManagedLlmState;
   onBackgroundTaskChanged?: (snapshot: JsonObject) => Promise<void> | void;
+  onZhihuiTmsProgress?: (event: ZhihuiTmsProgressEvent) => Promise<void> | void;
   onSkillsChanged?: (revision: number) => Promise<void> | void;
   onSessionChanged?: (sessionId: string, change: AgentSessionChange) => Promise<void> | void;
   onManagedLlmAuthenticationFailure?: (
@@ -209,6 +211,7 @@ export function createAgentRuntimeHost(
     lxeSkillStatus: () => lxeSkillRuntime.snapshot(),
     execEnv: ({ skillNames }) => ({ LXESKILL_SKILL_SCOPE: skillNames.join(",") }),
     ...(options.onBackgroundTaskChanged ? { onExecComplete: options.onBackgroundTaskChanged } : {}),
+    ...(options.onZhihuiTmsProgress ? { onZhihuiTmsProgress: options.onZhihuiTmsProgress } : {}),
   });
   let skillRefreshTimer: ReturnType<typeof setInterval> | undefined;
   const runtimeServices: Array<{

@@ -60,6 +60,25 @@ def test_paginates_and_exports_each_page_until_total_is_reached() -> None:
     assert client.export_calls == [list(range(1000)), [1000]]
 
 
+def test_progress_reports_only_validated_lists_and_successful_exports() -> None:
+    client = FakeProductClient({1: list_fixture(1, [101, 102], 2)})
+    events: list[dict[str, Any]] = []
+
+    export_stockwarehouse_pages(client, on_event=events.append)
+
+    assert events == [
+        {"stage": "listed", "page": 1, "page_records": 2, "total_records": 2},
+        {"stage": "exported", "page": 1, "page_records": 2},
+    ]
+    assert "fixture-export-url" not in str(events)
+
+    failed = FakeProductClient({1: list_fixture(1, [101], 1)}, export_response={"code": "200"})
+    failed_events: list[dict[str, Any]] = []
+    with pytest.raises(ZhihuiTmsPaginationError, match="pop"):
+        export_stockwarehouse_pages(failed, on_event=failed_events.append)
+    assert failed_events == [{"stage": "listed", "page": 1, "page_records": 1, "total_records": 1}]
+
+
 def test_empty_page_is_successful_and_does_not_export() -> None:
     client = FakeProductClient({1: list_fixture(1, [], 0)})
 

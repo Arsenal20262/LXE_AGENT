@@ -48,6 +48,14 @@ def test_preview_does_not_construct_client_or_create_artifacts(monkeypatch, tmp_
     assert list(tmp_path.iterdir()) == []
 
 
+def test_preview_and_disabled_execute_emit_no_misleading_progress(monkeypatch) -> None:
+    events: list[dict[str, object]] = []
+    monkeypatch.delenv("ZHIHUI_TMS_PRODUCTION_ENABLED", raising=False)
+    assert export_products.run_with_events({"action": "preview"}, events.append)["success"] is True
+    assert export_products.run_with_events({"action": "execute"}, events.append)["success"] is False
+    assert events == []
+
+
 def test_execute_requires_explicit_gate_and_runtime_secrets(monkeypatch) -> None:
     monkeypatch.delenv("ZHIHUI_TMS_PRODUCTION_ENABLED", raising=False)
     monkeypatch.delenv("ZHIHUI_TMS_ACCOUNT", raising=False)
@@ -78,10 +86,12 @@ def test_execute_refuses_second_concurrent_run_before_login(monkeypatch, tmp_pat
         yield
 
     monkeypatch.setattr(export_products, "interprocess_lock", busy_lock)
-    result = export_products.run({"action": "execute"})
+    events: list[dict[str, object]] = []
+    result = export_products.run_with_events({"action": "execute"}, events.append)
     assert result["success"] is False
     assert result["code"] == "tms_export_busy"
     assert result["artifacts"] == []
+    assert events == []
 
 
 def test_account_lock_is_shared_across_workspaces_without_exposing_account(monkeypatch, tmp_path: Path) -> None:
@@ -153,20 +163,29 @@ def test_execute_failure_reports_only_existing_pages_and_redacts_secret(monkeypa
     monkeypatch.setenv("ZHIHUI_TMS_PASSWORD", "fixture-secret")
     monkeypatch.setattr(export_products, "artifact_root", lambda: tmp_path)
     monkeypatch.setattr(export_products, "ZhihuiTmsClient", lambda: SimpleNamespace(login=lambda *_: None))
-    monkeypatch.setattr(export_products, "export_stockwarehouse_pages", lambda *_args, **_kwargs: SimpleNamespace())
+    monkeypatch.setattr(
+        export_products, "export_stockwarehouse_pages",
+        lambda *_args, **_kwargs: SimpleNamespace(pages=(object(),), total_records=1, request_count=2),
+    )
 
-    def fail_delivery(_client, _result, *, output_dir, date_label):
+    def fail_delivery(_client, _result, *, output_dir, date_label, on_event):
         output_dir.mkdir(parents=True)
         (output_dir / f"智慧tms-商品-第1页-{date_label}.xlsx").write_bytes(b"page")
+        on_event({"stage": "downloaded", "page": 1, "total_pages": 1, "rows": 1})
         raise RuntimeError("fixture-secret workbook error")
 
     monkeypatch.setattr(export_products, "deliver_product_exports", fail_delivery)
-    result = export_products.run({"action": "execute"})
+    events: list[dict[str, object]] = []
+    result = export_products.run_with_events({"action": "execute"}, events.append)
     assert result["success"] is False
     assert len(result["artifacts"]) == 1
     assert result["artifacts"][0]["kind"] == "page"
     assert "fixture-secret" not in str(result)
     assert "[REDACTED]" in result["exception"]
+    assert [event["stage"] for event in events] == [
+        "login_started", "authenticated", "delivery_started", "downloaded",
+    ]
+    assert "fixture-secret" not in str(events)
 
 
 def test_catalog_and_cli_preview_keep_credentials_out_of_arguments(monkeypatch, capsys) -> None:

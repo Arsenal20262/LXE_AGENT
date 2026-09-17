@@ -85,6 +85,26 @@ def test_delivers_page_artifacts_and_one_ordered_merged_workbook(tmp_path: Path)
     assert client.calls == [first_url, second_url]
 
 
+def test_delivery_progress_reports_saved_pages_and_merge_without_urls(tmp_path: Path) -> None:
+    first_url = "https://tms-cos.mabangerp.com/export/page-1.xls"
+    client = FakeDownloadClient({first_url: (_xlsx_bytes([["SKU"], ["A"]]), "application/vnd.ms-excel")})
+    events: list[dict[str, Any]] = []
+
+    deliver_product_exports(
+        client,
+        _export_result((1, first_url)),
+        output_dir=tmp_path,
+        date_label="20260917",
+        on_event=events.append,
+    )
+
+    assert events == [
+        {"stage": "downloaded", "page": 1, "total_pages": 1, "rows": 1},
+        {"stage": "merged", "total_pages": 1, "rows": 1},
+    ]
+    assert first_url not in str(events)
+
+
 def test_header_mismatch_keeps_downloaded_pages_and_does_not_publish_merge(tmp_path: Path) -> None:
     first_url = "https://tms-cos.mabangerp.com/export/page-1.xls"
     second_url = "https://tms-cos.mabangerp.com/export/page-2.xls"

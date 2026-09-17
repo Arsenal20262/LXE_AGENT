@@ -5694,6 +5694,16 @@ h1 {
   white-space: nowrap;
 }
 
+.tool-op-progress {
+  flex: 0 1 45%;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 0.6875rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .tool-op-mark {
   flex: 0 0 auto;
   margin-left: auto;
