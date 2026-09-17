@@ -31,6 +31,7 @@ import {
   McpManager,
   OfficialMcpConnector,
   OneShotCliRunner,
+  ZhihuiTmsConfirmationRouter,
   registerCodingTools,
   registerToolSearch,
   registerUserQuestionTool,
@@ -177,14 +178,15 @@ export function createAgentRuntimeHost(
     LXE_USER_SKILLS_ROOT: _userSkillsRoot,
     ...lxeSkillEnvironment
   } = environment;
-  const lxeSkillRunner = lxeSkillArgv ? new OneShotCliRunner({
+  const lxeSkillRunnerConfig = lxeSkillArgv ? {
     command: lxeSkillArgv,
     cwd: options.dataRoot,
     timeoutMs: 3 * 60_000,
     maxOutputBytes: 10 * 1024 * 1024,
     env: lxeSkillEnvironment,
-    onStderr: (line) => logger.info("lxeskill", { line }),
-  }) : undefined;
+    onStderr: (line: string) => logger.info("lxeskill", { line }),
+  } : undefined;
+  const lxeSkillRunner = lxeSkillRunnerConfig ? new OneShotCliRunner(lxeSkillRunnerConfig) : undefined;
   const maintenance = lxeSkillRunner ? new MaintenanceScheduler({
     environment: lxeSkillEnvironment,
     store,
@@ -290,6 +292,13 @@ export function createAgentRuntimeHost(
       environment,
     }),
     tools,
+    ...(lxeSkillRunner ? { zhihuiConfirmation: {
+      router: new ZhihuiTmsConfirmationRouter(lxeSkillRunner),
+      ask: async (question, context) => {
+        const answers = await questions.askForTurn([question], context);
+        return answers[0]?.selected[0] ?? "";
+      },
+    } } : {}),
     workspaceInstances,
     contextWindowTokens: providerDescriptor.contextWindowTokens,
     display: {

@@ -1,7 +1,7 @@
 ---
 name: zhihui-tms-product-export
 description: 用户用自然语言要求获取、拉取、查询并导出智汇 TMS 菲律宾站商品数据时使用，例如“导出智汇商品”“下载菲律宾商品资料”“拉取商品清单”“生成商品 Excel/XLSX”，或要求商品的 SKU、销量、库存、入库时间、上架时间等字段并希望整理成文件。口语化表达如“帮我把智汇菲律宾商品数据拉下来”“把商品表导出来”也属于此 Skill。仅限商品全量导出，不处理订单、物流、发货、采购、财务报表或独立历史报表。
-type: business
+type: amazon_replenish
 commands:
   - lxeskill tms philippines products-export
 ---
@@ -18,7 +18,7 @@ commands:
 
 如果用户只是在询问订单、物流、发货、采购或财务信息，或要求独立的历史销量/库存报表，不要调用本 Skill；先说明当前接口只提供商品全量导出。
 
-先通过 CLI 预览固定导出计划，再在用户明确要求执行导出时使用 `action=execute`。只调用声明的命令，不自己拼 TMS HTTP 请求、Cookie、Token 或账号密码。
+先通过 CLI 预览固定导出计划。Desktop 对匹配的商品查询会直接展示预览和确认卡；只有用户在本次确认卡中选择“确认执行导出”，运行时才执行一次 `action=execute`。用户不需要自行再发送“执行”，也不得将普通聊天文本当成确认。若从非确认卡流程直接调用本 Skill，则只能在有明确、当前的执行授权时使用 `action=execute`。只调用声明的命令，不自己拼 TMS HTTP 请求、Cookie、Token 或账号密码。
 
 ```text
 lxeskill tms philippines products-export --action preview --request "菲律宾商品数据"
