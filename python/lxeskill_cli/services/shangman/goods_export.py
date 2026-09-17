@@ -1,0 +1,383 @@
+from __future__ import annotations
+
+import json
+import re
+import tempfile
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Protocol
+from urllib.parse import urlsplit
+
+import aiohttp
+from openpyxl import load_workbook
+
+from shared.infra.net import erp_http_session
+from shared.workspace import artifact_root
+
+
+BASE_URL = "https://erp.shangmanet.com"
+CAPTCHA_PATH = "/api/blade-auth/oauth/captcha"
+TOKEN_PATH = "/api/blade-auth/oauth/token"
+GOODS_EXPORT_PATH = "/api/blade-goods/goods/merchant/exportNew"
+DEFAULT_OUTPUT_DIR = artifact_root() / "shangman" / "indonesia"
+SOURCE = "shangman_goods_export"
+PLATFORM = "shangman-indonesia"
+
+REQUIRED_BUSINESS_HEADERS = (
+    "SKU",
+    "商品名",
+    "总数量",
+    "有效库存",
+    "锁定库存",
+    "在途库存",
+    "预警库存",
+    "7天销量",
+    "15天销量",
+    "30天销量",
+    "仓库名称",
+    "创建时间",
+)
+
+
+class CaptchaCodeProvider(Protocol):
+    async def get_code(self, image: str) -> str:
+        """Return captcha text supplied by the caller for the displayed image."""
+
+
+@dataclass(frozen=True)
+class StaticCaptchaCodeProvider:
+    code: str
+
+    async def get_code(self, image: str) -> str:
+        del image
+        return self.code
+
+
+@dataclass(frozen=True)
+class ShangmanCredentials:
+    """Processed values supplied by the runtime; this client never persists them."""
+
+    tenant_id: str
+    username: str
+    password: str
+    basic_username: str
+    basic_password: str
+
+
+class ShangmanError(RuntimeError):
+    pass
+
+
+class ShangmanHttpError(ShangmanError):
+    pass
+
+
+class ShangmanAuthError(ShangmanError):
+    pass
+
+
+class ShangmanBusinessError(ShangmanError):
+    pass
+
+
+class ShangmanDownloadUrlError(ShangmanBusinessError):
+    pass
+
+
+class GoodsExportWorkbookError(ShangmanBusinessError):
+    pass
+
+
+@dataclass(frozen=True)
+class ShangmanExportResult:
+    artifact_path: str
+    filename: str
+    sheet_names: list[str]
+    row_count: int
+    headers: list[str]
+    download_host: str
+    platform: str = PLATFORM
+    source: str = SOURCE
+
+    def to_payload(self) -> dict[str, Any]:
+        return {
+            "platform": self.platform,
+            "source": self.source,
+            "artifact_path": self.artifact_path,
+            "filename": self.filename,
+            "sheet_names": list(self.sheet_names),
+            "row_count": self.row_count,
+            "headers": list(self.headers),
+            "download_host": self.download_host,
+        }
+
+
+def _normalize_header(value: Any) -> str:
+    compact = re.sub(r"\s+", "", str(value or "")).strip()
+    translated = re.search(r"\(([^()]*)\)$", compact)
+    if translated:
+        chinese_label = translated.group(1)
+        return {"商品编码": "SKU", "商品名称": "商品名"}.get(chinese_label, chinese_label)
+    return compact
+
+
+def _redact(text: str, sensitive_values: tuple[str, ...]) -> str:
+    result = str(text or "")
+    for value in sensitive_values:
+        if value:
+            result = result.replace(value, "<redacted>")
+    result = re.sub(
+        r"(?i)(authorization|blade-auth|password|access_token|token|captcha[-_](?:key|code))"
+        r"\s*[:=]\s*[\"']?[^,\s\"'}]+",
+        r"\1=<redacted>",
+        result,
+    )
+    return result[:300]
+
+
+def _response_message(payload: dict[str, Any], fallback: str) -> str:
+    for field in ("message", "msg", "error", "error_description"):
+        value = payload.get(field)
+        if value:
+            return str(value)
+    return fallback
+
+
+class ShangmanClient:
+    def __init__(
+        self,
+        *,
+        credentials: ShangmanCredentials,
+        captcha_provider: CaptchaCodeProvider,
+        session: Any | None = None,
+        base_url: str = BASE_URL,
+        output_dir: str | Path | None = None,
+        trusted_download_hosts: set[str] | frozenset[str] | None = None,
+    ) -> None:
+        self.credentials = credentials
+        self.captcha_provider = captcha_provider
+        self.session = session or erp_http_session
+        self.base_url = base_url.rstrip("/")
+        self.output_dir = Path(output_dir) if output_dir is not None else DEFAULT_OUTPUT_DIR
+        default_host = str(urlsplit(self.base_url).hostname or "").lower()
+        self.trusted_download_hosts = {
+            str(host).strip().lower()
+            for host in (trusted_download_hosts or {default_host, "oss.erp.shangmanet.com"})
+            if str(host).strip()
+        }
+        self._basic_auth = aiohttp.BasicAuth(
+            credentials.basic_username,
+            credentials.basic_password,
+        )
+
+    @property
+    def _sensitive_values(self) -> tuple[str, ...]:
+        credentials = self.credentials
+        return (
+            credentials.tenant_id,
+            credentials.username,
+            credentials.password,
+            credentials.basic_username,
+            credentials.basic_password,
+        )
+
+    def _url(self, path: str) -> str:
+        return f"{self.base_url}{path}"
+
+    async def _json_response(self, response: Any, *, action: str) -> dict[str, Any]:
+        status = int(getattr(response, "status", 0) or 0)
+        text = await response.text()
+        if status < 200 or status >= 300:
+            message = _redact(text, self._sensitive_values) or "empty response"
+            error_type = ShangmanAuthError if status in {401, 403} else ShangmanHttpError
+            raise error_type(f"{action} request failed (status={status}): {message}")
+        try:
+            payload = json.loads(text) if text else {}
+        except json.JSONDecodeError as exc:
+            message = _redact(text, self._sensitive_values) or "empty response"
+            raise ShangmanBusinessError(f"{action} returned invalid JSON: {message}") from exc
+        if not isinstance(payload, dict):
+            raise ShangmanBusinessError(f"{action} returned a non-object JSON value")
+        return payload
+
+    async def _login(self) -> str:
+        captcha_url = self._url(CAPTCHA_PATH)
+        async with self.session.get(captcha_url) as response:
+            captcha = await self._json_response(response, action="captcha")
+        captcha_key = str(captcha.get("key") or "").strip()
+        captcha_image = str(captcha.get("image") or "").strip()
+        if not captcha_key or not captcha_image:
+            message = _redact(_response_message(captcha, "missing captcha key or image"), self._sensitive_values)
+            raise ShangmanAuthError(f"captcha response incomplete: {message}")
+
+        try:
+            captcha_code = str(await self.captcha_provider.get_code(captcha_image) or "").strip()
+        except Exception as exc:
+            message = _redact(str(exc), self._sensitive_values)
+            raise ShangmanAuthError(f"captcha provider failed: {message}") from exc
+        if not captcha_code:
+            raise ShangmanAuthError("captcha provider returned empty code")
+
+        credentials = self.credentials
+        params = {
+            "tenantId": credentials.tenant_id,
+            "username": credentials.username,
+            "password": credentials.password,
+            "grant_type": "captcha",
+            "scope": "all",
+            "type": "account",
+        }
+        headers = {
+            "Captcha-Key": captcha_key,
+            "Captcha-Code": captcha_code,
+            "Tenant-Id": credentials.tenant_id,
+        }
+        async with self.session.post(
+            self._url(TOKEN_PATH),
+            params=params,
+            headers=headers,
+            auth=self._basic_auth,
+        ) as response:
+            token_payload = await self._json_response(response, action="login")
+        access_token = str(token_payload.get("access_token") or "").strip()
+        if not access_token:
+            message = _redact(_response_message(token_payload, "missing access_token"), self._sensitive_values)
+            raise ShangmanAuthError(f"login response incomplete: {message}")
+        return access_token
+
+    def _validate_download_url(self, raw_url: Any) -> tuple[str, str]:
+        url = str(raw_url or "").strip()
+        parsed = urlsplit(url)
+        host = str(parsed.hostname or "").lower()
+        if parsed.scheme.lower() != "https" or not host or host not in self.trusted_download_hosts:
+            raise ShangmanDownloadUrlError(
+                "export download URL must use trusted https"
+            )
+        if parsed.username or parsed.password:
+            raise ShangmanDownloadUrlError("export returned a download URL containing credentials")
+        return url, host
+
+    @staticmethod
+    def _row_values(row: tuple[Any, ...]) -> list[Any]:
+        return list(row)
+
+    def _validate_workbook(self, path: Path) -> tuple[list[str], int, list[str]]:
+        try:
+            workbook = load_workbook(path, read_only=True, data_only=True)
+        except Exception as exc:
+            message = _redact(str(exc), self._sensitive_values)
+            raise GoodsExportWorkbookError(f"downloaded file is not a readable XLSX: {message}") from exc
+
+        try:
+            for worksheet in workbook.worksheets:
+                # The source ERP may write an incorrect <dimension>. Force a
+                # scan of worksheet XML before iterating rows so validation is
+                # based on actual cells rather than max_row/max_column alone.
+                worksheet.reset_dimensions()
+                worksheet.calculate_dimension(force=True)
+                header_row_index: int | None = None
+                headers: list[str] = []
+                row_count = 0
+                for row_index, raw_row in enumerate(worksheet.iter_rows(values_only=True), start=1):
+                    row = self._row_values(raw_row)
+                    normalized = {_normalize_header(value) for value in row}
+                    if header_row_index is None:
+                        if set(REQUIRED_BUSINESS_HEADERS).issubset(normalized):
+                            header_row_index = row_index
+                            headers = [str(value).strip() if value is not None else "" for value in row]
+                        continue
+                    if any(value not in (None, "") for value in row):
+                        row_count += 1
+                if header_row_index is not None:
+                    return list(worksheet.parent.sheetnames), row_count, headers
+        finally:
+            workbook.close()
+
+        raise GoodsExportWorkbookError(
+            "downloaded workbook is readable but has no required business headers"
+        )
+
+    async def export_goods(self) -> ShangmanExportResult:
+        access_token = await self._login()
+        credentials = self.credentials
+        headers = {
+            "Blade-Auth": f"bearer {access_token}",
+            "Tenant-Id": credentials.tenant_id,
+        }
+        async with self.session.post(
+            self._url(GOODS_EXPORT_PATH),
+            headers=headers,
+            auth=self._basic_auth,
+        ) as response:
+            export_payload = await self._json_response(response, action="goods export")
+        try:
+            response_code = int(export_payload.get("code"))
+        except (TypeError, ValueError):
+            response_code = 0
+        if response_code != 200 or export_payload.get("success") is not True:
+            message = _redact(_response_message(export_payload, "export response was not successful"), self._sensitive_values)
+            raise ShangmanBusinessError(f"goods export failed (code={response_code}): {message}")
+        download_url, download_host = self._validate_download_url(export_payload.get("data"))
+
+        download_options: dict[str, Any] = {"allow_redirects": False}
+        if download_host == urlsplit(self.base_url).hostname:
+            download_options.update(headers=headers, auth=self._basic_auth)
+        async with self.session.get(download_url, **download_options) as response:
+            status = int(getattr(response, "status", 0) or 0)
+            body = await response.read()
+            if status < 200 or status >= 300:
+                message = _redact(body.decode("utf-8", errors="replace"), self._sensitive_values)
+                raise ShangmanHttpError(
+                    f"goods download request failed (status={status}): {message or 'empty response'}"
+                )
+
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        filename = f"智慧印尼-商品-{datetime.now().strftime('%Y%m%d-%H%M%S')}.xlsx"
+        artifact_path = self.output_dir / filename
+        temporary_path: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="wb",
+                dir=self.output_dir,
+                prefix=f".{filename}.",
+                suffix=".xlsx",
+                delete=False,
+            ) as temporary:
+                temporary.write(body)
+                temporary_path = Path(temporary.name)
+            sheet_names, row_count, workbook_headers = self._validate_workbook(temporary_path)
+            temporary_path.replace(artifact_path)
+        except GoodsExportWorkbookError:
+            if temporary_path is not None:
+                temporary_path.unlink(missing_ok=True)
+            raise
+        except Exception as exc:
+            if temporary_path is not None:
+                temporary_path.unlink(missing_ok=True)
+            message = _redact(str(exc), self._sensitive_values)
+            raise GoodsExportWorkbookError(f"failed to store validated XLSX: {message}") from exc
+
+        return ShangmanExportResult(
+            artifact_path=str(artifact_path.resolve()),
+            filename=filename,
+            sheet_names=sheet_names,
+            row_count=row_count,
+            headers=workbook_headers,
+            download_host=download_host,
+        )
+
+
+__all__ = [
+    "CaptchaCodeProvider",
+    "GoodsExportWorkbookError",
+    "ShangmanAuthError",
+    "ShangmanBusinessError",
+    "ShangmanClient",
+    "ShangmanCredentials",
+    "ShangmanDownloadUrlError",
+    "ShangmanError",
+    "ShangmanExportResult",
+    "ShangmanHttpError",
+    "StaticCaptchaCodeProvider",
+]
