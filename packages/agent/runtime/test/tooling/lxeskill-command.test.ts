@@ -140,6 +140,13 @@ describe("lxeskill command recognition", () => {
         ownerSkills: [],
         artifactPaths: [{ field: "xlsx_paths[]", role: "deliverable" }],
       });
+    expect(entries.find((entry) => entry.name === "zhihui_export_products"))
+      .toMatchObject({
+        command: "lxeskill tms philippines products-export",
+        module: "services.agent_cli.zhihui.export_products",
+        ownerSkills: ["zhihui-tms-product-export"],
+        artifactPaths: [{ field: "artifacts[].path", role: "deliverable" }],
+      });
     expect(entries.find((entry) => entry.name === "ziniao_page")).toMatchObject({
       ownerSkills: ["ziniao-browser"],
       artifactPaths: [{ field: "screenshot_path", role: "model_input" }],

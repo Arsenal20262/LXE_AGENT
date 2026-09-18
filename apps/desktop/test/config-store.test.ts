@@ -41,6 +41,71 @@ const legacyPermission = (
 });
 
 describe("DesktopConfigStore", () => {
+  test("keeps all four platform configurations after saving one integration and restarting", () => {
+    const root = createRoot();
+    const workspaceRoot = join(root, "workspace");
+    const store = new DesktopConfigStore(root, workspaceRoot, safeStorage, { platform: "darwin" });
+    store.save({
+      workspace_root: workspaceRoot,
+      mabang: { action: "save", account: "pool4-account", password: "pool4-secret" },
+      shangman: {
+        action: "save", tenant_id: "pool2-tenant", username: "pool2-user",
+        processed_password: "pool2-secret", production_enabled: true,
+      },
+      yacang: { action: "save", mobile: "pool3-mobile", password: "pool3-secret", production_enabled: true },
+      zhihui_tms: { action: "save", account: "pool1-account", password: "pool1-secret", production_enabled: true },
+    });
+    store.save({ workspace_root: workspaceRoot, zhihui_tms: { action: "save", account: "pool1-updated", production_enabled: true } });
+
+    const restarted = new DesktopConfigStore(root, workspaceRoot, safeStorage, { platform: "darwin" });
+    expect(restarted.state()).toMatchObject({
+      mabang: { configured: true, account: "pool4-account" },
+      shangman: { configured: true, tenant_id: "pool2-tenant", username: "pool2-user" },
+      yacang: { configured: true, mobile: "pool3-mobile" },
+      zhihui_tms: { configured: true, account: "pool1-updated" },
+    });
+    expect(restarted.environment()).toMatchObject({
+      MABANG_PASSWORD: "pool4-secret",
+      LXE_SHANGMAN_PROCESSED_PASSWORD: "pool2-secret",
+      LXE_YACANG_PASSWORD: "pool3-secret",
+      ZHIHUI_TMS_PASSWORD: "pool1-secret",
+    });
+    for (const secret of ["pool4-secret", "pool2-secret", "pool3-secret", "pool1-secret"]) {
+      expect(readFileSync(join(root, "config", "settings.json"), "utf8")).not.toContain(secret);
+      expect(JSON.stringify(restarted.state())).not.toContain(secret);
+    }
+  });
+
+  test("stores Zhihui password encrypted and injects production access only when enabled", () => {
+    const root = createRoot();
+    const store = new DesktopConfigStore(root, join(root, "workspace"), safeStorage, { platform: "darwin" });
+    const saved = store.save({
+      workspace_root: join(root, "workspace"),
+      zhihui_tms: { action: "save", account: "fixture-tms-account", password: "fixture-tms-secret", production_enabled: false },
+    });
+    expect(saved.zhihui_tms).toMatchObject({ managed: true, configured: false, password_configured: true, production_enabled: false });
+    expect(JSON.stringify(saved)).not.toContain("fixture-tms-secret");
+    expect(readFileSync(join(root, "config", "settings.json"), "utf8")).not.toContain("fixture-tms-secret");
+    expect(store.environment()).toMatchObject({
+      ZHIHUI_TMS_ACCOUNT: "",
+      ZHIHUI_TMS_PASSWORD: "",
+      ZHIHUI_TMS_PRODUCTION_ENABLED: "0",
+    });
+    const enabled = store.save({
+      workspace_root: join(root, "workspace"),
+      zhihui_tms: { action: "save", account: "fixture-tms-account", production_enabled: true },
+    });
+    expect(enabled.zhihui_tms).toMatchObject({ configured: true, password_configured: true, production_enabled: true });
+    expect(store.environment()).toMatchObject({
+      ZHIHUI_TMS_ACCOUNT: "fixture-tms-account",
+      ZHIHUI_TMS_PASSWORD: "fixture-tms-secret",
+      ZHIHUI_TMS_PRODUCTION_ENABLED: "1",
+    });
+    const cleared = store.save({ workspace_root: join(root, "workspace"), zhihui_tms: { action: "clear" } });
+    expect(cleared.zhihui_tms).toMatchObject({ configured: false, password_configured: false, production_enabled: false });
+    expect(store.environment().ZHIHUI_TMS_PRODUCTION_ENABLED).toBe("0");
+  });
+
   test("keeps every secret encrypted and maps complete integrations and diagnostic logs", () => {
     const root = createRoot();
     const appPath = join(root, "ziniao.exe");

@@ -9,6 +9,7 @@ export function effectiveDesktopSecrets(
     ziniao_password: text(environment.ZINIAO_PASSWORD),
     mabang_password: text(environment.MABANG_PASSWORD),
     yacang_password: text(environment.LXE_YACANG_PASSWORD),
+    zhihui_tms_password: text(environment.ZHIHUI_TMS_PASSWORD),
     feishu_app_secret: text(environment.FEISHU_APP_SECRET),
     shangman_processed_password: text(environment.LXE_SHANGMAN_PROCESSED_PASSWORD),
     shangman_basic_auth: text(environment.LXE_SHANGMAN_BASIC_AUTH),

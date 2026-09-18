@@ -1,0 +1,166 @@
+from __future__ import annotations
+
+from collections.abc import Callable
+import contextlib
+from hashlib import sha256
+import os
+from pathlib import Path
+from typing import Any
+from uuid import uuid4
+
+from services.zhihui_tms.client import DEFAULT_MAX_HTTP_ATTEMPTS, ZhihuiTmsClient
+from services.zhihui_tms.errors import redact_text
+from services.zhihui_tms.planner import plan_product_export
+from services.zhihui_tms.product_export import export_stockwarehouse_pages
+from services.zhihui_tms.xlsx_delivery import deliver_product_exports
+from shared.process_lock import InterProcessLockTimeout, interprocess_lock
+from shared.workspace import artifact_root
+
+
+def _existing_delivery(output_dir: Path, date_label: str) -> list[dict[str, Any]]:
+    if not output_dir.is_dir():
+        return []
+    partial = output_dir / f"智慧tms-商品-部分合并-{date_label}.xlsx"
+    merged = output_dir / f"智慧tms-商品-合并-{date_label}.xlsx"
+    if partial.is_file():
+        return [{"path": str(partial.resolve()), "kind": "merged_partial", "page": None, "total_pages": None}]
+    if merged.is_file():
+        return [{"path": str(merged.resolve()), "kind": "merged", "page": None, "total_pages": None}]
+    return []
+
+
+def _account_lock_path(account: str) -> Path:
+    data_root = Path(os.environ.get("LXE_DATA_ROOT", "").strip()).expanduser()
+    lock_root = data_root if data_root.is_absolute() else artifact_root()
+    account_hash = sha256(account.strip().casefold().encode("utf-8")).hexdigest()
+    return lock_root / "locks" / "zhihui_tms" / f"{account_hash}.lock"
+
+
+def run(arguments: dict[str, Any]) -> dict[str, Any]:
+    """Catalog entrypoint; credentials are process environment only."""
+    return _run(arguments, on_event=None)
+
+
+def run_with_events(
+    arguments: dict[str, Any], on_event: Callable[[dict[str, Any]], None],
+) -> dict[str, Any]:
+    """Catalog entrypoint with credential-free progress records."""
+    return _run(arguments, on_event=on_event)
+
+
+def _run(
+    arguments: dict[str, Any], *, on_event: Callable[[dict[str, Any]], None] | None,
+) -> dict[str, Any]:
+    try:
+        plan = plan_product_export(arguments)
+    except (TypeError, ValueError) as exc:
+        return {"success": False, "code": "tms_plan_invalid", "exception": str(exc), "artifacts": []}
+
+    summary: dict[str, Any] = {
+        "action": plan.action,
+        "warehouse": plan.intent.warehouse,
+        "export_kind": plan.intent.kind,
+        "historical_metrics_available": plan.intent.historical_metrics_available,
+        "date_label": plan.date_label,
+        "page_size": plan.page_size,
+        "max_pages": plan.max_pages,
+        "max_records": plan.max_records,
+        "max_requests": plan.max_requests,
+        "max_http_attempts": DEFAULT_MAX_HTTP_ATTEMPTS,
+        "max_runtime_seconds": plan.max_runtime,
+        "artifacts": [],
+    }
+    if plan.action == "preview":
+        return {"success": True, **summary}
+
+    if os.environ.get("ZHIHUI_TMS_PRODUCTION_ENABLED") != "1":
+        return {
+            "success": False,
+            "code": "tms_production_disabled",
+            "exception": "智汇 TMS 生产调用开关未启用",
+            **summary,
+        }
+    account = os.environ.get("ZHIHUI_TMS_ACCOUNT", "").strip()
+    password = os.environ.get("ZHIHUI_TMS_PASSWORD", "")
+    if not account or not password:
+        return {
+            "success": False,
+            "code": "tms_credentials_missing",
+            "exception": "智汇 TMS 运行时账号或密码未配置",
+            **summary,
+        }
+
+    output_dir = artifact_root() / "zhihui_tms" / uuid4().hex
+    client: Any = None
+
+    def emit(event: dict[str, Any]) -> None:
+        if on_event is not None:
+            on_event(event)
+
+    try:
+        with interprocess_lock(_account_lock_path(account), timeout_seconds=0):
+            client = ZhihuiTmsClient()
+            emit({"stage": "login_started"})
+            client.login(account, password)
+            emit({"stage": "authenticated"})
+            export_result = export_stockwarehouse_pages(
+                client,
+                max_pages=plan.max_pages,
+                max_records=plan.max_records,
+                max_requests=plan.max_requests,
+                max_runtime=plan.max_runtime,
+                **({"on_event": emit} if on_event is not None else {}),
+            )
+            emit({"stage": "delivery_started", "total_pages": len(export_result.pages)})
+            delivery = deliver_product_exports(
+                client,
+                export_result,
+                output_dir=output_dir,
+                date_label=plan.date_label,
+                **({"on_event": emit} if on_event is not None else {}),
+            )
+            artifacts = [
+                {"path": item.path, "kind": item.kind, "page": item.page, "total_pages": item.total_pages}
+                for item in delivery.artifacts
+            ]
+            return {
+                "success": True,
+                **summary,
+                "artifacts": artifacts,
+                "total_records": export_result.total_records,
+                "request_count": export_result.request_count,
+                "http_attempt_count": getattr(client, "request_attempt_count", None),
+                "total_rows": delivery.total_rows,
+            }
+    except InterProcessLockTimeout:
+        return {
+            "success": False,
+            **summary,
+            "code": "tms_export_busy",
+            "exception": "智汇 TMS 商品导出正在执行，请等待当前任务结束",
+        }
+    except Exception as exc:  # noqa: BLE001 — the CLI must return the observed redacted failure
+        partial_artifacts = [
+            {"path": item.path, "kind": item.kind, "page": item.page, "total_pages": item.total_pages}
+            for item in getattr(exc, "partial_artifacts", ())
+        ]
+        artifacts = partial_artifacts or _existing_delivery(output_dir, plan.date_label)
+        return {
+            "success": False,
+            **summary,
+            "code": getattr(exc, "code", "tms_export_failed"),
+            "exception": redact_text(f"{type(exc).__name__}: {exc}", secrets=(account, password)),
+            "http_attempt_count": getattr(client, "request_attempt_count", None),
+            "artifacts": artifacts,
+            "partial_pages": getattr(exc, "partial_pages", None),
+            "partial_rows": getattr(exc, "partial_rows", None),
+        }
+    finally:
+        session = getattr(client, "session", None)
+        close = getattr(session, "close", None)
+        if callable(close):
+            with contextlib.suppress(Exception):
+                close()
+
+
+__all__ = ["run", "run_with_events"]

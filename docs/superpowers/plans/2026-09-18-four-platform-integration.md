@@ -21,24 +21,24 @@
 
 **Files:** `python/lxeskill_cli/lxeskill/catalog.json`, `python/lxeskill_cli/lxeskill/business.py`, `config/skill-labels.json`, platform-specific `python/lxeskill_cli/services/mabang/brazil_overseas/`, `skills/replenishment-brazil-overseas-export/`, associated tests and handoffs.
 
-- [ ] Fetch `codex/mabang-brazil-overseas-export` from the local source repository into the integration checkout.
-- [ ] Merge it while preserving the existing Shangman/Yacang catalog entries and Skill ownership.
-- [ ] Run `uv run --frozen pytest -q python/lxeskill_cli/tests/mabang python/lxeskill_cli/tests/lxeskill python/lxeskill_cli/tests/infra` and `bun test packages/agent/runtime/test/tooling/lxeskill-command.test.ts`.
-- [ ] Review the staged diff for lost commands, then commit this integration step.
+- [x] Fetch `codex/mabang-brazil-overseas-export` from the local source repository into the integration checkout.
+- [x] Merge it while preserving the existing Shangman/Yacang catalog entries and Skill ownership.
+- [x] Run `uv run --frozen pytest -q python/lxeskill_cli/tests/mabang python/lxeskill_cli/tests/lxeskill python/lxeskill_cli/tests/infra` and `bun test packages/agent/runtime/test/tooling/lxeskill-command.test.ts`.
+- [x] Review the staged diff for lost commands, then commit this integration step (`55fb98e7`).
 
 ## Task 2: Incorporate complete Zhihui
 
 **Files:** `apps/desktop/src/main/config-store/`, `apps/dashboard/src/desktop/`, `apps/dashboard/src/shared/i18n.tsx`, `apps/agent-cli/src/runtime-host.ts`, `apps/gateway/src/bootstrap/env.ts`, `packages/foundation/desktop-protocol/src/index.ts`, `python/lxeskill_cli/lxeskill/catalog.json`, corresponding tests.
 
-- [ ] Fetch `codex/zhihui-tms-client-auth` at the exact source commit and merge it into the integration branch.
-- [ ] Resolve shared fields by retaining Zhihui, Shangman, and Yacang config/secrets/IPC fields; retain Mabang's existing authentication and Brazil export routing.
-- [ ] Check the four public CLI commands by catalog name and path, plus Desktop runtime environment propagation.
-- [ ] Run the changed Python platform, catalog, and Desktop/Bun tests, fix failures at their source, then commit this integration step.
+- [x] Fetch `codex/zhihui-tms-client-auth` at the exact source commit and merge it into the integration branch.
+- [x] Resolve shared fields by retaining Zhihui, Shangman, and Yacang config/secrets/IPC fields; retain Mabang's existing authentication and Brazil export routing.
+- [x] Check the four public CLI commands by catalog name and path, plus Desktop runtime environment propagation.
+- [x] Run the changed Python platform, catalog, and Desktop/Bun tests; fix integration failures at their source, then commit this integration step.
 
 ## Task 3: Final validation and handoff
 
 **Files:** `docs/handoff/2026-09-18-four-platform-integration.md` and any tests needed to lock the four-way contract.
 
-- [ ] Run `bun run typecheck`, the relevant Bun suites, Python platform suites, and `bun run dashboard:build` from the integration checkout.
+- [x] Run `bun run typecheck`, the relevant Bun suites, Python platform suites, and `bun run dashboard:build` from the integration checkout.
 - [ ] Check `git diff --check`, `git status`, missing command/Skill labels, secret-bearing diffs, and the four source commits' ancestry.
 - [ ] Document exact commit, entry paths, environment variables, tests, limits, and next step; register the verified branch in the original repository without altering any pool worktree.

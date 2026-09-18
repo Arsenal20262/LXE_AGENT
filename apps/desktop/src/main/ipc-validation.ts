@@ -127,6 +127,7 @@ export function validateSetupInput(value: unknown): DesktopSetupInput {
   const ziniao = input.ziniao === undefined ? undefined : integrationAction(input.ziniao, "Ziniao setup");
   const mabang = input.mabang === undefined ? undefined : integrationAction(input.mabang, "Mabang setup");
   const yacang = input.yacang === undefined ? undefined : integrationAction(input.yacang, "Yacang setup");
+  const zhihuiTms = input.zhihui_tms === undefined ? undefined : integrationAction(input.zhihui_tms, "Zhihui TMS setup");
   const feishu = input.feishu === undefined ? undefined : integrationAction(input.feishu, "Feishu setup");
   const shangman = input.shangman === undefined ? undefined : integrationAction(input.shangman, "Shangman setup");
   const logging = input.logging === undefined ? undefined : objectValue(input.logging, "Logging setup");
@@ -166,6 +167,18 @@ export function validateSetupInput(value: unknown): DesktopSetupInput {
       ? {}
       : { production_enabled: yacang.production_enabled === true }),
   } : yacang?.action === "clear" ? { action: "clear" as const } : undefined;
+  const zhihuiTmsPassword = zhihuiTms?.action === "save"
+    ? boundedText(zhihuiTms.password, "Zhihui TMS password", 16_384)
+    : "";
+  if (zhihuiTms?.action === "save" && typeof zhihuiTms.production_enabled !== "boolean") {
+    throw new Error("Zhihui TMS production switch must be a boolean");
+  }
+  const zhihuiTmsInput = zhihuiTms?.action === "save" ? {
+    action: "save" as const,
+    account: boundedText(zhihuiTms.account, "Zhihui TMS account", 1_024),
+    production_enabled: zhihuiTms.production_enabled as boolean,
+    ...(zhihuiTmsPassword ? { password: zhihuiTmsPassword } : {}),
+  } : zhihuiTms?.action === "clear" ? { action: "clear" as const } : undefined;
   const feishuSecret = feishu?.action === "save"
     ? boundedText(feishu.app_secret, "Feishu App Secret", 16_384)
     : "";
@@ -209,6 +222,7 @@ export function validateSetupInput(value: unknown): DesktopSetupInput {
     ...(ziniaoInput ? { ziniao: ziniaoInput } : {}),
     ...(mabangInput ? { mabang: mabangInput } : {}),
     ...(yacangInput ? { yacang: yacangInput } : {}),
+    ...(zhihuiTmsInput ? { zhihui_tms: zhihuiTmsInput } : {}),
     ...(feishuInput ? { feishu: feishuInput } : {}),
     ...(shangmanInput ? { shangman: shangmanInput } : {}),
     ...(loggingInput ? { logging: loggingInput } : {}),

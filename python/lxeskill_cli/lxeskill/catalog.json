@@ -461,6 +461,19 @@
       "visibility": "internal", "session_mode": "none",
       "owner_skills": [], "artifact_paths": [{"field": "xlsx_paths[]", "role": "deliverable"}], "timeout_ms": 900000, "exposed": false,
       "input_schema": {"type": "object", "properties": {"as_of_date": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$", "description": "执行日，默认今天；接口不支持历史快照"}}, "additionalProperties": false}
+    },
+    {
+      "name": "zhihui_export_products", "module": "services.agent_cli.zhihui.export_products",
+      "command_path": ["tms", "philippines", "products-export"],
+      "legacy_aliases": ["zhihui_export_products"],
+      "visibility": "business", "session_mode": "none",
+      "owner_skills": ["zhihui-tms-product-export"],
+      "artifact_paths": [{"field": "artifacts[].path", "role": "deliverable"}],
+      "deliver_artifacts_on_failure": true, "timeout_ms": 1200000, "exposed": true,
+      "input_schema": {"type": "object", "properties": {
+        "action": {"type": "string", "enum": ["preview", "execute"], "description": "默认 preview；execute 需要运行时生产开关与安全注入的凭据。"},
+        "request": {"type": "string", "description": "用户原始商品数据需求，支持导出、下载、拉取、整理商品清单或生成 Excel/XLSX 等自然语言；SKU、销量、库存、入库时间、上架时间等字段归一到商品全量导出，不代表独立历史报表。"}
+      }, "additionalProperties": false}
     }
   ],
   "datasets": {

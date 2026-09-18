@@ -51,6 +51,7 @@ export type DesktopSettingsSection =
   | "ziniao"
   | "mabang"
   | "yacang"
+  | "zhihui_tms"
   | "feishu"
   | "shangman"
   | "logging";
@@ -72,6 +73,9 @@ export interface DesktopSettingsFormValue {
   yacangMobile: string;
   yacangPassword: string;
   yacangProductionEnabled: boolean;
+  zhihuiTmsAccount: string;
+  zhihuiTmsPassword: string;
+  zhihuiTmsProductionEnabled: boolean;
   feishuAppId: string;
   feishuAppSecret: string;
   shangmanTenantId: string;
@@ -97,6 +101,9 @@ export const desktopSettingsForm = (state: DesktopSetupState): DesktopSettingsFo
   yacangMobile: state.yacang.mobile,
   yacangPassword: "",
   yacangProductionEnabled: state.yacang.production_enabled,
+  zhihuiTmsAccount: state.zhihui_tms.account,
+  zhihuiTmsPassword: "",
+  zhihuiTmsProductionEnabled: state.zhihui_tms.production_enabled,
   feishuAppId: state.feishu.app_id,
   feishuAppSecret: "",
   shangmanTenantId: state.shangman.tenant_id,
@@ -119,6 +126,7 @@ const SECTION_FIELDS: Record<EditableDesktopSettingsSection, readonly (keyof Des
   ],
   mabang: ["mabangAccount", "mabangPassword"],
   yacang: ["yacangMobile", "yacangPassword", "yacangProductionEnabled"],
+  zhihui_tms: ["zhihuiTmsAccount", "zhihuiTmsPassword", "zhihuiTmsProductionEnabled"],
   feishu: ["feishuAppId", "feishuAppSecret"],
   shangman: ["shangmanTenantId", "shangmanUsername", "shangmanProcessedPassword", "shangmanProductionEnabled"],
   logging: ["logProfile", "logRetentionDays"],

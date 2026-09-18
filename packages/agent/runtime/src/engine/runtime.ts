@@ -2,7 +2,8 @@ import { contextFingerprint } from "./context-meter";
 import { turnAbortedMessage } from "./turn-aborted";
 import { captureEnvironment, environmentChanged, environmentMessage } from "./environment-context";
 import { randomUUID } from "node:crypto";
-import { basename, isAbsolute } from "node:path";
+import { existsSync, realpathSync } from "node:fs";
+import { basename, isAbsolute, relative, sep } from "node:path";
 import type { AgentJob, EmitRequest, JsonObject, WorkspaceContext } from "@lxe/protocol";
 import {
   assertWorkspaceAvailable,
@@ -16,6 +17,7 @@ import {
 import {
   ToolExecutionError,
   ToolRegistry,
+  safeToolFailureObservation,
   unknownToolFailureDetails,
   type ToolExposureOptions,
 } from "../tooling/registry";
@@ -31,6 +33,10 @@ import {
   type ContextCompactionResult,
 } from "./context";
 import { FinalAnswerStreamer } from "./final-answer-streamer";
+import type { ZhihuiTmsConfirmationRouter } from "../operations/zhihui-confirmation";
+import type { ZhihuiParameterTranslator } from "../operations/zhihui-parameter-translator";
+import { zhihuiProgressMessage } from "../tooling/coding/zhihui-progress";
+import type { UserQuestion } from "@lxe/protocol/user-questions";
 import {
   providerEndpointUrl,
   RuntimeProviderError,
@@ -105,6 +111,11 @@ export interface TypeScriptAgentRuntimeOptions {
     start(registry: ToolRegistry): Promise<void>;
     stop(): Promise<void>;
   }>;
+  zhihuiConfirmation?: {
+    router: ZhihuiTmsConfirmationRouter;
+    translator: ZhihuiParameterTranslator;
+    ask(question: UserQuestion, context: { sessionId: string; turnId: string; toolCallId: string; signal: AbortSignal }): Promise<string>;
+  };
 }
 
 const toolCallBlocks = (content: RuntimeContentBlock[]): ToolCallBlock[] =>
@@ -215,7 +226,7 @@ export class TypeScriptAgentRuntime implements AgentRuntime {
       response_route_id: job.response_route_id,
       message_id: job.message_id,
     }, async () => {
-      const outcome = await this.runTurnInContext(job, handle);
+      const outcome = await this.tryRunZhihuiConfirmation(job, handle) ?? await this.runTurnInContext(job, handle);
       if (outcome.status === "cancelled" && handle.cancelReason === "user_stop") {
         try {
           await this.appendMessage(job.session_id, turnAbortedMessage(), "turn_aborted", job.job_id);
@@ -225,6 +236,133 @@ export class TypeScriptAgentRuntime implements AgentRuntime {
       }
       return outcome;
     });
+  }
+
+  private async tryRunZhihuiConfirmation(job: AgentJob, handle: RuntimeHandle): Promise<TurnOutcome | undefined> {
+    // Desktop includes the submitted text in user_content_blocks. Only binary/local-file
+    // attachments must bypass this route; a text-only request is its primary input.
+    if (!this.started || job.job_kind !== "turn" || job.source.platform !== "desktop"
+      || job.user_content_blocks.some(block => block.type !== "text") || !this.options.zhihuiConfirmation) return undefined;
+    const session = await this.options.store.getSession(job.session_id);
+    if (!session) throw new Error(`session not found: ${job.session_id}`);
+    if (!sameWorkspaceContext(session.workspace, workspaceContextFrom(job.workspace))) {
+      throw new Error(`job workspace does not match session: ${job.session_id}`);
+    }
+    const request = job.user_input.trim();
+    const parameters = await this.options.zhihuiConfirmation.translator.translate(request, handle.signal);
+    if (!parameters) return undefined;
+    const workspace = assertWorkspaceAvailable(session.workspace);
+    const workspaceLease = await this.options.workspaceInstances?.acquire(workspace);
+    const skillNames = workspaceLease?.snapshot.skills.names
+      ?? this.options.skillSnapshot?.(workspace)?.names
+      ?? [];
+    const startedAt = Date.now();
+    const callId = randomUUID();
+    const call: ToolCallBlock = { type: "tool_call", id: callId, name: "exec",
+      arguments: { command: "lxeskill tms philippines products-export", cwd: job.workspace.directory } };
+    const stream = job.response_route_id ? new FinalAnswerStreamer({
+      sessionId: job.session_id, turnId: job.job_id, responseRouteId: job.response_route_id,
+      emit: value => this.emitBestEffort(value, "zhihui_confirmation"),
+      ...(this.options.emitter.desktopStream ? { emitDesktopBatch: value => this.emitDesktopStreamBestEffort(value) } : {}),
+      model: "", contextWindowTokens: 0, toolUseMode: "full", showFullPaths: true,
+    }) : undefined;
+    let typingStarted = false;
+    let executionStarted = false;
+    let usageRecorded = false;
+    const recordUsage = async (status: TurnOutcome["status"]): Promise<void> => {
+      if (usageRecorded) return;
+      usageRecorded = true;
+      await this.options.store.recordTurn(job.session_id, {
+        turn_id: job.job_id, started_at: startedAt / 1_000, platform: "desktop", status,
+        elapsed_ms: Date.now() - startedAt, input_tokens: 0, output_tokens: 0, tool_calls: executionStarted ? 1 : 0,
+        api_calls: 0, tools: [], activations: [], executions: [],
+      });
+      await this.notifySessionChanged(job.session_id, "usage");
+    };
+    this.active.add(handle);
+    try {
+      const userMessage: RuntimeMessage = { role: "user", content: request, message_id: job.message_id,
+        ...(typeof job.raw_data.client_message_id === "string" ? { client_message_id: job.raw_data.client_message_id } : {}) };
+      await this.appendMessage(job.session_id, userMessage, "turn_input", job.job_id);
+      if (job.response_route_id) typingStarted = await this.typingBestEffort({
+        session_id: job.session_id, turn_id: job.job_id, response_route_id: job.response_route_id,
+        operation: "start", emit_id: randomUUID().replaceAll("-", ""),
+      }, "start");
+      const routed = await this.options.zhihuiConfirmation.router.handle(request, parameters, {
+        signal: handle.signal,
+        skillNames,
+        onPreview: async text => {
+          await this.appendMessage(job.session_id, { role: "assistant", content: [{ type: "text", text }] },
+            "assistant_preview", job.job_id);
+        },
+        ask: async question => {
+          const selected = await this.options.zhihuiConfirmation!.ask(question, {
+            sessionId: job.session_id, turnId: job.job_id, toolCallId: callId, signal: handle.signal,
+          });
+          if (selected === "确认执行导出") {
+            executionStarted = true;
+            await stream?.pushToolStart(call);
+          }
+          return selected;
+        },
+        onProgress: async record => {
+          const message = zhihuiProgressMessage(JSON.stringify(record));
+          if (message && executionStarted) await stream?.pushToolFinish(call, "running", 0, { result: message });
+        },
+      });
+      if (isCancelled(handle)) throw new DOMException("CLI cancelled", "AbortError");
+      if (executionStarted) await stream?.pushToolFinish(call, routed.status === "error" ? "error" : "success",
+        Date.now() - startedAt, routed.status === "error" ? { error: routed.reply } : { result: routed.reply });
+      const verifiedFiles: string[] = [];
+      const artifactRoot = this.options.artifactRoot && existsSync(this.options.artifactRoot)
+        ? realpathSync(this.options.artifactRoot) : "";
+      for (const path of routed.files) {
+        if (!artifactRoot || !isAbsolute(path) || !existsSync(path)) continue;
+        const resolved = realpathSync(path);
+        const within = relative(artifactRoot, resolved);
+        if (!within || within === ".." || within.startsWith(`..${sep}`) || isAbsolute(within)) continue;
+        verifiedFiles.push(resolved);
+        await this.options.store.appendArtifact(job.session_id, {
+          artifact_id: randomUUID().replaceAll("-", ""), turn_id: job.job_id, tool_call_id: callId,
+          path: resolved, name: basename(resolved), ts: Date.now() / 1_000,
+        });
+      }
+      if (verifiedFiles.length > 0) {
+        await this.notifySessionChanged(job.session_id, "artifacts");
+        const fileEvent: EmitRequest = {
+          session_id: job.session_id, turn_id: job.job_id, response_route_id: job.response_route_id,
+          content: "", thinking: "", redacted_thinking_count: 0, thinking_elapsed_ms: 0,
+          tool_pending: false, tool_elapsed_ms: Date.now() - startedAt, tool_steps: [], files: verifiedFiles,
+          emit_kind: "tool", emit_id: randomUUID().replaceAll("-", ""), stream_type: "", state: "", seq: 0,
+        };
+        await this.emitBestEffort(fileEvent, "zhihui_files");
+      }
+      await this.appendMessage(job.session_id, { role: "assistant", content: [{ type: "text", text: routed.reply }] },
+        "assistant_response", job.job_id);
+      const delivered = routed.status === "error" ? await stream?.fail(routed.reply) : await stream?.finish(routed.reply);
+      if (job.response_route_id && !delivered) await this.emitBestEffort(this.finalRequest(job, routed.reply), "zhihui_final");
+      await recordUsage(routed.status);
+      return this.outcome(routed.status, routed.reply, 0, 0, executionStarted ? 1 : 0);
+    } catch (cause) {
+      if (isCancelled(handle) || (cause instanceof DOMException && cause.name === "AbortError")) {
+        await stream?.cancel();
+        await recordUsage("cancelled");
+        return this.outcome("cancelled", "", 0, 0, executionStarted ? 1 : 0);
+      }
+      const observed = safeToolFailureObservation(cause instanceof Error ? cause.message : cause);
+      const reply = `智汇 TMS 执行失败：${observed}`;
+      await this.appendTurnError(job.session_id, job.job_id, reply);
+      await stream?.fail(reply);
+      await recordUsage("error");
+      return this.outcome("error", reply, 0, 0, executionStarted ? 1 : 0);
+    } finally {
+      workspaceLease?.release();
+      if (typingStarted) await this.typingBestEffort({
+        session_id: job.session_id, turn_id: job.job_id, response_route_id: job.response_route_id,
+        operation: "stop", emit_id: randomUUID().replaceAll("-", ""),
+      }, "stop");
+      this.active.delete(handle);
+    }
   }
 
   private async runTurnInContext(job: AgentJob, handle: RuntimeHandle): Promise<TurnOutcome> {

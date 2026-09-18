@@ -31,6 +31,8 @@ import {
   McpManager,
   OfficialMcpConnector,
   OneShotCliRunner,
+  ZhihuiTmsConfirmationRouter,
+  ProviderZhihuiParameterTranslator,
   registerCodingTools,
   registerShangmanCaptchaTool,
   registerToolSearch,
@@ -48,6 +50,7 @@ import {
   type TurnOutcome,
   ShangmanCaptchaBroker,
   SHANGMAN_CAPTCHA_SKILL,
+  type ZhihuiTmsProgressEvent,
 } from "@lxe/runtime";
 import { DashboardService } from "./dashboard-service";
 import { loadAgentFeishuConfig } from "./feishu-runtime-config";
@@ -67,6 +70,7 @@ export interface AgentRuntimeHostOptions {
   allowedSkillTypes?: ReadonlySet<string>;
   managedLlmState?: ManagedLlmState;
   onBackgroundTaskChanged?: (snapshot: JsonObject) => Promise<void> | void;
+  onZhihuiTmsProgress?: (event: ZhihuiTmsProgressEvent) => Promise<void> | void;
   onSkillsChanged?: (revision: number) => Promise<void> | void;
   onSessionChanged?: (sessionId: string, change: AgentSessionChange) => Promise<void> | void;
   onManagedLlmAuthenticationFailure?: (
@@ -183,14 +187,15 @@ export function createAgentRuntimeHost(
     LXE_USER_SKILLS_ROOT: _userSkillsRoot,
     ...lxeSkillEnvironment
   } = environment;
-  const lxeSkillRunner = lxeSkillArgv ? new OneShotCliRunner({
+  const lxeSkillRunnerConfig = lxeSkillArgv ? {
     command: lxeSkillArgv,
     cwd: options.dataRoot,
     timeoutMs: 3 * 60_000,
     maxOutputBytes: 10 * 1024 * 1024,
     env: lxeSkillEnvironment,
-    onStderr: (line) => logger.info("lxeskill", { line }),
-  }) : undefined;
+    onStderr: (line: string) => logger.info("lxeskill", { line }),
+  } : undefined;
+  const lxeSkillRunner = lxeSkillRunnerConfig ? new OneShotCliRunner(lxeSkillRunnerConfig) : undefined;
   const maintenance = lxeSkillRunner ? new MaintenanceScheduler({
     environment: lxeSkillEnvironment,
     store,
@@ -223,6 +228,7 @@ export function createAgentRuntimeHost(
       return env;
     },
     ...(options.onBackgroundTaskChanged ? { onExecComplete: options.onBackgroundTaskChanged } : {}),
+    ...(options.onZhihuiTmsProgress ? { onZhihuiTmsProgress: options.onZhihuiTmsProgress } : {}),
   });
   let skillRefreshTimer: ReturnType<typeof setInterval> | undefined;
   const runtimeServices: Array<{
@@ -302,6 +308,14 @@ export function createAgentRuntimeHost(
       environment,
     }),
     tools,
+    ...(lxeSkillRunner ? { zhihuiConfirmation: {
+      router: new ZhihuiTmsConfirmationRouter(lxeSkillRunner),
+      translator: new ProviderZhihuiParameterTranslator({ turn: request => providerManager.acquire().provider.turn(request) }),
+      ask: async (question, context) => {
+        const answers = await questions.askForTurn([question], context);
+        return answers[0]?.selected[0] ?? "";
+      },
+    } } : {}),
     workspaceInstances,
     contextWindowTokens: providerDescriptor.contextWindowTokens,
     display: {

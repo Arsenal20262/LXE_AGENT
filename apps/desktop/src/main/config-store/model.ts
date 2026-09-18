@@ -66,6 +66,7 @@ export interface DesktopConfig {
     };
     mabang: { managed: boolean; account: string };
     yacang: { managed: boolean; mobile: string; production_enabled: boolean };
+    zhihui_tms: { managed: boolean; account: string; production_enabled: boolean };
     feishu: { managed: boolean; app_id: string };
     shangman: { managed: boolean; tenant_id: string; username: string; production_enabled: boolean };
   };
@@ -90,6 +91,7 @@ export interface DesktopSecrets {
   ziniao_password: string;
   mabang_password: string;
   yacang_password: string;
+  zhihui_tms_password: string;
   feishu_app_secret: string;
   shangman_processed_password: string;
   shangman_basic_auth: string;
@@ -146,6 +148,7 @@ const defaultConfig = (catalog: LlmProviderCatalog): DesktopConfig => {
       },
       mabang: { managed: false, account: "" },
       yacang: { managed: false, mobile: "", production_enabled: false },
+      zhihui_tms: { managed: false, account: "", production_enabled: false },
       feishu: { managed: false, app_id: "" },
       shangman: { managed: false, tenant_id: "", username: "", production_enabled: false },
     },
@@ -168,6 +171,7 @@ const DEFAULT_SECRETS: DesktopSecrets = {
   ziniao_password: "",
   mabang_password: "",
   yacang_password: "",
+  zhihui_tms_password: "",
   feishu_app_secret: "",
   shangman_processed_password: "",
   shangman_basic_auth: "",
@@ -316,14 +320,16 @@ export const parseSettings = (
   const ziniao = objectValue(integrations.ziniao);
   const mabang = objectValue(integrations.mabang);
   const yacang = objectValue(integrations.yacang);
+  const zhihuiTms = objectValue(integrations.zhihui_tms);
   const feishu = objectValue(integrations.feishu);
   const shangman = objectValue(integrations.shangman);
-  assertOnlyFields(integrations, ["ziniao", "mabang", "yacang", "feishu", "shangman"], "settings.integrations");
+  assertOnlyFields(integrations, ["ziniao", "mabang", "yacang", "zhihui_tms", "feishu", "shangman"], "settings.integrations");
   assertOnlyFields(ziniao, [
     "managed", "company", "username", "app_version", "app_path", "webdriver_path",
   ], "settings.integrations.ziniao");
   assertOnlyFields(mabang, ["managed", "account"], "settings.integrations.mabang");
   assertOnlyFields(yacang, ["managed", "mobile", "production_enabled"], "settings.integrations.yacang");
+  assertOnlyFields(zhihuiTms, ["managed", "account", "production_enabled"], "settings.integrations.zhihui_tms");
   assertOnlyFields(feishu, ["managed", "app_id"], "settings.integrations.feishu");
   assertOnlyFields(shangman, ["managed", "tenant_id", "username", "production_enabled"], "settings.integrations.shangman");
   assertFieldTypes(ziniao, {
@@ -336,6 +342,11 @@ export const parseSettings = (
   }
   if (yacang.production_enabled !== undefined && typeof yacang.production_enabled !== "boolean") {
     throw new Error("settings.integrations.yacang.production_enabled must be a boolean");
+  }
+  if (integrations.zhihui_tms !== undefined) {
+    assertFieldTypes(zhihuiTms, {
+      managed: "boolean", account: "string", production_enabled: "boolean",
+    }, "settings.integrations.zhihui_tms");
   }
   assertFieldTypes(feishu, { managed: "boolean", app_id: "string" }, "settings.integrations.feishu");
   if (value.schema_version >= SETTINGS_SCHEMA_VERSION || Object.keys(shangman).length > 0) {
@@ -377,6 +388,7 @@ export const parseConfig = (
   const rawZiniao = objectValue(integrations.ziniao);
   const rawMabang = objectValue(integrations.mabang);
   const rawYacang = objectValue(integrations.yacang);
+  const rawZhihuiTms = objectValue(integrations.zhihui_tms);
   const rawFeishu = objectValue(integrations.feishu);
   const rawShangman = objectValue(integrations.shangman);
   const rawLogging = objectValue(value.logging);
@@ -460,6 +472,11 @@ export const parseConfig = (
         mobile: text(rawYacang.mobile),
         production_enabled: Boolean(rawYacang.production_enabled),
       },
+      zhihui_tms: {
+        managed: Boolean(rawZhihuiTms.managed),
+        account: text(rawZhihuiTms.account),
+        production_enabled: rawZhihuiTms.production_enabled === true,
+      },
       feishu: {
         managed: Boolean(rawFeishu.managed) || Boolean(legacyFeishuAppId),
         app_id: text(rawFeishu.app_id) || legacyFeishuAppId,
@@ -516,6 +533,7 @@ export const parseSecrets = (raw: unknown): DesktopSecrets => {
     ziniao_password: text(value.ziniao_password),
     mabang_password: text(value.mabang_password),
     yacang_password: text(value.yacang_password),
+    zhihui_tms_password: text(value.zhihui_tms_password),
     feishu_app_secret: text(value.feishu_app_secret),
     shangman_processed_password: text(value.shangman_processed_password),
     shangman_basic_auth: text(value.shangman_basic_auth),

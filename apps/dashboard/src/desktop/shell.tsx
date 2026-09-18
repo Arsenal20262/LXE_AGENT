@@ -59,7 +59,7 @@ import {
 } from "./settings-model";
 
 type Provider = DesktopModelProvider;
-type IntegrationName = "ziniao" | "mabang" | "yacang" | "feishu" | "shangman";
+type IntegrationName = "ziniao" | "mabang" | "yacang" | "zhihui_tms" | "feishu" | "shangman";
 type SetupForm = DesktopSettingsFormValue;
 type DesktopConfirmation =
   | { kind: "diagnostic" }
@@ -168,6 +168,7 @@ function DesktopSettingsNavigation({
         {item("ziniao", t.desktop.sectionTitles.ziniao, desktopSettingsSectionStatus(t.desktop, "ziniao", setup), Globe)}
         {item("mabang", t.desktop.sectionTitles.mabang, desktopSettingsSectionStatus(t.desktop, "mabang", setup), Store)}
         {item("yacang", t.desktop.sectionTitles.yacang, desktopSettingsSectionStatus(t.desktop, "yacang", setup), Store)}
+        {item("zhihui_tms", t.desktop.sectionTitles.zhihui_tms, desktopSettingsSectionStatus(t.desktop, "zhihui_tms", setup), Store)}
         {item("feishu", t.desktop.sectionTitles.feishu, desktopSettingsSectionStatus(t.desktop, "feishu", setup), Feather)}
         {item("shangman", t.desktop.sectionTitles.shangman, desktopSettingsSectionStatus(t.desktop, "shangman", setup), ShieldCheck)}
         {item("logging", t.desktop.sectionTitles.logging, desktopSettingsSectionStatus(t.desktop, "logging", setup), ScrollText)}
@@ -886,6 +887,61 @@ function DesktopSettingsForm({
     );
   }
 
+  if (activeSection === "zhihui_tms") {
+    const status = desktopSettingsSectionStatus(t.desktop, "zhihui_tms", setup);
+    return (
+      <section className="desktop-settings-section">
+        <DesktopSectionHeading
+          badge={status}
+          badgeClassName={integrationStatusClass(setup.zhihui_tms.managed, setup.zhihui_tms.configured)}
+          description={t.desktop.zhihui_tms.description}
+          headingRef={headingRef}
+          title={t.desktop.sectionTitles.zhihui_tms}
+        />
+        <div className="desktop-integration-fields">
+          <IntegrationIssues issues={setup.zhihui_tms.issues} />
+          <div className="desktop-field-grid">
+            <label>
+              <span>{t.desktop.zhihui_tms.account}</span>
+              <input
+                autoComplete="username"
+                onChange={(event) => onChange({ zhihuiTmsAccount: event.target.value })}
+                value={form.zhihuiTmsAccount}
+              />
+            </label>
+            <label>
+              <span>{t.desktop.zhihui_tms.password}{setup.zhihui_tms.password_configured ? t.desktop.keepBlankSuffix : ""}</span>
+              <input
+                autoComplete="new-password"
+                onChange={(event) => onChange({ zhihuiTmsPassword: event.target.value })}
+                placeholder={setup.zhihui_tms.password_configured ? t.desktop.storedPlaceholder : t.desktop.zhihui_tms.passwordPlaceholder}
+                type="password"
+                value={form.zhihuiTmsPassword}
+              />
+            </label>
+          </div>
+          <label className="desktop-integration-production-toggle">
+            <span>
+              <strong>{t.desktop.zhihui_tms.productionEnable}</strong>
+              <small>{t.desktop.zhihui_tms.productionEnableHint}</small>
+            </span>
+            <input
+              aria-label={t.desktop.zhihui_tms.productionEnable}
+              checked={form.zhihuiTmsProductionEnabled}
+              onChange={(event) => onChange({ zhihuiTmsProductionEnabled: event.target.checked })}
+              type="checkbox"
+            />
+          </label>
+          {setup.zhihui_tms.managed ? (
+            <button className="desktop-clear-integration" onClick={() => onClearIntegration("zhihui_tms")} type="button">
+              <Trash2 size={14} />{t.desktop.clearIntegration}
+            </button>
+          ) : null}
+        </div>
+      </section>
+    );
+  }
+
   if (activeSection === "feishu") {
     const status = desktopSettingsSectionStatus(t.desktop, "feishu", setup);
     return (
@@ -1463,6 +1519,8 @@ export function DesktopShell({
     const yacangTouched = hasText(form.yacangMobile, form.yacangPassword)
       || setup.yacang.configured
       || form.yacangProductionEnabled !== setup.yacang.production_enabled;
+    const zhihuiTmsTouched = hasText(form.zhihuiTmsAccount, form.zhihuiTmsPassword)
+      || form.zhihuiTmsProductionEnabled || setup.zhihui_tms.password_configured;
     const feishuTouched = hasText(form.feishuAppId, form.feishuAppSecret) || setup.feishu.configured;
     const shangmanTouched = hasText(
       form.shangmanTenantId,
@@ -1495,6 +1553,14 @@ export function DesktopShell({
           mobile: form.yacangMobile,
           production_enabled: form.yacangProductionEnabled,
           ...(form.yacangPassword ? { password: form.yacangPassword } : {}),
+        },
+      } : {}),
+      ...(zhihuiTmsTouched ? {
+        zhihui_tms: {
+          action: "save" as const,
+          account: form.zhihuiTmsAccount,
+          production_enabled: form.zhihuiTmsProductionEnabled,
+          ...(form.zhihuiTmsPassword ? { password: form.zhihuiTmsPassword } : {}),
         },
       } : {}),
       ...(feishuTouched ? {

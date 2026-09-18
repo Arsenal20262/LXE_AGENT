@@ -99,6 +99,27 @@ describe("desktop agent protocol", () => {
     })).toThrow("payload is invalid");
   });
 
+  test("strictly parses bounded Zhihui UI progress without raw stdout", () => {
+    const event = {
+      type: "zhihui_tms.progress",
+      thread_id: "session-1",
+      turn_id: "turn-1",
+      payload: {
+        exec_id: `exec_${"a".repeat(32)}`,
+        tool_call_id: "tool-1",
+        message: "智汇 TMS：第1页读取20条，累计20条",
+      },
+    } as const;
+    expect(roundTripEvent(event)).toEqual(event);
+    for (const payload of [
+      { ...event.payload, token: "secret" },
+      { ...event.payload, message: "token=secret" },
+      { ...event.payload, message: "智汇 TMS：token=secret" },
+      { ...event.payload, message: "智汇 TMS：" + "x".repeat(121) },
+      { ...event.payload, exec_id: "other" },
+    ]) expect(() => roundTripEvent({ ...event, payload })).toThrow("payload is invalid");
+  });
+
   test.each([undefined, "estimated", "usage_calibrated"] as const)("strictly parses desktop stream batches with context source %s and matching envelopes", (context_source) => {
     const payload: DesktopStreamBatchRequest = {
       session_id: "session-1",

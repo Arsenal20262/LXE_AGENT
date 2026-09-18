@@ -4,7 +4,8 @@ import { createLogger, runWithLogContext } from "@lxe/core";
 import type { JsonObject, WorkspaceContext } from "@lxe/protocol";
 import type { ExecShellAdapter } from "../exec-shell";
 import { ProcessOutputStore, sweepSpillDirectory } from "../process-output";
-import type { ProcessStatus } from "./public-types";
+import type { ProcessStatus, ZhihuiTmsProgressEvent } from "./public-types";
+import { ZhihuiProgressDecoder } from "./zhihui-progress";
 
 interface ProcessEntry {
   id: string;
@@ -53,6 +54,7 @@ export class CodingProcessManager {
   private readonly admissionTails = new Map<string, Promise<void>>();
   private readonly logger = createLogger("runtime.coding_process");
   private nextRecency = 0;
+  onZhihuiTmsProgress: ((event: ZhihuiTmsProgressEvent) => Promise<void> | void) | undefined;
 
   constructor(private readonly options: {
     maxOutputBytes: number;
@@ -107,6 +109,7 @@ export class CodingProcessManager {
     yieldMs: number;
     signal: AbortSignal;
     toolCallId: string;
+    trackZhihuiProgress?: boolean;
     turnId?: string;
     env?: Record<string, string>;
   }): Promise<JsonObject> {
@@ -139,6 +142,7 @@ export class CodingProcessManager {
     workspace: WorkspaceContext;
     signal: AbortSignal;
     toolCallId: string;
+    trackZhihuiProgress?: boolean;
     turnId?: string;
     env?: Record<string, string>;
   }): { entry: ProcessEntry } | { failure: JsonObject } {
@@ -236,6 +240,8 @@ export class CodingProcessManager {
     runWithLogContext(this.logContext(entry), () => {
       this.logger.info("process_started", this.processFields(entry));
     });
+    const progressDecoder = request.trackZhihuiProgress && this.onZhihuiTmsProgress
+      ? new ZhihuiProgressDecoder() : undefined;
     const createPump = (
       stream: ReadableStream<Uint8Array>,
       source: "stdout" | "stderr",
@@ -246,6 +252,21 @@ export class CodingProcessManager {
           const chunk = await reader.read();
           if (chunk.done) break;
           if (entry.acceptingOutput) entry.output.append(source, chunk.value);
+          if (source === "stdout" && progressDecoder && entry.acceptingOutput) {
+            for (const message of progressDecoder.push(chunk.value)) {
+              try {
+                await this.onZhihuiTmsProgress?.({
+                  execId: entry.id,
+                  sessionId: entry.sessionId,
+                  turnId: entry.turnId,
+                  toolCallId: entry.toolCallId,
+                  message,
+                });
+              } catch (error) {
+                this.logger.warn("zhihui_progress_publish_failed", { task_id: entry.id, error });
+              }
+            }
+          }
         }
       })();
       return { reader, task };

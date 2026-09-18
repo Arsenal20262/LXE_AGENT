@@ -644,6 +644,7 @@ export const ZH_TEXT = {
       ziniao: "紫鸟",
       mabang: "马帮",
       yacang: "雅仓",
+      zhihui_tms: "智汇 TMS",
       feishu: "飞书",
       shangman: "智慧"
     },
@@ -655,6 +656,7 @@ export const ZH_TEXT = {
       ziniao: "紫鸟自动化",
       mabang: "马帮",
       yacang: "雅仓",
+      zhihui_tms: "智汇 TMS",
       feishu: "飞书",
       shangman: "智慧",
       logging: "日志与排障"
@@ -797,6 +799,14 @@ export const ZH_TEXT = {
       passwordPlaceholder: "输入雅仓密码",
       productionEnabled: "启用雅仓生产 API 调用",
       productionEnabledDescription: "仅在账号配置完成且确认要访问生产接口时开启。"
+    },
+    zhihui_tms: {
+      description: "只支持菲律宾商品全量导出。保存账号和密码后，需单独启用生产 API 调用；执行任务会访问真实 TMS。",
+      account: "智汇 TMS 账号",
+      password: "智汇 TMS 密码",
+      passwordPlaceholder: "输入智汇 TMS 密码",
+      productionEnable: "启用智汇 TMS 生产 API 调用",
+      productionEnableHint: "仅在账号配置完成且确认需要访问生产接口时开启"
     },
     feishu: {
       description: "App ID 与 App Secret 必须成对填写；整组留空即可跳过。",
@@ -1501,6 +1511,7 @@ export const UI_TEXT: Record<Language, UiText> = {
         ziniao: "ZiNiao",
         mabang: "Mabang",
         yacang: "Yacang",
+        zhihui_tms: "Zhihui TMS",
         feishu: "Feishu",
         shangman: "Wisdom"
       },
@@ -1512,6 +1523,7 @@ export const UI_TEXT: Record<Language, UiText> = {
         ziniao: "ZiNiao automation",
         mabang: "Mabang",
         yacang: "Yacang data export",
+        zhihui_tms: "Zhihui TMS",
         feishu: "Feishu",
         shangman: "Wisdom",
         logging: "Logs & diagnostics"
@@ -1654,6 +1666,14 @@ export const UI_TEXT: Record<Language, UiText> = {
         passwordPlaceholder: "Enter the Yacang password",
         productionEnabled: "Enable Yacang production API calls",
         productionEnabledDescription: "Enable only after the account is configured and production access is confirmed."
+      },
+      zhihui_tms: {
+        description: "Only the Philippines full product export is supported. Save the credentials, then separately enable production API calls; executing a task accesses the live TMS.",
+        account: "Zhihui TMS account",
+        password: "Zhihui TMS password",
+        passwordPlaceholder: "Enter the Zhihui TMS password",
+        productionEnable: "Enable Zhihui TMS production API calls",
+        productionEnableHint: "Enable only after the account is configured and production access is confirmed"
       },
       feishu: {
         description: "App ID and App Secret must be filled in together; leave the whole group blank to skip.",

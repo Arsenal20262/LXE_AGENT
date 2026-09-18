@@ -71,6 +71,16 @@ export class DesktopConfigValidation {
     ].filter((value): value is string => Boolean(value));
   }
 
+  zhihuiTmsIssues(
+    zhihuiTms: DesktopConfig["integrations"]["zhihui_tms"],
+    secrets: DesktopSecrets,
+  ): string[] {
+    return [
+      !zhihuiTms.account && "缺少账号",
+      !secrets.zhihui_tms_password && "缺少密码",
+    ].filter((value): value is string => Boolean(value));
+  }
+
   feishuIssues(
     feishu: DesktopConfig["integrations"]["feishu"],
     secrets: DesktopSecrets,

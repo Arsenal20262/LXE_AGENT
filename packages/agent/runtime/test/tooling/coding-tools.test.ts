@@ -524,6 +524,31 @@ describe("native coding tools", () => {
     await processes.stop();
   }, 30_000);
 
+  test("exec exposes flushed business JSONL progress before the terminal result", async () => {
+    const registry = new ToolRegistry();
+    const processes = registerCodingTools(registry, {});
+    try {
+      const command = evalCommand(
+        "console.log(JSON.stringify({protocol_version:'1',type:'progress',stage:'login_started'}));" +
+        "setTimeout(() => console.log(JSON.stringify({protocol_version:'1',type:'result',ok:true})), 800)",
+      );
+      const started = await registry.execute("exec", { command, "yield-time-ms": 300 }, context());
+      const startedText = String(started.content[0]?.text);
+      expect(startedText).toContain("status: running");
+      expect(startedText).toContain("stage: login_started");
+      expect(startedText).not.toContain("type: result");
+      const execId = startedText.match(/^exec_id: (exec_[a-z0-9]+)/mu)?.[1];
+      if (!execId) throw new Error(`missing exec id in: ${startedText}`);
+
+      const finished = String((await registry.execute("wait", { exec_id: execId }, context())).content[0]?.text);
+      expect(finished).toContain("status: completed");
+      expect(finished).toContain("type: result");
+      expect(finished).not.toContain("stage: login_started");
+    } finally {
+      await processes.stop();
+    }
+  });
+
   test("token-budget omission is recovered on disk without replaying the wait cursor", async () => {
     const root = projectRoot;
     const registry = new ToolRegistry();

@@ -99,6 +99,8 @@ def load_catalog() -> dict[str, dict[str, Any]]:
                 if module.startswith("services.assets.")
                 else f"shangman_{module.rsplit('.', 1)[-1]}"
                 if module.startswith("services.agent_cli.shangman.")
+                else f"zhihui_{module.rsplit('.', 1)[-1]}"
+                if module.startswith("services.agent_cli.zhihui.")
                 else ""
             )
             if expected != name:
