@@ -4711,6 +4711,12 @@ h1 {
   background: var(--surface-muted);
 }
 
+/* Direct status/source badges are flex children too: don't stretch them across the card. */
+.skills-catalog .catalog-item > .pill {
+  align-self: flex-start;
+  max-width: 100%;
+}
+
 .catalog-item .item-icon {
   width: 38px;
   height: 38px;
@@ -5852,10 +5858,12 @@ h1 {
   overflow-wrap: anywhere;
 }
 
+/* Shared Markdown typography for conversations and skill previews. */
 .message-markdown {
   color: var(--text);
-  font-size: 0.8125rem;
-  line-height: 1.62;
+  font-size: 0.875rem;
+  font-weight: 370;
+  line-height: 1.7;
   overflow-wrap: anywhere;
 }
 
@@ -5915,7 +5923,7 @@ h1 {
 .message-markdown .markdown-table-scroll,
 .message-markdown pre,
 .message-markdown hr {
-  margin: 0 0 8px;
+  margin: 0 0 7px;
 }
 
 .message-markdown ul,
@@ -6746,135 +6754,11 @@ pre {
   max-height: min(520px, 58vh);
 }
 
+/* Skill previews reuse .message-markdown typography; only their viewport differs. */
 .skill-markdown {
   max-height: min(520px, 58vh);
   overflow: auto;
   padding: 12px;
-  color: var(--text);
-  font-size: 0.8125rem;
-  line-height: 1.62;
-}
-
-.skill-markdown > :first-child {
-  margin-top: 0;
-}
-
-.skill-markdown > :last-child {
-  margin-bottom: 0;
-}
-
-.skill-markdown h1,
-.skill-markdown h2,
-.skill-markdown h3,
-.skill-markdown h4,
-.skill-markdown h5,
-.skill-markdown h6 {
-  margin: 18px 0 8px;
-  color: var(--text-strong);
-  line-height: 1.25;
-}
-
-.skill-markdown h1 {
-  font-size: 1.25rem;
-}
-
-.skill-markdown h2 {
-  padding-bottom: 5px;
-  border-bottom: 1px solid var(--border);
-  font-size: 1.0625rem;
-}
-
-.skill-markdown h3 {
-  font-size: 0.9375rem;
-}
-
-.skill-markdown h4,
-.skill-markdown h5,
-.skill-markdown h6 {
-  font-size: 0.8125rem;
-}
-
-.skill-markdown p,
-.skill-markdown ul,
-.skill-markdown ol,
-.skill-markdown blockquote,
-.skill-markdown table,
-.skill-markdown pre {
-  margin: 0 0 12px;
-}
-
-.skill-markdown ul,
-.skill-markdown ol {
-  padding-left: 22px;
-}
-
-.skill-markdown li + li {
-  margin-top: 4px;
-}
-
-.skill-markdown a {
-  color: var(--info);
-  font-weight: 600;
-  overflow-wrap: anywhere;
-}
-
-/* This quote keeps its filled panel, so it keeps vertical padding too — but the
-   inner margins still have to be reset or the fill sits lopsided on the text. */
-.skill-markdown blockquote {
-  padding: 8px 12px;
-  border-left: 3px solid var(--accent-muted);
-  background: var(--surface-subtle);
-  color: var(--text-soft);
-}
-
-.skill-markdown blockquote > :first-child {
-  margin-top: 0;
-}
-
-.skill-markdown blockquote > :last-child {
-  margin-bottom: 0;
-}
-
-.skill-markdown code {
-  padding: 1px 5px;
-  border-radius: 6px;
-  background: var(--surface-muted);
-  color: var(--text-soft);
-  font-size: 0.75rem;
-}
-
-.skill-markdown pre {
-  max-height: none;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface-subtle);
-}
-
-.skill-markdown pre code {
-  padding: 0;
-  background: transparent;
-  color: inherit;
-}
-
-.skill-markdown table {
-  display: block;
-  width: 100%;
-  overflow: auto;
-  border-collapse: collapse;
-}
-
-.skill-markdown th,
-.skill-markdown td {
-  padding: 7px 9px;
-  border: 1px solid var(--border);
-  text-align: left;
-  vertical-align: top;
-}
-
-.skill-markdown th {
-  background: var(--surface-subtle);
-  color: var(--text-soft);
-  font-size: 0.75rem;
 }
 
 .mermaid-block {
@@ -9461,21 +9345,10 @@ pre {
   background: var(--surface-subtle);
 }
 
-.conversation-feed .message-text,
-.conversation-feed .message-markdown {
+.conversation-feed .message-text {
   font-size: 0.875rem;
   font-weight: 370;
   line-height: 1.7;
-}
-
-.conversation-feed .message-markdown p,
-.conversation-feed .message-markdown ul,
-.conversation-feed .message-markdown ol,
-.conversation-feed .message-markdown blockquote,
-.conversation-feed .message-markdown .markdown-table-scroll,
-.conversation-feed .message-markdown pre,
-.conversation-feed .message-markdown hr {
-  margin-bottom: 7px;
 }
 
 .process-step {

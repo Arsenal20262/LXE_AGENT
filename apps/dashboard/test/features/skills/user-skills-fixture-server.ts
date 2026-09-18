@@ -16,6 +16,13 @@ function writeSkill(root: string, name: string, body: string) {
 }
 const weekly = writeSkill(user, "weekly-report", "# 周报流程\n\n整理本周完成事项、风险和下周计划。使用 assets/template.md 中的模板。");
 mkdirSync(join(weekly, "assets")); writeFileSync(join(weekly, "assets", "template.md"), "# 周报模板\n\n## 完成事项\n## 问题\n## 下周计划");
+writeFileSync(join(weekly, "assets", "formatting.md"), [
+  "# Markdown 排版样例", "", "正文包含 **粗体**、*斜体*、`inline_code` 和 [链接](https://example.com)。",
+  "", "## 二级标题", "", "> 引用第一段。", ">", "> 引用第二段。", "",
+  "### 三级标题", "", "- 列表第一项", "- 列表第二项", "", "1. 有序列表", "2. 后续步骤", "",
+  "| 名称 | 内容 |", "| --- | --- |", "| 示例 | `value` |", "| 长字段 | " + "long_value_".repeat(20) + " |", "",
+  "```python", "print('hello')", "```", "", "用于验证长文滚动的正文段落。\n\n".repeat(12), "末尾段落。",
+].join("\n"));
 const demo = writeSkill(official, "official-demo", "# Official workflow\n\n" + "Read the workflow before using the skill.\n\n".repeat(30));
 writeFileSync(join(demo, "reference.md"), "# Official reference\n\nReference instructions");
 writeFileSync(join(demo, "SKILL.md"), readFileSync(join(demo, "SKILL.md"), "utf8").replace("description:", "commands: [lxeskill fixture demo]\nreferences: [reference.md]\ndescription:"));

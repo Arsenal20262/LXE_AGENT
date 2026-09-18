@@ -136,7 +136,7 @@ export function SkillDetailDialog({ skill, title, close, files, selectedFile, on
         {loading ? <p role="status">{t.skillModal.loadingContent}</p> : binary ? <p>{t.userSkills.binary}</p>
           : content !== undefined ? <div className="skill-detail-body">
             {source || !/\.md$/iu.test(selectedFile) ? <pre className="skill-content-pre">{content}</pre>
-              : <div className="skill-markdown"><ReactMarkdown components={markdownComponents}
+              : <div className="message-markdown skill-markdown"><ReactMarkdown components={markdownComponents}
                 remarkPlugins={selectedFile === "SKILL.md" ? skillPreviewRemarkPlugins : markdownRemarkPlugins} rehypePlugins={markdownRehypePlugins}>
                 {selectedFile === "SKILL.md" ? markdownWithoutFrontMatter(content) : content}
               </ReactMarkdown></div>}
