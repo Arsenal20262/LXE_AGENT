@@ -11,7 +11,7 @@ from urllib.parse import urlsplit
 
 from shared.infra.net import erp_http_session, external_http_session
 
-from services.mabang.auth import get_auth_context
+from services.mabang.auth import get_existing_auth_context
 from services.mabang.auth_constants import (
     MABANG_MEMCACHE_COOKIE_NAME,
     PRIVATE_AMZ_REQUIRED_COOKIE_NAMES,
@@ -186,7 +186,7 @@ def _export_form_data(*, memcache_key: str) -> list[tuple[str, str]]:
 
 
 async def resolve_brazil_allocation_export_auth() -> PrivateAmzExportAuth:
-    context = await get_auth_context(purpose="brazil_overseas_allocation_export")
+    context = await get_existing_auth_context(purpose="brazil_overseas_allocation_export")
     return build_private_amz_headers(
         context,
         required_names=PRIVATE_AMZ_REQUIRED_COOKIE_NAMES,

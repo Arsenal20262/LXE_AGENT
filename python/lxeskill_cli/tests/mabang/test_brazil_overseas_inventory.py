@@ -68,6 +68,21 @@ async def _fake_auth_context(*args, **kwargs) -> MabangAuthContext:
     )
 
 
+def test_inventory_uses_existing_auth_only(monkeypatch) -> None:
+    observed: list[str] = []
+
+    async def fake_existing_auth(*args, **kwargs) -> MabangAuthContext:
+        observed.append(str(kwargs["purpose"]))
+        return await _fake_auth_context()
+
+    monkeypatch.setattr(inventory, "get_existing_auth_context", fake_existing_auth)
+
+    cookie_header = asyncio.run(inventory._resolve_private_amz_cookie())
+    assert "PHPSESSID=test-session" in cookie_header
+    assert "mabang_lite_rowsPerPage=100" in cookie_header
+    assert observed == ["brazil_overseas_inventory_export"]
+
+
 def _form_as_dict(data: list[tuple[str, str]]) -> dict[str, str]:
     return dict(data)
 
@@ -78,7 +93,7 @@ def test_exports_confirmed_brazil_inventory_filter_to_beijing_named_xlsx(monkeyp
         _FakeResponse(body=_xlsx_bytes([], columns=["库存SKU"])),
     ])
     monkeypatch.setattr(inventory, "erp_http_session", fake_session)
-    monkeypatch.setattr(inventory, "get_auth_context", _fake_auth_context)
+    monkeypatch.setattr(inventory, "get_existing_auth_context", _fake_auth_context)
 
     result = asyncio.run(
         inventory.export_brazil_overseas_inventory_sales_snapshot(
@@ -106,7 +121,7 @@ def test_rejects_non_xlsx_export_without_writing_file(monkeypatch, tmp_path: Pat
         _FakeResponse(body=b"<html>login required</html>"),
     ])
     monkeypatch.setattr(inventory, "erp_http_session", fake_session)
-    monkeypatch.setattr(inventory, "get_auth_context", _fake_auth_context)
+    monkeypatch.setattr(inventory, "get_existing_auth_context", _fake_auth_context)
 
     with pytest.raises(inventory.BrazilOverseasInventoryExportError, match="未返回 XLSX"):
         asyncio.run(inventory.export_brazil_overseas_inventory_sales_snapshot(output_dir=tmp_path))
@@ -119,7 +134,7 @@ def test_rejects_damaged_xlsx_archive_without_writing_file(monkeypatch, tmp_path
         _FakeResponse(body=b"PK\x03\x04not-a-zip-workbook"),
     ])
     monkeypatch.setattr(inventory, "erp_http_session", fake_session)
-    monkeypatch.setattr(inventory, "get_auth_context", _fake_auth_context)
+    monkeypatch.setattr(inventory, "get_existing_auth_context", _fake_auth_context)
 
     with pytest.raises(inventory.BrazilOverseasInventoryExportError, match="损坏的 XLSX"):
         asyncio.run(inventory.export_brazil_overseas_inventory_sales_snapshot(output_dir=tmp_path))
@@ -133,7 +148,7 @@ def test_stops_after_export_rejection_without_retry(monkeypatch, tmp_path: Path,
         _FakeResponse(status=status, body=b"blocked"),
     ])
     monkeypatch.setattr(inventory, "erp_http_session", fake_session)
-    monkeypatch.setattr(inventory, "get_auth_context", _fake_auth_context)
+    monkeypatch.setattr(inventory, "get_existing_auth_context", _fake_auth_context)
 
     with pytest.raises(MabangRequestError, match="已停止请求"):
         asyncio.run(inventory.export_brazil_overseas_inventory_sales_snapshot(output_dir=tmp_path))
@@ -143,7 +158,7 @@ def test_stops_after_export_rejection_without_retry(monkeypatch, tmp_path: Path,
 def test_stops_on_search_auth_failure_before_export(monkeypatch, tmp_path: Path) -> None:
     fake_session = _FakeSession([_FakeResponse(status=401, body=b"login required")])
     monkeypatch.setattr(inventory, "erp_http_session", fake_session)
-    monkeypatch.setattr(inventory, "get_auth_context", _fake_auth_context)
+    monkeypatch.setattr(inventory, "get_existing_auth_context", _fake_auth_context)
 
     with pytest.raises(inventory.BrazilOverseasInventoryAuthError, match="鉴权失败"):
         asyncio.run(inventory.export_brazil_overseas_inventory_sales_snapshot(output_dir=tmp_path))

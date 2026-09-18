@@ -12,6 +12,7 @@ from services.mabang.brazil_overseas import allocation
 from services.mabang.brazil_overseas.contracts import BrazilExportKind
 from services.mabang.errors import MabangRequestError
 from services.mabang.export_common import PrivateAmzExportAuth
+from services.mabang.auth import MabangAuthContext
 
 
 class _FakeResponse:
@@ -63,6 +64,39 @@ async def _fake_auth() -> PrivateAmzExportAuth:
         private_cookie_header="test-private-cookie-header",
         memcache_key="test-memcache-key",
     )
+
+
+def test_allocation_uses_existing_auth_only(monkeypatch) -> None:
+    observed: list[str] = []
+
+    async def fake_existing_auth(*args, **kwargs) -> MabangAuthContext:
+        observed.append(str(kwargs["purpose"]))
+        return MabangAuthContext(
+            account="test",
+            source="test",
+            cookies_by_domain={
+                ".mabangerp.com": [
+                    {"name": "PHPSESSID", "value": "test-session", "domain": ".mabangerp.com"},
+                    {"name": "mabang_memcache", "value": "test-memcache", "domain": ".mabangerp.com"},
+                ]
+            },
+            free_token="",
+            wms_cookie_header="",
+        )
+
+    def fake_build_headers(*args, **kwargs) -> PrivateAmzExportAuth:
+        return PrivateAmzExportAuth(
+            private_amz_cookie_header="test-private-amz-cookie-header",
+            private_cookie_header="test-private-cookie-header",
+            memcache_key="test-memcache-key",
+        )
+
+    monkeypatch.setattr(allocation, "get_existing_auth_context", fake_existing_auth)
+    monkeypatch.setattr(allocation, "build_private_amz_headers", fake_build_headers)
+
+    result = asyncio.run(allocation.resolve_brazil_allocation_export_auth())
+    assert result.memcache_key == "test-memcache-key"
+    assert observed == ["brazil_overseas_allocation_export"]
 
 
 def _form_values(form: list[tuple[str, str]], name: str) -> list[str]:

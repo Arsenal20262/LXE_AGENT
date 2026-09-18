@@ -14,7 +14,7 @@ from zipfile import BadZipFile, ZipFile
 
 from shared.infra.net import erp_http_session
 
-from services.mabang.auth import get_auth_context
+from services.mabang.auth import get_existing_auth_context
 from services.mabang.auth_constants import PRIVATE_AMZ_HOST
 from services.mabang.cookies import build_cookie_header
 from services.mabang.errors import MabangAuthError, MabangBusinessError, MabangRequestError
@@ -85,7 +85,7 @@ def _search_form_data() -> list[tuple[str, str]]:
 
 
 async def _resolve_private_amz_cookie() -> str:
-    context = await get_auth_context(purpose="brazil_overseas_inventory_export")
+    context = await get_existing_auth_context(purpose="brazil_overseas_inventory_export")
     cookie_header = build_cookie_header(
         context.cookies_by_domain,
         request_host=PRIVATE_AMZ_HOST,
