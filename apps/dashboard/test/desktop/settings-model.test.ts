@@ -80,6 +80,7 @@ const setupState = (patch: Partial<DesktopSetupState> = {}): DesktopSetupState =
     username: "",
     password_configured: false,
     basic_auth_configured: false,
+    production_enabled: false,
   },
   logging: {
     profile: "standard",

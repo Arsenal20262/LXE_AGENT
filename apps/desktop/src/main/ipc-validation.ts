@@ -147,18 +147,19 @@ export function validateSetupInput(value: unknown): DesktopSetupInput {
   const shangmanProcessedPassword = shangman?.action === "save"
     ? boundedText(shangman.processed_password, "Shangman processed password", 16_384)
     : "";
-  const shangmanBasicAuth = shangman?.action === "save"
-    ? boundedText(shangman.basic_auth, "Shangman Basic Authorization", 16_384)
-    : "";
-  if (shangmanBasicAuth && !/^Basic\s+\S+$/iu.test(shangmanBasicAuth)) {
-    throw new Error("Shangman Basic Authorization must be a complete Basic value");
+  if (shangman?.action === "save" && shangman.production_enabled !== undefined
+    && typeof shangman.production_enabled !== "boolean") {
+    throw new Error("Shangman production_enabled must be a boolean");
   }
+  const shangmanProductionEnabled = shangman?.action === "save" && typeof shangman.production_enabled === "boolean"
+    ? shangman.production_enabled
+    : undefined;
   const shangmanInput = shangman?.action === "save" ? {
     action: "save" as const,
     tenant_id: boundedText(shangman.tenant_id, "Shangman Tenant ID", 1_024),
     username: boundedText(shangman.username, "Shangman username", 1_024),
     ...(shangmanProcessedPassword ? { processed_password: shangmanProcessedPassword } : {}),
-    ...(shangmanBasicAuth ? { basic_auth: shangmanBasicAuth } : {}),
+    ...(shangmanProductionEnabled !== undefined ? { production_enabled: shangmanProductionEnabled } : {}),
   } : shangman?.action === "clear" ? { action: "clear" as const } : undefined;
   let loggingInput: DesktopSetupInput["logging"];
   if (logging) {

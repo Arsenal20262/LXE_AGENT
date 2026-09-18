@@ -41,7 +41,7 @@ export const OUTPUT_DIRECTORY_ENV_NAMES = [
 export type OutputDirectoryEnvironmentName = typeof OUTPUT_DIRECTORY_ENV_NAMES[number];
 
 export interface DesktopConfig {
-  schema_version: 9;
+  schema_version: 10;
   migration_version: number;
   llm: {
     provider: DesktopModelProvider;
@@ -66,7 +66,7 @@ export interface DesktopConfig {
     };
     mabang: { managed: boolean; account: string };
     feishu: { managed: boolean; app_id: string };
-    shangman: { managed: boolean; tenant_id: string; username: string };
+    shangman: { managed: boolean; tenant_id: string; username: string; production_enabled: boolean };
   };
   logging: {
     profile: DesktopLogProfile;
@@ -108,7 +108,7 @@ export interface DesktopSecrets {
 export const LOG_RETENTION_DAYS = new Set<DesktopLogRetentionDays>([3, 7, 14, 30]);
 export const MODEL_AUTH_MIGRATION_VERSION = 5;
 
-export const SETTINGS_SCHEMA_VERSION = 9 as const;
+export const SETTINGS_SCHEMA_VERSION = 10 as const;
 
 const developmentCatalog = (): LlmProviderCatalog => loadLlmProviderCatalog(
   join(repositoryRoot(dirname(fileURLToPath(import.meta.url))), "config", "llm"),
@@ -144,7 +144,7 @@ const defaultConfig = (catalog: LlmProviderCatalog): DesktopConfig => {
       },
       mabang: { managed: false, account: "" },
       feishu: { managed: false, app_id: "" },
-      shangman: { managed: false, tenant_id: "", username: "" },
+      shangman: { managed: false, tenant_id: "", username: "", production_enabled: false },
     },
     logging: { profile: "standard", retention_days: 7 },
     cloud: {
@@ -253,7 +253,7 @@ export const parseSettings = (
   const value = objectValue(raw);
   if (value.schema_version !== 4 && value.schema_version !== 5
     && value.schema_version !== 6 && value.schema_version !== 7
-    && value.schema_version !== 8
+    && value.schema_version !== 8 && value.schema_version !== 9
     && value.schema_version !== SETTINGS_SCHEMA_VERSION) {
     throw new Error(`unsupported settings schema_version: ${String(value.schema_version ?? "missing")}`);
   }
@@ -319,7 +319,7 @@ export const parseSettings = (
   ], "settings.integrations.ziniao");
   assertOnlyFields(mabang, ["managed", "account"], "settings.integrations.mabang");
   assertOnlyFields(feishu, ["managed", "app_id"], "settings.integrations.feishu");
-  assertOnlyFields(shangman, ["managed", "tenant_id", "username"], "settings.integrations.shangman");
+  assertOnlyFields(shangman, ["managed", "tenant_id", "username", "production_enabled"], "settings.integrations.shangman");
   assertFieldTypes(ziniao, {
     managed: "boolean", company: "string", username: "string", app_version: "string",
     app_path: "string", webdriver_path: "string",
@@ -329,6 +329,7 @@ export const parseSettings = (
   if (value.schema_version >= SETTINGS_SCHEMA_VERSION || Object.keys(shangman).length > 0) {
     assertFieldTypes(shangman, {
       managed: "boolean", tenant_id: "string", username: "string",
+      ...(value.schema_version >= SETTINGS_SCHEMA_VERSION ? { production_enabled: "boolean" as const } : {}),
     }, "settings.integrations.shangman");
   }
   const logging = objectValue(value.logging);
@@ -449,6 +450,7 @@ export const parseConfig = (
         managed: Boolean(rawShangman.managed),
         tenant_id: text(rawShangman.tenant_id),
         username: text(rawShangman.username),
+        production_enabled: rawShangman.production_enabled === true,
       },
     },
     logging: {

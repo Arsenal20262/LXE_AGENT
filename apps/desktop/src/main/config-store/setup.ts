@@ -31,6 +31,9 @@ const sameManagedTarget = (
   right: ManagedLlmTarget,
 ): boolean => left.provider === right.provider && left.model === right.model;
 
+const shangmanBasicAuth = (username: string, password: string): string =>
+  `Basic ${Buffer.from(`${username}:${password}`, "utf8").toString("base64")}`;
+
 export class DesktopSetupService {
   constructor(
     private readonly dataRoot: string,
@@ -132,6 +135,7 @@ export class DesktopSetupService {
         username: shangman.username,
         password_configured: Boolean(secrets.shangman_processed_password),
         basic_auth_configured: Boolean(secrets.shangman_basic_auth),
+        production_enabled: shangman.production_enabled,
       },
       logging: {
         ...config.logging,
@@ -203,25 +207,26 @@ export class DesktopSetupService {
     }
 
     if (input.shangman?.action === "clear") {
-      config.integrations.shangman = { managed: true, tenant_id: "", username: "" };
+      config.integrations.shangman = { managed: true, tenant_id: "", username: "", production_enabled: false };
       secrets.shangman_processed_password = "";
       secrets.shangman_basic_auth = "";
     } else if (input.shangman?.action === "save") {
       const tenantId = text(input.shangman.tenant_id);
       const username = text(input.shangman.username);
       const inputProcessedPassword = text(input.shangman.processed_password);
-      const inputBasicAuth = text(input.shangman.basic_auth);
       const processedPassword = inputProcessedPassword || effectiveSecrets.shangman_processed_password;
-      const basicAuth = inputBasicAuth || effectiveSecrets.shangman_basic_auth;
-      if (!tenantId || !username || !processedPassword || !basicAuth) {
-        throw new Error("智慧印尼 Tenant ID、账号、已处理密码和 Basic Authorization 必须完整填写");
+      if (!tenantId || !username || !processedPassword) {
+        throw new Error("智慧印尼 ID、账号和密码必须完整填写");
       }
-      if (!/^Basic\s+\S+$/iu.test(basicAuth)) {
-        throw new Error("智慧印尼 Basic Authorization 必须是完整的 Basic 值");
-      }
-      config.integrations.shangman = { managed: true, tenant_id: tenantId, username };
+      const basicAuth = shangmanBasicAuth(username, processedPassword);
+      config.integrations.shangman = {
+        managed: true,
+        tenant_id: tenantId,
+        username,
+        production_enabled: input.shangman.production_enabled ?? config.integrations.shangman.production_enabled,
+      };
       if (inputProcessedPassword) secrets.shangman_processed_password = inputProcessedPassword;
-      if (inputBasicAuth) secrets.shangman_basic_auth = inputBasicAuth;
+      secrets.shangman_basic_auth = basicAuth;
     }
 
     if (input.logging) {
@@ -557,8 +562,10 @@ export class DesktopSetupService {
       LXE_SHANGMAN_TENANT_ID: shangmanConfigured ? shangman.tenant_id : "",
       LXE_SHANGMAN_USERNAME: shangmanConfigured ? shangman.username : "",
       LXE_SHANGMAN_PROCESSED_PASSWORD: shangmanConfigured ? secrets.shangman_processed_password : "",
-      LXE_SHANGMAN_BASIC_AUTH: shangmanConfigured ? secrets.shangman_basic_auth : "",
-      LXE_SHANGMAN_PROD_ENABLED: flag(this.secretEnvironment.LXE_SHANGMAN_PROD_ENABLED) ? "true" : "false",
+      LXE_SHANGMAN_BASIC_AUTH: shangmanConfigured
+        ? shangmanBasicAuth(shangman.username, secrets.shangman_processed_password)
+        : "",
+      LXE_SHANGMAN_PROD_ENABLED: shangman.production_enabled ? "true" : "false",
       LOCAL_LOGS_ENABLED: logsEnabled ? "1" : "0",
       LOCAL_LOG_RETENTION_DAYS: String(config.logging.retention_days),
       LOG_LEVEL: diagnostic ? "DEBUG" : "INFO",

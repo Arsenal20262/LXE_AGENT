@@ -13,8 +13,8 @@ def test_preview_is_deterministic_and_does_not_construct_client(monkeypatch) -> 
 
     monkeypatch.setattr(goods_export_preview, "ShangmanClient", fail_constructor, raising=False)
 
-    first = goods_export_preview.run({"request_text": "请导出库存"})
-    second = goods_export_preview.run({"request_text": "请导出库存"})
+    first = goods_export_preview.run({"request_text": "请导出智慧印尼库存"})
+    second = goods_export_preview.run({"request_text": "请导出智慧印尼库存"})
 
     assert first == second
     assert first["success"] is True
@@ -45,13 +45,13 @@ def test_catalog_exposes_only_request_text_for_both_public_commands() -> None:
 
 def test_preview_maps_all_supported_business_wording_to_one_plan() -> None:
     requests = [
-        "导出月度7天销量",
-        "导出14天销量和30天销量",
-        "查看90天日度销量",
-        "导出当前库存",
-        "导出月末库存快照",
-        "导出入库时间",
-        "导出商品上架时间",
+        "导出智慧印尼月度7天销量",
+        "导出智慧印尼14天销量和30天销量",
+        "查看智慧印尼90天日度销量",
+        "导出智慧印尼当前库存",
+        "导出智慧印尼月末库存快照",
+        "导出智慧印尼入库时间",
+        "导出智慧印尼商品上架时间",
     ]
 
     results = [goods_export_preview.run({"request_text": request}) for request in requests]
@@ -78,13 +78,13 @@ def test_run_stops_at_production_gate_without_network(monkeypatch) -> None:
 
     monkeypatch.setattr(_workflow, "ShangmanClient", FailClient)
 
-    result = goods_export_run.run({"request_text": "导出当前库存"})
+    result = goods_export_run.run({"request_text": "导出智慧印尼当前库存"})
 
     assert result == {
         "success": False,
         "status": "blocked",
-        "request_text": "导出当前库存",
-        "intent": {"type": "goods-export", "request_text": "导出当前库存"},
+        "request_text": "导出智慧印尼当前库存",
+        "intent": {"type": "goods-export", "request_text": "导出智慧印尼当前库存"},
         "plan": {
             "type": "goods-export",
             "tasks": [{"type": "goods-export"}],
@@ -108,7 +108,7 @@ def test_run_reports_missing_captcha_after_gate_and_credentials(monkeypatch) -> 
     }.items():
         monkeypatch.setenv(name, value)
 
-    result = goods_export_run.run({"request_text": "导出当前库存"})
+    result = goods_export_run.run({"request_text": "导出智慧印尼当前库存"})
 
     assert result["success"] is False
     assert result["status"] == "blocked"
@@ -129,7 +129,7 @@ def test_run_reuses_first_stage_client_and_returns_one_artifact(monkeypatch, tmp
         "LXE_AGENT_TURN_ID": "turn-id",
     }.items():
         monkeypatch.setenv(name, value)
-    artifact = tmp_path / "智慧印尼-商品-20260917-150000.xlsx"
+    artifact = tmp_path / "智慧-商品-20260917-150000.xlsx"
     artifact.write_bytes(b"fake xlsx")
     calls: list[dict] = []
 
@@ -146,7 +146,7 @@ def test_run_reuses_first_stage_client_and_returns_one_artifact(monkeypatch, tmp
 
     monkeypatch.setattr(_workflow, "ShangmanClient", FakeClient)
 
-    result = goods_export_run.run({"request_text": "请导出30天销量"})
+    result = goods_export_run.run({"request_text": "请导出智慧印尼30天销量"})
 
     assert result["success"] is True
     assert result["status"] == "completed"
@@ -178,7 +178,7 @@ def test_run_redacts_runtime_credentials_but_keeps_client_diagnostic(monkeypatch
 
     monkeypatch.setattr(_workflow, "ShangmanClient", FailingClient)
 
-    result = goods_export_run.run({"request_text": "导出库存"})
+    result = goods_export_run.run({"request_text": "导出智慧印尼库存"})
 
     assert result["error"] == {
         "code": "erp_execution_failed",
@@ -210,7 +210,7 @@ def test_run_returns_only_an_opaque_challenge_when_captcha_is_required(monkeypat
 
     monkeypatch.setattr(_workflow, "ShangmanClient", WaitingClient)
 
-    result = goods_export_run.run({"request_text": "导出库存"})
+    result = goods_export_run.run({"request_text": "导出智慧印尼库存"})
 
     assert result["error"] == {
         "code": "captcha_input_required",
@@ -224,7 +224,7 @@ def test_run_returns_only_an_opaque_challenge_when_captcha_is_required(monkeypat
 def test_run_rejects_ambiguous_request_before_gate(monkeypatch) -> None:
     monkeypatch.delenv("LXE_SHANGMAN_PROD_ENABLED", raising=False)
 
-    result = goods_export_run.run({"request_text": "最近卖得怎么样"})
+    result = goods_export_run.run({"request_text": "智慧印尼最近卖得怎么样"})
 
     assert result["success"] is False
     assert result["status"] == "needs_clarification"

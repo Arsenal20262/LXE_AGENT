@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import json
+import asyncio
+import hashlib
 import re
 import tempfile
+import threading
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -23,6 +27,7 @@ GOODS_EXPORT_PATH = "/api/blade-goods/goods/merchant/exportNew"
 DEFAULT_OUTPUT_DIR = artifact_root() / "shangman" / "indonesia"
 SOURCE = "shangman_goods_export"
 PLATFORM = "shangman-indonesia"
+_DEFAULT_ACCESS_TOKEN_TTL_SECONDS = 300.0
 
 REQUIRED_BUSINESS_HEADERS = (
     "SKU",
@@ -139,6 +144,52 @@ class ShangmanExportResult:
         }
 
 
+@dataclass(frozen=True)
+class _CachedAccessToken:
+    value: str
+    expires_at: float
+    session: object
+
+
+class _ShangmanAuthCache:
+    """Process-local auth cache; tokens never enter settings, files, or logs."""
+
+    def __init__(self) -> None:
+        self._entries: dict[str, _CachedAccessToken] = {}
+        self._lock = threading.Lock()
+
+    def get(self, key: str, session: object) -> str | None:
+        now = time.monotonic()
+        with self._lock:
+            entry = self._entries.get(key)
+            if entry is None or entry.session is not session:
+                if entry is not None:
+                    self._entries.pop(key, None)
+                return None
+            if entry.expires_at <= now:
+                self._entries.pop(key, None)
+                return None
+            return entry.value
+
+    def put(self, key: str, value: str, ttl_seconds: float, session: object) -> None:
+        with self._lock:
+            self._entries[key] = _CachedAccessToken(
+                value=value,
+                expires_at=time.monotonic() + max(1.0, ttl_seconds),
+                session=session,
+            )
+
+    def invalidate(self, key: str, value: str) -> None:
+        with self._lock:
+            entry = self._entries.get(key)
+            if entry is not None and entry.value == value:
+                self._entries.pop(key, None)
+
+
+_AUTH_CACHE = _ShangmanAuthCache()
+_AUTH_LOGIN_LOCK = threading.Lock()
+
+
 def _normalize_header(value: Any) -> str:
     compact = re.sub(r"\s+", "", str(value or "")).strip()
     translated = re.search(r"\(([^()]*)\)$", compact)
@@ -222,7 +273,41 @@ class ShangmanClient:
             raise ShangmanBusinessError(f"{action} returned a non-object JSON value")
         return payload
 
-    async def _login(self) -> str:
+    def _auth_cache_key(self) -> str:
+        credentials = self.credentials
+        material = "\x00".join((
+            str(id(self.session)),
+            self.base_url,
+            credentials.tenant_id,
+            credentials.username,
+            credentials.processed_password,
+            credentials.basic_auth,
+        ))
+        return hashlib.sha256(material.encode("utf-8")).hexdigest()
+
+    async def _login(self, *, force: bool = False) -> str:
+        cache_key = self._auth_cache_key()
+        if not force:
+            cached = _AUTH_CACHE.get(cache_key, self.session)
+            if cached:
+                return cached
+
+        # asyncio.run creates a new event loop for each CLI invocation. A
+        # process-level threading lock keeps the single-flight guarantee
+        # across those loops without binding an asyncio.Lock to one loop.
+        await asyncio.to_thread(_AUTH_LOGIN_LOCK.acquire)
+        try:
+            if not force:
+                cached = _AUTH_CACHE.get(cache_key, self.session)
+                if cached:
+                    return cached
+            access_token, ttl_seconds = await self._login_uncached()
+            _AUTH_CACHE.put(cache_key, access_token, ttl_seconds, self.session)
+            return access_token
+        finally:
+            _AUTH_LOGIN_LOCK.release()
+
+    async def _login_uncached(self) -> tuple[str, float]:
         captcha_key = ""
         captcha_code = ""
         resume = getattr(self.captcha_provider, "resume", None)
@@ -273,7 +358,13 @@ class ShangmanClient:
         if not access_token:
             message = _redact(_response_message(token_payload, "missing access_token"), self._sensitive_values)
             raise ShangmanAuthError(f"login response incomplete: {message}")
-        return access_token
+        try:
+            ttl_seconds = float(token_payload.get("expires_in", _DEFAULT_ACCESS_TOKEN_TTL_SECONDS))
+        except (TypeError, ValueError):
+            ttl_seconds = _DEFAULT_ACCESS_TOKEN_TTL_SECONDS
+        if ttl_seconds <= 0:
+            ttl_seconds = _DEFAULT_ACCESS_TOKEN_TTL_SECONDS
+        return access_token, ttl_seconds
 
     def _validate_download_url(self, raw_url: Any) -> tuple[str, str]:
         url = str(raw_url or "").strip()
@@ -327,8 +418,7 @@ class ShangmanClient:
             "downloaded workbook is readable but has no required business headers"
         )
 
-    async def export_goods(self) -> ShangmanExportResult:
-        access_token = await self._login()
+    async def _request_goods_export(self, access_token: str) -> dict[str, Any]:
         credentials = self.credentials
         headers = {
             "Blade-Auth": f"bearer {access_token}",
@@ -339,7 +429,24 @@ class ShangmanClient:
             self._url(GOODS_EXPORT_PATH),
             headers=headers,
         ) as response:
-            export_payload = await self._json_response(response, action="goods export")
+            return await self._json_response(response, action="goods export")
+
+    async def export_goods(self) -> ShangmanExportResult:
+        access_token = await self._login()
+        credentials = self.credentials
+        try:
+            export_payload = await self._request_goods_export(access_token)
+        except ShangmanAuthError:
+            # A server-side token rejection is the only point where a cached
+            # token is discarded. Retry login once; never loop indefinitely.
+            _AUTH_CACHE.invalidate(self._auth_cache_key(), access_token)
+            access_token = await self._login(force=True)
+            export_payload = await self._request_goods_export(access_token)
+        headers = {
+            "Blade-Auth": f"bearer {access_token}",
+            "Tenant-Id": credentials.tenant_id,
+            "Authorization": credentials.basic_auth,
+        }
         try:
             response_code = int(export_payload.get("code"))
         except (TypeError, ValueError):
@@ -362,7 +469,7 @@ class ShangmanClient:
                 )
 
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        filename = f"智慧印尼-商品-{datetime.now().strftime('%Y%m%d-%H%M%S')}.xlsx"
+        filename = f"智慧-商品-{datetime.now().strftime('%Y%m%d-%H%M%S')}.xlsx"
         artifact_path = self.output_dir / filename
         temporary_path: Path | None = None
         try:

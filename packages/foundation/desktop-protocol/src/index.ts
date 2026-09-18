@@ -470,6 +470,7 @@ export interface DesktopSetupState {
     username: string;
     password_configured: boolean;
     basic_auth_configured: boolean;
+    production_enabled: boolean;
   };
   logging: {
     profile: DesktopLogProfile;
@@ -505,7 +506,7 @@ export type DesktopShangmanSetupInput =
       tenant_id: string;
       username: string;
       processed_password?: string;
-      basic_auth?: string;
+      production_enabled?: boolean;
     };
 
 export interface DesktopSetupInput {

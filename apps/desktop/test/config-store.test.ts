@@ -179,7 +179,7 @@ describe("DesktopConfigStore", () => {
   test("persists Shangman non-secrets separately and emits only the new runtime contract", () => {
     const root = createRoot();
     const store = new DesktopConfigStore(root, join(root, "workspace"), safeStorage);
-    const basicAuth = "Basic ZHVtbXk6cGFzcw==";
+    const basicAuth = "Basic cHJvY2Vzc2VkLXVzZXI6cHJvY2Vzc2VkLXBhc3N3b3Jk";
     const processedPassword = "processed-password";
     const state = store.save({
       workspace_root: join(root, "workspace"),
@@ -188,7 +188,7 @@ describe("DesktopConfigStore", () => {
         tenant_id: "tenant-1",
         username: "processed-user",
         processed_password: processedPassword,
-        basic_auth: basicAuth,
+        production_enabled: true,
       },
     });
 
@@ -199,6 +199,7 @@ describe("DesktopConfigStore", () => {
       username: "processed-user",
       password_configured: true,
       basic_auth_configured: true,
+      production_enabled: true,
       issues: [],
     });
     const settings = readFileSync(join(root, "config", "settings.json"), "utf8");
@@ -212,7 +213,7 @@ describe("DesktopConfigStore", () => {
       LXE_SHANGMAN_USERNAME: "processed-user",
       LXE_SHANGMAN_PROCESSED_PASSWORD: processedPassword,
       LXE_SHANGMAN_BASIC_AUTH: basicAuth,
-      LXE_SHANGMAN_PROD_ENABLED: "false",
+      LXE_SHANGMAN_PROD_ENABLED: "true",
     });
     expect(store.environment()).not.toHaveProperty("LXE_SHANGMAN_PASSWORD");
     expect(store.environment()).not.toHaveProperty("LXE_SHANGMAN_BASIC_USERNAME");
@@ -226,7 +227,7 @@ describe("DesktopConfigStore", () => {
     expect(store.environment()).toMatchObject({
       LXE_SHANGMAN_TENANT_ID: "tenant-2",
       LXE_SHANGMAN_PROCESSED_PASSWORD: processedPassword,
-      LXE_SHANGMAN_BASIC_AUTH: basicAuth,
+      LXE_SHANGMAN_BASIC_AUTH: "Basic bmV4dC11c2VyOnByb2Nlc3NlZC1wYXNzd29yZA==",
     });
 
     const cleared = store.save({
@@ -242,7 +243,7 @@ describe("DesktopConfigStore", () => {
     });
   });
 
-  test("does not activate Shangman with an invalid injected Basic Authorization", () => {
+  test("derives Shangman Basic Authorization from the three user fields", () => {
     const root = createRoot();
     const configuredStore = new DesktopConfigStore(root, join(root, "workspace"), safeStorage);
     configuredStore.save({
@@ -252,7 +253,6 @@ describe("DesktopConfigStore", () => {
         tenant_id: "tenant-1",
         username: "user-1",
         processed_password: "processed-password",
-        basic_auth: "Basic ZHVtbXk6cGFzcw==",
       },
     });
     const store = new DesktopConfigStore(root, join(root, "workspace"), safeStorage, {
@@ -263,14 +263,14 @@ describe("DesktopConfigStore", () => {
     });
 
     expect(store.state().shangman).toMatchObject({
-      configured: false,
-      issues: ["Basic Authorization 格式无效"],
+      configured: true,
+      issues: [],
     });
     expect(store.environment()).toMatchObject({
-      LXE_SHANGMAN_TENANT_ID: "",
-      LXE_SHANGMAN_USERNAME: "",
-      LXE_SHANGMAN_PROCESSED_PASSWORD: "",
-      LXE_SHANGMAN_BASIC_AUTH: "",
+      LXE_SHANGMAN_TENANT_ID: "tenant-1",
+      LXE_SHANGMAN_USERNAME: "user-1",
+      LXE_SHANGMAN_PROCESSED_PASSWORD: "processed-password",
+      LXE_SHANGMAN_BASIC_AUTH: "Basic dXNlci0xOnByb2Nlc3NlZC1wYXNzd29yZA==",
     });
   });
 
@@ -465,7 +465,7 @@ describe("DesktopConfigStore", () => {
     });
     expect(existsSync(join(root, ".env.local"))).toBeFalse();
     expect(JSON.parse(readFileSync(join(root, "config", "settings.json"), "utf8"))).toMatchObject({
-      schema_version: 9,
+      schema_version: 10,
       llm: {
         provider: "kimi_coding",
         profiles: { kimi_coding: { model: "k3", thinking_level: "max" } },

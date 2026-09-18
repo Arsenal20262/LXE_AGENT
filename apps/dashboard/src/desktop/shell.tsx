@@ -913,16 +913,19 @@ function DesktopSettingsForm({
                 value={form.shangmanProcessedPassword}
               />
             </label>
-            <label>
-              <span>{t.desktop.shangman.basicAuth}{setup.shangman.basic_auth_configured ? t.desktop.keepBlankSuffix : ""}</span>
-              <input
-                autoComplete="new-password"
-                onChange={(event) => onChange({ shangmanBasicAuth: event.target.value })}
-                placeholder={setup.shangman.basic_auth_configured ? t.desktop.storedPlaceholder : t.desktop.shangman.basicAuthPlaceholder}
-                type="password"
-                value={form.shangmanBasicAuth}
-              />
-            </label>
+          </div>
+          <div className="desktop-production-switch-row">
+            <div>
+              <strong>{t.desktop.shangman.productionLabel}</strong>
+              <small>{t.desktop.shangman.productionDescription}</small>
+            </div>
+            <button
+              aria-checked={form.shangmanProductionEnabled}
+              className={`desktop-switch ${form.shangmanProductionEnabled ? "is-on" : ""}`}
+              onClick={() => onChange({ shangmanProductionEnabled: !form.shangmanProductionEnabled })}
+              role="switch"
+              type="button"
+            ><span /></button>
           </div>
           {setup.shangman.managed ? (
             <button className="desktop-clear-integration" onClick={() => onClearIntegration("shangman")} type="button">
@@ -1406,8 +1409,7 @@ export function DesktopShell({
       form.shangmanTenantId,
       form.shangmanUsername,
       form.shangmanProcessedPassword,
-      form.shangmanBasicAuth,
-    ) || setup.shangman.configured;
+    ) || setup.shangman.configured || form.shangmanProductionEnabled !== setup.shangman.production_enabled;
     return {
       ...baseInput(),
       ...(ziniaoTouched ? {
@@ -1440,8 +1442,8 @@ export function DesktopShell({
           action: "save" as const,
           tenant_id: form.shangmanTenantId,
           username: form.shangmanUsername,
+          production_enabled: form.shangmanProductionEnabled,
           ...(form.shangmanProcessedPassword ? { processed_password: form.shangmanProcessedPassword } : {}),
-          ...(form.shangmanBasicAuth ? { basic_auth: form.shangmanBasicAuth } : {}),
         },
       } : {}),
     };

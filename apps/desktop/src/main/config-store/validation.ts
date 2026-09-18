@@ -75,13 +75,10 @@ export class DesktopConfigValidation {
     shangman: DesktopConfig["integrations"]["shangman"],
     secrets: DesktopSecrets,
   ): string[] {
-    const basicAuth = secrets.shangman_basic_auth;
     return [
-      !shangman.tenant_id && "缺少 Tenant ID",
+      !shangman.tenant_id && "缺少 ID",
       !shangman.username && "缺少账号",
       !secrets.shangman_processed_password && "缺少已处理密码",
-      !basicAuth && "缺少 Basic Authorization",
-      basicAuth && !/^Basic\s+\S+$/iu.test(basicAuth) && "Basic Authorization 格式无效",
     ].filter((value): value is string => Boolean(value));
   }
 

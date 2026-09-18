@@ -23,7 +23,7 @@ export const ZH_TEXT = {
   skillDisplayName: (name: string) => skillDisplayName(name, "zh"),
   sessionStatus: {waiting_input:"等待回答",running:"运行中",stopping:"正在停止",queued:"排队中",completed:"已完成，尚未查看",error:"执行失败，尚未查看",cancelled:"已停止",idle:"暂无未查看结果",unknown:"上次运行结果未确认",unavailable:"状态暂不可用",syncError:"状态同步失败"},
   userQuestions: {waiting:"等待回答",received:"回答已接收",done:"完成",retry:"重试提交",skip:"跳过",skipQuestion:"跳过当前问题",skipped:"已跳过",submitting:"正在提交…",stop:"停止本次任务",stopping:"正在停止…",pagination:"问题分页",previous:"上一题",next:"下一题",multiple:"可多选，也可以补充文字",custom:"自己的回答",customPlaceholder:"填写自己的回答…",freeText:"回答"},
-  shangmanCaptcha: {eyebrow:"智慧印尼安全校验",title:"请输入图片验证码",hint:"ERP 返回了需要人工确认的验证码。输入图片中的文字后继续。",imageAlt:"智慧印尼验证码",inputLabel:"验证码",submit:"确认并继续",submitting:"正在提交…",accepted:"验证码已提交",acceptedHint:"正在继续原任务。",noStorage:"验证码不会保存到会话或浏览器存储。"},
+  shangmanCaptcha: {eyebrow:"智慧安全校验",title:"请输入图片验证码",hint:"ERP 返回了需要人工确认的验证码。输入图片中的文字后继续。",imageAlt:"智慧验证码",inputLabel:"验证码",submit:"确认并继续",submitting:"正在提交…",accepted:"验证码已提交",acceptedHint:"正在继续原任务。",noStorage:"验证码不会保存到会话或浏览器存储。"},
   language: {
     label: "语言",
     zh: "中文",
@@ -643,7 +643,7 @@ export const ZH_TEXT = {
       ziniao: "紫鸟",
       mabang: "马帮",
       feishu: "飞书",
-      shangman: "智慧印尼"
+      shangman: "智慧"
     },
     sectionTitles: {
       status: "运行状态",
@@ -653,7 +653,7 @@ export const ZH_TEXT = {
       ziniao: "紫鸟自动化",
       mabang: "马帮",
       feishu: "飞书",
-      shangman: "智慧印尼",
+      shangman: "智慧",
       logging: "日志与排障"
     },
     status: {
@@ -793,13 +793,13 @@ export const ZH_TEXT = {
       appSecretPlaceholder: "输入 App Secret"
     },
     shangman: {
-      description: "Tenant ID、账号、已处理密码和完整 Basic Authorization 必须成对配置；验证码仅在导出时人工输入。",
-      tenantId: "Tenant ID",
+      description: "ID、账号和密码必须完整配置；验证码仅在印尼商品导出时人工输入。Basic Authorization 由系统自动生成。",
+      tenantId: "ID",
       username: "账号",
-      processedPassword: "已处理密码",
-      processedPasswordPlaceholder: "输入已处理密码",
-      basicAuth: "Basic Authorization",
-      basicAuthPlaceholder: "输入完整的 Basic 值"
+      processedPassword: "密码",
+      processedPasswordPlaceholder: "输入密码",
+      productionLabel: "启用智慧生产 API 调用",
+      productionDescription: "仅在账号配置完成且确认要访问生产接口时开启。"
     },
     logging: {
       description: "标准日志适合长期运行，排障日志仅建议在复现问题时开启。",
@@ -1489,7 +1489,7 @@ export const UI_TEXT: Record<Language, UiText> = {
         ziniao: "ZiNiao",
         mabang: "Mabang",
         feishu: "Feishu",
-        shangman: "Wisdom Indonesia"
+        shangman: "Wisdom"
       },
       sectionTitles: {
         status: "Runtime status",
@@ -1499,7 +1499,7 @@ export const UI_TEXT: Record<Language, UiText> = {
         ziniao: "ZiNiao automation",
         mabang: "Mabang",
         feishu: "Feishu",
-        shangman: "Wisdom Indonesia",
+        shangman: "Wisdom",
         logging: "Logs & diagnostics"
       },
       status: {
@@ -1639,13 +1639,13 @@ export const UI_TEXT: Record<Language, UiText> = {
         appSecretPlaceholder: "Enter the App Secret"
       },
       shangman: {
-        description: "Tenant ID, username, processed password, and the complete Basic Authorization value are required together; captcha is entered manually only during an export.",
-        tenantId: "Tenant ID",
+        description: "ID, username, and password are required; Basic Authorization is generated automatically and captcha is entered manually only during an export.",
+        tenantId: "ID",
         username: "Username",
-        processedPassword: "Processed password",
-        processedPasswordPlaceholder: "Enter the processed password",
-        basicAuth: "Basic Authorization",
-        basicAuthPlaceholder: "Enter the complete Basic value"
+        processedPassword: "Password",
+        processedPasswordPlaceholder: "Enter the password",
+        productionLabel: "Enable Shangman production API calls",
+        productionDescription: "Enable only after credentials are configured and production access is intended."
       },
       logging: {
         description: "Standard logs suit long-term use; enable diagnostic logs only while reproducing an issue.",

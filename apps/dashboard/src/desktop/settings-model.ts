@@ -73,7 +73,7 @@ export interface DesktopSettingsFormValue {
   shangmanTenantId: string;
   shangmanUsername: string;
   shangmanProcessedPassword: string;
-  shangmanBasicAuth: string;
+  shangmanProductionEnabled: boolean;
   logProfile: DesktopLogProfile;
   logRetentionDays: DesktopLogRetentionDays;
 }
@@ -95,7 +95,7 @@ export const desktopSettingsForm = (state: DesktopSetupState): DesktopSettingsFo
   shangmanTenantId: state.shangman.tenant_id,
   shangmanUsername: state.shangman.username,
   shangmanProcessedPassword: "",
-  shangmanBasicAuth: "",
+  shangmanProductionEnabled: state.shangman.production_enabled,
   logProfile: state.logging.profile,
   logRetentionDays: state.logging.retention_days,
 });
@@ -112,7 +112,7 @@ const SECTION_FIELDS: Record<EditableDesktopSettingsSection, readonly (keyof Des
   ],
   mabang: ["mabangAccount", "mabangPassword"],
   feishu: ["feishuAppId", "feishuAppSecret"],
-  shangman: ["shangmanTenantId", "shangmanUsername", "shangmanProcessedPassword", "shangmanBasicAuth"],
+  shangman: ["shangmanTenantId", "shangmanUsername", "shangmanProcessedPassword", "shangmanProductionEnabled"],
   logging: ["logProfile", "logRetentionDays"],
 };
 

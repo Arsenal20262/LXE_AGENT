@@ -164,9 +164,9 @@ def test_export_goods_authenticates_downloads_and_returns_canonical_payload(tmp_
         "headers": BUSINESS_HEADERS,
         "download_host": "download.example.test",
     }
-    assert result.filename.startswith("智慧印尼-商品-")
+    assert result.filename.startswith("智慧-商品-")
     assert result.filename.endswith(".xlsx")
-    assert len(result.filename) == len("智慧印尼-商品-YYYYMMDD-HHMMSS.xlsx")
+    assert len(result.filename) == len("智慧-商品-YYYYMMDD-HHMMSS.xlsx")
     assert Path(result.artifact_path).is_file()
     assert load_workbook(result.artifact_path, read_only=True).sheetnames == ["sheet1"]
 
@@ -193,6 +193,55 @@ def test_export_goods_authenticates_downloads_and_returns_canonical_payload(tmp_
     assert "auth" not in download_call
     assert "headers" not in download_call
     assert download_call["allow_redirects"] is False
+
+
+def test_export_reuses_process_local_login_state_across_clients(tmp_path: Path) -> None:
+    session = FakeSession(
+        [
+            FakeResponse(payload={"key": "captcha-key", "image": "data:image/png;base64,abc"}),
+            FakeResponse(payload={"access_token": "shared-token", "expires_in": 600}),
+            FakeResponse(payload={"code": 200, "success": True, "data": "https://download.example.test/first.xlsx"}),
+            FakeResponse(body=xlsx_bytes()),
+            FakeResponse(payload={"code": 200, "success": True, "data": "https://download.example.test/second.xlsx"}),
+            FakeResponse(body=xlsx_bytes()),
+        ]
+    )
+
+    first = asyncio.run(make_client(session, tmp_path / "first").export_goods())
+    second = asyncio.run(make_client(session, tmp_path / "second").export_goods())
+
+    assert first.row_count == second.row_count == 1
+    assert [call["method"] for call in session.calls] == [
+        "GET", "POST", "POST", "GET", "POST", "GET",
+    ]
+    assert session.calls[1]["url"].endswith("/oauth/token")
+    assert session.calls[2]["url"].endswith("/goods/merchant/exportNew")
+    assert session.calls[4]["url"].endswith("/goods/merchant/exportNew")
+    assert session.calls[4]["headers"]["Blade-Auth"] == "bearer shared-token"
+
+
+def test_export_discards_rejected_token_and_reauthenticates_once(tmp_path: Path) -> None:
+    session = FakeSession(
+        [
+            FakeResponse(payload={"key": "captcha-key-1", "image": "data:image/png;base64,abc"}),
+            FakeResponse(payload={"access_token": "stale-token"}),
+            FakeResponse(status=401, payload={"message": "expired"}),
+            FakeResponse(payload={"key": "captcha-key-2", "image": "data:image/png;base64,abc"}),
+            FakeResponse(payload={"access_token": "fresh-token"}),
+            FakeResponse(payload={"code": 200, "success": True, "data": "https://download.example.test/goods.xlsx"}),
+            FakeResponse(body=xlsx_bytes()),
+        ]
+    )
+
+    result = asyncio.run(make_client(session, tmp_path).export_goods())
+
+    assert result.row_count == 1
+    login_calls = [call for call in session.calls if call["url"].endswith("/oauth/token")]
+    export_calls = [call for call in session.calls if call["url"].endswith("/goods/merchant/exportNew")]
+    assert len(login_calls) == 2
+    assert [call["headers"]["Blade-Auth"] for call in export_calls] == [
+        "bearer stale-token", "bearer fresh-token",
+    ]
 
 
 def test_workbook_validation_scans_rows_when_dimension_metadata_is_wrong(tmp_path: Path) -> None:

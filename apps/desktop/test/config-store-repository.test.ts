@@ -41,7 +41,7 @@ describe("DesktopConfigRepository", () => {
     const repository = new DesktopConfigRepository(root, safeStorage, "darwin");
     expect(repository.hadExistingConfig).toBeFalse();
     expect(repository.readConfig()).toMatchObject({
-      schema_version: 9,
+      schema_version: 10,
       migration_version: 0,
       llm: {
         provider: "deepseek",
@@ -62,7 +62,7 @@ describe("DesktopConfigRepository", () => {
       cloud: { sync_interval_seconds: 1 },
     }));
     expect(repository.readConfig()).toMatchObject({
-      schema_version: 9,
+      schema_version: 10,
       migration_version: 0,
       llm: {
         provider: "deepseek",
@@ -88,7 +88,7 @@ describe("DesktopConfigRepository", () => {
 
     const repository = new DesktopConfigRepository(root, safeStorage, "darwin");
     expect(repository.readConfig()).toMatchObject({
-      schema_version: 9,
+      schema_version: 10,
       llm: {
         provider: "deepseek",
         credential_source: "local",
@@ -107,7 +107,7 @@ describe("DesktopConfigRepository", () => {
 
     const repository = new DesktopConfigRepository(root, safeStorage, "win32");
     expect(repository.readConfig()).toMatchObject({
-      schema_version: 9,
+      schema_version: 10,
       cloud: { switch_in_progress: false },
     });
   });
@@ -128,7 +128,7 @@ describe("DesktopConfigRepository", () => {
 
     const repository = new DesktopConfigRepository(root, safeStorage, "darwin");
     expect(repository.readConfig()).toMatchObject({
-      schema_version: 9,
+      schema_version: 10,
       llm: {
         provider: "kimi_coding",
         last_local_provider: "kimi_coding",
@@ -150,9 +150,9 @@ describe("DesktopConfigRepository", () => {
 
     const repository = new DesktopConfigRepository(root, safeStorage, "darwin");
     expect(repository.readConfig()).toMatchObject({
-      schema_version: 9,
+      schema_version: 10,
       integrations: {
-        shangman: { managed: false, tenant_id: "", username: "" },
+        shangman: { managed: false, tenant_id: "", username: "", production_enabled: false },
       },
     });
   });

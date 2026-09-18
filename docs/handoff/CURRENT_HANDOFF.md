@@ -153,3 +153,87 @@ The commit SHA is reported in the stage completion response. This document is in
 - After fetching `origin/main`, rebase reported the branch was up to date. Full verification from the worktree root: `UV_CACHE_DIR=/private/tmp/lxe-agent-uv-cache uv run --frozen pytest -q python/lxeskill_cli/tests` → `1685 passed, 2 skipped`; `LXE_FD_PATH=<prepared pinned fd> bun test` → `1583 pass, 13 skip, 0 fail`; `bun run typecheck` passed for all packages. The pinned fd was prepared with `bun run desktop:tools:fd` from the checked-in lockfile.
 - Python's localhost tests and Bun's local HTTP tests require an environment that permits loopback binding. The default sandbox rejected those binds; the final full runs used local-loopback test permission. The opt-in Shangman HTTP broker test passed separately during Stage 3 with `LXE_RUN_LOOPBACK_TESTS=1`.
 - No real ERP request, credential configuration, production probe, or push was performed.
+
+## Stage 4: Desktop development-service startup alignment (uncommitted)
+
+- Worktree/Pool: `/Users/hym/PycharmProjects/LXE_AGENT/.worktrees/pool-2`, branch `codex/shangman-erp-export-client`.
+- Root cause: when port 5173 was already occupied, Vite silently selected a different port but `apps/desktop/src/dev.ts` still passed `http://127.0.0.1:5173` to Electron. That could make this worktree load another task's Dashboard.
+- Added `apps/dashboard/vite/dev-server.ts`, the single resolver for `LXE_DASHBOARD_DEV_PORT` (default 5173; strict validated range 1024–65535) and the corresponding loopback URL.
+- `vite.config.ts` now uses that resolver and `strictPort: true`; `apps/desktop/src/dev.ts` passes the same resolved port and URL to both Vite and Electron and probes that same URL before launching Electron.
+- Added `apps/dashboard/test/dev-server.test.ts` for default, explicit override, and invalid-port cases.
+
+### Stage 4 verification
+
+- Red test first: `bun test apps/dashboard/test/dev-server.test.ts` failed because the resolver module did not yet exist.
+- After implementation: `bun test apps/dashboard/test/dev-server.test.ts` → `3 pass`; `bun run --cwd apps/dashboard typecheck` and `bun run --cwd apps/desktop typecheck` passed.
+- Manual local-service verification: started `LXE_DASHBOARD_DEV_PORT=5181 bun run desktop:dev`; Vite bound to `127.0.0.1:5181`, the Desktop gateway and agent runtime logged ready, loopback HTTP returned `200`, and the actual Electron window reported `URL: 127.0.0.1:5181/`.
+- The runtime also reported `Mabang 账号为空` from its pre-existing maintenance refresh configuration. This does not block the Desktop, Dashboard, gateway, or Shangman startup path; no Shangman production gate was enabled and no ERP request occurred.
+
+### Stage 4 status and next step
+
+- Uncommitted files: `apps/dashboard/vite/dev-server.ts`, `apps/dashboard/test/dev-server.test.ts`, `apps/dashboard/vite.config.ts`, `apps/desktop/src/dev.ts`, and this handoff.
+- The local Electron development instance is still running on port 5181 for inspection; terminate it with its originating terminal/session before starting another copy.
+- Run `git diff --check` and sensitive-data review before staging. With user approval, stage only these Stage 4 files and commit as `fix: align desktop dashboard dev port`.
+
+## Stage 5: Skill recognition, persistent production switch, and local flow validation (uncommitted)
+
+- Worktree/Pool: `/Users/hym/PycharmProjects/LXE_AGENT/.worktrees/pool-2`, branch `codex/shangman-erp-export-client`.
+- Added the design spec and inline execution plan at `docs/superpowers/specs/2026-09-18-shangman-skill-production-flow-design.md` and `docs/superpowers/plans/2026-09-18-shangman-skill-production-flow.md`.
+- Confirmed the public Skill is discoverable as `shangman-goods-export-workflow-map`, with `type: amazon_replenish`, both `lxeskill shangman export` commands, and a single catalog owner. Added a runtime catalog discovery test so a missing or malformed manifest is caught instead of silently becoming unrecognized.
+- Added a persistent, non-secret `integrations.shangman.production_enabled` setting and moved the Desktop runtime gate to that value. Settings schema is now version 10; schema 9 and older configurations migrate with the switch off. Save preserves it, clear resets it, and the UI presents a two-column credential layout plus an orange/gray switch with accessible `role=switch` semantics.
+- The screenshot was used only as a layout reference. TMS-specific labels and credentials were not copied into Shangman.
+
+### Stage 5 verification
+
+- `bun test apps/desktop/test/config-store.test.ts apps/desktop/test/config-store-repository.test.ts apps/desktop/test/ipc-validation.test.ts apps/dashboard/test/desktop/settings-model.test.ts` → `48 pass, 0 fail`.
+- `bun test packages/agent/runtime/test/tooling/skills.test.ts packages/agent/runtime/test/tooling/lxeskill-command.test.ts` → `17 pass, 0 fail`; the repository Skill catalog loaded 57 manifests and recognized the Shangman type/commands.
+- `uv run --frozen pytest -q python/lxeskill_cli/tests/lxeskill/test_fba_skill_docs.py python/lxeskill_cli/tests/shangman/test_goods_export_workflow.py` → `16 passed`.
+- `bun run --cwd apps/dashboard typecheck`, `bun run --cwd apps/desktop typecheck`, and `bun run --cwd packages/foundation/desktop-protocol typecheck` passed. Existing dev-server tests → `3 pass`.
+- `git diff --check` passed. No real ERP request, production probe, credential, token, or captcha answer was used. The local workflow tests validate preview, gate-off blocking, credential/channel checks, opaque captcha pause, rerun/artifact return, and redaction using fakes; formal ERP integration remains to be tested only in an authorized environment.
+
+### Stage 5 status and next step
+
+- All Stage 5 files remain uncommitted. Do not stage or commit without user approval under the repository handoff policy.
+
+## Stage 6: Process-local Shangman login-state reuse (uncommitted)
+
+- `ShangmanClient` now keeps a process-local access-token cache keyed by the ERP endpoint, HTTP session identity, tenant, username, processed password, and Basic Authorization fingerprint. The token itself stays memory-only; it is never written to settings, artifacts, logs, or the transcript.
+- New clients created by separate export requests reuse a valid cached token and skip captcha/login. A bounded default token lifetime is used when the ERP response omits `expires_in`; a valid numeric `expires_in` is honored.
+- Login refresh is single-flight across the separate asyncio event loops used by CLI invocations. If a goods-export request receives 401/403, the rejected token is invalidated and the client performs one forced re-login, then retries once without an unbounded loop.
+- Added tests for cross-client reuse and rejected-token reauthentication. A test initially exposed object-ID reuse in the cache key; the cache now retains and identity-checks the session object to prevent that collision.
+
+### Stage 6 verification
+
+- `uv run --frozen pytest -q python/lxeskill_cli/tests/shangman/test_goods_export.py` → `11 passed`.
+- `uv run --frozen pytest -q python/lxeskill_cli/tests/shangman` → `37 passed`.
+- `git diff --check` passed. Tests used only local fake HTTP sessions; no real ERP request or production credential was used.
+
+### Stage 6 status and next step
+
+- Implementation and tests are uncommitted. Before any commit, inspect the combined Stage 4–6 diff and obtain user approval to stage/commit.
+
+## Stage 7: Reduce Shangman setup to the three user login fields (uncommitted)
+
+- Desktop settings now shows only ID/Tenant ID, account, and password. The separate Basic Authorization input was removed from the user-facing form and from the public Desktop setup input.
+- Electron derives `Basic base64(username:password)` in memory and persists only the encrypted derived value for compatibility with the existing runtime contract. The runtime environment also derives it from the three configured fields, so older configurations without a usable Basic value can be repaired on startup.
+- Validation and save errors now require only the three user fields. The existing Python client still receives the internal Basic header and does not expose it as a public command argument.
+- This derivation is an implementation assumption based on the user's stated three-field login flow. It has local unit coverage but has not been confirmed against a real Shangman production response; no real ERP request was made.
+
+### Stage 7 verification
+
+- `bun run --cwd apps/dashboard typecheck`, `bun run --cwd apps/desktop typecheck`, and `bun run --cwd packages/foundation/desktop-protocol typecheck` passed.
+- Desktop/config/dashboard focused tests → `48 pass, 0 fail`.
+- The Desktop development service was rebuilt and restarted from this worktree on `http://127.0.0.1:5181/`; Electron is currently running for inspection.
+- Existing non-blocking startup diagnostics remain: cloud machine identity mismatch and empty Mabang account for the maintenance refresh.
+
+## Stage 8: Generic Wisdom integration name with explicit Indonesia trigger (uncommitted)
+
+- The frontend business integration is now named `智慧` in Chinese (and `Wisdom` in English). Captcha labels, production-switch labels, navigation, and settings descriptions no longer use `智慧印尼` as the integration name.
+- The public workflow trigger now requires both markers `智慧` and `印尼` in the original natural-language request. Requests containing only one marker are rejected with `platform_marker_required`; this leaves room for future country-specific Wisdom integrations without accidental routing.
+- The Skill description and body document the same two-marker rule. The generated artifact filename is now `智慧-商品-YYYYMMDD-HHMMSS.xlsx`; technical internal IDs remain `shangman`.
+
+### Stage 8 verification
+
+- `uv run --frozen pytest -q python/lxeskill_cli/tests/shangman/test_intent.py python/lxeskill_cli/tests/shangman/test_goods_export_workflow.py python/lxeskill_cli/tests/lxeskill/test_fba_skill_docs.py` → `30 passed`.
+- `bun run --cwd apps/dashboard typecheck` passed; `git diff --check` passed.
+- No real ERP request was made. Changes remain uncommitted.
