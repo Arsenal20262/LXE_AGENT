@@ -8,7 +8,7 @@ commands:
 
 # 雅仓数据导出路由
 
-本 Skill 是 Agent 可发现的唯一雅仓自然语言导出入口，归入现有备货权限域，但业务范围仅限雅仓数据导出。Amazon/马帮店铺解析、补货计算和补货建议仍由各自的备货 Skill 处理。把用户关于雅仓导出的完整原始话语原样传给唯一命令，由确定性业务层完成 Intent、任务规划与执行；不得由模型自行补日期、仓库、数据类型或底层参数。
+本 Skill 是 Agent 可发现的唯一雅仓导出入口，归入现有备货权限域，但业务范围仅限雅仓数据导出。Amazon/马帮店铺解析、补货计算和补货建议仍由各自的备货 Skill 处理。模型必须先把用户话语翻译成下方定义的结构化意图，再调用唯一命令；确定性业务层只负责参数校验、默认值补全、任务规划与执行，不再从原始自然语言中解析业务意图。
 
 ## 雅仓能力边界
 
@@ -20,13 +20,18 @@ commands:
 ## 执行
 
 ```text
-lxeskill yacang export run --request-text "<用户关于雅仓导出的完整原始话语>"
+lxeskill yacang export run --data-type-intent '<JSON>' --warehouse-intent '<JSON>' --created-date-filter '<JSON>' --inventory-snapshot-intent '<JSON>'
 ```
 
-- 只允许传 `request_text`。禁止传 URL、headers、Token、Cookie、`task_type`、`param_where`、OSS 地址等底层参数。
-- 用户没提商品创建日期时，命令复用统一默认：开始日和结束日都取执行当天；模型不得计算日期。
-- 用户没提仓库时默认四仓 `MY8801`、`PH8805`、`TH8802`、`VN8806`；明确指定一个或多个时只执行指定仓库。完全没提数据类型时默认三类，但“仓库产品/产品-仓库产品”明确只表示全局入库/上架时间，不能展开成全部类型。
-- 仓库中文名和简称必须先归一化为标准代码：马来西亚仓/马来西亚/马来仓/马来/MY → `MY8801`，菲律宾仓/菲律宾/菲仓/PH → `PH8805`，泰国仓/泰国/泰仓/TH → `TH8802`，越南仓/越南/越仓/VN → `VN8806`。多个仓库按固定顺序去重；中文名不得进入 Planner、Executor、HTTP、`source_fetch_id` 或 canonical warehouse 字段。
+- 正常调用必须传 `data_type_intent`、`warehouse_intent`、`created_date_filter` 和 `inventory_snapshot_intent` 四个结构化对象；不要传 `request_text`。
+- 每个意图必须是 `omitted`、`resolved` 或 `ambiguous`。无法确定时传 `ambiguous`，等待命令返回 `needs_clarification` 后把 `questions` 交给用户。
+- `resolved` 的数据类型只能使用 `inventory-sales`、`inventory-current-snapshot`、`inbound-listing-time` 及兼容 alias；仓库只能使用 `MY8801`、`PH8805`、`TH8802`、`VN8806`。
+- `created_date_filter` 的 `explicit_range` 必须由模型提供 `start_date` 和 `end_date`，格式为 `YYYY-MM-DD`；`relative_days` 只传正整数天数，代码负责换算实际日期。
+- 用户没提商品创建日期时传 `{"state":"omitted"}`，命令复用统一默认：开始日和结束日都取执行当天。
+- 用户没提仓库时传 `{"state":"omitted"}`，命令默认四仓 `MY8801`、`PH8805`、`TH8802`、`VN8806`；完全没提数据类型时默认三类。
+- 禁止传 URL、headers、Token、Cookie、`task_type`、`param_where`、OSS 地址等底层参数。
+- 兼容旧调用时可以传 `request_text`，但新 Skill 路径不得依赖它。
+- 仓库中文名和简称必须先由模型归一化为标准代码：马来西亚仓/马来西亚/马来仓/马来/MY → `MY8801`，菲律宾仓/菲律宾/菲仓/PH → `PH8805`，泰国仓/泰国/泰仓/TH → `TH8802`，越南仓/越南/越仓/VN → `VN8806`。
 - 分仓 XLSX 的最终文件名使用中文展示名（马来西亚仓、菲律宾仓、泰国仓、越南仓）；入库/上架时间是全局文件，不添加仓库名。
 - “四仓/四个仓/全部仓库/所有仓库”表示全部四个标准仓库；若与具体仓库同时出现，返回澄清，不得猜测范围。
 - 返回 `overall_status=needs_clarification` 时，必须把 `questions` 交给用户确认，不得换用具体 Skill 猜测执行。

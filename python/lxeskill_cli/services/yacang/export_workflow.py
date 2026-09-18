@@ -6,6 +6,7 @@ from typing import Any, Callable, Mapping, NotRequired, Sequence, TypedDict
 from services.yacang.export_intent import (
     ALL_DATA_TYPES as CANONICAL_DATA_TYPES,
     WAREHOUSE_CODES,
+    normalize_structured_intent,
     normalize_export_intent,
 )
 from services.yacang.exports.sales_source import resolve_source_date_range, sales_source_fetch_id
@@ -193,7 +194,7 @@ def plan_export_workflow(
 
 
 def run_export_workflow(
-    request_text: Any,
+    request_text: Any | None = None,
     *,
     data_type_intent: Mapping[str, Any] | None = None,
     warehouse_intent: Mapping[str, Any] | None = None,
@@ -202,17 +203,33 @@ def run_export_workflow(
     today: Callable[[], date] = date.today,
     executor: ExportPlanExecutor | None = None,
 ) -> CanonicalExportResult:
-    """Normalize, plan, and execute one request through the frozen domain boundary."""
+    """Plan and execute structured intent; raw text remains a compatibility path."""
     execution_day = today()
     fixed_today = lambda: execution_day
-    normalized = normalize_export_intent(
-        request_text,
-        data_type_intent=data_type_intent,
-        warehouse_intent=warehouse_intent,
-        created_date_filter=created_date_filter,
-        inventory_snapshot_intent=inventory_snapshot_intent,
-        today=fixed_today,
-    )
+    if request_text is None:
+        if any(value is None for value in (
+            data_type_intent,
+            warehouse_intent,
+            created_date_filter,
+            inventory_snapshot_intent,
+        )):
+            raise ValueError("结构化雅仓请求必须包含四个意图字段")
+        normalized = normalize_structured_intent(
+            data_type_intent=data_type_intent,
+            warehouse_intent=warehouse_intent,
+            created_date_filter=created_date_filter,
+            inventory_snapshot_intent=inventory_snapshot_intent,
+            today=fixed_today,
+        )
+    else:
+        normalized = normalize_export_intent(
+            request_text,
+            data_type_intent=data_type_intent,
+            warehouse_intent=warehouse_intent,
+            created_date_filter=created_date_filter,
+            inventory_snapshot_intent=inventory_snapshot_intent,
+            today=fixed_today,
+        )
     plan = plan_export_workflow(normalized, execution_date=execution_day.isoformat())
     validate_export_plan(plan)
     if plan["requires_clarification"]:

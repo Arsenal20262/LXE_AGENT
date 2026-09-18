@@ -159,6 +159,118 @@ def normalize_export_intent(
     return merge_and_resolve_intent(text, parsed, candidates, today=fixed_today)
 
 
+def normalize_structured_intent(
+    *,
+    data_type_intent: Mapping[str, Any],
+    warehouse_intent: Mapping[str, Any],
+    created_date_filter: Mapping[str, Any],
+    inventory_snapshot_intent: Mapping[str, Any],
+    today: Callable[[], date] = date.today,
+) -> dict[str, Any]:
+    """Normalize an AI-produced intent without inspecting the user's raw text."""
+    execution_day = today()
+    fixed_today = lambda: execution_day
+    candidates = validate_intent_candidates(
+        data_type_intent=data_type_intent,
+        warehouse_intent=warehouse_intent,
+        created_date_filter=created_date_filter,
+        inventory_snapshot_intent=inventory_snapshot_intent,
+        require_explicit_created_dates=True,
+    )
+    intent = {
+        "data_type_intent": candidates["data_type_intent"] or {"state": "omitted"},
+        "warehouse_intent": candidates["warehouse_intent"] or {"state": "omitted"},
+        "created_date_filter": candidates["created_date_filter"] or {"state": "omitted"},
+        "inventory_snapshot_intent": candidates["inventory_snapshot_intent"] or {"state": "omitted"},
+    }
+    questions = _structured_intent_questions(intent)
+    preflight_issues: list[dict[str, Any]] = []
+    if intent["inventory_snapshot_intent"]["state"] == "historical":
+        preflight_issues.append(
+            _issue(
+                "unsupported",
+                "UNSUPPORTED_HISTORICAL_INVENTORY",
+                "当前雅仓能力不支持指定历史日期或历史月末库存快照。",
+            )
+        )
+    if questions:
+        return {
+            "intent": intent,
+            "effective_request": None,
+            "questions": questions,
+            "preflight_issues": preflight_issues,
+            "requires_clarification": True,
+        }
+
+    data_types = list(ALL_DATA_TYPES) if intent["data_type_intent"]["state"] == "omitted" else list(
+        intent["data_type_intent"]["values"]
+    )
+    warehouses = _effective_selection(intent["warehouse_intent"], WAREHOUSE_CODES)
+    sales_selected = "inventory-sales" in data_types
+    inventory_selected = "inventory-current-snapshot" in data_types
+    created_intent = intent["created_date_filter"]
+    if created_intent["state"] != "omitted" and not sales_selected:
+        preflight_issues.append(
+            _issue(
+                "invalid",
+                "INVALID_CREATED_DATE_SCOPE",
+                "商品创建日期筛选只能用于销量任务。",
+            )
+        )
+    if intent["inventory_snapshot_intent"]["state"] == "current" and not inventory_selected:
+        preflight_issues.append(
+            _issue(
+                "invalid",
+                "INVALID_INVENTORY_INTENT_SCOPE",
+                "库存快照意图只能用于库存任务。",
+            )
+        )
+
+    effective_request: dict[str, Any] = {
+        "data_types": data_types,
+        "warehouses": warehouses,
+    }
+    if sales_selected:
+        parsed = {
+            "_created_effective": {
+                "created_start_date": created_intent.get("start_date"),
+                "created_end_date": created_intent.get("end_date"),
+                "input_fragments": [],
+                "normalization_rules": ["ai_structured_explicit_range"],
+            }
+        }
+        effective_request["created_date_filter"] = _effective_created_date_filter(
+            created_intent,
+            parsed,
+            today=fixed_today,
+        )
+    return {
+        "intent": intent,
+        "effective_request": effective_request,
+        "questions": [],
+        "preflight_issues": _deduplicate_records(preflight_issues),
+        "requires_clarification": False,
+    }
+
+
+def _structured_intent_questions(intent: Mapping[str, Mapping[str, Any]]) -> list[dict[str, str]]:
+    questions: list[dict[str, str]] = []
+    messages = {
+        "data_type_intent": ("data_type", "DATA_TYPE_REQUIRED", "请确认需要导出哪类雅仓数据。"),
+        "warehouse_intent": ("warehouse", "WAREHOUSE_REQUIRED", "请确认需要导出的雅仓仓库范围。"),
+        "created_date_filter": ("created_date", "CREATED_DATE_REQUIRED", "请确认商品创建日期筛选条件。"),
+        "inventory_snapshot_intent": (
+            "inventory_snapshot",
+            "INVENTORY_SNAPSHOT_REQUIRED",
+            "请确认需要当前库存还是历史库存。",
+        ),
+    }
+    for field, (dimension, code, message) in messages.items():
+        if intent[field].get("state") == "ambiguous":
+            questions.append(_question(dimension, code, message))
+    return questions
+
+
 def require_request_text(request_text: Any) -> str:
     if not isinstance(request_text, str) or not request_text.strip():
         raise ValueError("request_text 必须是非空文本")
@@ -171,6 +283,7 @@ def validate_intent_candidates(
     warehouse_intent: Mapping[str, Any] | None = None,
     created_date_filter: Mapping[str, Any] | None = None,
     inventory_snapshot_intent: Mapping[str, Any] | None = None,
+    require_explicit_created_dates: bool = False,
 ) -> dict[str, dict[str, Any] | None]:
     return {
         "data_type_intent": _validate_selection_candidate(
@@ -184,7 +297,10 @@ def validate_intent_candidates(
             warehouse_intent,
             allowed_values=WAREHOUSE_CODES,
         ),
-        "created_date_filter": _validate_created_candidate(created_date_filter),
+        "created_date_filter": _validate_created_candidate(
+            created_date_filter,
+            require_explicit_dates=require_explicit_created_dates,
+        ),
         "inventory_snapshot_intent": _validate_inventory_candidate(inventory_snapshot_intent),
     }
 
@@ -225,6 +341,8 @@ def _validate_selection_candidate(
 
 def _validate_created_candidate(
     candidate: Mapping[str, Any] | None,
+    *,
+    require_explicit_dates: bool = False,
 ) -> dict[str, Any] | None:
     if candidate is None:
         return None
@@ -239,14 +357,34 @@ def _validate_created_candidate(
     mode = value.get("mode")
     if mode not in _CREATED_MODES:
         raise ValueError("created_date_filter.mode 不受支持")
-    expected_keys = {"state", "mode", "days"} if mode == "relative_days" else {"state", "mode"}
+    if mode == "relative_days":
+        expected_keys = {"state", "mode", "days"}
+    elif mode == "explicit_range" and require_explicit_dates:
+        expected_keys = {"state", "mode", "start_date", "end_date"}
+    else:
+        expected_keys = {"state", "mode"}
     _require_exact_keys("created_date_filter", value, expected_keys)
     if mode == "relative_days":
         days = value["days"]
         if isinstance(days, bool) or not isinstance(days, int) or days <= 0:
             raise ValueError("created_date_filter.days 必须是正整数")
         return {"state": "resolved", "mode": mode, "days": days}
+    if mode == "explicit_range" and require_explicit_dates:
+        start = _validate_iso_date(value["start_date"], "created_date_filter.start_date")
+        end = _validate_iso_date(value["end_date"], "created_date_filter.end_date")
+        if start > end:
+            raise ValueError("created_date_filter.start_date 不能晚于 end_date")
+        return {"state": "resolved", "mode": mode, "start_date": start, "end_date": end}
     return {"state": "resolved", "mode": mode}
+
+
+def _validate_iso_date(value: Any, name: str) -> str:
+    if not isinstance(value, str):
+        raise ValueError(f"{name} 必须是 YYYY-MM-DD 字符串")
+    try:
+        return date.fromisoformat(value).isoformat()
+    except ValueError as exc:
+        raise ValueError(f"{name} 必须是有效的 YYYY-MM-DD 日期") from exc
 
 
 def _validate_inventory_candidate(
@@ -916,7 +1054,14 @@ def _effective_created_date_filter(
             "input_fragments": [fragment] if fragment else [],
             "normalization_rules": ["relative_creation_days"],
         }
-    raw = dict(parsed["_created_effective"] or {})
+    raw = dict(parsed.get("_created_effective") or {})
+    if not raw.get("created_start_date") and intent.get("start_date"):
+        raw = {
+            "created_start_date": intent["start_date"],
+            "created_end_date": intent["end_date"],
+            "input_fragments": [],
+            "normalization_rules": ["ai_structured_explicit_range"],
+        }
     return {
         "mode": "explicit_range",
         "created_start_date": raw["created_start_date"],
@@ -950,6 +1095,7 @@ __all__ = [
     "ALL_DATA_TYPES",
     "WAREHOUSE_CODES",
     "merge_and_resolve_intent",
+    "normalize_structured_intent",
     "normalize_export_intent",
     "parse_request_text",
     "require_request_text",

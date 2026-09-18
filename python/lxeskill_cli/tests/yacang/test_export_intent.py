@@ -10,6 +10,7 @@ import pytest
 from services.yacang.export_intent import (
     ALL_DATA_TYPES,
     WAREHOUSE_CODES,
+    normalize_structured_intent,
     normalize_export_intent,
 )
 
@@ -22,6 +23,45 @@ EVAL_CASES = json.loads(
 
 def normalized(text: str, **kwargs: Any) -> dict[str, Any]:
     return normalize_export_intent(text, today=FIXED_TODAY, **kwargs)
+
+
+def structured(**kwargs: Any) -> dict[str, Any]:
+    defaults = {
+        "data_type_intent": {"state": "resolved", "values": ["inventory-sales"]},
+        "warehouse_intent": {"state": "resolved", "values": ["MY8801"]},
+        "created_date_filter": {"state": "resolved", "mode": "default"},
+        "inventory_snapshot_intent": {"state": "omitted"},
+    }
+    defaults.update(kwargs)
+    return normalize_structured_intent(today=FIXED_TODAY, **defaults)
+
+
+def test_structured_intent_never_needs_raw_user_text() -> None:
+    result = structured()
+
+    assert result["requires_clarification"] is False
+    assert result["effective_request"]["data_types"] == ["inventory-sales"]
+    assert result["effective_request"]["warehouses"] == ["MY8801"]
+
+
+def test_structured_explicit_dates_are_validated_and_preserved() -> None:
+    result = structured(created_date_filter={
+        "state": "resolved",
+        "mode": "explicit_range",
+        "start_date": "2026-09-01",
+        "end_date": "2026-09-10",
+    })
+
+    assert result["effective_request"]["created_date_filter"]["created_start_date"] == "2026-09-01"
+    assert result["effective_request"]["created_date_filter"]["created_end_date"] == "2026-09-10"
+
+
+def test_structured_ambiguous_intent_stops_before_execution() -> None:
+    result = structured(data_type_intent={"state": "ambiguous"})
+
+    assert result["requires_clarification"] is True
+    assert result["effective_request"] is None
+    assert result["questions"][0]["code"] == "DATA_TYPE_REQUIRED"
 
 
 def test_omitted_dimensions_apply_deterministic_defaults() -> None:

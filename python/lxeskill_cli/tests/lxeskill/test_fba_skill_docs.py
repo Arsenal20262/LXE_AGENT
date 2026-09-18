@@ -39,7 +39,12 @@ def test_yacang_has_one_discoverable_skill_and_one_natural_language_command() ->
     assert workflow["command_path"] == ["yacang", "export", "run"]
     assert workflow["owner_skills"] == ["yacang-export-workflow-map"]
     assert workflow["exposed"] is True
-    assert workflow["input_schema"]["required"] == ["request_text"]
+    assert workflow["input_schema"]["required"] == [
+        "data_type_intent",
+        "warehouse_intent",
+        "created_date_filter",
+        "inventory_snapshot_intent",
+    ]
     assert set(workflow["input_schema"]["properties"]) == {
         "request_text",
         "data_type_intent",
@@ -56,6 +61,8 @@ def test_yacang_has_one_discoverable_skill_and_one_natural_language_command() ->
     assert {"sales-monthly", "sales-90d"}.issubset(data_type_values)
     assert workflow["input_schema"]["properties"]["warehouse_intent"]["oneOf"]
     assert workflow["input_schema"]["properties"]["created_date_filter"]["oneOf"]
+    explicit_range = workflow["input_schema"]["properties"]["created_date_filter"]["oneOf"][4]
+    assert explicit_range["required"] == ["state", "mode", "start_date", "end_date"]
     assert workflow["input_schema"]["properties"]["inventory_snapshot_intent"] == {
         "type": "object",
         "properties": {"state": {"enum": ["current", "historical", "omitted", "ambiguous"]}},
@@ -66,7 +73,7 @@ def test_yacang_has_one_discoverable_skill_and_one_natural_language_command() ->
     assert workflow["deliver_artifacts_on_failure"] is True
     assert "lxeskill yacang export run" in router.split("---", 2)[1]
     assert "needs_clarification" in router
-    assert "模型不得计算日期" in router
+    assert "created_date_filter" in router
     assert "禁止自行尝试相似 endpoint" in router
     assert "不得改走其他雅仓命令冒充成功" in router
 

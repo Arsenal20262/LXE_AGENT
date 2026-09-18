@@ -9,7 +9,7 @@ from services.yacang.reporting import cli_failure
 
 
 def run(arguments: dict[str, Any]) -> dict[str, Any]:
-    """Deterministic natural-language entrypoint; low-level API inputs are never accepted."""
+    """Structured AI intent entrypoint; raw text is retained for internal compatibility."""
     try:
         reject_unknown_arguments(
             arguments,
@@ -21,9 +21,8 @@ def run(arguments: dict[str, Any]) -> dict[str, Any]:
                 "inventory_snapshot_intent",
             },
         )
-        request_text = str(arguments.get("request_text") or "").strip()
-        if not request_text:
-            raise ValueError("request_text 不能为空")
+        raw_request_text = arguments.get("request_text")
+        request_text = str(raw_request_text).strip() if raw_request_text else None
         result = run_export_workflow(
             request_text,
             data_type_intent=arguments.get("data_type_intent"),

@@ -79,3 +79,16 @@ def test_unified_natural_language_cli_rejects_low_level_arguments(forbidden: str
     assert result["success"] is False
     assert result["diagnostics"][0]["code"] == "VALUEERROR"
     assert "不允许的雅仓参数" in result["diagnostics"][0]["message"]
+
+
+def test_structured_cli_accepts_ai_intent_without_raw_request_text() -> None:
+    result = run_workflow({
+        "data_type_intent": {"state": "ambiguous"},
+        "warehouse_intent": {"state": "omitted"},
+        "created_date_filter": {"state": "omitted"},
+        "inventory_snapshot_intent": {"state": "omitted"},
+    })
+
+    assert result["success"] is False
+    assert result["overall_status"] == "needs_clarification"
+    assert result["questions"][0]["code"] == "DATA_TYPE_REQUIRED"
