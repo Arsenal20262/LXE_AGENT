@@ -29,6 +29,7 @@ import {
   type McpConfig,
   type LxeSkillCommandDefinition,
   type RuntimeProviderManager,
+  type ShangmanCaptchaBroker,
   type SkillManifest,
   type SqliteRuntimeStore,
   type ToolRegistry,
@@ -40,6 +41,7 @@ type Environment = Record<string, string | undefined>;
 /** Agent-process dependencies required by the Dashboard query service. */
 interface DashboardServiceOptions {
   questions?: UserQuestionService;
+  shangmanCaptcha?: ShangmanCaptchaBroker;
   /** Writable desktop/source state. */
   stateRoot: string;
   /** Read-only provider schemas and auth profile metadata. */
@@ -265,10 +267,27 @@ export class DashboardService {
   } | undefined;
 
   private readonly handlers: AgentDashboardRpcHandlers = {
-    "sessions.questions": () => ({ items: this.options.questions?.snapshot() ?? [] }),
+    "sessions.questions": input => {
+      const captcha = input.session_id ? this.options.shangmanCaptcha?.snapshot(input.session_id) : undefined;
+      return {
+        items: this.options.questions?.snapshot() ?? [],
+        ...(captcha ? { shangman_captcha: captcha } : {}),
+      };
+    },
     "sessions.answer": input => {
       if (!this.options.questions) return rpcError("unavailable", "User questions are unavailable");
       return this.options.questions.submit(input);
+    },
+    "sessions.shangman_captcha.answer": input => {
+      if (!this.options.shangmanCaptcha) return rpcError("unavailable", "Shangman captcha input is unavailable");
+      try {
+        return this.options.shangmanCaptcha.answer(input.session_id, input.challenge_id, input.code);
+      } catch (error) {
+        return rpcError(
+          "failed_precondition",
+          error instanceof Error ? error.message : "Shangman captcha challenge is no longer available",
+        );
+      }
     },
     "sessions.list": (input) => this.sessions(input) as DashboardRpcResult<"sessions.list">,
     "sessions.detail": (input) => this.session(input) as Promise<DashboardRpcResult<"sessions.detail">>,
@@ -355,6 +374,7 @@ export class DashboardService {
     }
     await this.options.terminateSession?.(input.session_id);
     this.options.questions?.forgetSession(input.session_id);
+    this.options.shangmanCaptcha?.forgetSession(input.session_id);
     if (!await this.options.store.deleteSession(input.session_id)) {
       return rpcError("not_found", "session not found");
     }

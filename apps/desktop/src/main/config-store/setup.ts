@@ -13,6 +13,7 @@ import type {
 import type { LlmProviderCatalog } from "@lxe/core";
 import {
   cloneConfig,
+  flag,
   logProfile,
   logRetention,
   MODEL_AUTH_MIGRATION_VERSION,
@@ -29,6 +30,9 @@ const sameManagedTarget = (
   left: ManagedLlmTarget,
   right: ManagedLlmTarget,
 ): boolean => left.provider === right.provider && left.model === right.model;
+
+const shangmanBasicAuth = (username: string, password: string): string =>
+  `Basic ${Buffer.from(`${username}:${password}`, "utf8").toString("base64")}`;
 
 export class DesktopSetupService {
   constructor(
@@ -72,12 +76,15 @@ export class DesktopSetupService {
     const ziniao = config.integrations.ziniao;
     const mabang = config.integrations.mabang;
     const feishu = config.integrations.feishu;
+    const shangman = config.integrations.shangman;
     const ziniaoIssues = ziniao.managed ? this.validation.ziniaoIssues(ziniao, secrets) : [];
     const mabangIssues = mabang.managed ? this.validation.mabangIssues(mabang, secrets) : [];
     const feishuIssues = feishu.managed ? this.validation.feishuIssues(feishu, secrets) : [];
+    const shangmanIssues = shangman.managed ? this.validation.shangmanIssues(shangman, secrets) : [];
     const ziniaoConfigured = ziniao.managed && ziniaoIssues.length === 0;
     const mabangConfigured = mabang.managed && mabangIssues.length === 0;
     const feishuConfigured = feishu.managed && feishuIssues.length === 0;
+    const shangmanConfigured = shangman.managed && shangmanIssues.length === 0;
     return {
       complete: Boolean(
         workspaceAvailable
@@ -119,6 +126,16 @@ export class DesktopSetupService {
         issues: feishuIssues,
         app_id: feishu.app_id,
         app_secret_configured: Boolean(secrets.feishu_app_secret),
+      },
+      shangman: {
+        managed: shangman.managed,
+        configured: shangmanConfigured,
+        issues: shangmanIssues,
+        tenant_id: shangman.tenant_id,
+        username: shangman.username,
+        password_configured: Boolean(secrets.shangman_processed_password),
+        basic_auth_configured: Boolean(secrets.shangman_basic_auth),
+        production_enabled: shangman.production_enabled,
       },
       logging: {
         ...config.logging,
@@ -187,6 +204,29 @@ export class DesktopSetupService {
       if (!appId || !appSecret) throw new Error("飞书 App ID 和 App Secret 必须同时填写");
       config.integrations.feishu = { managed: true, app_id: appId };
       if (inputSecret) secrets.feishu_app_secret = inputSecret;
+    }
+
+    if (input.shangman?.action === "clear") {
+      config.integrations.shangman = { managed: true, tenant_id: "", username: "", production_enabled: false };
+      secrets.shangman_processed_password = "";
+      secrets.shangman_basic_auth = "";
+    } else if (input.shangman?.action === "save") {
+      const tenantId = text(input.shangman.tenant_id);
+      const username = text(input.shangman.username);
+      const inputProcessedPassword = text(input.shangman.processed_password);
+      const processedPassword = inputProcessedPassword || effectiveSecrets.shangman_processed_password;
+      if (!tenantId || !username || !processedPassword) {
+        throw new Error("智慧印尼 ID、账号和密码必须完整填写");
+      }
+      const basicAuth = shangmanBasicAuth(username, processedPassword);
+      config.integrations.shangman = {
+        managed: true,
+        tenant_id: tenantId,
+        username,
+        production_enabled: input.shangman.production_enabled ?? config.integrations.shangman.production_enabled,
+      };
+      if (inputProcessedPassword) secrets.shangman_processed_password = inputProcessedPassword;
+      secrets.shangman_basic_auth = basicAuth;
     }
 
     if (input.logging) {
@@ -483,9 +523,11 @@ export class DesktopSetupService {
     const ziniao = config.integrations.ziniao;
     const mabang = config.integrations.mabang;
     const feishu = config.integrations.feishu;
+    const shangman = config.integrations.shangman;
     const ziniaoConfigured = ziniao.managed && this.validation.ziniaoIssues(ziniao, secrets).length === 0;
     const mabangConfigured = mabang.managed && this.validation.mabangIssues(mabang, secrets).length === 0;
     const feishuConfigured = feishu.managed && this.validation.feishuIssues(feishu, secrets).length === 0;
+    const shangmanConfigured = shangman.managed && this.validation.shangmanIssues(shangman, secrets).length === 0;
     const diagnostic = config.logging.profile === "diagnostic";
     const logsEnabled = config.logging.profile !== "off";
     const cloudEnabled = config.cloud.managed
@@ -517,6 +559,13 @@ export class DesktopSetupService {
       LXE_FEISHU_GATEWAY_ENABLED: feishuConfigured ? "1" : "0",
       FEISHU_APP_ID: feishuConfigured ? feishu.app_id : "",
       FEISHU_APP_SECRET: feishuConfigured ? secrets.feishu_app_secret : "",
+      LXE_SHANGMAN_TENANT_ID: shangmanConfigured ? shangman.tenant_id : "",
+      LXE_SHANGMAN_USERNAME: shangmanConfigured ? shangman.username : "",
+      LXE_SHANGMAN_PROCESSED_PASSWORD: shangmanConfigured ? secrets.shangman_processed_password : "",
+      LXE_SHANGMAN_BASIC_AUTH: shangmanConfigured
+        ? shangmanBasicAuth(shangman.username, secrets.shangman_processed_password)
+        : "",
+      LXE_SHANGMAN_PROD_ENABLED: shangman.production_enabled ? "true" : "false",
       LOCAL_LOGS_ENABLED: logsEnabled ? "1" : "0",
       LOCAL_LOG_RETENTION_DAYS: String(config.logging.retention_days),
       LOG_LEVEL: diagnostic ? "DEBUG" : "INFO",

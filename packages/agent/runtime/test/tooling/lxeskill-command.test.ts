@@ -97,5 +97,21 @@ describe("lxeskill command recognition", () => {
           "replenishment-unlinked-shipment-download",
         ]),
       });
+    expect(entries.find((entry) => entry.name === "shangman_goods_export_preview")).toMatchObject({
+      command: "lxeskill shangman export preview",
+      module: "services.agent_cli.shangman.goods_export_preview",
+      ownerSkills: ["shangman-goods-export-workflow-map"],
+      attributionSkill: "shangman-goods-export-workflow-map",
+    });
+    expect(entries.find((entry) => entry.name === "shangman_goods_export_run")).toMatchObject({
+      command: "lxeskill shangman export run",
+      module: "services.agent_cli.shangman.goods_export_run",
+      ownerSkills: ["shangman-goods-export-workflow-map"],
+      artifactPaths: [{ field: "artifact_path", role: "deliverable" }],
+    });
+    const shangmanEntries = entries.filter((entry) => entry.command.startsWith("lxeskill shangman export "));
+    expect(shangmanEntries).toHaveLength(2);
+    expect(shangmanEntries.every((entry) => entry.ownerSkills.length === 1
+      && entry.ownerSkills[0] === "shangman-goods-export-workflow-map")).toBe(true);
   });
 });

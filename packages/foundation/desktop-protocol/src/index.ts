@@ -462,6 +462,16 @@ export interface DesktopSetupState {
     app_id: string;
     app_secret_configured: boolean;
   };
+  shangman: {
+    managed: boolean;
+    configured: boolean;
+    issues: string[];
+    tenant_id: string;
+    username: string;
+    password_configured: boolean;
+    basic_auth_configured: boolean;
+    production_enabled: boolean;
+  };
   logging: {
     profile: DesktopLogProfile;
     retention_days: DesktopLogRetentionDays;
@@ -489,11 +499,22 @@ export type DesktopFeishuSetupInput =
   | { action: "clear" }
   | { action: "save"; app_id: string; app_secret?: string };
 
+export type DesktopShangmanSetupInput =
+  | { action: "clear" }
+  | {
+      action: "save";
+      tenant_id: string;
+      username: string;
+      processed_password?: string;
+      production_enabled?: boolean;
+    };
+
 export interface DesktopSetupInput {
   workspace_root: string;
   ziniao?: DesktopZiniaoSetupInput;
   mabang?: DesktopMabangSetupInput;
   feishu?: DesktopFeishuSetupInput;
+  shangman?: DesktopShangmanSetupInput;
   logging?: {
     profile: DesktopLogProfile;
     retention_days: DesktopLogRetentionDays;

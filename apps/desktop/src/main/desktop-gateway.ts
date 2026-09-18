@@ -53,7 +53,10 @@ import {
   resolveDataServerRuntimeEnvironment,
   withoutDataServerEnvironment,
 } from "./data-server-policy";
-import { withoutRetiredAgentTraceEnvironment } from "./runtime-environment-policy";
+import {
+  withoutRetiredAgentTraceEnvironment,
+  withoutRetiredShangmanEnvironment,
+} from "./runtime-environment-policy";
 
 class SplitGatewayStorage implements DirectGatewayStorage {
   constructor(
@@ -132,10 +135,12 @@ export class DesktopGateway {
     this.publishHealth();
     const setup = this.options.config.state();
     const legacyWorkspace = resolveWorkspaceContext(setup.workspace_root);
-    const configuredEnvironment = withoutRetiredAgentTraceEnvironment(
-      this.options.config.environment(),
+    const configuredEnvironment = withoutRetiredShangmanEnvironment(
+      withoutRetiredAgentTraceEnvironment(this.options.config.environment()),
     );
-    const processEnvironment = withoutRetiredAgentTraceEnvironment(process.env);
+    const processEnvironment = withoutRetiredShangmanEnvironment(
+      withoutRetiredAgentTraceEnvironment(process.env),
+    );
     delete configuredEnvironment.LXE_WORKSPACE_ROOT;
     delete processEnvironment.LXE_WORKSPACE_ROOT;
     for (const target of [configuredEnvironment, processEnvironment]) {

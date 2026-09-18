@@ -71,6 +71,17 @@ export class DesktopConfigValidation {
     ].filter((value): value is string => Boolean(value));
   }
 
+  shangmanIssues(
+    shangman: DesktopConfig["integrations"]["shangman"],
+    secrets: DesktopSecrets,
+  ): string[] {
+    return [
+      !shangman.tenant_id && "缺少 ID",
+      !shangman.username && "缺少账号",
+      !secrets.shangman_processed_password && "缺少已处理密码",
+    ].filter((value): value is string => Boolean(value));
+  }
+
   validateZiniaoPaths(appPath: string, webdriverPath: string): void {
     if (!this.pathExists(appPath)) throw new Error("紫鸟 APP 文件不存在");
     if (this.platform === "win32" && extname(appPath).toLowerCase() !== ".exe") {

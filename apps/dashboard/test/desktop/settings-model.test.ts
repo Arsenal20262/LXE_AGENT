@@ -72,6 +72,16 @@ const setupState = (patch: Partial<DesktopSetupState> = {}): DesktopSetupState =
     app_id: "cli_test",
     app_secret_configured: true,
   },
+  shangman: {
+    managed: false,
+    configured: false,
+    issues: [],
+    tenant_id: "",
+    username: "",
+    password_configured: false,
+    basic_auth_configured: false,
+    production_enabled: false,
+  },
   logging: {
     profile: "standard",
     retention_days: 7,

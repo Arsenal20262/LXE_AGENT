@@ -15,6 +15,18 @@ afterEach(() => {
 });
 
 describe("skill context", () => {
+  test("discovers the Shangman export skill under its production permission type", () => {
+    const source = repositoryRoot(import.meta.dir);
+    const skills = new SkillCatalog(source, join(source, "missing-user"), { sharedSkillsRoot: false }).list();
+    const skill = skills.find((entry) => entry.name === "shangman-goods-export-workflow-map");
+    expect(skill).toBeDefined();
+    expect(skill?.type).toBe("amazon_replenish");
+    expect(skill?.commands).toEqual([
+      "lxeskill shangman export preview",
+      "lxeskill shangman export run",
+    ]);
+  });
+
   test("loads the nine bundled replenishment skills and their local references outside the source checkout", () => {
     const root = mkdtempSync(join(tmpdir(), "lxe-replenishment-skills-"));
     roots.push(root);

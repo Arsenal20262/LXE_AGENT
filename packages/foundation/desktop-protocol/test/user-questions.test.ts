@@ -4,8 +4,10 @@ import { parseDashboardRpcCall, parseAgentCall, decodeAgentEvent, encodeAgentEve
 test("question reads, answers and change notifications cross the shared IPC/JSON-RPC contract", () => {
   const calls = [
     { operation: "sessions.questions" as const, input: {} },
+    { operation: "sessions.questions" as const, input: { session_id: "s" } },
     { operation: "sessions.answer" as const, input: { session_id: "s", request_id: "request", answers: [{ id: "q", selected: ["a"] }] } },
     { operation: "sessions.answer" as const, input: { session_id: "s", request_id: "request", answers: [{ id: "q", selected: [] }] } },
+    { operation: "sessions.shangman_captcha.answer" as const, input: { session_id: "s", challenge_id: "opaque", code: "A7x9" } },
   ];
   for (const call of calls) {
     expect(parseDashboardRpcCall(call)).toEqual(call);
@@ -13,6 +15,21 @@ test("question reads, answers and change notifications cross the shared IPC/JSON
   }
   const event = { type: "session.changed" as const, thread_id: "s", payload: { changes: ["questions" as const] } };
   expect(decodeAgentEvent(encodeAgentEvent(event))).toEqual(event);
+});
+
+test("captcha answers accept only bounded local interaction fields", () => {
+  const call = {
+    operation: "sessions.shangman_captcha.answer" as const,
+    input: { session_id: "s", challenge_id: "opaque", code: " A7x9 " },
+  };
+  expect(parseDashboardRpcCall(call)).toEqual({
+    operation: call.operation,
+    input: { session_id: "s", challenge_id: "opaque", code: "A7x9" },
+  });
+  expect(() => parseDashboardRpcCall({
+    operation: call.operation,
+    input: { ...call.input, code: " " },
+  })).toThrow();
 });
 
 test("malformed answer payloads are rejected at the boundary", () => {

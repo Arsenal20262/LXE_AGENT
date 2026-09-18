@@ -50,12 +50,18 @@ describe("project environment", () => {
     expect(developmentSecretEnvironment({
       KIMI_CODE_API_KEY: "secret",
       FEISHU_APP_SECRET: "feishu-secret",
+      LXE_SHANGMAN_PROCESSED_PASSWORD: "processed-password",
+      LXE_SHANGMAN_BASIC_AUTH: "Basic ZHVtbXk6cGFzcw==",
+      LXE_SHANGMAN_PROD_ENABLED: "true",
       FEISHU_APP_ID: "must-come-from-settings",
       AGENT_LLM_PROVIDER: "must-come-from-settings",
       LXE_DATA_SERVER_URL: "must-come-from-settings",
       LXE_SAIHU_MCP_API_KEY: "saihu-mcp-secret",
     })).toEqual({
       FEISHU_APP_SECRET: "feishu-secret",
+      LXE_SHANGMAN_PROCESSED_PASSWORD: "processed-password",
+      LXE_SHANGMAN_BASIC_AUTH: "Basic ZHVtbXk6cGFzcw==",
+      LXE_SHANGMAN_PROD_ENABLED: "true",
       LXE_SAIHU_MCP_API_KEY: "saihu-mcp-secret",
     });
   });

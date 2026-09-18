@@ -25,6 +25,10 @@ export interface CodingToolOptions {
   businessCommands?: ReadonlyMap<string, readonly string[]>;
   businessCommandCatalog?: readonly LxeSkillRecoveryCommand[];
   execShell?: ExecShellAdapter;
-  execEnv?: (context: { skillNames: readonly string[] }) => Record<string, string>;
+  execEnv?: (context: {
+    skillNames: readonly string[];
+    sessionId: string;
+    turnId: string;
+  }) => Record<string, string>;
   lxeSkillStatus?: () => LxeSkillRuntimeStatus;
 }

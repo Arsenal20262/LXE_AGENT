@@ -109,6 +109,7 @@ export function validateSetupInput(value: unknown): DesktopSetupInput {
   const ziniao = input.ziniao === undefined ? undefined : integrationAction(input.ziniao, "Ziniao setup");
   const mabang = input.mabang === undefined ? undefined : integrationAction(input.mabang, "Mabang setup");
   const feishu = input.feishu === undefined ? undefined : integrationAction(input.feishu, "Feishu setup");
+  const shangman = input.shangman === undefined ? undefined : integrationAction(input.shangman, "Shangman setup");
   const logging = input.logging === undefined ? undefined : objectValue(input.logging, "Logging setup");
   const rawZiniaoVersion = ziniao?.action === "save"
     ? boundedText(ziniao.app_version, "Ziniao app version", 16)
@@ -143,6 +144,23 @@ export function validateSetupInput(value: unknown): DesktopSetupInput {
     app_id: boundedText(feishu.app_id, "Feishu App ID", 1_024),
     ...(feishuSecret ? { app_secret: feishuSecret } : {}),
   } : feishu?.action === "clear" ? { action: "clear" as const } : undefined;
+  const shangmanProcessedPassword = shangman?.action === "save"
+    ? boundedText(shangman.processed_password, "Shangman processed password", 16_384)
+    : "";
+  if (shangman?.action === "save" && shangman.production_enabled !== undefined
+    && typeof shangman.production_enabled !== "boolean") {
+    throw new Error("Shangman production_enabled must be a boolean");
+  }
+  const shangmanProductionEnabled = shangman?.action === "save" && typeof shangman.production_enabled === "boolean"
+    ? shangman.production_enabled
+    : undefined;
+  const shangmanInput = shangman?.action === "save" ? {
+    action: "save" as const,
+    tenant_id: boundedText(shangman.tenant_id, "Shangman Tenant ID", 1_024),
+    username: boundedText(shangman.username, "Shangman username", 1_024),
+    ...(shangmanProcessedPassword ? { processed_password: shangmanProcessedPassword } : {}),
+    ...(shangmanProductionEnabled !== undefined ? { production_enabled: shangmanProductionEnabled } : {}),
+  } : shangman?.action === "clear" ? { action: "clear" as const } : undefined;
   let loggingInput: DesktopSetupInput["logging"];
   if (logging) {
     const profile = boundedText(logging.profile, "Log profile", 32);
@@ -161,6 +179,7 @@ export function validateSetupInput(value: unknown): DesktopSetupInput {
     ...(ziniaoInput ? { ziniao: ziniaoInput } : {}),
     ...(mabangInput ? { mabang: mabangInput } : {}),
     ...(feishuInput ? { feishu: feishuInput } : {}),
+    ...(shangmanInput ? { shangman: shangmanInput } : {}),
     ...(loggingInput ? { logging: loggingInput } : {}),
   };
 }
