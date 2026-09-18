@@ -9,11 +9,10 @@ The repository currently contains 32 top-level workflow and default runtime skil
 | Type | Count | Purpose |
 | --- | ---: | --- |
 | `amazon_fba` | 14 | shipment, customs, purchase, contract, and export-tax workflows |
-| `amazon_replenish` | 9 | inventory snapshots, sales analysis, parameters, and replenishment calculation |
+| `amazon_replenish` | 12 | inventory snapshots, sales analysis, parameters, replenishment calculation, Yacang exports, Wisdom goods export, and Brazil overseas source exports |
 | `amazon_operations` | 2 | listing, keyword, competitor, and public-review analysis |
 | `default` | 3 | general connector, workbook and custom Skill creation capabilities |
 | `ziniao_browser` | 1 | controlled Ziniao browser lifecycle and page operations |
-| `yacang_operations` | 6 | Yacang export routing, fixed 7/15/30 and 90-day sales exports, current inventory lists, warehouse-product creation times, and the first-version compatibility export |
 
 Counts describe top-level repository skills before per-agent permission and connector filtering. The
 bundled Lark CLI contributes another 27 nested connector-specific Skill manifests, so recursive runtime
@@ -41,6 +40,7 @@ Start with `fba-workflow-map` for routing. The individual skills own exact input
 ## Amazon Replenishment
 
 - `replenishment-workflow-map`
+- `replenishment-brazil-overseas-export`
 - `replenishment-store-resolve`
 - `replenishment-msku-download`
 - `replenishment-unlinked-shipment-download`
@@ -49,6 +49,8 @@ Start with `fba-workflow-map` for routing. The individual skills own exact input
 - `replenishment-sales-analyze`
 - `replenishment-algorithm-config-manage`
 - `replenishment-calculate`
+
+`yacang-export-workflow-map` and `shangman-goods-export-workflow-map` also use the `amazon_replenish` permission type.
 
 Start with `replenishment-workflow-map`. Snapshot and analysis skills prepare explicit artifacts; calculation consumes those artifacts and the selected algorithm configuration.
 

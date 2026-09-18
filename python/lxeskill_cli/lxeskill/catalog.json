@@ -353,6 +353,14 @@
       "input_schema": {"type": "object", "properties": {"store_name": {"type": "string"}}, "required": ["store_name"], "additionalProperties": false}
     },
     {
+      "name": "mabang_brazil_overseas_export", "module": "services.agent_cli.mabang.brazil_overseas_export",
+      "command_path": ["replenish", "brazil-overseas", "export"],
+      "legacy_aliases": ["mabang_brazil_overseas_export"],
+      "visibility": "business", "session_mode": "none",
+      "owner_skills": ["replenishment-brazil-overseas-export"], "artifact_paths": [{"field": "xlsx_path", "role": "deliverable"}], "timeout_ms": 300000, "exposed": true,
+      "input_schema": {"type": "object", "properties": {"warehouse": {"type": "string", "enum": ["brazil_overseas"], "description": "模型解析后的仓库参数，必须是巴西海外仓。"}, "export_kind": {"type": "string", "enum": ["inventory_sales_snapshot", "allocation_signed_before_3m", "allocation_pending_default_3m"], "description": "模型解析后的导出类型。"}}, "required": ["warehouse", "export_kind"], "additionalProperties": false}
+    },
+    {
       "name": "mabang_analyze_store_msku_sales", "module": "services.agent_cli.mabang.analyze_store_msku_sales",
       "command_path": ["replenish", "sales", "analyze"],
       "legacy_aliases": ["mabang_analyze_store_msku_sales"],
@@ -479,6 +487,7 @@
     "replenish_unlinked_shipments": {"dir": "replenish/unlinked_shipments", "holds": "未关联货件原始下载文件。", "legacy_dirs": ["mabang_fba_unlinked_shipments"]},
     "replenish_unlinked_shipments_snapshots": {"dir": "replenish/unlinked_shipments_snapshots", "holds": "未关联货件快照 Excel。", "legacy_dirs": ["mabang_fba_unlinked_shipments_snapshots"]},
     "replenish_store_resolver": {"dir": "replenish/store_resolver", "holds": "店铺名解析结果缓存。", "legacy_dirs": ["mabang_fba_store_resolver"]},
+    "replenish_brazil_overseas": {"dir": "replenish/brazil_overseas", "holds": "马帮巴西海外仓库存、销量原始导出 XLSX，以及三个月前已签收/三个月内待签收分仓调拨原始导出 XLS。", "legacy_dirs": []},
     "amazon_operations": {"dir": "amazon/operations", "holds": "亚马逊运营分析报告 JSON，按 listing/review/competitor/keyword 分子目录。", "legacy_dirs": ["amazon_operations"]},
     "browser_store_agent": {"dir": "browser/amazon_store_agent", "holds": "紫鸟浏览器店铺会话的截图与页面快照，按 session_id 分子目录。", "legacy_dirs": []},
     "browser_workflows": {"dir": "browser/workflows", "holds": "紫鸟浏览器固定流程的中间产物，按 session_id 分子目录。", "legacy_dirs": []},

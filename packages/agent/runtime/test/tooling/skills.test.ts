@@ -40,15 +40,15 @@ describe("skill context", () => {
     expect(catalog.snapshot({ allowedTypes: new Set() }).names).toEqual([]);
   });
 
-  test("loads the nine bundled replenishment skills and their local references outside the source checkout", () => {
+  test("loads the ten bundled replenishment skills and their local references outside the source checkout", () => {
     const root = mkdtempSync(join(tmpdir(), "lxe-replenishment-skills-"));
     roots.push(root);
     const source = join(repositoryRoot(import.meta.dir), "skills");
     const names = readdirSync(source).filter((name) => name.startsWith("replenishment-"));
-    expect(names).toHaveLength(9);
+    expect(names).toHaveLength(10);
     for (const name of names) cpSync(join(source, name), join(root, "skills", name), { recursive: true });
     const skills = new SkillCatalog(root, join(root, "missing-user"), { sharedSkillsRoot: false }).list();
-    expect(skills).toHaveLength(9);
+    expect(skills).toHaveLength(10);
     const references = skills.flatMap((skill) => skill.references.map((reference) => {
       expect(readFileSync(join(skill.root, reference.path), "utf8").length).toBeGreaterThan(100);
       return reference;
