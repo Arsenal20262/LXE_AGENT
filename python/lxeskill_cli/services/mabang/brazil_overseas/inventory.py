@@ -128,7 +128,7 @@ async def _read_search_response(resp: Any) -> None:
         raise BrazilOverseasInventoryExportError(f"巴西海外仓库存筛选业务异常: {message}")
 
 
-def _validate_xlsx(body: bytes) -> None:
+def validate_xlsx(body: bytes) -> None:
     if not body:
         raise BrazilOverseasInventoryExportError("巴西海外仓库存导出返回空文件")
     if not body.startswith(XLSX_ZIP_SIGNATURE):
@@ -154,7 +154,7 @@ def _output_path(output_dir: str | Path | None, *, executed_at: datetime) -> Pat
     return directory / output_filename(BrazilExportKind.INVENTORY_SALES_SNAPSHOT, executed_at=executed_at)
 
 
-def _write_xlsx_atomically(target_path: Path, body: bytes) -> None:
+def write_xlsx_atomically(target_path: Path, body: bytes) -> None:
     staged_path = target_path.with_name(f".{target_path.name}.{uuid4().hex}.tmp")
     try:
         staged_path.write_bytes(body)
@@ -190,10 +190,10 @@ async def export_brazil_overseas_inventory_sales_snapshot(
         if status_code >= 400:
             message = body.decode("utf-8", errors="replace")[:300] if body else "empty response"
             raise MabangRequestError(f"巴西海外仓库存导出请求失败(status={status_code}): {message}")
-    _validate_xlsx(body)
+    validate_xlsx(body)
     run_at = executed_at or datetime.now(BEIJING_TZ)
     target_path = _output_path(output_dir, executed_at=run_at)
-    _write_xlsx_atomically(target_path, body)
+    write_xlsx_atomically(target_path, body)
     return BrazilOverseasInventoryExportResult(xlsx_path=str(target_path))
 
 
@@ -202,4 +202,6 @@ __all__ = [
     "BrazilOverseasInventoryExportError",
     "BrazilOverseasInventoryExportResult",
     "export_brazil_overseas_inventory_sales_snapshot",
+    "validate_xlsx",
+    "write_xlsx_atomically",
 ]

@@ -104,13 +104,13 @@ async def export_brazil_allocation(
 ) -> BrazilExportArtifact: ...
 ```
 
-- [ ] Write fake-session tests for the private-amz query followed by the private export request and the resulting `gourl` XLSX download.
-- [ ] Assert the pending query sends `allocationstatus=2`, `targetwarhouseId=1072376`, `timetype=timeCreated`, and empty date fields; assert the signed query sends status `4` with the same target warehouse and no date filter.
-- [ ] Assert the export form retains the captured template ID, fixed settings, ordered `fieldlabel` values, ordered map triples, empty `orderIds`, and runtime `memcacheKey` taken from the existing authenticated Cookie.
-- [ ] Accept only a successful JSON response with a nonempty approved Mabang download URL. Never resubmit on malformed JSON, missing `gourl`, or download uncertainty.
-- [ ] Verify the returned XLSX, publish the appropriate signed or pending filename, and return one artifact.
-- [ ] Run: `uv run pytest python/lxeskill_cli/tests/mabang/test_brazil_overseas_allocation.py`.
-- [ ] Write `docs/handoff/2026-09-18-mabang-brazil-overseas-allocation.md` with request contracts, failure semantics, and next task.
+- [x] Write fake-session tests for the private-amz query followed by the private export request and the resulting `gourl` XLSX download.
+- [x] Assert the pending query sends `allocationstatus=2`, `targetwarhouseId=1072376`, `timetype=timeCreated`, and empty date fields; assert the signed query sends status `4` with the same target warehouse and no date filter.
+- [x] Assert the export form retains the captured template ID, fixed settings, ordered `fieldlabel` values, ordered map triples, empty `orderIds`, and runtime `memcacheKey` taken from the existing authenticated Cookie.
+- [x] Accept only a successful JSON response with a nonempty approved Mabang download URL. Never resubmit on malformed JSON, missing `gourl`, or download uncertainty.
+- [x] Verify the returned XLSX, publish the appropriate signed or pending filename, and return one artifact.
+- [x] Run: `uv run pytest python/lxeskill_cli/tests/mabang/test_brazil_overseas_allocation.py`.
+- [x] Write `docs/handoff/2026-09-18-mabang-brazil-overseas-allocation.md` with request contracts, failure semantics, and next task.
 - [ ] Request approval to stage and commit only Task 3 files.
 
 ## Task 4: CLI, Skill, routing, and end-to-end contracts
