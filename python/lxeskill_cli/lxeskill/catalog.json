@@ -353,6 +353,14 @@
       "input_schema": {"type": "object", "properties": {"store_name": {"type": "string"}}, "required": ["store_name"], "additionalProperties": false}
     },
     {
+      "name": "mabang_brazil_overseas_export", "module": "services.agent_cli.mabang.brazil_overseas_export",
+      "command_path": ["replenish", "brazil-overseas", "export"],
+      "legacy_aliases": ["mabang_brazil_overseas_export"],
+      "visibility": "business", "session_mode": "none",
+      "owner_skills": ["replenishment-brazil-overseas-export"], "artifact_paths": [{"field": "xlsx_path", "role": "deliverable"}], "timeout_ms": 300000, "exposed": true,
+      "input_schema": {"type": "object", "properties": {"request_text": {"type": "string", "minLength": 1, "description": "完整自然语言请求，必须明确巴西海外仓及库存/销量、已签收或待签收范围。"}}, "required": ["request_text"], "additionalProperties": false}
+    },
+    {
       "name": "mabang_analyze_store_msku_sales", "module": "services.agent_cli.mabang.analyze_store_msku_sales",
       "command_path": ["replenish", "sales", "analyze"],
       "legacy_aliases": ["mabang_analyze_store_msku_sales"],

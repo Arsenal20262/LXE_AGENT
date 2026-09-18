@@ -17,6 +17,7 @@
   "fba-workflow-map": "FBA 流程导览",
   "replenishment-algorithm-config-manage": "备货算法参数管理",
   "replenishment-amazon-restock-inventory-snapshot": "亚马逊补充库存报告解析",
+  "replenishment-brazil-overseas-export": "巴西海外仓数据导出",
   "replenishment-calculate": "备货建议计算",
   "replenishment-msku-download": "店铺 MSKU 数据下载",
   "replenishment-real-inventory-report": "深圳仓真实库存报告",

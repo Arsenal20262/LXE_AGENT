@@ -135,15 +135,15 @@ async def export_brazil_allocation(
 lxeskill replenish brazil-overseas export --request-text "<complete user request>"
 ```
 
-- [ ] Write CLI tests proving request text reaches the deterministic workflow and declared artifacts are delivered only on success.
-- [ ] Add one Catalog business command owned by `replenishment-brazil-overseas-export`, with one `request_text` input, one deliverable artifact selector, and the existing `amazon_replenish` Skill type.
-- [ ] Add the Skill with the three recognized request classes, source-data limitation, no-ID/no-Cookie rules, one-auth-refresh recovery rule, and file delivery instructions.
-- [ ] Route Brazil overseas warehouse phrases from `replenishment-workflow-map` to the new Skill without changing existing store-MSKU replenishment behavior.
-- [ ] Add the Chinese UI label and Catalog inventory entry.
-- [ ] Run: `uv run pytest python/lxeskill_cli/tests/mabang/test_brazil_overseas_workflow.py python/lxeskill_cli/tests/mabang/test_brazil_overseas_export_cli.py python/lxeskill_cli/tests/lxeskill/test_command_contracts.py python/lxeskill_cli/tests/infra`.
-- [ ] Run: `bun test packages/agent/runtime/test/tooling/lxeskill-command.test.ts`.
-- [ ] Run: `git diff --check` and inspect `git status --short` plus a secret-pattern scan limited to changed files.
-- [ ] Write `docs/handoff/2026-09-18-mabang-brazil-overseas-entry.md` with completed behavior, CLI, credentials, tests, limitations, and integration notes.
+- [x] Write CLI tests proving request text reaches the deterministic workflow and declared artifacts are delivered only on success.
+- [x] Add one Catalog business command owned by `replenishment-brazil-overseas-export`, with one `request_text` input, one deliverable artifact selector, and the existing `amazon_replenish` Skill type.
+- [x] Add the Skill with the three recognized request classes, source-data limitation, no-ID/no-Cookie rules, no automatic auth refresh/retry, and file delivery instructions.
+- [x] Route Brazil overseas warehouse phrases from `replenishment-workflow-map` to the new Skill without changing existing store-MSKU replenishment behavior.
+- [x] Add the Chinese UI label and Catalog inventory entry.
+- [x] Run: `uv run pytest python/lxeskill_cli/tests/mabang/test_brazil_overseas_workflow.py python/lxeskill_cli/tests/mabang/test_brazil_overseas_export_cli.py python/lxeskill_cli/tests/lxeskill/test_command_contracts.py python/lxeskill_cli/tests/infra`.
+- [x] Run: `bun test packages/agent/runtime/test/tooling/lxeskill-command.test.ts`.
+- [x] Run: `git diff --check` and inspect `git status --short` plus a secret-pattern scan limited to changed files.
+- [x] Write `docs/handoff/2026-09-18-mabang-brazil-overseas-entry.md` with completed behavior, CLI, credentials, tests, limitations, and integration notes.
 - [ ] Request approval to stage and commit only Task 4 files.
 
 ## Integration Checkpoint

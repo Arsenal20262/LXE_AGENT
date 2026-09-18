@@ -72,6 +72,14 @@ describe("lxeskill command recognition", () => {
         ownerSkills: ["fba-shipment-delivery-csv-download"],
         attributionSkill: "fba-shipment-delivery-csv-download",
       });
+    expect(entries.find((entry) => entry.name === "mabang_brazil_overseas_export"))
+      .toMatchObject({
+        command: "lxeskill replenish brazil-overseas export",
+        module: "services.agent_cli.mabang.brazil_overseas_export",
+        ownerSkills: ["replenishment-brazil-overseas-export"],
+        attributionSkill: "replenishment-brazil-overseas-export",
+        artifactPaths: [{ field: "xlsx_path", role: "deliverable" }],
+      });
     expect(entries.find((entry) => entry.name === "mabang_regenerate_purchase_files"))
       .toMatchObject({
         command: "lxeskill fba purchase files-regenerate",
