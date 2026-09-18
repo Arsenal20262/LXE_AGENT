@@ -52,7 +52,7 @@ def _safe_error_message(exc: Exception) -> str:
 
 
 def preview(arguments: dict[str, Any]) -> dict[str, Any]:
-    plan = build_goods_export_plan(str(arguments.get("request_text") or ""))
+    plan = build_goods_export_plan(arguments.get("params"))
     return {"success": plan["status"] == "ready", **plan}
 
 
@@ -69,7 +69,7 @@ def _blocked(
     return {
         "success": False,
         "status": "blocked",
-        "request_text": plan.get("request_text", ""),
+        "params": plan.get("params"),
         "intent": plan.get("intent"),
         "plan": plan.get("plan"),
         "error": error,
@@ -77,7 +77,7 @@ def _blocked(
 
 
 def run(arguments: dict[str, Any]) -> dict[str, Any]:
-    plan = build_goods_export_plan(str(arguments.get("request_text") or ""))
+    plan = build_goods_export_plan(arguments.get("params"))
     if plan["status"] != "ready":
         return {"success": False, **plan}
 
@@ -148,7 +148,7 @@ def run(arguments: dict[str, Any]) -> dict[str, Any]:
         return {
             "success": False,
             "status": "failed",
-            "request_text": plan["request_text"],
+            "params": plan["params"],
             "intent": plan["intent"],
             "plan": plan["plan"],
             "error": {
@@ -161,7 +161,7 @@ def run(arguments: dict[str, Any]) -> dict[str, Any]:
     return {
         "success": True,
         "status": "completed",
-        "request_text": plan["request_text"],
+        "params": plan["params"],
         "intent": plan["intent"],
         "plan": plan["plan"],
         **result.to_payload(),

@@ -1,88 +1,101 @@
 from __future__ import annotations
 
-import re
 from typing import Any
 
 
-_AMBIGUOUS_MARKERS = ("最近卖", "最近销量", "卖得怎么样", "销售情况")
-_PLATFORM_MARKERS = ("智慧", "印尼")
-_SUPPORTED_MARKERS = (
-    "销量",
-    "销售",
-    "动销",
-    "库存",
-    "月末",
-    "入库",
-    "入仓",
-    "上架",
-    "创建时间",
-    "智慧",
-    "商品导出",
-    "商品报表",
-    "goods-export",
-    "goods export",
-)
+PLATFORM = "智慧"
+COUNTRY = "印尼"
+OPERATION = "goods_export"
+SUPPORTED_METRICS = frozenset({"sales", "inventory", "inbound_time", "listing_time"})
+SUPPORTED_SALES_WINDOWS = frozenset({7, 14, 30, 90})
 
 SOURCE_NOTICE = "该文件保留平台原始商品导出字段，不包含逐日销量、14天销量或历史月末快照。"
-
-
-def _normalized_text(request_text: str) -> str:
-    return re.sub(r"\s+", "", request_text).casefold()
 
 
 def _error(code: str, message: str, *, recoverable: bool) -> dict[str, Any]:
     return {"code": code, "message": message, "recoverable": recoverable}
 
 
-def build_goods_export_plan(request_text: str) -> dict[str, Any]:
-    original = str(request_text or "")
-    normalized = _normalized_text(original)
-    if not normalized:
-        return {
-            "status": "blocked",
-            "request_text": original,
-            "error": _error("request_text_required", "request_text is required", recoverable=True),
-        }
-    if not all(marker in normalized for marker in _PLATFORM_MARKERS):
-        return {
-            "status": "unsupported",
-            "request_text": original,
-            "error": _error(
-                "platform_marker_required",
-                "请同时明确提到“智慧”和“印尼”，以触发智慧印尼平台商品导出能力",
-                recoverable=True,
-            ),
-        }
-    if any(marker in normalized for marker in _AMBIGUOUS_MARKERS):
-        return {
-            "status": "needs_clarification",
-            "request_text": original,
-            "error": _error(
-                "ambiguous_request",
-                "请明确需要销量、库存、月末快照、入库时间或上架时间中的哪一种商品导出数据",
-                recoverable=True,
-            ),
-        }
-    if not any(marker in normalized for marker in _SUPPORTED_MARKERS):
-        return {
-            "status": "unsupported",
-            "request_text": original,
-            "error": _error(
-                "unsupported_request",
-                "request is outside the Wisdom goods export capability",
-                recoverable=False,
-            ),
-        }
+def _invalid(message: str) -> dict[str, Any]:
+    return {"status": "blocked", "error": _error("params_invalid", message, recoverable=True)}
+
+
+def _string(value: Any) -> str:
+    return str(value or "").strip()
+
+
+def _normalize_params(raw_params: Any) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    if not isinstance(raw_params, dict):
+        return None, _invalid("params must be an object")
+
+    platform = _string(raw_params.get("platform"))
+    country = _string(raw_params.get("country"))
+    operation = _string(raw_params.get("operation"))
+    if platform != PLATFORM:
+        return None, _invalid(f"params.platform must be {PLATFORM}")
+    if country != COUNTRY:
+        return None, _invalid(f"params.country must be {COUNTRY}")
+    if operation != OPERATION:
+        return None, _invalid(f"params.operation must be {OPERATION}")
+
+    raw_metrics = raw_params.get("requested_metrics")
+    if not isinstance(raw_metrics, list) or not raw_metrics:
+        return None, _invalid("params.requested_metrics must be a non-empty array")
+    metrics = [_string(value) for value in raw_metrics]
+    if any(not value or value not in SUPPORTED_METRICS for value in metrics):
+        return None, _invalid("params.requested_metrics contains an unsupported metric")
+    if len(set(metrics)) != len(metrics):
+        return None, _invalid("params.requested_metrics must not contain duplicates")
+
+    raw_windows = raw_params.get("sales_windows_days", [])
+    if not isinstance(raw_windows, list):
+        return None, _invalid("params.sales_windows_days must be an array")
+    windows: list[int] = []
+    for value in raw_windows:
+        if isinstance(value, bool) or not isinstance(value, int) or value not in SUPPORTED_SALES_WINDOWS:
+            return None, _invalid("params.sales_windows_days contains an unsupported window")
+        windows.append(value)
+    if len(set(windows)) != len(windows):
+        return None, _invalid("params.sales_windows_days must not contain duplicates")
+
+    return {
+        "platform": platform,
+        "country": country,
+        "operation": operation,
+        "requested_metrics": metrics,
+        "sales_windows_days": windows,
+    }, None
+
+
+def build_goods_export_plan(params: Any) -> dict[str, Any]:
+    normalized_params, error = _normalize_params(params)
+    if error is not None:
+        return error
+    assert normalized_params is not None
     return {
         "status": "ready",
-        "request_text": original,
-        "intent": {"type": "goods-export", "request_text": original},
+        "params": normalized_params,
+        "intent": {
+            "type": "goods-export",
+            "platform": PLATFORM,
+            "country": COUNTRY,
+            "operation": OPERATION,
+            "params": normalized_params,
+        },
         "plan": {
             "type": "goods-export",
-            "tasks": [{"type": "goods-export"}],
+            "tasks": [{"type": "goods-export", "params": normalized_params}],
             "source_notice": SOURCE_NOTICE,
         },
     }
 
 
-__all__ = ["SOURCE_NOTICE", "build_goods_export_plan"]
+__all__ = [
+    "COUNTRY",
+    "OPERATION",
+    "PLATFORM",
+    "SOURCE_NOTICE",
+    "SUPPORTED_METRICS",
+    "SUPPORTED_SALES_WINDOWS",
+    "build_goods_export_plan",
+]

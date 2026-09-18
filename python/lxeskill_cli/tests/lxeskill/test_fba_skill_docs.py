@@ -26,7 +26,10 @@ def test_shangman_goods_export_is_the_single_owner_with_formal_permission_domain
     assert "name: shangman-goods-export-workflow-map" in frontmatter
     assert "type: amazon_replenish" in frontmatter
     assert frontmatter.count("lxeskill shangman export") == 2
-    assert "request_text" in text
+    assert "params" in text
+    assert 'platform: "智慧"' in text
+    assert 'country: "印尼"' in text
+    assert "--params" in text
 
 
 def test_ziniao_is_independent_and_shipment_owns_only_four_stages() -> None:

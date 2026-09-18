@@ -5,81 +5,71 @@ import pytest
 from services.shangman.intent import build_goods_export_plan
 
 
-SUPPORTED_REQUESTS = [
-    "请导出智慧印尼本月7天销量",
-    "请给我智慧印尼14天销量和30天销量",
-    "查看智慧印尼90天日度销量",
-    "查一下智慧印尼当前库存",
-    "我要智慧印尼月末库存快照",
-    "导出智慧印尼入库时间",
-    "导出智慧印尼商品上架时间",
-    "智慧印尼 goods export 商品导出",
-]
+BASE_PARAMS = {
+    "platform": "智慧",
+    "country": "印尼",
+    "operation": "goods_export",
+    "requested_metrics": ["sales", "inventory"],
+    "sales_windows_days": [7, 30],
+}
 
 
-@pytest.mark.parametrize("request_text", SUPPORTED_REQUESTS)
-def test_supported_business_wording_maps_to_one_goods_export_plan(request_text: str) -> None:
-    result = build_goods_export_plan(request_text)
+def test_structured_params_map_to_one_goods_export_plan() -> None:
+    result = build_goods_export_plan(BASE_PARAMS)
 
     assert result["status"] == "ready"
+    assert result["params"] == BASE_PARAMS
     assert result["intent"] == {
         "type": "goods-export",
-        "request_text": request_text,
+        "platform": "智慧",
+        "country": "印尼",
+        "operation": "goods_export",
+        "params": BASE_PARAMS,
     }
     assert result["plan"] == {
         "type": "goods-export",
-        "tasks": [{"type": "goods-export"}],
+        "tasks": [{"type": "goods-export", "params": BASE_PARAMS}],
         "source_notice": "该文件保留平台原始商品导出字段，不包含逐日销量、14天销量或历史月末快照。",
     }
-    assert result["request_text"] == request_text
-    assert "14" not in result["plan"]
-    assert "90" not in result["plan"]
-    assert "month_end" not in result["plan"]
 
 
-def test_month_end_and_listing_time_variants_share_the_same_canonical_plan() -> None:
-    plans = [
-        build_goods_export_plan("导出智慧印尼月底库存快照")["plan"],
-        build_goods_export_plan("查询智慧印尼商品创建时间")["plan"],
-        build_goods_export_plan("导出智慧印尼商品")["plan"],
-    ]
+def test_normalizes_optional_sales_windows_when_omitted() -> None:
+    params = {key: value for key, value in BASE_PARAMS.items() if key != "sales_windows_days"}
 
-    assert plans[0] == plans[1] == plans[2]
+    result = build_goods_export_plan(params)
 
-
-def test_empty_request_is_recoverable_input_error() -> None:
-    result = build_goods_export_plan("  ")
-
-    assert result == {
-        "status": "blocked",
-        "request_text": "  ",
-        "error": {
-            "code": "request_text_required",
-            "message": "request_text is required",
-            "recoverable": True,
-        },
-    }
+    assert result["status"] == "ready"
+    assert result["params"]["sales_windows_days"] == []
 
 
-def test_ambiguous_request_requires_clarification_without_guessing_report_type() -> None:
-    result = build_goods_export_plan("帮我看一下智慧印尼最近卖得怎么样")
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("platform", "其他平台"),
+        ("country", "美国"),
+        ("operation", "inventory_export"),
+        ("requested_metrics", ["unknown"]),
+        ("sales_windows_days", [15]),
+    ],
+)
+def test_rejects_params_outside_the_declared_contract(field: str, value: object) -> None:
+    params = dict(BASE_PARAMS)
+    params[field] = value
 
-    assert result["status"] == "needs_clarification"
-    assert result["request_text"] == "帮我看一下智慧印尼最近卖得怎么样"
-    assert result["error"]["code"] == "ambiguous_request"
-    assert result["error"]["recoverable"] is True
+    result = build_goods_export_plan(params)
+
+    assert result["status"] == "blocked"
+    assert result["error"]["code"] == "params_invalid"
 
 
-def test_unrelated_request_is_explicitly_unsupported() -> None:
-    result = build_goods_export_plan("帮我发一封邮件")
-
-    assert result["status"] == "unsupported"
-    assert result["error"]["code"] == "platform_marker_required"
+def test_rejects_missing_or_non_object_params() -> None:
+    assert build_goods_export_plan(None)["error"]["code"] == "params_invalid"
+    assert build_goods_export_plan({})["error"]["code"] == "params_invalid"
 
 
-@pytest.mark.parametrize("request_text", ["导出智慧库存", "导出印尼库存"])
-def test_both_platform_markers_are_required_to_trigger_the_workflow(request_text: str) -> None:
-    result = build_goods_export_plan(request_text)
+def test_rejects_duplicate_metrics_and_windows() -> None:
+    duplicate_metrics = dict(BASE_PARAMS, requested_metrics=["sales", "sales"])
+    duplicate_windows = dict(BASE_PARAMS, sales_windows_days=[7, 7])
 
-    assert result["status"] == "unsupported"
-    assert result["error"]["code"] == "platform_marker_required"
+    assert build_goods_export_plan(duplicate_metrics)["error"]["code"] == "params_invalid"
+    assert build_goods_export_plan(duplicate_windows)["error"]["code"] == "params_invalid"

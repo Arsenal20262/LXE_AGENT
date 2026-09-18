@@ -7,27 +7,37 @@ from services.agent_cli.shangman import _workflow, goods_export_preview, goods_e
 from services.shangman.goods_export import CaptchaInputRequired
 
 
+GOODS_PARAMS = {
+    "platform": "智慧",
+    "country": "印尼",
+    "operation": "goods_export",
+    "requested_metrics": ["inventory"],
+    "sales_windows_days": [],
+}
+
+
 def test_preview_is_deterministic_and_does_not_construct_client(monkeypatch) -> None:
     def fail_constructor(*args, **kwargs):
         raise AssertionError("preview must not construct an HTTP client")
 
     monkeypatch.setattr(goods_export_preview, "ShangmanClient", fail_constructor, raising=False)
 
-    first = goods_export_preview.run({"request_text": "请导出智慧印尼库存"})
-    second = goods_export_preview.run({"request_text": "请导出智慧印尼库存"})
+    first = goods_export_preview.run({"params": GOODS_PARAMS})
+    second = goods_export_preview.run({"params": GOODS_PARAMS})
 
     assert first == second
     assert first["success"] is True
     assert first["status"] == "ready"
+    assert first["params"] == GOODS_PARAMS
     assert first["intent"]["type"] == "goods-export"
     assert first["plan"] == {
         "type": "goods-export",
-        "tasks": [{"type": "goods-export"}],
+        "tasks": [{"type": "goods-export", "params": GOODS_PARAMS}],
         "source_notice": "该文件保留平台原始商品导出字段，不包含逐日销量、14天销量或历史月末快照。",
     }
 
 
-def test_catalog_exposes_only_request_text_for_both_public_commands() -> None:
+def test_catalog_exposes_only_structured_params_for_both_public_commands() -> None:
     catalog = load_catalog()
     entries = [
         catalog["shangman_goods_export_preview"],
@@ -39,34 +49,33 @@ def test_catalog_exposes_only_request_text_for_both_public_commands() -> None:
         ["shangman", "export", "run"],
     ]
     assert all(entry["owner_skills"] == ["shangman-goods-export-workflow-map"] for entry in entries)
-    assert all(entry["input_schema"]["required"] == ["request_text"] for entry in entries)
-    assert all(set(entry["input_schema"]["properties"]) == {"request_text"} for entry in entries)
+    assert all(entry["input_schema"]["required"] == ["params"] for entry in entries)
+    assert all(set(entry["input_schema"]["properties"]) == {"params"} for entry in entries)
+    assert all(
+        entry["input_schema"]["properties"]["params"]["required"]
+        == ["platform", "country", "operation", "requested_metrics"]
+        for entry in entries
+    )
 
 
-def test_preview_maps_all_supported_business_wording_to_one_plan() -> None:
-    requests = [
-        "导出智慧印尼月度7天销量",
-        "导出智慧印尼14天销量和30天销量",
-        "查看智慧印尼90天日度销量",
-        "导出智慧印尼当前库存",
-        "导出智慧印尼月末库存快照",
-        "导出智慧印尼入库时间",
-        "导出智慧印尼商品上架时间",
-    ]
+def test_preview_accepts_ai_generated_params_without_parsing_business_wording() -> None:
+    params = dict(GOODS_PARAMS, requested_metrics=["sales", "inventory"], sales_windows_days=[30])
 
-    results = [goods_export_preview.run({"request_text": request}) for request in requests]
+    result = goods_export_preview.run({"params": params})
 
-    assert all(result["status"] == "ready" for result in results)
-    assert {result["intent"]["type"] for result in results} == {"goods-export"}
-    assert {str(result["plan"]) for result in results} == {str(results[0]["plan"])}
+    assert result["success"] is True
+    assert result["status"] == "ready"
+    assert result["params"] == params
+    assert result["intent"]["params"] == params
+    assert result["plan"]["tasks"] == [{"type": "goods-export", "params": params}]
 
 
-def test_preview_preserves_original_request_and_rejects_missing_text() -> None:
+def test_preview_rejects_missing_structured_params() -> None:
     result = goods_export_preview.run({})
 
     assert result["success"] is False
     assert result["status"] == "blocked"
-    assert result["error"]["code"] == "request_text_required"
+    assert result["error"]["code"] == "params_invalid"
 
 
 def test_run_stops_at_production_gate_without_network(monkeypatch) -> None:
@@ -78,16 +87,22 @@ def test_run_stops_at_production_gate_without_network(monkeypatch) -> None:
 
     monkeypatch.setattr(_workflow, "ShangmanClient", FailClient)
 
-    result = goods_export_run.run({"request_text": "导出智慧印尼当前库存"})
+    result = goods_export_run.run({"params": GOODS_PARAMS})
 
     assert result == {
         "success": False,
         "status": "blocked",
-        "request_text": "导出智慧印尼当前库存",
-        "intent": {"type": "goods-export", "request_text": "导出智慧印尼当前库存"},
+        "params": GOODS_PARAMS,
+        "intent": {
+            "type": "goods-export",
+            "platform": "智慧",
+            "country": "印尼",
+            "operation": "goods_export",
+            "params": GOODS_PARAMS,
+        },
         "plan": {
             "type": "goods-export",
-            "tasks": [{"type": "goods-export"}],
+            "tasks": [{"type": "goods-export", "params": GOODS_PARAMS}],
             "source_notice": "该文件保留平台原始商品导出字段，不包含逐日销量、14天销量或历史月末快照。",
         },
         "error": {
@@ -108,7 +123,7 @@ def test_run_reports_missing_captcha_after_gate_and_credentials(monkeypatch) -> 
     }.items():
         monkeypatch.setenv(name, value)
 
-    result = goods_export_run.run({"request_text": "导出智慧印尼当前库存"})
+    result = goods_export_run.run({"params": GOODS_PARAMS})
 
     assert result["success"] is False
     assert result["status"] == "blocked"
@@ -146,7 +161,9 @@ def test_run_reuses_first_stage_client_and_returns_one_artifact(monkeypatch, tmp
 
     monkeypatch.setattr(_workflow, "ShangmanClient", FakeClient)
 
-    result = goods_export_run.run({"request_text": "请导出智慧印尼30天销量"})
+    result = goods_export_run.run(
+        {"params": dict(GOODS_PARAMS, requested_metrics=["sales"], sales_windows_days=[30])}
+    )
 
     assert result["success"] is True
     assert result["status"] == "completed"
@@ -178,7 +195,7 @@ def test_run_redacts_runtime_credentials_but_keeps_client_diagnostic(monkeypatch
 
     monkeypatch.setattr(_workflow, "ShangmanClient", FailingClient)
 
-    result = goods_export_run.run({"request_text": "导出智慧印尼库存"})
+    result = goods_export_run.run({"params": GOODS_PARAMS})
 
     assert result["error"] == {
         "code": "erp_execution_failed",
@@ -210,7 +227,7 @@ def test_run_returns_only_an_opaque_challenge_when_captcha_is_required(monkeypat
 
     monkeypatch.setattr(_workflow, "ShangmanClient", WaitingClient)
 
-    result = goods_export_run.run({"request_text": "导出智慧印尼库存"})
+    result = goods_export_run.run({"params": GOODS_PARAMS})
 
     assert result["error"] == {
         "code": "captcha_input_required",
@@ -221,11 +238,18 @@ def test_run_returns_only_an_opaque_challenge_when_captcha_is_required(monkeypat
     assert "captcha_code" not in str(result)
 
 
-def test_run_rejects_ambiguous_request_before_gate(monkeypatch) -> None:
+def test_run_rejects_invalid_structured_params_before_gate(monkeypatch) -> None:
     monkeypatch.delenv("LXE_SHANGMAN_PROD_ENABLED", raising=False)
 
-    result = goods_export_run.run({"request_text": "智慧印尼最近卖得怎么样"})
+    result = goods_export_run.run(
+        {
+            "params": {
+                **GOODS_PARAMS,
+                "operation": "unknown",
+            }
+        }
+    )
 
     assert result["success"] is False
-    assert result["status"] == "needs_clarification"
-    assert result["error"]["code"] == "ambiguous_request"
+    assert result["status"] == "blocked"
+    assert result["error"]["code"] == "params_invalid"

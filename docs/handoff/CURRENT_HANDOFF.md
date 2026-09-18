@@ -237,3 +237,18 @@ The commit SHA is reported in the stage completion response. This document is in
 - `uv run --frozen pytest -q python/lxeskill_cli/tests/shangman/test_intent.py python/lxeskill_cli/tests/shangman/test_goods_export_workflow.py python/lxeskill_cli/tests/lxeskill/test_fba_skill_docs.py` → `30 passed`.
 - `bun run --cwd apps/dashboard typecheck` passed; `git diff --check` passed.
 - No real ERP request was made. Changes remain uncommitted.
+
+## Stage 9: AI-first structured parameters for the Wisdom export workflow (current, uncommitted)
+
+- Worktree/Pool: `/Users/hym/PycharmProjects/LXE_AGENT/.worktrees/pool-2`, branch `codex/shangman-erp-export-client`.
+- The public `shangman_goods_export_preview` and `shangman_goods_export_run` commands now accept only a structured `params` object. The required contract is `platform="智慧"`, `country="印尼"`, `operation="goods_export"`, and non-empty `requested_metrics`; optional `sales_windows_days` is limited to 7, 14, 30, and 90.
+- The Skill instructs the AI to translate the user's natural-language request into that object before calling `lxeskill`. The Python layer no longer parses keywords, guesses intent, or handles ambiguous natural-language wording; it validates the AI-produced parameters and builds the deterministic export plan.
+- The production gate, three-field runtime credential model, shared process-local login state, captcha pause/resume flow, redaction, and artifact delivery boundary are unchanged. Invalid structured parameters are rejected before the production gate or client construction.
+- Changed files: `python/lxeskill_cli/services/shangman/intent.py`, `python/lxeskill_cli/services/agent_cli/shangman/_workflow.py`, `python/lxeskill_cli/lxeskill/catalog.json`, `skills/shangman-goods-export-workflow-map/SKILL.md`, and the related Python tests plus this handoff.
+
+### Stage 9 verification
+
+- `uv run --frozen pytest -q python/lxeskill_cli/tests/shangman python/lxeskill_cli/tests/lxeskill/test_fba_skill_docs.py` → `40 passed`.
+- `bun test packages/agent/runtime/test/tooling/lxeskill-command.test.ts packages/agent/runtime/test/tooling/skills.test.ts` → `17 pass, 0 fail`.
+- Local CLI path check: `uv run --frozen lxeskill shangman export preview --params '<valid JSON>'` returned `ok=true`, normalized `data.params`, and a parameterized `data.plan`; no ERP request was made.
+- Remaining checks before handoff: `git diff --check`, `git status`, and sensitive-data review. Do not stage or commit without user approval under the repository policy.
