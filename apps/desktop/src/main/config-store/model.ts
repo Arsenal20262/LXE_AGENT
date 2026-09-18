@@ -65,7 +65,7 @@ export interface DesktopConfig {
       webdriver_path: string;
     };
     mabang: { managed: boolean; account: string };
-    yacang: { managed: boolean; mobile: string };
+    yacang: { managed: boolean; mobile: string; production_enabled: boolean };
     feishu: { managed: boolean; app_id: string };
   };
   logging: {
@@ -142,7 +142,7 @@ const defaultConfig = (catalog: LlmProviderCatalog): DesktopConfig => {
         webdriver_path: "",
       },
       mabang: { managed: false, account: "" },
-      yacang: { managed: false, mobile: "" },
+      yacang: { managed: false, mobile: "", production_enabled: false },
       feishu: { managed: false, app_id: "" },
     },
     logging: { profile: "standard", retention_days: 7 },
@@ -314,7 +314,7 @@ export const parseSettings = (
     "managed", "company", "username", "app_version", "app_path", "webdriver_path",
   ], "settings.integrations.ziniao");
   assertOnlyFields(mabang, ["managed", "account"], "settings.integrations.mabang");
-  assertOnlyFields(yacang, ["managed", "mobile"], "settings.integrations.yacang");
+  assertOnlyFields(yacang, ["managed", "mobile", "production_enabled"], "settings.integrations.yacang");
   assertOnlyFields(feishu, ["managed", "app_id"], "settings.integrations.feishu");
   assertFieldTypes(ziniao, {
     managed: "boolean", company: "string", username: "string", app_version: "string",
@@ -323,6 +323,9 @@ export const parseSettings = (
   assertFieldTypes(mabang, { managed: "boolean", account: "string" }, "settings.integrations.mabang");
   if (value.schema_version === SETTINGS_SCHEMA_VERSION) {
     assertFieldTypes(yacang, { managed: "boolean", mobile: "string" }, "settings.integrations.yacang");
+  }
+  if (yacang.production_enabled !== undefined && typeof yacang.production_enabled !== "boolean") {
+    throw new Error("settings.integrations.yacang.production_enabled must be a boolean");
   }
   assertFieldTypes(feishu, { managed: "boolean", app_id: "string" }, "settings.integrations.feishu");
   const logging = objectValue(value.logging);
@@ -438,6 +441,7 @@ export const parseConfig = (
       yacang: {
         managed: Boolean(rawYacang.managed),
         mobile: text(rawYacang.mobile),
+        production_enabled: Boolean(rawYacang.production_enabled),
       },
       feishu: {
         managed: Boolean(rawFeishu.managed) || Boolean(legacyFeishuAppId),

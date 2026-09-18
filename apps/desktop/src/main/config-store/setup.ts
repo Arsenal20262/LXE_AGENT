@@ -122,6 +122,7 @@ export class DesktopSetupService {
         issues: yacangIssues,
         mobile: yacang.mobile,
         password_configured: Boolean(secrets.yacang_password),
+        production_enabled: yacang.production_enabled,
       },
       feishu: {
         managed: feishu.managed,
@@ -188,14 +189,18 @@ export class DesktopSetupService {
     }
 
     if (input.yacang?.action === "clear") {
-      config.integrations.yacang = { managed: true, mobile: "" };
+      config.integrations.yacang = { managed: true, mobile: "", production_enabled: false };
       secrets.yacang_password = "";
     } else if (input.yacang?.action === "save") {
       const mobile = text(input.yacang.mobile);
       const inputPassword = text(input.yacang.password);
       const password = inputPassword || effectiveSecrets.yacang_password;
       if (!mobile || !password) throw new Error("雅仓账号和密码必须同时填写");
-      config.integrations.yacang = { managed: true, mobile };
+      config.integrations.yacang = {
+        managed: true,
+        mobile,
+        production_enabled: input.yacang.production_enabled === true,
+      };
       if (inputPassword) secrets.yacang_password = inputPassword;
     }
 
@@ -540,6 +545,7 @@ export class DesktopSetupService {
       MABANG_PASSWORD: mabangConfigured ? secrets.mabang_password : "",
       LXE_YACANG_MOBILE: yacangConfigured ? yacang.mobile : "",
       LXE_YACANG_PASSWORD: yacangConfigured ? secrets.yacang_password : "",
+      LXE_YACANG_PROD_ENABLED: yacangConfigured && yacang.production_enabled ? "true" : "false",
       LXE_FEISHU_GATEWAY_ENABLED: feishuConfigured ? "1" : "0",
       FEISHU_APP_ID: feishuConfigured ? feishu.app_id : "",
       FEISHU_APP_SECRET: feishuConfigured ? secrets.feishu_app_secret : "",

@@ -863,6 +863,18 @@ function DesktopSettingsForm({
               />
             </label>
           </div>
+          <label className="desktop-production-toggle">
+            <input
+              checked={form.yacangProductionEnabled}
+              disabled={!setup.yacang.configured}
+              onChange={(event) => onChange({ yacangProductionEnabled: event.target.checked })}
+              type="checkbox"
+            />
+            <span>
+              <strong>{t.desktop.yacang.productionEnabled}</strong>
+              <small>{t.desktop.yacang.productionEnabledDescription}</small>
+            </span>
+          </label>
           {setup.yacang.managed ? (
             <button className="desktop-clear-integration" onClick={() => onClearIntegration("yacang")} type="button">
               <Trash2 size={14} />{t.desktop.clearIntegration}
@@ -1383,7 +1395,9 @@ export function DesktopShell({
       form.ziniaoWebDriverPath,
     ) || setup.ziniao.configured;
     const mabangTouched = hasText(form.mabangAccount, form.mabangPassword) || setup.mabang.configured;
-    const yacangTouched = hasText(form.yacangMobile, form.yacangPassword) || setup.yacang.configured;
+    const yacangTouched = hasText(form.yacangMobile, form.yacangPassword)
+      || setup.yacang.configured
+      || form.yacangProductionEnabled !== setup.yacang.production_enabled;
     const feishuTouched = hasText(form.feishuAppId, form.feishuAppSecret) || setup.feishu.configured;
     return {
       ...baseInput(),
@@ -1409,6 +1423,7 @@ export function DesktopShell({
         yacang: {
           action: "save" as const,
           mobile: form.yacangMobile,
+          production_enabled: form.yacangProductionEnabled,
           ...(form.yacangPassword ? { password: form.yacangPassword } : {}),
         },
       } : {}),

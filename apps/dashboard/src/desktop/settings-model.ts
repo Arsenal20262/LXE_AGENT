@@ -70,6 +70,7 @@ export interface DesktopSettingsFormValue {
   mabangPassword: string;
   yacangMobile: string;
   yacangPassword: string;
+  yacangProductionEnabled: boolean;
   feishuAppId: string;
   feishuAppSecret: string;
   logProfile: DesktopLogProfile;
@@ -90,6 +91,7 @@ export const desktopSettingsForm = (state: DesktopSetupState): DesktopSettingsFo
   mabangPassword: "",
   yacangMobile: state.yacang.mobile,
   yacangPassword: "",
+  yacangProductionEnabled: state.yacang.production_enabled,
   feishuAppId: state.feishu.app_id,
   feishuAppSecret: "",
   logProfile: state.logging.profile,
@@ -107,7 +109,7 @@ const SECTION_FIELDS: Record<EditableDesktopSettingsSection, readonly (keyof Des
     "ziniaoWebDriverPath",
   ],
   mabang: ["mabangAccount", "mabangPassword"],
-  yacang: ["yacangMobile", "yacangPassword"],
+  yacang: ["yacangMobile", "yacangPassword", "yacangProductionEnabled"],
   feishu: ["feishuAppId", "feishuAppSecret"],
   logging: ["logProfile", "logRetentionDays"],
 };

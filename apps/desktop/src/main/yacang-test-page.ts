@@ -56,7 +56,12 @@ export class DesktopYacangTestPageService {
     const plan = record(data.plan, "Yacang preview plan");
     const previewId = randomUUID();
     this.previews.set(previewId, { requestText: input.request_text, expiresAt: Date.now() + PREVIEW_TTL_MS });
-    return { preview_id: previewId, plan, production_enabled: process.env.LXE_YACANG_PROD_ENABLED === "true" };
+    const productionFlag = String(process.env.LXE_YACANG_PROD_ENABLED || "").trim().toLowerCase();
+    return {
+      preview_id: previewId,
+      plan,
+      production_enabled: productionFlag === "1" || productionFlag === "true",
+    };
   }
 
   async execute(input: DesktopYacangExecuteInput): Promise<DesktopYacangExecution> {

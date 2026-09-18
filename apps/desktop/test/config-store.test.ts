@@ -59,7 +59,12 @@ describe("DesktopConfigStore", () => {
         webdriver_path: join(root, "drivers"),
       },
       mabang: { action: "save", account: "mabang-user", password: "mabang-secret" },
-      yacang: { action: "save", mobile: "yacang-user", password: "yacang-secret" },
+      yacang: {
+        action: "save",
+        mobile: "yacang-user",
+        password: "yacang-secret",
+        production_enabled: true,
+      },
       feishu: { action: "save", app_id: "cli_1234567890", app_secret: "feishu-secret" },
       logging: { profile: "diagnostic", retention_days: 14 },
     });
@@ -73,7 +78,7 @@ describe("DesktopConfigStore", () => {
       ]),
       ziniao: { configured: true, password_configured: true },
       mabang: { configured: true, password_configured: true },
-      yacang: { configured: true, password_configured: true },
+      yacang: { configured: true, password_configured: true, production_enabled: true },
       feishu: { configured: true, app_secret_configured: true },
       logging: { profile: "diagnostic", retention_days: 14 },
     });
@@ -90,6 +95,7 @@ describe("DesktopConfigStore", () => {
       MABANG_PASSWORD: "mabang-secret",
       LXE_YACANG_MOBILE: "yacang-user",
       LXE_YACANG_PASSWORD: "yacang-secret",
+      LXE_YACANG_PROD_ENABLED: "true",
       LXE_FEISHU_GATEWAY_ENABLED: "1",
       FEISHU_APP_SECRET: "feishu-secret",
       LOCAL_LOGS_ENABLED: "1",
@@ -139,6 +145,7 @@ describe("DesktopConfigStore", () => {
     expect(store.environment()).toMatchObject({
       MABANG_PASSWORD: "source-mabang-secret",
       LXE_YACANG_PASSWORD: "source-yacang-secret",
+      LXE_YACANG_PROD_ENABLED: "false",
       FEISHU_APP_SECRET: "source-feishu-secret",
       LXE_SAIHU_MCP_API_KEY: "",
     });

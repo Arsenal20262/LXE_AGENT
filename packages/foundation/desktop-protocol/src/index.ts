@@ -461,6 +461,7 @@ export interface DesktopSetupState {
     issues: string[];
     mobile: string;
     password_configured: boolean;
+    production_enabled: boolean;
   };
   feishu: {
     managed: boolean;
@@ -494,7 +495,7 @@ export type DesktopMabangSetupInput =
 
 export type DesktopYacangSetupInput =
   | { action: "clear" }
-  | { action: "save"; mobile: string; password?: string };
+  | { action: "save"; mobile: string; password?: string; production_enabled?: boolean };
 
 export type DesktopFeishuSetupInput =
   | { action: "clear" }

@@ -161,6 +161,9 @@ export function validateSetupInput(value: unknown): DesktopSetupInput {
     action: "save" as const,
     mobile: boundedText(yacang.mobile, "Yacang mobile", 1_024),
     ...(yacangPassword ? { password: yacangPassword } : {}),
+    ...(yacang.production_enabled === undefined
+      ? {}
+      : { production_enabled: yacang.production_enabled === true }),
   } : yacang?.action === "clear" ? { action: "clear" as const } : undefined;
   const feishuSecret = feishu?.action === "save"
     ? boundedText(feishu.app_secret, "Feishu App Secret", 16_384)

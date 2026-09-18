@@ -791,7 +791,9 @@ export const ZH_TEXT = {
       description: "账号与密码使用系统安全存储；配置后可供已注册的雅仓数据导出流程自动登录。",
       mobile: "雅仓账号",
       password: "雅仓密码",
-      passwordPlaceholder: "输入雅仓密码"
+      passwordPlaceholder: "输入雅仓密码",
+      productionEnabled: "启用雅仓生产 API 调用",
+      productionEnabledDescription: "仅在账号配置完成且确认要访问生产接口时开启。"
     },
     feishu: {
       description: "App ID 与 App Secret 必须成对填写；整组留空即可跳过。",
@@ -1634,7 +1636,9 @@ export const UI_TEXT: Record<Language, UiText> = {
         description: "The account and password use system secure storage for registered Yacang data export workflows.",
         mobile: "Yacang account",
         password: "Yacang password",
-        passwordPlaceholder: "Enter the Yacang password"
+        passwordPlaceholder: "Enter the Yacang password",
+        productionEnabled: "Enable Yacang production API calls",
+        productionEnabledDescription: "Enable only after the account is configured and production access is confirmed."
       },
       feishu: {
         description: "App ID and App Secret must be filled in together; leave the whole group blank to skip.",
