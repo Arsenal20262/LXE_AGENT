@@ -13,8 +13,8 @@
 - Added immutable export kinds, the confirmed warehouse ID, and the registered artifact partition.
 - Added Beijing-time filenames:
   - `马帮系统-库存-巴西海外仓-YYYY-MM-DD_HHmm.xlsx`
-  - `马帮系统-已签收-巴西海外仓-YYYY-MM-DD_HHmm.xlsx`
-  - `马帮系统-3个月待签收-巴西海外仓-YYYY-MM-DD_HHmm.xlsx`
+  - `马帮系统-已签收-巴西海外仓-YYYY-MM-DD_HHmm.xls`
+  - `马帮系统-3个月待签收-巴西海外仓-YYYY-MM-DD_HHmm.xls`
 
 ## Files Changed
 

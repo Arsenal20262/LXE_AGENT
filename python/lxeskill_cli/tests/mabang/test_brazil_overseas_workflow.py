@@ -30,7 +30,7 @@ def test_routes_sales_request_to_one_inventory_sales_export(monkeypatch) -> None
 @pytest.mark.parametrize(
     ("request_text", "kind", "expected_path"),
     [
-        ("查询巴西海外仓已签收单据", BrazilExportKind.ALLOCATION_SIGNED_ALL, "/artifacts/replenish/brazil_overseas/signed.xlsx"),
+        ("查询巴西海外仓已签收单据", BrazilExportKind.ALLOCATION_SIGNED_BEFORE_3M, "/artifacts/replenish/brazil_overseas/signed.xlsx"),
         ("查询巴西海外仓三个月待签收单据", BrazilExportKind.ALLOCATION_PENDING_DEFAULT_3M, "/artifacts/replenish/brazil_overseas/pending.xlsx"),
     ],
 )
@@ -54,4 +54,4 @@ def test_returns_actionable_clarification_without_calling_erp() -> None:
     with pytest.raises(workflow.BrazilOverseasRequestClarificationError) as raised:
         asyncio.run(workflow.export_brazil_overseas_from_request("查询巴西海外仓入库情况"))
     assert raised.value.code == "allocation_status_required"
-    assert str(raised.value) == "请说明要查询已签收单据，还是默认三个月内待签收单据。"
+    assert str(raised.value) == "请说明要查询三个月前已签收单据，还是默认三个月内待签收单据。"

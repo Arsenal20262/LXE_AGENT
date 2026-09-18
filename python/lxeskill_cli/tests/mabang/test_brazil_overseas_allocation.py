@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from mabang_test_helpers import _xlsx_bytes
+from mabang_test_helpers import _xls_bytes
 from services.mabang.brazil_overseas import allocation
 from services.mabang.brazil_overseas.contracts import BrazilExportKind
 from services.mabang.errors import MabangRequestError
@@ -109,14 +109,14 @@ def _form_value(form: list[tuple[str, str]], name: str) -> str:
     return values[0]
 
 
-def _setup_success(monkeypatch, *, xlsx_body: bytes) -> tuple[_FakeSession, _FakeSession]:
+def _setup_success(monkeypatch, *, xls_body: bytes) -> tuple[_FakeSession, _FakeSession]:
     erp_session = _FakeSession(
         [
-            _FakeResponse(payload={"success": True}),
-            _FakeResponse(payload={"success": True, "gourl": "https://upload.mabangerp.com/stock/orderexport/export.xlsx"}),
+            _FakeResponse(payload={"success": True, "message": '<input type="checkbox" name="orderIds[]" value="2477220"><input type="checkbox" name="orderIds[]" value="2461000">'}),
+            _FakeResponse(payload={"success": True, "gourl": "https://upload.mabangerp.com/stock/orderexport/export.xls"}),
         ]
     )
-    download_session = _FakeSession([_FakeResponse(body=xlsx_body)])
+    download_session = _FakeSession([_FakeResponse(body=xls_body)])
     monkeypatch.setattr(allocation, "erp_http_session", erp_session)
     monkeypatch.setattr(allocation, "external_http_session", download_session)
     monkeypatch.setattr(allocation, "resolve_brazil_allocation_export_auth", _fake_auth)
@@ -124,7 +124,7 @@ def _setup_success(monkeypatch, *, xlsx_body: bytes) -> tuple[_FakeSession, _Fak
 
 
 def test_exports_default_three_month_pending_allocation_with_captured_template(monkeypatch, tmp_path: Path) -> None:
-    erp_session, download_session = _setup_success(monkeypatch, xlsx_body=_xlsx_bytes([], columns=["批次编号"]))
+    erp_session, download_session = _setup_success(monkeypatch, xls_body=_xls_bytes())
 
     result = asyncio.run(
         allocation.export_brazil_overseas_allocation(
@@ -134,7 +134,7 @@ def test_exports_default_three_month_pending_allocation_with_captured_template(m
         )
     )
 
-    output_path = tmp_path / "马帮系统-3个月待签收-巴西海外仓-2026-09-18_1430.xlsx"
+    output_path = tmp_path / "马帮系统-3个月待签收-巴西海外仓-2026-09-18_1430.xls"
     assert result.xlsx_path == str(output_path)
     assert output_path.is_file()
     assert [call["method"] for call in erp_session.calls] == ["POST", "POST"]
@@ -149,6 +149,7 @@ def test_exports_default_three_month_pending_allocation_with_captured_template(m
     assert export_call["url"] == allocation.DEFAULT_ALLOCATION_EXPORT_URL
     export_form = export_call["data"]
     assert _form_value(export_form, "templateId") == "1058049"
+    assert _form_value(export_form, "orderIds") == "2477220,2461000,"
     assert _form_value(export_form, "memcacheKey") == "test-memcache-key"
     assert _form_values(export_form, "fieldlabel") == list(allocation.ALLOCATION_FIELDLABELS)
     assert _form_values(export_form, "map-name[]") == [name for name, _ in allocation.ALLOCATION_EXPORT_FIELDS]
@@ -157,23 +158,37 @@ def test_exports_default_three_month_pending_allocation_with_captured_template(m
     assert [call["method"] for call in download_session.calls] == ["GET"]
 
 
-def test_exports_all_signed_allocation_without_a_date_range(monkeypatch, tmp_path: Path) -> None:
-    erp_session, _ = _setup_success(monkeypatch, xlsx_body=_xlsx_bytes([], columns=["批次编号"]))
+def test_exports_signed_allocation_before_three_months(monkeypatch, tmp_path: Path) -> None:
+    erp_session, _ = _setup_success(monkeypatch, xls_body=_xls_bytes())
 
     result = asyncio.run(
         allocation.export_brazil_overseas_allocation(
-            BrazilExportKind.ALLOCATION_SIGNED_ALL,
+            BrazilExportKind.ALLOCATION_SIGNED_BEFORE_3M,
             output_dir=tmp_path,
             executed_at=datetime(2026, 9, 18, 6, 30, tzinfo=timezone.utc),
         )
     )
 
-    assert Path(result.xlsx_path).name == "马帮系统-已签收-巴西海外仓-2026-09-18_1430.xlsx"
+    assert Path(result.xlsx_path).name == "马帮系统-已签收-巴西海外仓-2026-09-18_1430.xls"
     search_form = erp_session.calls[0]["data"]
     assert _form_value(search_form, "allocationstatus") == "4"
+    assert _form_value(search_form, "tablebase") == "2"
     assert _form_value(search_form, "targetwarhouseId") == "1072376"
     assert _form_value(search_form, "datepickerfrom") == ""
     assert _form_value(search_form, "datepickerto") == ""
+
+
+def test_rejects_non_xls_download_without_writing_file(monkeypatch, tmp_path: Path) -> None:
+    _setup_success(monkeypatch, xls_body=b"<html>not an xls</html>")
+
+    with pytest.raises(allocation.BrazilOverseasAllocationExportError, match="未返回 XLS 文件"):
+        asyncio.run(
+            allocation.export_brazil_overseas_allocation(
+                BrazilExportKind.ALLOCATION_PENDING_DEFAULT_3M,
+                output_dir=tmp_path,
+            )
+        )
+    assert list(tmp_path.iterdir()) == []
 
 
 def test_requires_approved_allocation_kind() -> None:
@@ -181,10 +196,31 @@ def test_requires_approved_allocation_kind() -> None:
         asyncio.run(allocation.export_brazil_overseas_allocation(BrazilExportKind.INVENTORY_SALES_SNAPSHOT))
 
 
+def test_extracts_unique_order_ids_from_search_html() -> None:
+    payload = {
+        "message": '<input name="orderIds[]" value="2547022"><input name="orderIds[]" value="2533844">'
+        '<input name="orderIds[]" value="2547022">'
+    }
+    assert allocation._extract_order_ids(payload) == "2547022,2533844,"
+
+
+def test_extracts_order_ids_from_allocation_detail_links() -> None:
+    payload = {
+        "message": '<a href="/index.php?mod=warehouseallocation.editallocation&id=2547022&type=2">one</a>'
+        '<a href="/index.php?mod=warehouseallocation.editallocation&id=2533844&type=2">two</a>'
+    }
+    assert allocation._extract_order_ids(payload) == "2547022,2533844,"
+
+
+def test_stops_when_search_html_has_no_order_ids() -> None:
+    with pytest.raises(allocation.BrazilOverseasAllocationExportError, match="未返回可导出的 orderIds"):
+        allocation._extract_order_ids({"message": "<div>没有记录</div>"})
+
+
 def test_stops_when_export_response_has_no_gourl(monkeypatch, tmp_path: Path) -> None:
     erp_session = _FakeSession(
         [
-            _FakeResponse(payload={"success": True}),
+            _FakeResponse(payload={"success": True, "message": '<input name="orderIds[]" value="2477220">'}),
             _FakeResponse(payload={"success": True}),
         ]
     )
@@ -204,7 +240,7 @@ def test_stops_when_export_response_has_no_gourl(monkeypatch, tmp_path: Path) ->
 def test_rejects_unapproved_gourl_before_downloading(monkeypatch, tmp_path: Path) -> None:
     erp_session = _FakeSession(
         [
-            _FakeResponse(payload={"success": True}),
+            _FakeResponse(payload={"success": True, "message": '<input name="orderIds[]" value="2477220">'}),
             _FakeResponse(payload={"success": True, "gourl": "https://example.test/export.xlsx"}),
         ]
     )

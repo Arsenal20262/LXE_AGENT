@@ -9,14 +9,14 @@
 
 ## 本次完成内容
 
-新增 services.mabang.brazil_overseas.allocation，提供两种马帮分仓调拨原始 XLSX 导出：
+新增 services.mabang.brazil_overseas.allocation，提供两种马帮分仓调拨原始 XLS 导出：
 
 | 用户意图 | 查询状态 | 输出文件名 |
 | --- | --- | --- |
-| 已签收单据 | allocationstatus=4，目标仓 1072376，日期保持空 | 马帮系统-已签收-巴西海外仓-YYYY-MM-DD_HHmm.xlsx |
-| 三个月待签收单据 | allocationstatus=2，目标仓 1072376，日期保持空 | 马帮系统-3个月待签收-巴西海外仓-YYYY-MM-DD_HHmm.xlsx |
+| 三个月前已签收单据 | allocationstatus=4，tablebase=2，目标仓 1072376 | 马帮系统-已签收-巴西海外仓-YYYY-MM-DD_HHmm.xls |
+| 三个月待签收单据 | allocationstatus=2，目标仓 1072376，日期保持空 | 马帮系统-3个月待签收-巴西海外仓-YYYY-MM-DD_HHmm.xls |
 
-待签收的空日期值刻意保留，依赖已确认 ERP 页面默认的三个月范围；已签收也不加日期限制，因此导出所有已签收记录。
+待签收的空日期值刻意保留，依赖已确认 ERP 页面默认的三个月范围；已签收使用页面确认的“三个月前”快捷筛选 `tablebase=2`，不自行计算日期。
 
 调用顺序：
 
@@ -24,13 +24,13 @@
 2. 在 erp_http_session 中 POST warehouseallocation.searchallocation。
 3. 在同一 Session 中 POST export.doAllocationWarehouseExportFile，使用已抓包确认的 templateId=1058049、字段顺序与空 orderIds。
 4. 仅接受 success=true 且存在 gourl 的响应；下载地址限定为 https://upload.mabangerp.com。
-5. 下载内容必须是完整 XLSX ZIP 工作簿，验证成功后才原子保存。
+5. 下载内容必须是马帮返回的 OLE Compound File 格式 XLS，验证成功后才原子保存。
 
 ## 失败语义
 
 - 401：认证错误，不自动刷新或重试。
 - 403、429：立即停止，不重试。
-- 筛选/导出业务失败、非 JSON、缺少 gourl、未批准下载域名、下载失败或无效 XLSX：立即报错，不发布文件。
+- 筛选/导出业务失败、非 JSON、缺少 gourl、未批准下载域名、下载失败或无效 XLS：立即报错，不发布文件。
 
 没有新增账号、Cookie、Token、环境变量或配置文件；memcacheKey 只从现有 Cookie 的运行时上下文读取，不写日志或提交。
 
@@ -43,7 +43,7 @@
 - docs/superpowers/plans/2026-09-18-mabang-brazil-overseas-export.md
 - 本交接文档
 
-inventory.py 的改动仅将 XLSX 验证和原子写入函数公开为本包共享实现，避免调拨导出重复实现文件安全校验。
+调拨导出单独验证 OLE XLS 签名并原子写入，库存导出继续使用独立的 XLSX ZIP 校验；两类格式不混用。
 
 ## 验证
 
@@ -53,7 +53,7 @@ uv run pytest python/lxeskill_cli/tests/mabang/test_brazil_overseas_allocation.p
 
 结果：93 passed。
 
-所有测试使用伪造 Session、运行时 memcacheKey 占位值和本地 XLSX 字节；没有调用马帮生产接口。
+所有测试使用伪造 Session、运行时 memcacheKey 占位值和本地 XLS 字节；没有调用马帮生产接口。
 
 ## 下一步
 

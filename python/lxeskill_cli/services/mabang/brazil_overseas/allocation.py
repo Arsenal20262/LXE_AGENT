@@ -1,13 +1,16 @@
-"""Raw Mabang allocation XLSX exports for the Brazil overseas warehouse."""
+"""Raw Mabang allocation XLS exports for the Brazil overseas warehouse."""
 
 from __future__ import annotations
 
 import json
+import os
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
+from uuid import uuid4
 
 from shared.infra.net import erp_http_session, external_http_session
 
@@ -25,7 +28,6 @@ from .contracts import (
     DEFAULT_OUTPUT_DIR,
     BrazilExportKind,
 )
-from .inventory import validate_xlsx, write_xlsx_atomically
 from .naming import BEIJING_TZ, output_filename
 
 
@@ -38,6 +40,7 @@ PRIVATE_REFERER = "https://private.mabangerp.com/"
 APPROVED_DOWNLOAD_HOST = "upload.mabangerp.com"
 AUTH_FAILURE_STATUSES = {401}
 NO_RETRY_STATUSES = {403, 429}
+XLS_COMPOUND_SIGNATURE = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
 
 ALLOCATION_FIELDLABELS = (
     "uq102",
@@ -106,11 +109,20 @@ class BrazilOverseasAllocationExportResult:
 
 
 def _status_for_kind(kind: BrazilExportKind) -> str:
-    if kind is BrazilExportKind.ALLOCATION_SIGNED_ALL:
+    if kind is BrazilExportKind.ALLOCATION_SIGNED_BEFORE_3M:
         return "4"
     if kind is BrazilExportKind.ALLOCATION_PENDING_DEFAULT_3M:
         return "2"
-    raise ValueError("仅支持已签收或三个月待签收调拨导出")
+    raise ValueError("仅支持三个月前已签收或三个月内待签收调拨导出")
+
+
+def _tablebase_for_kind(kind: BrazilExportKind) -> str:
+    """Use only the time shortcuts confirmed in the allocation-signing page."""
+    if kind is BrazilExportKind.ALLOCATION_SIGNED_BEFORE_3M:
+        return "2"
+    if kind is BrazilExportKind.ALLOCATION_PENDING_DEFAULT_3M:
+        return ""
+    raise ValueError("仅支持三个月前已签收或三个月内待签收调拨导出")
 
 
 def _search_form_data(kind: BrazilExportKind) -> list[tuple[str, str]]:
@@ -122,7 +134,7 @@ def _search_form_data(kind: BrazilExportKind) -> list[tuple[str, str]]:
         ("targetWarehouseIdStr", ""),
         ("search-content1", "allocationCode"),
         ("search-content-text1", ""),
-        ("tablebase", ""),
+        ("tablebase", _tablebase_for_kind(kind)),
         ("Orderby", ""),
         ("startWarehouseIdStr", ""),
         ("third_in_status", "undefined"),
@@ -148,11 +160,11 @@ def _search_form_data(kind: BrazilExportKind) -> list[tuple[str, str]]:
     ]
 
 
-def _export_form_data(*, memcache_key: str) -> list[tuple[str, str]]:
+def _export_form_data(*, memcache_key: str, order_ids: str) -> list[tuple[str, str]]:
     form: list[tuple[str, str]] = [
         ("mod", "export.doAllocationWarehouseExportFile"),
         ("backUrl", ""),
-        ("orderIds", ""),
+        ("orderIds", order_ids),
     ]
     form.extend(("fieldlabel", field) for field in ALLOCATION_FIELDLABELS)
     for name, field in ALLOCATION_EXPORT_FIELDS:
@@ -183,6 +195,27 @@ def _export_form_data(*, memcache_key: str) -> list[tuple[str, str]]:
         ]
     )
     return form
+
+
+def _extract_order_ids(payload: dict[str, Any]) -> str:
+    """Extract only numeric allocation IDs rendered by the confirmed list response."""
+    sources = [payload.get("message"), payload.get("pageHtml")]
+    found: list[str] = []
+    patterns = (
+        re.compile(r"name\s*=\s*[\"']orderIds(?:\[\])?[\"'][^>]*value\s*=\s*[\"']([0-9]+)[\"']", re.IGNORECASE),
+        re.compile(r"(?:data-)?order-id\s*=\s*[\"']([0-9]+)[\"']", re.IGNORECASE),
+        re.compile(r"warehouseallocation\.editallocation[^>]*(?:\?|&|&amp;)id=([0-9]+)", re.IGNORECASE),
+    )
+    for source in sources:
+        if not isinstance(source, str):
+            continue
+        for pattern in patterns:
+            for value in pattern.findall(source):
+                if value not in found:
+                    found.append(value)
+    if not found:
+        raise BrazilOverseasAllocationExportError("分仓调拨筛选结果未返回可导出的 orderIds")
+    return ",".join(found) + ","
 
 
 async def resolve_brazil_allocation_export_auth() -> PrivateAmzExportAuth:
@@ -229,7 +262,7 @@ def _parse_gourl(payload: dict[str, Any]) -> str:
     return gourl
 
 
-async def _download_xlsx(gourl: str) -> bytes:
+async def _download_xls(gourl: str) -> bytes:
     headers = {
         "Accept": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,application/octet-stream,*/*"
     }
@@ -243,14 +276,32 @@ async def _download_xlsx(gourl: str) -> bytes:
     if status_code >= 400:
         message = body.decode("utf-8", errors="replace")[:300] if body else "empty response"
         raise MabangRequestError(f"分仓调拨导出文件下载失败(status={status_code}): {message}")
-    validate_xlsx(body)
+    validate_xls(body)
     return body
+
+
+def validate_xls(body: bytes) -> None:
+    """Reject HTML/empty responses while accepting the ERP's legacy XLS file."""
+    if not body.startswith(XLS_COMPOUND_SIGNATURE):
+        preview = body[:120].decode("utf-8", errors="replace").strip()
+        raise BrazilOverseasAllocationExportError(
+            f"巴西海外仓分仓调拨导出未返回 XLS 文件: {preview or 'unknown response'}"
+        )
+
+
+def write_xls_atomically(target_path: Path, body: bytes) -> None:
+    temporary_path = target_path.with_name(f".{target_path.name}.{uuid4().hex}.tmp")
+    try:
+        temporary_path.write_bytes(body)
+        os.replace(temporary_path, target_path)
+    finally:
+        temporary_path.unlink(missing_ok=True)
 
 
 def _output_path(kind: BrazilExportKind, output_dir: str | Path | None, *, executed_at: datetime) -> Path:
     directory = Path(output_dir) if output_dir is not None else DEFAULT_OUTPUT_DIR
     directory.mkdir(parents=True, exist_ok=True)
-    return directory / output_filename(kind, executed_at=executed_at)
+    return directory / output_filename(kind, executed_at=executed_at, extension="xls")
 
 
 async def export_brazil_overseas_allocation(
@@ -267,17 +318,18 @@ async def export_brazil_overseas_allocation(
         data=_search_form_data(kind),
         headers=request_headers(auth.private_amz_cookie_header, origin=PRIVATE_AMZ_ORIGIN, referer=PRIVATE_AMZ_REFERER),
     ) as response:
-        await _read_json_response(response, action="巴西海外仓分仓调拨筛选")
+        search_response = await _read_json_response(response, action="巴西海外仓分仓调拨筛选")
+    order_ids = _extract_order_ids(search_response)
     async with erp_http_session.post(
         DEFAULT_ALLOCATION_EXPORT_URL,
-        data=_export_form_data(memcache_key=auth.memcache_key),
+        data=_export_form_data(memcache_key=auth.memcache_key, order_ids=order_ids),
         headers=request_headers(auth.private_cookie_header, origin=PRIVATE_ORIGIN, referer=PRIVATE_REFERER),
     ) as response:
         export_response = await _read_json_response(response, action="巴西海外仓分仓调拨导出")
-    body = await _download_xlsx(_parse_gourl(export_response))
+    body = await _download_xls(_parse_gourl(export_response))
     run_at = executed_at or datetime.now(BEIJING_TZ)
     target_path = _output_path(kind, output_dir, executed_at=run_at)
-    write_xlsx_atomically(target_path, body)
+    write_xls_atomically(target_path, body)
     return BrazilOverseasAllocationExportResult(kind=kind, xlsx_path=str(target_path))
 
 
@@ -287,6 +339,8 @@ __all__ = [
     "BrazilOverseasAllocationAuthError",
     "BrazilOverseasAllocationExportError",
     "BrazilOverseasAllocationExportResult",
+    "validate_xls",
+    "write_xls_atomically",
     "export_brazil_overseas_allocation",
     "resolve_brazil_allocation_export_auth",
 ]

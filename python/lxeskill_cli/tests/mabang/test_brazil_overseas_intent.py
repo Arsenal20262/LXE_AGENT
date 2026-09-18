@@ -30,8 +30,8 @@ def test_sales_and_inventory_requests_share_the_raw_inventory_export(request_tex
 @pytest.mark.parametrize(
     ("request_text", "expected_kind"),
     [
-        ("查询巴西海外仓已签收的单据", BrazilExportKind.ALLOCATION_SIGNED_ALL),
-        ("导出巴西海外仓所有已签收单据", BrazilExportKind.ALLOCATION_SIGNED_ALL),
+        ("查询巴西海外仓已签收的单据", BrazilExportKind.ALLOCATION_SIGNED_BEFORE_3M),
+        ("导出巴西海外仓三个月前已签收单据", BrazilExportKind.ALLOCATION_SIGNED_BEFORE_3M),
         ("查询巴西海外仓三个月内待签收的单据", BrazilExportKind.ALLOCATION_PENDING_DEFAULT_3M),
         ("导出巴西海外仓待签收单据", BrazilExportKind.ALLOCATION_PENDING_DEFAULT_3M),
     ],
@@ -59,7 +59,7 @@ def test_ambiguous_allocation_requests_require_a_status_choice(request_text: str
             "马帮系统-库存-巴西海外仓-2026-09-18_1430.xlsx",
         ),
         (
-            BrazilExportKind.ALLOCATION_SIGNED_ALL,
+            BrazilExportKind.ALLOCATION_SIGNED_BEFORE_3M,
             "马帮系统-已签收-巴西海外仓-2026-09-18_1430.xlsx",
         ),
         (

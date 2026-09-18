@@ -39,17 +39,17 @@ def normalize_brazil_export_intent(request_text: str) -> BrazilExportPlan | Braz
     if _has_any(text, _PENDING_TERMS):
         return BrazilExportPlan(BrazilExportKind.ALLOCATION_PENDING_DEFAULT_3M)
     if _has_any(text, _SIGNED_TERMS):
-        return BrazilExportPlan(BrazilExportKind.ALLOCATION_SIGNED_ALL)
+        return BrazilExportPlan(BrazilExportKind.ALLOCATION_SIGNED_BEFORE_3M)
     if _has_any(text, _SALES_TERMS) or _has_any(text, _INVENTORY_TERMS):
         return BrazilExportPlan(BrazilExportKind.INVENTORY_SALES_SNAPSHOT)
     if _has_any(text, _ALLOCATION_TERMS):
         return BrazilIntentClarification(
             code="allocation_status_required",
-            message="请说明要查询已签收单据，还是默认三个月内待签收单据。",
+            message="请说明要查询三个月前已签收单据，还是默认三个月内待签收单据。",
         )
     return BrazilIntentClarification(
         code="brazil_export_kind_required",
-        message="请说明查询巴西海外仓库存/销量、已签收单据或待签收单据。",
+        message="请说明查询巴西海外仓库存/销量、三个月前已签收单据或待签收单据。",
     )
 
 

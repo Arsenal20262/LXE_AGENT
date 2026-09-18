@@ -56,7 +56,7 @@ Worktree 从 pool-3 迁到 pool-4 后，发现本地 .venv/bin/pytest 的 sheban
 
 实现 services.mabang.brazil_overseas.allocation：
 
-- 已签收：allocationstatus=4，巴西目标仓，全部已签收。
+- 已签收：allocationstatus=4，tablebase=2，巴西目标仓，即页面“三个月前”快捷筛选。
 - 待签收：allocationstatus=2，巴西目标仓，保留空日期以使用页面默认三个月范围。
 - 使用已确认导出模板和运行时 Cookie 中的 memcacheKey，验证 gourl 下载的 XLSX。
 
