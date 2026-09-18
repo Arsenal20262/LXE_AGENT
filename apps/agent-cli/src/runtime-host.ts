@@ -32,6 +32,7 @@ import {
   OfficialMcpConnector,
   OneShotCliRunner,
   ZhihuiTmsConfirmationRouter,
+  ProviderZhihuiParameterTranslator,
   registerCodingTools,
   registerToolSearch,
   registerUserQuestionTool,
@@ -294,6 +295,7 @@ export function createAgentRuntimeHost(
     tools,
     ...(lxeSkillRunner ? { zhihuiConfirmation: {
       router: new ZhihuiTmsConfirmationRouter(lxeSkillRunner),
+      translator: new ProviderZhihuiParameterTranslator({ turn: request => providerManager.acquire().provider.turn(request) }),
       ask: async (question, context) => {
         const answers = await questions.askForTurn([question], context);
         return answers[0]?.selected[0] ?? "";

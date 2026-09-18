@@ -1,27 +1,12 @@
 import type { UserQuestion } from "@lxe/protocol/user-questions";
 import { safeToolFailureObservation } from "../tooling/registry";
 import type { CliTerminalResult, OneShotCliRunnerPort } from "../tooling/one-shot-cli";
+import type { ZhihuiProductRequest } from "./zhihui-parameters";
 
 const CONFIRM = "确认执行导出";
 const CANCEL = "取消";
 const COMMAND = ["tms", "philippines", "products-export"] as const;
 const OWNER_SKILL = "zhihui-tms-product-export";
-
-/** Narrow route: only the supported Zhihui product export enters this workflow. */
-export function matchZhihuiProductRequest(request: string, previousUserText = ""): string | undefined {
-  const text = request.trim();
-  if (!text || text.length > 2_000) return undefined;
-  if (/(雅仓|马帮|紫鸟|订单|物流|发货|采购|财务)/u.test(text)) return undefined;
-  if (/(历史.{0,8}(销量|库存|报表)|(销量|库存).{0,8}历史)/u.test(text)) return undefined;
-  if (!/(商品|sku|销量|库存|入库|上架)/iu.test(text)) return undefined;
-  const explicit = /(智汇|tms)/iu.test(text);
-  const contextual = !/(菲律宾|ph)/iu.test(text)
-    && /(智汇|tms)/iu.test(previousUserText)
-    && /(商品|sku|销量|库存|入库|上架)/iu.test(previousUserText)
-    && !/(雅仓|马帮|紫鸟|订单|物流|发货|采购|财务)/u.test(previousUserText)
-    && !/(历史.{0,8}(销量|库存|报表)|(销量|库存).{0,8}历史)/u.test(previousUserText);
-  return explicit || contextual ? text : undefined;
-}
 
 export interface ZhihuiConfirmationContext {
   signal: AbortSignal;
@@ -46,7 +31,7 @@ const observedError = (result: CliTerminalResult): string => {
 export class ZhihuiTmsConfirmationRouter {
   constructor(private readonly runner: Pick<OneShotCliRunnerPort, "execute">) {}
 
-  async handle(request: string, context: ZhihuiConfirmationContext): Promise<ZhihuiRouteResult> {
+  async handle(request: string, _parameters: ZhihuiProductRequest, context: ZhihuiConfirmationContext): Promise<ZhihuiRouteResult> {
     const args = (action: "preview" | "execute") => [...COMMAND, "--action", action, "--request", request];
     if (!context.skillNames.includes(OWNER_SKILL)) {
       return { status: "error", reply: "智汇 TMS Skill 当前未获授权，无法执行导出。", files: [] };

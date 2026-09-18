@@ -33,7 +33,8 @@ import {
   type ContextCompactionResult,
 } from "./context";
 import { FinalAnswerStreamer } from "./final-answer-streamer";
-import { matchZhihuiProductRequest, type ZhihuiTmsConfirmationRouter } from "../operations/zhihui-confirmation";
+import type { ZhihuiTmsConfirmationRouter } from "../operations/zhihui-confirmation";
+import type { ZhihuiParameterTranslator } from "../operations/zhihui-parameter-translator";
 import { zhihuiProgressMessage } from "../tooling/coding/zhihui-progress";
 import type { UserQuestion } from "@lxe/protocol/user-questions";
 import {
@@ -112,6 +113,7 @@ export interface TypeScriptAgentRuntimeOptions {
   }>;
   zhihuiConfirmation?: {
     router: ZhihuiTmsConfirmationRouter;
+    translator: ZhihuiParameterTranslator;
     ask(question: UserQuestion, context: { sessionId: string; turnId: string; toolCallId: string; signal: AbortSignal }): Promise<string>;
   };
 }
@@ -246,14 +248,9 @@ export class TypeScriptAgentRuntime implements AgentRuntime {
     if (!sameWorkspaceContext(session.workspace, workspaceContextFrom(job.workspace))) {
       throw new Error(`job workspace does not match session: ${job.session_id}`);
     }
-    const history = await this.options.store.loadMessages(job.session_id);
-    const previous = [...history].reverse().find(message => message.role === "user" && !message.environmentContext);
-    const previousText = previous && typeof previous.content === "string" ? previous.content
-      : previous?.content && Array.isArray(previous.content)
-        ? previous.content.filter((item): item is { type: "text"; text: string } => item.type === "text" && typeof item.text === "string")
-          .map(item => item.text).join(" ") : "";
-    const request = matchZhihuiProductRequest(job.user_input, previousText);
-    if (!request) return undefined;
+    const request = job.user_input.trim();
+    const parameters = await this.options.zhihuiConfirmation.translator.translate(request, handle.signal);
+    if (!parameters) return undefined;
     const workspace = assertWorkspaceAvailable(session.workspace);
     const workspaceLease = await this.options.workspaceInstances?.acquire(workspace);
     const skillNames = workspaceLease?.snapshot.skills.names
@@ -291,7 +288,7 @@ export class TypeScriptAgentRuntime implements AgentRuntime {
         session_id: job.session_id, turn_id: job.job_id, response_route_id: job.response_route_id,
         operation: "start", emit_id: randomUUID().replaceAll("-", ""),
       }, "start");
-      const routed = await this.options.zhihuiConfirmation.router.handle(request, {
+      const routed = await this.options.zhihuiConfirmation.router.handle(request, parameters, {
         signal: handle.signal,
         skillNames,
         onPreview: async text => {

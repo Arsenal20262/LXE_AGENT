@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { matchZhihuiProductRequest, ZhihuiTmsConfirmationRouter } from "../../src/operations/zhihui-confirmation";
+import { ZhihuiTmsConfirmationRouter } from "../../src/operations/zhihui-confirmation";
+import { parseZhihuiProductRequest } from "../../src/operations/zhihui-parameters";
 import type { CliTerminalResult } from "../../src/tooling/one-shot-cli";
 
 const skillNames = ["zhihui-tms-product-export"];
+const parameters = parseZhihuiProductRequest({ platform: "zhihui_tms", warehouse: "PH", intent: "product_export", fields: ["sales"] })!;
 
 const result = (action: string, ok = true): CliTerminalResult => ({
   protocol_version: "1", type: "result", command: "tms philippines products-export", ok,
@@ -13,28 +15,13 @@ const result = (action: string, ok = true): CliTerminalResult => ({
 });
 
 describe("Zhihui confirmation router", () => {
-  test.each([
-    ["查询智汇菲律宾仓销量", ""], ["查智汇库存", ""], ["查询智汇SKU", ""],
-    ["查询智汇入库时间", ""], ["查询销量", "上轮查询智汇菲律宾入库时间"],
-  ])("matches supported product wording: %s", (request, previous) => {
-    expect(matchZhihuiProductRequest(request, previous)).toBe(request);
-  });
-
-  test.each([
-    ["查询销量", ""], ["查询马帮销量", "查询智汇库存"], ["查询智汇订单", ""],
-    ["查询智汇历史销量报表", ""], ["查询雅仓库存", ""],
-    ["查询销量", "查询智汇订单"],
-  ])("does not hijack unrelated wording: %s", (request, previous) => {
-    expect(matchZhihuiProductRequest(request, previous)).toBeUndefined();
-  });
-
   test.each(["确认执行导出", "取消", ""])("only an explicit confirmation executes: %s", async selected => {
     const calls: string[][] = [];
     const router = new ZhihuiTmsConfirmationRouter({
       execute: async args => { calls.push(args); return result(args[args.indexOf("--action") + 1]!); },
     });
     const questions: unknown[] = [];
-    const response = await router.handle("查询智汇销量", {
+    const response = await router.handle("查询智汇菲律宾销量", parameters, {
       signal: new AbortController().signal,
       skillNames,
       ask: async question => { questions.push(question); return selected; },
@@ -51,7 +38,7 @@ describe("Zhihui confirmation router", () => {
     const router = new ZhihuiTmsConfirmationRouter({ execute: async () => ({
       ...result("preview", false), error: { code: "fixture", message: "真实预览错误" },
     }) });
-    const response = await router.handle("智汇商品", {
+    const response = await router.handle("智汇商品", parameters, {
       signal: new AbortController().signal,
       skillNames,
       ask: async () => { questions++; return "确认执行导出"; },
@@ -67,7 +54,7 @@ describe("Zhihui confirmation router", () => {
       calls.push(args[args.indexOf("--action") + 1]!);
       return { ...result("preview"), data: { ...result("preview").data, warehouse: "OTHER" } };
     } });
-    const response = await router.handle("查询智汇商品", {
+    const response = await router.handle("查询智汇商品", parameters, {
       signal: new AbortController().signal,
       skillNames,
       ask: async () => { questions++; return "确认执行导出"; },
@@ -88,7 +75,7 @@ describe("Zhihui confirmation router", () => {
         error: { code: "tms_blocked", message: "HTTP 429; token=secret" },
       };
     } });
-    const response = await router.handle("查询智汇商品", {
+    const response = await router.handle("查询智汇商品", parameters, {
       signal: new AbortController().signal,
       skillNames,
       ask: async () => "确认执行导出",
@@ -108,7 +95,7 @@ describe("Zhihui confirmation router", () => {
       return result("preview");
     } });
 
-    const response = await router.handle("查询智汇商品", {
+    const response = await router.handle("查询智汇商品", parameters, {
       signal: new AbortController().signal,
       skillNames: ["replenishment-store-resolve"],
       ask: async () => "确认执行导出",

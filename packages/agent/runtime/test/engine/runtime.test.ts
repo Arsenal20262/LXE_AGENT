@@ -15,6 +15,7 @@ import {
 import { ToolExecutionError, ToolRegistry } from "../../src/tooling/registry";
 import { UserQuestionService, registerUserQuestionTool } from "../../src/tooling/user-questions";
 import { ZhihuiTmsConfirmationRouter } from "../../src/operations/zhihui-confirmation";
+import type { ZhihuiProductRequest } from "../../src/operations/zhihui-parameters";
 import { WorkspaceSearchService } from "../../src/tooling/workspace-search";
 import type {
   RuntimeHandle,
@@ -56,7 +57,7 @@ describe("Desktop Zhihui confirmation route", () => {
     data: { action, warehouse: "PH", export_kind: "philippines_product_full_export",
       date_label: "20260917", artifacts: [], historical_metrics_available: false }, files: [],
   });
-  const desktopJob = (user_input = "查询智汇销量") => job({
+  const desktopJob = (user_input = "查询智汇菲律宾销量") => job({
     user_input, source: { platform: "desktop" },
     // Gateway adds submitted desktop text as a content block even without attachments.
     user_content_blocks: [{ type: "text", text: user_input }],
@@ -66,6 +67,10 @@ describe("Desktop Zhihui confirmation route", () => {
     prompt: "skills: zhihui-tms-product-export",
     modules: { "zhihui-tms-product-export": "amazon_replenish" },
   });
+  const zhihuiParameters: ZhihuiProductRequest = {
+    platform: "zhihui_tms", warehouse: "PH", intent: "product_export", fields: ["sales"],
+  };
+  const zhihuiTranslator = { translate: async () => zhihuiParameters };
 
   test.each(["确认执行导出", "取消", ""])("preview waits for the card and only confirmation executes: %s", async choice => {
     const store = new MemoryStore();
@@ -83,6 +88,7 @@ describe("Desktop Zhihui confirmation route", () => {
           calls.push(action);
           return cliResult(action);
         } }),
+        translator: zhihuiTranslator,
         ask: async (question, context) => {
           const answers = await questions.askForTurn([question], context);
           return answers[0]?.selected[0] ?? "";
@@ -124,6 +130,7 @@ describe("Desktop Zhihui confirmation route", () => {
           calls.push(action);
           return cliResult(action);
         } }),
+        translator: zhihuiTranslator,
         ask: async (question, context) => (await questions.askForTurn([question], context))[0]?.selected[0] ?? "",
       },
     });
@@ -160,6 +167,7 @@ describe("Desktop Zhihui confirmation route", () => {
             error: { code: "blocked", message: "HTTP 429" },
           };
         } }),
+        translator: zhihuiTranslator,
         ask: async () => "确认执行导出",
       },
     });
@@ -186,6 +194,7 @@ describe("Desktop Zhihui confirmation route", () => {
       provider: { summarize, turn: async () => { modelCalls++; return messageFixture({ content: [{ type: "text", text: "正常回答" }] }); } },
       emitter: { emit: async () => {}, typing: async () => {} },
       zhihuiConfirmation: { router: new ZhihuiTmsConfirmationRouter({ execute: async () => { throw new Error("unexpected CLI"); } }),
+        translator: { translate: async () => undefined },
         ask: async () => { throw new Error("unexpected question"); } },
     });
     await runtime.start();

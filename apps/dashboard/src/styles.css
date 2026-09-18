@@ -1222,12 +1222,31 @@ button {
 
 .desktop-integration-production-toggle {
   display: flex !important;
-  width: min(100%, 390px);
+  width: 100%;
   min-height: 32px;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   cursor: pointer;
+}
+
+.desktop-integration-production-toggle > span {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.desktop-integration-production-toggle strong {
+  color: var(--text-soft);
+  font-size: 0.75rem;
+  font-weight: 650;
+}
+
+.desktop-integration-production-toggle small {
+  color: var(--muted);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  line-height: 1.45;
 }
 
 .desktop-settings-content .desktop-integration-production-toggle input {

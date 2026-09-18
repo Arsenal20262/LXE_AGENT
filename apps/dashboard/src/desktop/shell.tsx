@@ -864,7 +864,10 @@ function DesktopSettingsForm({
             </label>
           </div>
           <label className="desktop-integration-production-toggle">
-            <span>{t.desktop.zhihui_tms.productionEnable}</span>
+            <span>
+              <strong>{t.desktop.zhihui_tms.productionEnable}</strong>
+              <small>{t.desktop.zhihui_tms.productionEnableHint}</small>
+            </span>
             <input
               aria-label={t.desktop.zhihui_tms.productionEnable}
               checked={form.zhihuiTmsProductionEnabled}

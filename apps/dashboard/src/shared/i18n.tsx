@@ -791,7 +791,8 @@ export const ZH_TEXT = {
       account: "智汇 TMS 账号",
       password: "智汇 TMS 密码",
       passwordPlaceholder: "输入智汇 TMS 密码",
-      productionEnable: "启用智汇 TMS 生产 API 调用"
+      productionEnable: "启用智汇 TMS 生产 API 调用",
+      productionEnableHint: "仅在账号配置完成且确认需要访问生产接口时开启"
     },
     feishu: {
       description: "App ID 与 App Secret 必须成对填写；整组留空即可跳过。",
@@ -1634,7 +1635,8 @@ export const UI_TEXT: Record<Language, UiText> = {
         account: "Zhihui TMS account",
         password: "Zhihui TMS password",
         passwordPlaceholder: "Enter the Zhihui TMS password",
-        productionEnable: "Enable Zhihui TMS production API calls"
+        productionEnable: "Enable Zhihui TMS production API calls",
+        productionEnableHint: "Enable only after the account is configured and production access is confirmed"
       },
       feishu: {
         description: "App ID and App Secret must be filled in together; leave the whole group blank to skip.",
