@@ -14,7 +14,7 @@ from .contracts import (
     INVENTORY_SALES_SOURCE_NOTE,
     BrazilExportKind,
 )
-from .intent import BrazilIntentClarification, normalize_brazil_export_intent
+from .intent import BrazilIntentClarification, validate_brazil_export_parameters
 from .inventory import export_brazil_overseas_inventory_sales_snapshot
 
 
@@ -50,9 +50,9 @@ def _raise_clarification(clarification: BrazilIntentClarification) -> NoReturn:
     raise BrazilOverseasRequestClarificationError(clarification)
 
 
-async def export_brazil_overseas_from_request(request_text: str) -> BrazilOverseasWorkflowResult:
-    """Run exactly one approved Brazil source-data export for a natural-language request."""
-    resolved = normalize_brazil_export_intent(request_text)
+async def export_brazil_overseas(*, warehouse: str, export_kind: str) -> BrazilOverseasWorkflowResult:
+    """Run exactly one approved export from model-resolved structured parameters."""
+    resolved = validate_brazil_export_parameters(warehouse=warehouse, export_kind=export_kind)
     if isinstance(resolved, BrazilIntentClarification):
         _raise_clarification(resolved)
 
@@ -75,5 +75,5 @@ async def export_brazil_overseas_from_request(request_text: str) -> BrazilOverse
 __all__ = [
     "BrazilOverseasRequestClarificationError",
     "BrazilOverseasWorkflowResult",
-    "export_brazil_overseas_from_request",
+    "export_brazil_overseas",
 ]

@@ -10,11 +10,20 @@ commands:
 
 ## 使用
 
-当用户明确说明巴西海外仓并请求下列任一数据时，执行一次：
+模型先从用户原话解析出结构化参数，再执行一次。Python CLI 不接收自然语言，也不负责猜测用户意图：
 
 ~~~text
-lxeskill replenish brazil-overseas export --request-text "<用户完整请求>"
+lxeskill replenish brazil-overseas export --warehouse brazil_overseas --export-kind <枚举值>
 ~~~
+
+参数只能使用：
+
+- `warehouse=brazil_overseas`：用户必须明确提到巴西海外仓。
+- `export_kind=inventory_sales_snapshot`：库存、库存快照或销量。
+- `export_kind=allocation_signed_before_3m`：三个月前已签收调拨单。
+- `export_kind=allocation_pending_default_3m`：默认三个月内待签收调拨单。
+
+如果仓库不是巴西海外仓，或已签收/待签收状态不明确，先向用户追问，不调用 CLI。
 
 成功后发送 terminal files 中唯一的原始工作簿。库存/销量是 XLSX；已签收和待签收调拨单是马帮返回的 XLS。不要改名、合并或加工原始文件。
 

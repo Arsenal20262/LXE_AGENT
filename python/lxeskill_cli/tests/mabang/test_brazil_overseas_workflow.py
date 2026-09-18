@@ -10,7 +10,7 @@ from services.mabang.brazil_overseas.contracts import BrazilExportKind
 from services.mabang.brazil_overseas.inventory import BrazilOverseasInventoryExportResult
 
 
-def test_routes_sales_request_to_one_inventory_sales_export(monkeypatch) -> None:
+def test_routes_structured_inventory_parameters(monkeypatch) -> None:
     calls: list[dict] = []
 
     async def fake_inventory_export(**kwargs):
@@ -19,7 +19,7 @@ def test_routes_sales_request_to_one_inventory_sales_export(monkeypatch) -> None
 
     monkeypatch.setattr(workflow, "export_brazil_overseas_inventory_sales_snapshot", fake_inventory_export)
 
-    result = asyncio.run(workflow.export_brazil_overseas_from_request("查询巴西海外仓最近三个月销量"))
+    result = asyncio.run(workflow.export_brazil_overseas(warehouse="brazil_overseas", export_kind=BrazilExportKind.INVENTORY_SALES_SNAPSHOT.value))
 
     assert result.kind is BrazilExportKind.INVENTORY_SALES_SNAPSHOT
     assert result.xlsx_path == "/artifacts/replenish/brazil_overseas/inventory.xlsx"
@@ -28,13 +28,13 @@ def test_routes_sales_request_to_one_inventory_sales_export(monkeypatch) -> None
 
 
 @pytest.mark.parametrize(
-    ("request_text", "kind", "expected_path"),
+    ("kind", "expected_path"),
     [
-        ("查询巴西海外仓已签收单据", BrazilExportKind.ALLOCATION_SIGNED_BEFORE_3M, "/artifacts/replenish/brazil_overseas/signed.xlsx"),
-        ("查询巴西海外仓三个月待签收单据", BrazilExportKind.ALLOCATION_PENDING_DEFAULT_3M, "/artifacts/replenish/brazil_overseas/pending.xlsx"),
+        (BrazilExportKind.ALLOCATION_SIGNED_BEFORE_3M, "/artifacts/replenish/brazil_overseas/signed.xlsx"),
+        (BrazilExportKind.ALLOCATION_PENDING_DEFAULT_3M, "/artifacts/replenish/brazil_overseas/pending.xlsx"),
     ],
 )
-def test_routes_allocation_request_to_its_matching_export(monkeypatch, request_text, kind, expected_path) -> None:
+def test_routes_allocation_parameters_to_matching_export(monkeypatch, kind, expected_path) -> None:
     calls: list[tuple[BrazilExportKind, dict]] = []
 
     async def fake_allocation_export(actual_kind: BrazilExportKind, **kwargs):
@@ -43,7 +43,7 @@ def test_routes_allocation_request_to_its_matching_export(monkeypatch, request_t
 
     monkeypatch.setattr(workflow, "export_brazil_overseas_allocation", fake_allocation_export)
 
-    result = asyncio.run(workflow.export_brazil_overseas_from_request(request_text))
+    result = asyncio.run(workflow.export_brazil_overseas(warehouse="brazil_overseas", export_kind=kind.value))
 
     assert result.kind is kind
     assert result.xlsx_path == expected_path
@@ -52,6 +52,5 @@ def test_routes_allocation_request_to_its_matching_export(monkeypatch, request_t
 
 def test_returns_actionable_clarification_without_calling_erp() -> None:
     with pytest.raises(workflow.BrazilOverseasRequestClarificationError) as raised:
-        asyncio.run(workflow.export_brazil_overseas_from_request("查询巴西海外仓入库情况"))
-    assert raised.value.code == "allocation_status_required"
-    assert str(raised.value) == "请说明要查询三个月前已签收单据，还是默认三个月内待签收单据。"
+        asyncio.run(workflow.export_brazil_overseas(warehouse="brazil_overseas", export_kind="unknown"))
+    assert raised.value.code == "brazil_export_kind_required"

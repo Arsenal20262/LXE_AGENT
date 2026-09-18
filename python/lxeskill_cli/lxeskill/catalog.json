@@ -358,7 +358,7 @@
       "legacy_aliases": ["mabang_brazil_overseas_export"],
       "visibility": "business", "session_mode": "none",
       "owner_skills": ["replenishment-brazil-overseas-export"], "artifact_paths": [{"field": "xlsx_path", "role": "deliverable"}], "timeout_ms": 300000, "exposed": true,
-      "input_schema": {"type": "object", "properties": {"request_text": {"type": "string", "minLength": 1, "description": "完整自然语言请求，必须明确巴西海外仓及库存/销量、已签收或待签收范围。"}}, "required": ["request_text"], "additionalProperties": false}
+      "input_schema": {"type": "object", "properties": {"warehouse": {"type": "string", "enum": ["brazil_overseas"], "description": "模型解析后的仓库参数，必须是巴西海外仓。"}, "export_kind": {"type": "string", "enum": ["inventory_sales_snapshot", "allocation_signed_before_3m", "allocation_pending_default_3m"], "description": "模型解析后的导出类型。"}}, "required": ["warehouse", "export_kind"], "additionalProperties": false}
     },
     {
       "name": "mabang_analyze_store_msku_sales", "module": "services.agent_cli.mabang.analyze_store_msku_sales",

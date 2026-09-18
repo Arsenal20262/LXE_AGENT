@@ -3,52 +3,30 @@ from datetime import datetime, timezone
 import pytest
 
 from services.mabang.brazil_overseas.contracts import BrazilExportKind, DEFAULT_OUTPUT_DIR
-from services.mabang.brazil_overseas.intent import BrazilIntentClarification, normalize_brazil_export_intent
+from services.mabang.brazil_overseas.intent import BrazilIntentClarification, validate_brazil_export_parameters
 from services.mabang.brazil_overseas.naming import output_filename
 
 
-@pytest.mark.parametrize(
-    "request_text",
-    [
-        "查询一下海外巴西仓最近一个月的销量",
-        "巴西海外仓近三个月销量",
-        "巴西海外仓7天销量",
-        "巴西海外仓日度90天销量",
-        "查一下巴西海外仓库存",
-        "巴西仓库存快照",
-    ],
-)
-def test_sales_and_inventory_requests_share_the_raw_inventory_export(request_text: str) -> None:
-    plan = normalize_brazil_export_intent(request_text)
+@pytest.mark.parametrize("kind", list(BrazilExportKind))
+def test_validates_model_resolved_parameters(kind: BrazilExportKind) -> None:
+    plan = validate_brazil_export_parameters(warehouse="brazil_overseas", export_kind=kind.value)
 
-    assert plan.kind is BrazilExportKind.INVENTORY_SALES_SNAPSHOT
+    assert plan.kind is kind
     assert plan.warehouse_id == "1072376"
     assert plan.warehouse_label == "巴西海外仓"
     assert plan.source_data_note == "平台原始库存文件仅含7/28/42天累计销量"
 
 
-@pytest.mark.parametrize(
-    ("request_text", "expected_kind"),
-    [
-        ("查询巴西海外仓已签收的单据", BrazilExportKind.ALLOCATION_SIGNED_BEFORE_3M),
-        ("导出巴西海外仓三个月前已签收单据", BrazilExportKind.ALLOCATION_SIGNED_BEFORE_3M),
-        ("查询巴西海外仓三个月内待签收的单据", BrazilExportKind.ALLOCATION_PENDING_DEFAULT_3M),
-        ("导出巴西海外仓待签收单据", BrazilExportKind.ALLOCATION_PENDING_DEFAULT_3M),
-    ],
-)
-def test_allocation_requests_resolve_to_fixed_export_kinds(
-    request_text: str,
-    expected_kind: BrazilExportKind,
-) -> None:
-    assert normalize_brazil_export_intent(request_text).kind is expected_kind
-
-
-@pytest.mark.parametrize("request_text", ["查询巴西海外仓入库单据", "查询巴西海外仓调拨单据"])
-def test_ambiguous_allocation_requests_require_a_status_choice(request_text: str) -> None:
-    result = normalize_brazil_export_intent(request_text)
-
+def test_rejects_non_brazil_warehouse() -> None:
+    result = validate_brazil_export_parameters(warehouse="other", export_kind=BrazilExportKind.INVENTORY_SALES_SNAPSHOT.value)
     assert isinstance(result, BrazilIntentClarification)
-    assert result.code == "allocation_status_required"
+    assert result.code == "brazil_warehouse_required"
+
+
+def test_rejects_unknown_export_kind() -> None:
+    result = validate_brazil_export_parameters(warehouse="brazil_overseas", export_kind="ambiguous")
+    assert isinstance(result, BrazilIntentClarification)
+    assert result.code == "brazil_export_kind_required"
 
 
 @pytest.mark.parametrize(
