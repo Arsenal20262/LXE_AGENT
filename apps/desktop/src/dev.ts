@@ -24,7 +24,7 @@ while (Date.now() < deadline) {
   await Bun.sleep(100);
 }
 
-const electron = Bun.spawn(["bunx", "electron", "."], {
+const electron = Bun.spawn([process.execPath, "x", "electron", "."], {
   cwd: new URL("..", import.meta.url).pathname,
   stdout: "inherit",
   stderr: "inherit",

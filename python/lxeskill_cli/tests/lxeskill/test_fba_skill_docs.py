@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import yaml
+
 from lxeskill.business import load_catalog
 from shared.repository import repository_root
 
@@ -13,8 +15,8 @@ def _skill_text(name: str) -> str:
 
 def test_repository_skill_inventory_distinguishes_top_level_and_nested_manifests() -> None:
     skill_root = PROJECT_ROOT / "skills"
-    assert len(list(skill_root.glob("*/SKILL.md"))) == 30
-    assert len(list(skill_root.rglob("SKILL.md"))) == 57
+    assert len(list(skill_root.glob("*/SKILL.md"))) == 31
+    assert len(list(skill_root.rglob("SKILL.md"))) == 58
     assert not (skill_root / "feishu-im-read" / "SKILL.md").exists()
     assert (skill_root / "larksuite-cli" / "lark-im" / "SKILL.md").exists()
 
@@ -30,6 +32,74 @@ def test_shangman_goods_export_is_the_single_owner_with_formal_permission_domain
     assert 'platform: "智慧"' in text
     assert 'country: "印尼"' in text
     assert "--params" in text
+
+
+def test_yacang_has_one_discoverable_skill_and_one_natural_language_command() -> None:
+    catalog = load_catalog()
+    manifests = []
+    for path in (PROJECT_ROOT / "skills").rglob("SKILL.md"):
+        frontmatter = path.read_text(encoding="utf-8").split("---", 2)[1]
+        metadata = yaml.safe_load(frontmatter) or {}
+        if metadata.get("name", "").startswith("yacang-"):
+            manifests.append((metadata["name"], metadata.get("type"), path))
+
+    assert [(name, skill_type, path.parent.name) for name, skill_type, path in manifests] == [
+        ("yacang-export-workflow-map", "amazon_replenish", "yacang-export-workflow-map")
+    ]
+
+    router = _skill_text("yacang-export-workflow-map")
+    workflow = catalog["yacang_export_workflow"]
+    assert workflow["command_path"] == ["yacang", "export", "run"]
+    assert workflow["owner_skills"] == ["yacang-export-workflow-map"]
+    assert workflow["exposed"] is True
+    assert workflow["input_schema"]["required"] == [
+        "data_type_intent",
+        "warehouse_intent",
+        "created_date_filter",
+        "inventory_snapshot_intent",
+    ]
+    assert set(workflow["input_schema"]["properties"]) == {
+        "request_text",
+        "data_type_intent",
+        "warehouse_intent",
+        "created_date_filter",
+        "inventory_snapshot_intent",
+    }
+    assert workflow["input_schema"]["additionalProperties"] is False
+    assert workflow["input_schema"]["properties"]["data_type_intent"]["oneOf"]
+    data_type_values = workflow["input_schema"]["properties"]["data_type_intent"]["oneOf"][2][
+        "properties"
+    ]["values"]["items"]["enum"]
+    assert data_type_values[0] == "inventory-sales"
+    assert {"sales-monthly", "sales-90d"}.issubset(data_type_values)
+    assert workflow["input_schema"]["properties"]["warehouse_intent"]["oneOf"]
+    assert workflow["input_schema"]["properties"]["created_date_filter"]["oneOf"]
+    explicit_range = workflow["input_schema"]["properties"]["created_date_filter"]["oneOf"][4]
+    assert explicit_range["required"] == ["state", "mode", "start_date", "end_date"]
+    assert workflow["input_schema"]["properties"]["inventory_snapshot_intent"] == {
+        "type": "object",
+        "properties": {"state": {"enum": ["current", "historical", "omitted", "ambiguous"]}},
+        "required": ["state"],
+        "additionalProperties": False,
+    }
+    assert workflow["artifact_paths"] == [{"field": "artifacts[].path", "role": "deliverable"}]
+    assert workflow["deliver_artifacts_on_failure"] is True
+    assert "lxeskill yacang export run" in router.split("---", 2)[1]
+    assert "needs_clarification" in router
+    assert "created_date_filter" in router
+    assert "禁止自行尝试相似 endpoint" in router
+    assert "不得改走其他雅仓命令冒充成功" in router
+
+    compatibility_entries = [
+        catalog["yacang_export_inventory_sales"],
+        catalog["yacang_export_sales_monthly"],
+        catalog["yacang_export_sales_90d"],
+        catalog["yacang_export_inventory_month_end"],
+        catalog["yacang_export_inbound_listing_time"],
+    ]
+    assert all(entry["visibility"] == "internal" for entry in compatibility_entries)
+    assert all(entry["owner_skills"] == [] for entry in compatibility_entries)
+    assert all(entry["exposed"] is False for entry in compatibility_entries)
 
 
 def test_ziniao_is_independent_and_shipment_owns_only_four_stages() -> None:

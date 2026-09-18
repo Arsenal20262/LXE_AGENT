@@ -112,7 +112,7 @@ describe("DesktopConfigRepository", () => {
     });
   });
 
-  test("migrates schema 7 profiles to schema 9 without losing provider preferences", () => {
+  test("migrates schema 7 profiles to the current schema without losing provider preferences", () => {
     const root = createRoot();
     const legacy = structuredClone(cloneConfig()) as unknown as Record<string, unknown>;
     legacy.schema_version = 7;
@@ -140,7 +140,7 @@ describe("DesktopConfigRepository", () => {
     });
   });
 
-  test("migrates schema 8 settings to schema 9 with an unconfigured Shangman integration", () => {
+  test("migrates schema 8 settings with an unconfigured Shangman integration", () => {
     const root = createRoot();
     const legacy = structuredClone(cloneConfig()) as unknown as Record<string, unknown>;
     legacy.schema_version = 8;
@@ -157,6 +157,21 @@ describe("DesktopConfigRepository", () => {
     });
   });
 
+  test("migrates schema 8 settings with an unconfigured Yacang integration", () => {
+    const root = createRoot();
+    const legacy = structuredClone(cloneConfig()) as unknown as Record<string, unknown>;
+    legacy.schema_version = 8;
+    delete (legacy.integrations as Record<string, unknown>).yacang;
+    mkdirSync(join(root, "config"), { recursive: true });
+    writeFileSync(join(root, "config", "settings.json"), JSON.stringify(legacy));
+
+    const repository = new DesktopConfigRepository(root, safeStorage, "win32");
+    expect(repository.readConfig()).toMatchObject({
+      schema_version: 10,
+      integrations: { yacang: { managed: false, mobile: "", production_enabled: false } },
+    });
+  });
+
   test("keeps every secret encrypted and fails closed without secure storage", () => {
     const root = createRoot();
     const opaqueStorage = {
@@ -170,6 +185,7 @@ describe("DesktopConfigRepository", () => {
     secrets.managed_llm_credential = managedCredential("provider-secret");
     secrets.ziniao_password = "ziniao-secret";
     secrets.mabang_password = "mabang-secret";
+    secrets.yacang_password = "yacang-secret";
     secrets.feishu_app_secret = "feishu-secret";
     secrets.data_server_api_key = "upload-secret";
     secrets.erp_api_key = "erp-secret";
@@ -182,6 +198,7 @@ describe("DesktopConfigRepository", () => {
       "provider-secret",
       "ziniao-secret",
       "mabang-secret",
+      "yacang-secret",
       "feishu-secret",
       "upload-secret",
       "erp-secret",
