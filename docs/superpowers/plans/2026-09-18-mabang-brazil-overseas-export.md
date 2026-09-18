@@ -74,14 +74,14 @@ async def export_brazil_inventory_sales_snapshot(
 ) -> BrazilExportArtifact: ...
 ```
 
-- [ ] Write fake-session tests asserting the exact sequence: form POST to `warehouse.searchwarehousestock` with `warehouseIdArr=1072376`, then GET to `warehouse.doexportwarehousestock` on the same authenticated session.
-- [ ] Test that the search form retains confirmed empty fields and includes `isIdn=1`.
-- [ ] Test 401 maps to `MabangAuthError`; 403 and 429 stop without a retry; HTML, missing attachment headers, a non-XLSX extension, empty bytes, and a corrupt workbook fail before publishing.
-- [ ] Reuse `get_auth_context`, `build_cookie_header`, `request_headers`, `erp_http_session`, and the registered `replenish_brazil_overseas` directory.
-- [ ] Validate a downloaded workbook as a ZIP/XLSX before atomically publishing it under the planned Chinese filename.
-- [ ] Return one structured artifact path and source metadata stating that the workbook is a raw platform export with 7/28/42 cumulative sales fields.
-- [ ] Run: `uv run pytest python/lxeskill_cli/tests/mabang/test_brazil_overseas_inventory.py`.
-- [ ] Write `docs/handoff/2026-09-18-mabang-brazil-overseas-inventory.md` with request order, credential source, validation result, and next task.
+- [x] Write fake-session tests asserting the exact sequence: form POST to `warehouse.searchwarehousestock` with `warehouseIdArr=1072376`, then GET to `warehouse.doexportwarehousestock` on the same authenticated session.
+- [x] Test that the search form retains confirmed empty fields and includes `isIdn=1`.
+- [x] Test 401 maps to `MabangAuthError`; 403 and 429 stop without a retry; HTML, empty bytes, and a corrupt workbook fail before publishing.
+- [x] Reuse `get_auth_context`, `build_cookie_header`, `request_headers`, `erp_http_session`, and the registered `replenish_brazil_overseas` directory.
+- [x] Validate a downloaded workbook as a ZIP/XLSX before atomically publishing it under the planned Chinese filename.
+- [x] Return one structured artifact path and source metadata stating that the workbook is a raw platform export with 7/28/42 cumulative sales fields.
+- [x] Run: `uv run pytest python/lxeskill_cli/tests/mabang/test_brazil_overseas_inventory.py`.
+- [x] Write `docs/handoff/2026-09-18-mabang-brazil-overseas-inventory.md` with request order, credential source, validation result, and next task.
 - [ ] Request approval to stage and commit only Task 2 files.
 
 ## Task 3: Signed and pending allocation XLSX export
