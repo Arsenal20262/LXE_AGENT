@@ -20,6 +20,20 @@ def _records(capsys) -> list[dict]:
     return [json.loads(line) for line in lines]
 
 
+def test_coerce_parses_one_of_object_schema_as_json_object() -> None:
+    schema = {
+        "oneOf": [
+            {"type": "object", "required": ["state"]},
+            {"type": "object", "required": ["state", "values"]},
+        ]
+    }
+
+    assert lxeskill._coerce(
+        '{"state":"resolved","values":["inventory-sales"]}',
+        schema,
+    ) == {"state": "resolved", "values": ["inventory-sales"]}
+
+
 def test_catalog_defines_every_cli_command_and_hidden_alias() -> None:
     catalog = load_catalog()
 

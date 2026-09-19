@@ -162,4 +162,4 @@ def test_catalog_cli_failure_delivers_only_real_partial_merge(monkeypatch, tmp_p
     assert "部分合并" in Path(result["files"][0]).name
     partial = load_workbook(result["files"][0], read_only=True)
     assert list(partial.active.values) == [("商品ID", "库存"), (101, 5), (102, 8)]
-    assert not list(tmp_path.rglob("智慧tms-商品-第*页-*.xlsx"))
+    assert not list(tmp_path.rglob("智汇tms-商品-第*页-*.xlsx"))

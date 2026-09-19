@@ -31,8 +31,10 @@ const sameManagedTarget = (
   right: ManagedLlmTarget,
 ): boolean => left.provider === right.provider && left.model === right.model;
 
-const shangmanBasicAuth = (username: string, password: string): string =>
-  `Basic ${Buffer.from(`${username}:${password}`, "utf8").toString("base64")}`;
+// The ERP's OAuth client identity is platform-level configuration, not a user
+// credential. It must never be derived from the account password or exposed
+// as an extra Dashboard field.
+const DEFAULT_SHANGMAN_BASIC_AUTH = "Basic c2FiZXI6c2FiZXJfc2VjcmV0";
 
 export class DesktopSetupService {
   constructor(
@@ -269,10 +271,10 @@ export class DesktopSetupService {
       const username = text(input.shangman.username);
       const inputProcessedPassword = text(input.shangman.processed_password);
       const processedPassword = inputProcessedPassword || effectiveSecrets.shangman_processed_password;
-      if (!tenantId || !username || !processedPassword) {
-        throw new Error("智慧印尼 ID、账号和密码必须完整填写");
+      const basicAuth = effectiveSecrets.shangman_basic_auth || DEFAULT_SHANGMAN_BASIC_AUTH;
+      if (!tenantId || !username || !processedPassword || !basicAuth) {
+        throw new Error("智慧 ID、账号、密码和客户端认证必须完整配置");
       }
-      const basicAuth = shangmanBasicAuth(username, processedPassword);
       config.integrations.shangman = {
         managed: true,
         tenant_id: tenantId,
@@ -629,7 +631,7 @@ export class DesktopSetupService {
       LXE_SHANGMAN_USERNAME: shangmanConfigured ? shangman.username : "",
       LXE_SHANGMAN_PROCESSED_PASSWORD: shangmanConfigured ? secrets.shangman_processed_password : "",
       LXE_SHANGMAN_BASIC_AUTH: shangmanConfigured
-        ? shangmanBasicAuth(shangman.username, secrets.shangman_processed_password)
+        ? (secrets.shangman_basic_auth || DEFAULT_SHANGMAN_BASIC_AUTH)
         : "",
       LXE_SHANGMAN_PROD_ENABLED: shangman.production_enabled ? "true" : "false",
       LOCAL_LOGS_ENABLED: logsEnabled ? "1" : "0",

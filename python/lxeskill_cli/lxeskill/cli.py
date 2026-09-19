@@ -88,6 +88,11 @@ def _resolve_entry(argv: list[str], catalog: dict[str, dict[str, Any]]) -> tuple
 def _coerce(value: str, schema: dict[str, Any]) -> Any:
     kind = schema.get("type")
     kinds = list(kind) if isinstance(kind, list) else [kind]
+    if not kind and isinstance(schema.get("oneOf"), list):
+        variants = [variant for variant in schema["oneOf"] if isinstance(variant, dict)]
+        if variants and all(variant.get("type") == "object" for variant in variants):
+            kind = "object"
+            kinds = [kind]
     if "integer" in kinds:
         return int(value)
     if "number" in kinds:

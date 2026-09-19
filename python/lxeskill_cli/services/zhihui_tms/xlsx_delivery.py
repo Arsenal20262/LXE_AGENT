@@ -212,7 +212,7 @@ def _write_merged_artifact(
 ) -> tuple[ZhihuiTmsArtifact, int]:
     workbook_rows = _merged_rows(headers, pages)
     prefix = "部分合并" if partial else "合并"
-    path = (destination / f"智慧tms-商品-{prefix}-{date_label}.xlsx").resolve()
+    path = (destination / f"智汇tms-商品-{prefix}-{date_label}.xlsx").resolve()
     _atomic_write_workbook(path, workbook_rows)
     return (
         ZhihuiTmsArtifact(

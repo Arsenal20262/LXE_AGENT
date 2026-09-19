@@ -72,11 +72,11 @@ def test_delivers_only_one_ordered_merged_workbook(tmp_path: Path) -> None:
     assert [artifact.kind for artifact in result.artifacts] == ["merged"]
     assert result.page_artifacts == ()
     assert result.merged_artifact is not None
-    assert Path(result.merged_artifact.path).name == "智慧tms-商品-合并-20260917.xlsx"
+    assert Path(result.merged_artifact.path).name == "智汇tms-商品-合并-20260917.xlsx"
     assert result.headers == ("SKU", "库存")
     assert result.total_rows == 2
     assert [Path(artifact.path).is_file() for artifact in result.artifacts] == [True]
-    assert not list(tmp_path.glob("智慧tms-商品-第*页-*.xlsx"))
+    assert not list(tmp_path.glob("智汇tms-商品-第*页-*.xlsx"))
 
     workbook = load_workbook(result.merged_artifact.path, read_only=True, data_only=False)
     assert list(workbook.active.values) == [("SKU", "库存"), ("A", 1), ("B", 2)]
@@ -125,11 +125,11 @@ def test_header_mismatch_delivers_one_validated_partial_merge(tmp_path: Path) ->
     assert captured.value.partial_rows == 1
     assert [artifact.kind for artifact in captured.value.partial_artifacts] == ["merged_partial"]
     partial = Path(captured.value.partial_artifacts[0].path)
-    assert partial.name == "智慧tms-商品-部分合并-20260917.xlsx"
+    assert partial.name == "智汇tms-商品-部分合并-20260917.xlsx"
     assert partial.is_file()
     assert list(load_workbook(partial, read_only=True).active.values) == [("SKU", "库存"), ("A", 1)]
-    assert not list(tmp_path.glob("智慧tms-商品-第*页-*.xlsx"))
-    assert not (tmp_path / "智慧tms-商品-合并-20260917.xlsx").exists()
+    assert not list(tmp_path.glob("智汇tms-商品-第*页-*.xlsx"))
+    assert not (tmp_path / "智汇tms-商品-合并-20260917.xlsx").exists()
 
 
 def test_download_failure_delivers_one_validated_partial_merge(tmp_path: Path) -> None:
@@ -157,8 +157,8 @@ def test_download_failure_delivers_one_validated_partial_merge(tmp_path: Path) -
     partial = Path(captured.value.partial_artifacts[0].path)
     assert partial.is_file()
     assert list(load_workbook(partial, read_only=True).active.values) == [("SKU",), ("A",)]
-    assert not list(tmp_path.glob("智慧tms-商品-第*页-*.xlsx"))
-    assert not (tmp_path / "智慧tms-商品-合并-20260917.xlsx").exists()
+    assert not list(tmp_path.glob("智汇tms-商品-第*页-*.xlsx"))
+    assert not (tmp_path / "智汇tms-商品-合并-20260917.xlsx").exists()
 
 
 def test_empty_export_result_returns_no_artifacts(tmp_path: Path) -> None:

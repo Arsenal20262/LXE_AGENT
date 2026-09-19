@@ -175,7 +175,7 @@ def test_export_goods_authenticates_downloads_and_returns_canonical_payload(tmp_
     assert login_call["params"] == {
         "tenantId": "tenant-1",
         "username": "processed-user",
-        "password": "processed-password",
+        "password": "8e90dcfaa08d05a6b9a0e671448a7557",
         "grant_type": "captcha",
         "scope": "all",
         "type": "account",

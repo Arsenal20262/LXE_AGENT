@@ -12,6 +12,7 @@ from services.shangman.goods_export import (
     CaptchaInputRequired,
     ShangmanClient,
     ShangmanCredentials,
+    ShangmanAuthError,
 )
 from services.shangman.captcha_channel import (
     CHANNEL_TOKEN_ENV,
@@ -144,6 +145,19 @@ def run(arguments: dict[str, Any]) -> dict[str, Any]:
             "captcha_channel_unavailable",
             "Desktop captcha input channel is unavailable",
         )
+    except ShangmanAuthError as exc:
+        return {
+            "success": False,
+            "status": "failed",
+            "params": plan["params"],
+            "intent": plan["intent"],
+            "plan": plan["plan"],
+            "error": {
+                "code": "shangman_auth_failed",
+                "message": _safe_error_message(exc),
+                "recoverable": False,
+            },
+        }
     except Exception as exc:  # noqa: BLE001 — preserve the client diagnostic in the CLI envelope.
         return {
             "success": False,

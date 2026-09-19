@@ -131,7 +131,7 @@ def test_execute_composes_login_export_and_delivery_with_artifact_paths(monkeypa
         assert actual_client is client
         assert export_result.total_records == 2
         output_dir.mkdir(parents=True)
-        merged = output_dir / f"智慧tms-商品-合并-{date_label}.xlsx"
+        merged = output_dir / f"智汇tms-商品-合并-{date_label}.xlsx"
         merged.write_bytes(b"merged")
         calls.append(("delivery", output_dir))
         return SimpleNamespace(
@@ -168,7 +168,7 @@ def test_execute_failure_reports_only_partial_merge_and_redacts_secret(monkeypat
 
     def fail_delivery(_client, _result, *, output_dir, date_label, on_event):
         output_dir.mkdir(parents=True)
-        partial = output_dir / f"智慧tms-商品-部分合并-{date_label}.xlsx"
+        partial = output_dir / f"智汇tms-商品-部分合并-{date_label}.xlsx"
         partial.write_bytes(b"merged")
         on_event({"stage": "downloaded", "page": 1, "total_pages": 1, "rows": 1})
         error = RuntimeError("fixture-secret workbook error")

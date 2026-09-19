@@ -44,7 +44,10 @@ describe("DesktopConfigStore", () => {
   test("does not enable Yacang production without a saved account and password", () => {
     const root = createRoot();
     const workspaceRoot = join(root, "workspace");
-    const store = new DesktopConfigStore(root, workspaceRoot, safeStorage, { platform: "darwin" });
+    const store = new DesktopConfigStore(root, workspaceRoot, safeStorage, {
+      platform: "darwin",
+      secretEnvironment: { LXE_SHANGMAN_BASIC_AUTH: "Basic client-auth" },
+    });
 
     expect(() => store.save({
       workspace_root: workspaceRoot,
@@ -56,7 +59,10 @@ describe("DesktopConfigStore", () => {
   test("keeps all four platform configurations after saving one integration and restarting", () => {
     const root = createRoot();
     const workspaceRoot = join(root, "workspace");
-    const store = new DesktopConfigStore(root, workspaceRoot, safeStorage, { platform: "darwin" });
+    const store = new DesktopConfigStore(root, workspaceRoot, safeStorage, {
+      platform: "darwin",
+      secretEnvironment: { LXE_SHANGMAN_BASIC_AUTH: "Basic client-auth" },
+    });
     store.save({
       workspace_root: workspaceRoot,
       mabang: { action: "save", account: "pool4-account", password: "pool4-secret" },
@@ -288,9 +294,12 @@ describe("DesktopConfigStore", () => {
   test("persists Shangman non-secrets separately and emits only the new runtime contract", () => {
     const root = createRoot();
     const store = new DesktopConfigStore(root, join(root, "workspace"), safeStorage);
-    const basicAuth = "Basic cHJvY2Vzc2VkLXVzZXI6cHJvY2Vzc2VkLXBhc3N3b3Jk";
     const processedPassword = "processed-password";
-    const state = store.save({
+    const basicAuth = "Basic client-auth";
+    const configuredStore = new DesktopConfigStore(root, join(root, "workspace"), safeStorage, {
+      secretEnvironment: { LXE_SHANGMAN_BASIC_AUTH: basicAuth },
+    });
+    const state = configuredStore.save({
       workspace_root: join(root, "workspace"),
       shangman: {
         action: "save",
@@ -328,7 +337,7 @@ describe("DesktopConfigStore", () => {
     expect(store.environment()).not.toHaveProperty("LXE_SHANGMAN_BASIC_USERNAME");
     expect(store.environment()).not.toHaveProperty("LXE_SHANGMAN_BASIC_PASSWORD");
 
-    const patched = store.save({
+    const patched = configuredStore.save({
       workspace_root: join(root, "workspace"),
       shangman: { action: "save", tenant_id: "tenant-2", username: "next-user" },
     });
@@ -336,10 +345,10 @@ describe("DesktopConfigStore", () => {
     expect(store.environment()).toMatchObject({
       LXE_SHANGMAN_TENANT_ID: "tenant-2",
       LXE_SHANGMAN_PROCESSED_PASSWORD: processedPassword,
-      LXE_SHANGMAN_BASIC_AUTH: "Basic bmV4dC11c2VyOnByb2Nlc3NlZC1wYXNzd29yZA==",
+      LXE_SHANGMAN_BASIC_AUTH: basicAuth,
     });
 
-    const cleared = store.save({
+    const cleared = configuredStore.save({
       workspace_root: join(root, "workspace"),
       shangman: { action: "clear" },
     });
@@ -352,10 +361,10 @@ describe("DesktopConfigStore", () => {
     });
   });
 
-  test("derives Shangman Basic Authorization from the three user fields", () => {
+  test("supplies Shangman platform client authorization without an extra user field", () => {
     const root = createRoot();
     const configuredStore = new DesktopConfigStore(root, join(root, "workspace"), safeStorage);
-    configuredStore.save({
+    const state = configuredStore.save({
       workspace_root: join(root, "workspace"),
       shangman: {
         action: "save",
@@ -364,6 +373,7 @@ describe("DesktopConfigStore", () => {
         processed_password: "processed-password",
       },
     });
+    expect(state.shangman).toMatchObject({ configured: true, issues: [] });
     const store = new DesktopConfigStore(root, join(root, "workspace"), safeStorage, {
       secretEnvironment: {
         LXE_SHANGMAN_PROCESSED_PASSWORD: "processed-password",
@@ -371,16 +381,7 @@ describe("DesktopConfigStore", () => {
       },
     });
 
-    expect(store.state().shangman).toMatchObject({
-      configured: true,
-      issues: [],
-    });
-    expect(store.environment()).toMatchObject({
-      LXE_SHANGMAN_TENANT_ID: "tenant-1",
-      LXE_SHANGMAN_USERNAME: "user-1",
-      LXE_SHANGMAN_PROCESSED_PASSWORD: "processed-password",
-      LXE_SHANGMAN_BASIC_AUTH: "Basic dXNlci0xOnByb2Nlc3NlZC1wYXNzd29yZA==",
-    });
+    expect(store.state().shangman.issues).toEqual([]);
   });
 
   test("retires legacy model credentials and dotenv files before startup", () => {

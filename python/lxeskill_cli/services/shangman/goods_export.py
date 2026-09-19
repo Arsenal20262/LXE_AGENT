@@ -245,12 +245,21 @@ class ShangmanClient:
         }
 
     @property
+    def _effective_password(self) -> str:
+        password = str(self.credentials.processed_password or "").strip()
+        if re.fullmatch(r"[0-9a-f]{32}", password, flags=re.IGNORECASE):
+            return password.lower()
+        return hashlib.md5(password.encode("utf-8"), usedforsecurity=False).hexdigest()
+
+    @property
     def _sensitive_values(self) -> tuple[str, ...]:
         credentials = self.credentials
         return (
             credentials.tenant_id,
             credentials.username,
             credentials.processed_password,
+            self._effective_password,
+            credentials.basic_auth,
             credentials.basic_auth,
         )
 
@@ -280,7 +289,7 @@ class ShangmanClient:
             self.base_url,
             credentials.tenant_id,
             credentials.username,
-            credentials.processed_password,
+            self._effective_password,
             credentials.basic_auth,
         ))
         return hashlib.sha256(material.encode("utf-8")).hexdigest()
@@ -337,7 +346,7 @@ class ShangmanClient:
         params = {
             "tenantId": credentials.tenant_id,
             "username": credentials.username,
-            "password": credentials.processed_password,
+            "password": self._effective_password,
             "grant_type": "captcha",
             "scope": "all",
             "type": "account",

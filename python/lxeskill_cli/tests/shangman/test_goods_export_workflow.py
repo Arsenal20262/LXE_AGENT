@@ -4,7 +4,7 @@ from pathlib import Path
 
 from lxeskill.business import load_catalog
 from services.agent_cli.shangman import _workflow, goods_export_preview, goods_export_run
-from services.shangman.goods_export import CaptchaInputRequired
+from services.shangman.goods_export import CaptchaInputRequired, ShangmanAuthError
 
 
 GOODS_PARAMS = {
@@ -201,6 +201,38 @@ def test_run_redacts_runtime_credentials_but_keeps_client_diagnostic(monkeypatch
         "code": "erp_execution_failed",
         "message": "login failed for <redacted>: status=502",
         "recoverable": True,
+    }
+
+
+def test_run_stops_after_shangman_auth_failure_instead_of_requesting_another_recovery(monkeypatch) -> None:
+    monkeypatch.setenv("LXE_SHANGMAN_PROD_ENABLED", "true")
+    for name, value in {
+        "LXE_SHANGMAN_TENANT_ID": "tenant",
+        "LXE_SHANGMAN_USERNAME": "user",
+        "LXE_SHANGMAN_PROCESSED_PASSWORD": "password",
+        "LXE_SHANGMAN_BASIC_AUTH": "Basic ZHVtbXk6cGFzcw==",
+        "LXE_SHANGMAN_CAPTCHA_CHANNEL_URL": "http://127.0.0.1:1",
+        "LXE_SHANGMAN_CAPTCHA_CHANNEL_TOKEN": "channel-token",
+        "LXE_AGENT_SESSION_ID": "session-id",
+        "LXE_AGENT_TURN_ID": "turn-id",
+    }.items():
+        monkeypatch.setenv(name, value)
+
+    class AuthFailingClient:
+        def __init__(self, **kwargs):
+            del kwargs
+
+        async def export_goods(self):
+            raise ShangmanAuthError("login response incomplete: 用户名或密码不正确")
+
+    monkeypatch.setattr(_workflow, "ShangmanClient", AuthFailingClient)
+
+    result = goods_export_run.run({"params": GOODS_PARAMS})
+
+    assert result["error"] == {
+        "code": "shangman_auth_failed",
+        "message": "login response incomplete: 用户名或密码不正确",
+        "recoverable": False,
     }
 
 
