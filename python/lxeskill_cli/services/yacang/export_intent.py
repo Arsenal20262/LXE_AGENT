@@ -731,16 +731,7 @@ def _parse_data_type_intent(
                 "当前雅仓能力不支持指定历史日期或历史月末库存快照。",
             )
         )
-    elif bare_month_end:
-        inventory_intent = {"state": "ambiguous"}
-        questions.append(
-            _question(
-                "inventory_snapshot",
-                "AMBIGUOUS_INVENTORY_SNAPSHOT",
-                "请确认需要当前库存，还是指定历史月份的月末库存。",
-            )
-        )
-    elif current_inventory or bare_inventory:
+    elif bare_month_end or current_inventory or bare_inventory:
         inventory_intent = {"state": "current"}
     else:
         inventory_intent = {"state": "omitted"}

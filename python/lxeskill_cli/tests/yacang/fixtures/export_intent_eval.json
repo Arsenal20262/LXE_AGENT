@@ -54,7 +54,8 @@
     "id": "inventory_month_end_alias",
     "text": "导出月末库存",
     "expected_state": "resolved",
-    "expected_requires_clarification": true
+    "expected_requires_clarification": false,
+    "data_types": ["inventory-current-snapshot"]
   },
   {
     "id": "inventory_historical_phrase",

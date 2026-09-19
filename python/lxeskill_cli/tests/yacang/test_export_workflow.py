@@ -231,16 +231,14 @@ def test_historical_inventory_only_generates_no_tasks_or_source_fetch() -> None:
     assert plan["diagnostics"][0]["code"] == "UNSUPPORTED_HISTORICAL_INVENTORY"
 
 
-def test_bare_month_end_inventory_stops_planning_for_clarification() -> None:
+def test_bare_month_end_inventory_plans_current_snapshot() -> None:
     plan = plan_export_workflow(
         normalized("导出月末库存"),
         execution_date="2026-09-14",
     )
 
-    assert plan["requires_clarification"] is True
-    assert plan["logical_tasks"] == []
-    assert plan["source_fetches"] == []
-    assert plan["questions"][0]["code"] == "AMBIGUOUS_INVENTORY_SNAPSHOT"
+    assert plan["requires_clarification"] is False
+    assert plan["logical_tasks"][0]["data_type"] == "inventory-current-snapshot"
 
 
 def test_inbound_listing_time_is_one_global_task_without_date_or_warehouse_parameters() -> None:

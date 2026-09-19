@@ -339,19 +339,12 @@ def test_all_data_phrases_select_all_three_types(text: str) -> None:
 
 
 @pytest.mark.parametrize("text", ["导出四仓月底库存", "导出月末库存", "导出月末快照"])
-def test_bare_month_end_inventory_requires_clarification(text: str) -> None:
+def test_inventory_list_phrases_resolve_current_snapshot(text: str) -> None:
     result = normalized(text)
 
-    assert result["intent"]["inventory_snapshot_intent"] == {"state": "ambiguous"}
-    assert result["effective_request"] is None
-    assert result["requires_clarification"] is True
-    assert result["questions"] == [
-        {
-            "dimension": "inventory_snapshot",
-            "code": "AMBIGUOUS_INVENTORY_SNAPSHOT",
-            "message": "请确认需要当前库存，还是指定历史月份的月末库存。",
-        }
-    ]
+    assert result["intent"]["inventory_snapshot_intent"] == {"state": "current"}
+    assert result["effective_request"]["data_types"] == ["inventory-current-snapshot"]
+    assert result["requires_clarification"] is False
 
 
 @pytest.mark.parametrize("text", ["导出当前库存", "现在库存多少", "还剩多少货"])
@@ -360,6 +353,20 @@ def test_current_inventory_phrases_resolve_current_snapshot(text: str) -> None:
 
     assert result["intent"]["inventory_snapshot_intent"] == {"state": "current"}
     assert result["effective_request"]["data_types"] == ["inventory-current-snapshot"]
+
+
+@pytest.mark.parametrize("text", ["导出库存", "导出库存列表", "导出越南库存"])
+def test_bare_inventory_means_inventory_list(text: str) -> None:
+    result = normalized(text)
+
+    assert result["effective_request"]["data_types"] == ["inventory-current-snapshot"]
+
+
+@pytest.mark.parametrize("text", ["导出销量", "导出库存动销", "导出越南销量"])
+def test_sales_words_mean_inventory_sales(text: str) -> None:
+    result = normalized(text)
+
+    assert result["effective_request"]["data_types"] == ["inventory-sales"]
     assert result["requires_clarification"] is False
 
 
