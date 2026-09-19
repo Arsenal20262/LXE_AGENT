@@ -57,3 +57,17 @@ test("company cloud shows the server-verified device Skill permission state", ()
   assert.match(styles, /\.desktop-cloud-permission\.cached/);
   assert.match(styles, /\.desktop-cloud-permission\.unassigned/);
 });
+
+test("yacang production switch follows the shared integration layout and remains interactive", () => {
+  const yacangBlock = shell.slice(shell.indexOf('if (activeSection === "yacang")'), shell.indexOf('if (activeSection === "zhihui_tms")'));
+  assert.match(yacangBlock, /className="desktop-integration-production-toggle"/);
+  assert.match(yacangBlock, /role="switch"/);
+  assert.match(yacangBlock, /onClick=\{\(\) => onChange\(\{ yacangProductionEnabled:/);
+  assert.doesNotMatch(yacangBlock, /disabled=\{!setup\.yacang\.configured\}/);
+  const zhihuiBlock = shell.slice(shell.indexOf('if (activeSection === "zhihui_tms")'), shell.indexOf('if (activeSection === "feishu")'));
+  assert.match(zhihuiBlock, /className="desktop-integration-production-toggle"/);
+  assert.match(zhihuiBlock, /role="switch"/);
+  assert.match(styles, /\.desktop-switch\s*\{[^}]*flex:\s*0 0 38px;[^}]*width:\s*38px;[^}]*height:\s*22px;/s);
+  assert.match(styles, /\.desktop-integration-production-toggle strong\s*\{[^}]*font-size:\s*1rem;/s);
+  assert.match(styles, /\.desktop-integration-production-toggle small\s*\{[^}]*font-size:\s*0\.75rem;/s);
+});

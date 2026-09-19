@@ -865,17 +865,19 @@ function DesktopSettingsForm({
               />
             </label>
           </div>
-          <label className="desktop-production-toggle">
-            <input
-              checked={form.yacangProductionEnabled}
-              disabled={!setup.yacang.configured}
-              onChange={(event) => onChange({ yacangProductionEnabled: event.target.checked })}
-              type="checkbox"
-            />
+          <label className="desktop-integration-production-toggle">
             <span>
               <strong>{t.desktop.yacang.productionEnabled}</strong>
               <small>{t.desktop.yacang.productionEnabledDescription}</small>
             </span>
+            <button
+              aria-checked={form.yacangProductionEnabled}
+              aria-label={t.desktop.yacang.productionEnabled}
+              className={`desktop-switch ${form.yacangProductionEnabled ? "is-on" : ""}`}
+              onClick={() => onChange({ yacangProductionEnabled: !form.yacangProductionEnabled })}
+              role="switch"
+              type="button"
+            ><span /></button>
           </label>
           {setup.yacang.managed ? (
             <button className="desktop-clear-integration" onClick={() => onClearIntegration("yacang")} type="button">
@@ -925,12 +927,14 @@ function DesktopSettingsForm({
               <strong>{t.desktop.zhihui_tms.productionEnable}</strong>
               <small>{t.desktop.zhihui_tms.productionEnableHint}</small>
             </span>
-            <input
+            <button
+              aria-checked={form.zhihuiTmsProductionEnabled}
               aria-label={t.desktop.zhihui_tms.productionEnable}
-              checked={form.zhihuiTmsProductionEnabled}
-              onChange={(event) => onChange({ zhihuiTmsProductionEnabled: event.target.checked })}
-              type="checkbox"
-            />
+              className={`desktop-switch ${form.zhihuiTmsProductionEnabled ? "is-on" : ""}`}
+              onClick={() => onChange({ zhihuiTmsProductionEnabled: !form.zhihuiTmsProductionEnabled })}
+              role="switch"
+              type="button"
+            ><span /></button>
           </label>
           {setup.zhihui_tms.managed ? (
             <button className="desktop-clear-integration" onClick={() => onClearIntegration("zhihui_tms")} type="button">
