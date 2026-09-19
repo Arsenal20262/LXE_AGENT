@@ -793,7 +793,7 @@ export const ZH_TEXT = {
       passwordPlaceholder: "输入马帮密码"
     },
     yacang: {
-      description: "账号与密码使用系统安全存储；配置后可供已注册的雅仓数据导出流程自动登录。",
+      description: "填写账号和密码，用于导出雅仓数据。",
       mobile: "雅仓账号",
       password: "雅仓密码",
       passwordPlaceholder: "输入雅仓密码",
@@ -801,7 +801,7 @@ export const ZH_TEXT = {
       productionEnabledDescription: "仅在账号配置完成且确认要访问生产接口时开启。"
     },
     zhihui_tms: {
-      description: "只支持菲律宾商品全量导出。保存账号和密码后，需单独启用生产 API 调用；执行任务会访问真实 TMS。",
+      description: "用于导出智汇 TMS 菲律宾商品数据。",
       account: "智汇 TMS 账号",
       password: "智汇 TMS 密码",
       passwordPlaceholder: "输入智汇 TMS 密码",
@@ -814,7 +814,7 @@ export const ZH_TEXT = {
       appSecretPlaceholder: "输入 App Secret"
     },
     shangman: {
-      description: "ID、账号和密码必须完整配置；验证码仅在印尼商品导出时人工输入。Basic Authorization 由系统自动生成。",
+      description: "填写 ID、账号和密码，用于导出智慧印尼商品数据。",
       tenantId: "ID",
       username: "账号",
       processedPassword: "密码",
@@ -1660,7 +1660,7 @@ export const UI_TEXT: Record<Language, UiText> = {
         passwordPlaceholder: "Enter the Mabang password"
       },
       yacang: {
-        description: "The account and password use system secure storage for registered Yacang data export workflows.",
+        description: "Enter the account and password to export Yacang data.",
         mobile: "Yacang account",
         password: "Yacang password",
         passwordPlaceholder: "Enter the Yacang password",
@@ -1668,7 +1668,7 @@ export const UI_TEXT: Record<Language, UiText> = {
         productionEnabledDescription: "Enable only after the account is configured and production access is confirmed."
       },
       zhihui_tms: {
-        description: "Only the Philippines full product export is supported. Save the credentials, then separately enable production API calls; executing a task accesses the live TMS.",
+        description: "Used to export Zhihui TMS Philippines product data.",
         account: "Zhihui TMS account",
         password: "Zhihui TMS password",
         passwordPlaceholder: "Enter the Zhihui TMS password",
@@ -1681,7 +1681,7 @@ export const UI_TEXT: Record<Language, UiText> = {
         appSecretPlaceholder: "Enter the App Secret"
       },
       shangman: {
-        description: "ID, username, and password are required; Basic Authorization is generated automatically and captcha is entered manually only during an export.",
+        description: "Enter the ID, username, and password to export Shangman Indonesia data.",
         tenantId: "ID",
         username: "Username",
         processedPassword: "Password",
