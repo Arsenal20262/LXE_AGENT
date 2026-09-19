@@ -9,4 +9,11 @@ describe("desktop development launchers", () => {
     expect(developmentLauncher).toContain('Bun.spawn([process.execPath, "x", "electron", "."]');
     expect(previewLauncher).toContain('Bun.spawn([process.execPath, "x", "electron", "."]');
   });
+
+  test("resolve non-ASCII source paths through fileURLToPath", () => {
+    for (const source of [developmentLauncher, previewLauncher]) {
+      expect(source).toContain("fileURLToPath");
+      expect(source).not.toContain("import.meta.url).pathname");
+    }
+  });
 });

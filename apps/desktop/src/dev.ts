@@ -1,12 +1,16 @@
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { dashboardDevUrl, resolveDashboardDevPort } from "../../dashboard/vite/dev-server";
 
-const root = new URL("../../..", import.meta.url).pathname;
+const desktopRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const root = resolve(desktopRoot, "..", "..");
 const desktopEnvironment: Record<string, string | undefined> = { ...process.env };
 delete desktopEnvironment.LXE_DATA_ROOT;
 desktopEnvironment.LXE_SOURCE_ROOT = root;
 desktopEnvironment.LXE_DASHBOARD_DEV_PORT = String(resolveDashboardDevPort(desktopEnvironment));
 desktopEnvironment.LXE_DASHBOARD_DEV_URL = dashboardDevUrl(desktopEnvironment);
-const dashboard = Bun.spawn(["bun", "run", "--cwd", "apps/dashboard", "dev"], {
+const dashboard = Bun.spawn([process.execPath, "run", "--cwd", "apps/dashboard", "dev"], {
   cwd: root,
   stdout: "inherit",
   stderr: "inherit",
@@ -25,7 +29,7 @@ while (Date.now() < deadline) {
 }
 
 const electron = Bun.spawn([process.execPath, "x", "electron", "."], {
-  cwd: new URL("..", import.meta.url).pathname,
+  cwd: desktopRoot,
   stdout: "inherit",
   stderr: "inherit",
   env: desktopEnvironment,
