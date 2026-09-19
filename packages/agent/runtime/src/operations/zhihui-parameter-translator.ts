@@ -1,12 +1,18 @@
 import type { RuntimeProvider, RuntimeMessage } from "../engine/types";
 import { parseZhihuiProductRequest, type ZhihuiProductRequest } from "./zhihui-parameters";
 
+const ZHIHUI_PLATFORM_NAME = /(?:智汇|zhihui|\btms\b)/iu;
+const OTHER_PLATFORM_NAME = /(?:雅仓|yacang|智慧|shangman|马帮|mabang|巴西)/iu;
+
+export const isExplicitZhihuiRequest = (request: string): boolean =>
+  ZHIHUI_PLATFORM_NAME.test(request) && !OTHER_PLATFORM_NAME.test(request);
+
 const SYSTEM_PROMPT = [
   "Translate the user's request into the exact JSON contract below.",
   'Return only JSON or null. Never return markdown, explanations, commands, URLs, credentials, cookies, or tokens.',
   'The only valid object is {"platform":"zhihui_tms","warehouse":"PH","intent":"product_export","fields":[...]}',
   "Allowed fields: product, sku, sales, inventory, inbound, listing.",
-  "Return null when the request is not explicitly about Zhihui TMS or the Philippines warehouse product data, or when intent is uncertain.",
+  "Return null unless the request explicitly names Zhihui or TMS and refers to its product data. Philippines alone is ambiguous with other platforms. Return null for any request also naming Yacang, Shangman/Wisdom, or Mabang/Brazil.",
 ].join(" ");
 
 export interface ZhihuiParameterTranslator {
@@ -23,7 +29,7 @@ export class ProviderZhihuiParameterTranslator implements ZhihuiParameterTransla
   constructor(private readonly provider: Pick<RuntimeProvider, "turn">) {}
 
   async translate(request: string, signal: AbortSignal): Promise<ZhihuiProductRequest | undefined> {
-    if (signal.aborted || !request.trim() || request.length > 2_000) return undefined;
+    if (signal.aborted || !isExplicitZhihuiRequest(request) || request.length > 2_000) return undefined;
     const message: RuntimeMessage = { role: "user", content: request.trim() };
     try {
       const response = await this.provider.turn({

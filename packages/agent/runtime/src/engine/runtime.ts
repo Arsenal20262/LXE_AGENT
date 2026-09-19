@@ -34,7 +34,7 @@ import {
 } from "./context";
 import { FinalAnswerStreamer } from "./final-answer-streamer";
 import type { ZhihuiTmsConfirmationRouter } from "../operations/zhihui-confirmation";
-import type { ZhihuiParameterTranslator } from "../operations/zhihui-parameter-translator";
+import { isExplicitZhihuiRequest, type ZhihuiParameterTranslator } from "../operations/zhihui-parameter-translator";
 import { zhihuiProgressMessage } from "../tooling/coding/zhihui-progress";
 import type { UserQuestion } from "@lxe/protocol/user-questions";
 import {
@@ -249,6 +249,7 @@ export class TypeScriptAgentRuntime implements AgentRuntime {
       throw new Error(`job workspace does not match session: ${job.session_id}`);
     }
     const request = job.user_input.trim();
+    if (!isExplicitZhihuiRequest(request)) return undefined;
     const parameters = await this.options.zhihuiConfirmation.translator.translate(request, handle.signal);
     if (!parameters) return undefined;
     const workspace = assertWorkspaceAvailable(session.workspace);

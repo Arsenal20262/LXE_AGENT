@@ -203,6 +203,43 @@ describe("Desktop Zhihui confirmation route", () => {
     expect(modelCalls).toBe(1);
     await runtime.stop();
   });
+
+  test.each([
+    "雅仓菲律宾仓库存",
+    "智慧印尼商品",
+    "马帮巴西海外仓库存",
+    "查询菲律宾库存",
+    "同时导出智汇和雅仓的菲律宾库存",
+  ])("other or ambiguous platform request bypasses Zhihui translation: %s", async request => {
+    const store = new MemoryStore();
+    let translatorCalls = 0;
+    let modelCalls = 0;
+    const runtime = new TypeScriptAgentRuntime({
+      store, tools: new ToolRegistry(), systemPrompt: "test",
+      provider: { summarize, turn: async () => {
+        modelCalls++;
+        return messageFixture({ content: [{ type: "text", text: "普通路由" }] });
+      } },
+      emitter: { emit: async () => {}, typing: async () => {} },
+      zhihuiConfirmation: {
+        router: new ZhihuiTmsConfirmationRouter({ execute: async () => { throw new Error("unexpected Zhihui CLI"); } }),
+        translator: { translate: async () => {
+          translatorCalls++;
+          return zhihuiParameters;
+        } },
+        ask: async () => { throw new Error("unexpected Zhihui confirmation"); },
+      },
+    });
+    await runtime.start();
+    try {
+      const outcome = await runtime.runTurn(desktopJob(request), handle());
+      expect(outcome.reply).toBe("普通路由");
+      expect(translatorCalls).toBe(0);
+      expect(modelCalls).toBe(1);
+    } finally {
+      await runtime.stop();
+    }
+  });
 });
 
 class MemoryStore implements RuntimeStore {

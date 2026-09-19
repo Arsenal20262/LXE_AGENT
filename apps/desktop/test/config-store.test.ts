@@ -41,6 +41,18 @@ const legacyPermission = (
 });
 
 describe("DesktopConfigStore", () => {
+  test("does not enable Yacang production without a saved account and password", () => {
+    const root = createRoot();
+    const workspaceRoot = join(root, "workspace");
+    const store = new DesktopConfigStore(root, workspaceRoot, safeStorage, { platform: "darwin" });
+
+    expect(() => store.save({
+      workspace_root: workspaceRoot,
+      yacang: { action: "save", mobile: "yacang-user", production_enabled: true },
+    })).toThrow("雅仓账号和密码必须同时填写");
+    expect(store.environment().LXE_YACANG_PROD_ENABLED).toBe("false");
+  });
+
   test("keeps all four platform configurations after saving one integration and restarting", () => {
     const root = createRoot();
     const workspaceRoot = join(root, "workspace");
@@ -74,6 +86,22 @@ describe("DesktopConfigStore", () => {
       expect(readFileSync(join(root, "config", "settings.json"), "utf8")).not.toContain(secret);
       expect(JSON.stringify(restarted.state())).not.toContain(secret);
     }
+
+    const afterClearingYacang = restarted.save({ workspace_root: workspaceRoot, yacang: { action: "clear" } });
+    expect(afterClearingYacang).toMatchObject({
+      yacang: { configured: false, password_configured: false, production_enabled: false },
+      mabang: { configured: true, account: "pool4-account" },
+      shangman: { configured: true, tenant_id: "pool2-tenant" },
+      zhihui_tms: { configured: true, account: "pool1-updated" },
+    });
+    expect(restarted.environment()).toMatchObject({
+      LXE_YACANG_MOBILE: "",
+      LXE_YACANG_PASSWORD: "",
+      LXE_YACANG_PROD_ENABLED: "false",
+      MABANG_PASSWORD: "pool4-secret",
+      LXE_SHANGMAN_PROCESSED_PASSWORD: "pool2-secret",
+      ZHIHUI_TMS_PASSWORD: "pool1-secret",
+    });
   });
 
   test("stores Zhihui password encrypted and injects production access only when enabled", () => {

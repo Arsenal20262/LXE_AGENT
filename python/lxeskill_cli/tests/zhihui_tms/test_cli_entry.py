@@ -208,6 +208,7 @@ def test_catalog_and_cli_preview_keep_credentials_out_of_arguments(monkeypatch, 
 
 def test_zhihui_skill_manifest_covers_natural_product_export_wording() -> None:
     text = (repository_root() / "skills" / "zhihui-tms-product-export" / "SKILL.md").read_text(encoding="utf-8")
-    for phrase in ("导出智汇商品", "下载菲律宾商品资料", "商品 SKU", "商品 Excel/XLSX", "把商品表导出来"):
+    for phrase in ("导出智汇商品", "下载智汇商品资料", "商品 SKU", "智汇商品 Excel/XLSX", "只说“菲律宾库存”"):
         assert phrase in text
+    assert "用户请求必须明确指向“智汇”或“TMS”" in text
     assert "不处理订单、物流、发货、采购、财务报表" in text
