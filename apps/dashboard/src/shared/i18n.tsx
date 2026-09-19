@@ -23,6 +23,7 @@ export const ZH_TEXT = {
   skillDisplayName: (name: string) => skillDisplayName(name, "zh"),
   sessionStatus: {waiting_input:"等待回答",running:"运行中",stopping:"正在停止",queued:"排队中",completed:"已完成，尚未查看",error:"执行失败，尚未查看",cancelled:"已停止",idle:"暂无未查看结果",unknown:"上次运行结果未确认",unavailable:"状态暂不可用",syncError:"状态同步失败"},
   userQuestions: {waiting:"等待回答",received:"回答已接收",done:"完成",retry:"重试提交",skip:"跳过",skipQuestion:"跳过当前问题",skipped:"已跳过",submitting:"正在提交…",stop:"停止本次任务",stopping:"正在停止…",pagination:"问题分页",previous:"上一题",next:"下一题",multiple:"可多选，也可以补充文字",custom:"自己的回答",customPlaceholder:"填写自己的回答…",freeText:"回答"},
+  shangmanCaptcha: {eyebrow:"智慧安全校验",title:"请输入图片验证码",hint:"ERP 返回了需要人工确认的验证码。输入图片中的文字后继续。",imageAlt:"智慧验证码",inputLabel:"验证码",submit:"确认并继续",submitting:"正在提交…",accepted:"验证码已提交",acceptedHint:"正在继续原任务。",noStorage:"验证码不会保存到会话或浏览器存储。"},
   language: {
     label: "语言",
     zh: "中文",
@@ -577,6 +578,7 @@ export const ZH_TEXT = {
     amazon_fba: "Amazon FBA",
     amazon_replenish: "Amazon Replenish",
     amazon_operations: "Amazon Operations",
+    yacang_operations: "雅仓运营",
     uncategorized: "未分类"
   },
   mermaid: {
@@ -641,8 +643,10 @@ export const ZH_TEXT = {
     integrationNames: {
       ziniao: "紫鸟",
       mabang: "马帮",
+      yacang: "雅仓",
       zhihui_tms: "智汇 TMS",
-      feishu: "飞书"
+      feishu: "飞书",
+      shangman: "智慧"
     },
     sectionTitles: {
       status: "运行状态",
@@ -651,8 +655,10 @@ export const ZH_TEXT = {
       base: "模型设置",
       ziniao: "紫鸟自动化",
       mabang: "马帮",
+      yacang: "雅仓",
       zhihui_tms: "智汇 TMS",
       feishu: "飞书",
+      shangman: "智慧",
       logging: "日志与排障"
     },
     status: {
@@ -786,6 +792,14 @@ export const ZH_TEXT = {
       password: "马帮密码",
       passwordPlaceholder: "输入马帮密码"
     },
+    yacang: {
+      description: "账号与密码使用系统安全存储；配置后可供已注册的雅仓数据导出流程自动登录。",
+      mobile: "雅仓账号",
+      password: "雅仓密码",
+      passwordPlaceholder: "输入雅仓密码",
+      productionEnabled: "启用雅仓生产 API 调用",
+      productionEnabledDescription: "仅在账号配置完成且确认要访问生产接口时开启。"
+    },
     zhihui_tms: {
       description: "只支持菲律宾商品全量导出。保存账号和密码后，需单独启用生产 API 调用；执行任务会访问真实 TMS。",
       account: "智汇 TMS 账号",
@@ -798,6 +812,15 @@ export const ZH_TEXT = {
       description: "App ID 与 App Secret 必须成对填写；整组留空即可跳过。",
       appSecret: "App Secret",
       appSecretPlaceholder: "输入 App Secret"
+    },
+    shangman: {
+      description: "ID、账号和密码必须完整配置；验证码仅在印尼商品导出时人工输入。Basic Authorization 由系统自动生成。",
+      tenantId: "ID",
+      username: "账号",
+      processedPassword: "密码",
+      processedPasswordPlaceholder: "输入密码",
+      productionLabel: "启用智慧生产 API 调用",
+      productionDescription: "仅在账号配置完成且确认要访问生产接口时开启。"
     },
     logging: {
       description: "标准日志适合长期运行，排障日志仅建议在复现问题时开启。",
@@ -867,6 +890,7 @@ export const UI_TEXT: Record<Language, UiText> = {
     skillDisplayName: (name: string) => skillDisplayName(name, "en"),
     sessionStatus: {waiting_input:"Waiting for answer",running:"Running",stopping:"Stopping",queued:"Queued",completed:"Completed, not viewed",error:"Failed, not viewed",cancelled:"Stopped",idle:"No unviewed results",unknown:"Previous run result unconfirmed",unavailable:"Status unavailable",syncError:"Status sync failed"},
     userQuestions: {waiting:"Waiting for answer",received:"Answer received",done:"Done",retry:"Retry submission",skip:"Skip",skipQuestion:"Skip this question",skipped:"Skipped",submitting:"Submitting…",stop:"Stop this task",stopping:"Stopping…",pagination:"Question pages",previous:"Previous question",next:"Next question",multiple:"Choose any and optionally add text",custom:"Your own answer",customPlaceholder:"Write your own answer…",freeText:"Answer"},
+    shangmanCaptcha: {eyebrow:"Shangman security check",title:"Enter the image captcha",hint:"The ERP requires a one-time manual captcha check. Enter the text shown in the image to continue.",imageAlt:"Shangman captcha",inputLabel:"Captcha",submit:"Confirm and continue",submitting:"Submitting…",accepted:"Captcha submitted",acceptedHint:"The original task is continuing.",noStorage:"The captcha is not saved to the session or browser storage."},
     language: {
       label: "Language",
       zh: "中文",
@@ -1421,6 +1445,7 @@ export const UI_TEXT: Record<Language, UiText> = {
       amazon_fba: "Amazon FBA",
       amazon_replenish: "Amazon Replenish",
       amazon_operations: "Amazon Operations",
+      yacang_operations: "Yacang Operations",
       uncategorized: "Uncategorized"
     },
     mermaid: {
@@ -1485,8 +1510,10 @@ export const UI_TEXT: Record<Language, UiText> = {
       integrationNames: {
         ziniao: "ZiNiao",
         mabang: "Mabang",
+        yacang: "Yacang",
         zhihui_tms: "Zhihui TMS",
-        feishu: "Feishu"
+        feishu: "Feishu",
+        shangman: "Wisdom"
       },
       sectionTitles: {
         status: "Runtime status",
@@ -1495,8 +1522,10 @@ export const UI_TEXT: Record<Language, UiText> = {
         base: "Model settings",
         ziniao: "ZiNiao automation",
         mabang: "Mabang",
+        yacang: "Yacang data export",
         zhihui_tms: "Zhihui TMS",
         feishu: "Feishu",
+        shangman: "Wisdom",
         logging: "Logs & diagnostics"
       },
       status: {
@@ -1630,6 +1659,14 @@ export const UI_TEXT: Record<Language, UiText> = {
         password: "Mabang password",
         passwordPlaceholder: "Enter the Mabang password"
       },
+      yacang: {
+        description: "The account and password use system secure storage for registered Yacang data export workflows.",
+        mobile: "Yacang account",
+        password: "Yacang password",
+        passwordPlaceholder: "Enter the Yacang password",
+        productionEnabled: "Enable Yacang production API calls",
+        productionEnabledDescription: "Enable only after the account is configured and production access is confirmed."
+      },
       zhihui_tms: {
         description: "Only the Philippines full product export is supported. Save the credentials, then separately enable production API calls; executing a task accesses the live TMS.",
         account: "Zhihui TMS account",
@@ -1642,6 +1679,15 @@ export const UI_TEXT: Record<Language, UiText> = {
         description: "App ID and App Secret must be filled in together; leave the whole group blank to skip.",
         appSecret: "App Secret",
         appSecretPlaceholder: "Enter the App Secret"
+      },
+      shangman: {
+        description: "ID, username, and password are required; Basic Authorization is generated automatically and captcha is entered manually only during an export.",
+        tenantId: "ID",
+        username: "Username",
+        processedPassword: "Password",
+        processedPasswordPlaceholder: "Enter the password",
+        productionLabel: "Enable Shangman production API calls",
+        productionDescription: "Enable only after credentials are configured and production access is intended."
       },
       logging: {
         description: "Standard logs suit long-term use; enable diagnostic logs only while reproducing an issue.",

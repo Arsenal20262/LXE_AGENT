@@ -467,6 +467,14 @@ export interface DesktopSetupState {
     account: string;
     password_configured: boolean;
   };
+  yacang: {
+    managed: boolean;
+    configured: boolean;
+    issues: string[];
+    mobile: string;
+    password_configured: boolean;
+    production_enabled: boolean;
+  };
   zhihui_tms: {
     managed: boolean;
     configured: boolean;
@@ -481,6 +489,16 @@ export interface DesktopSetupState {
     issues: string[];
     app_id: string;
     app_secret_configured: boolean;
+  };
+  shangman: {
+    managed: boolean;
+    configured: boolean;
+    issues: string[];
+    tenant_id: string;
+    username: string;
+    password_configured: boolean;
+    basic_auth_configured: boolean;
+    production_enabled: boolean;
   };
   logging: {
     profile: DesktopLogProfile;
@@ -505,6 +523,10 @@ export type DesktopMabangSetupInput =
   | { action: "clear" }
   | { action: "save"; account: string; password?: string };
 
+export type DesktopYacangSetupInput =
+  | { action: "clear" }
+  | { action: "save"; mobile: string; password?: string; production_enabled?: boolean };
+
 export type DesktopZhihuiTmsSetupInput =
   | { action: "clear" }
   | { action: "save"; account: string; password?: string; production_enabled: boolean };
@@ -513,12 +535,24 @@ export type DesktopFeishuSetupInput =
   | { action: "clear" }
   | { action: "save"; app_id: string; app_secret?: string };
 
+export type DesktopShangmanSetupInput =
+  | { action: "clear" }
+  | {
+      action: "save";
+      tenant_id: string;
+      username: string;
+      processed_password?: string;
+      production_enabled?: boolean;
+    };
+
 export interface DesktopSetupInput {
   workspace_root: string;
   ziniao?: DesktopZiniaoSetupInput;
   mabang?: DesktopMabangSetupInput;
+  yacang?: DesktopYacangSetupInput;
   zhihui_tms?: DesktopZhihuiTmsSetupInput;
   feishu?: DesktopFeishuSetupInput;
+  shangman?: DesktopShangmanSetupInput;
   logging?: {
     profile: DesktopLogProfile;
     retention_days: DesktopLogRetentionDays;
@@ -609,6 +643,11 @@ export interface DesktopInputAssetSlot {
   previous: DesktopInputAssetVersion | null;
 }
 
+export interface DesktopYacangPreviewInput { request_text: string; }
+export interface DesktopYacangExecuteInput { preview_id: string; confirmed: true; }
+export interface DesktopYacangPreview { preview_id: string; plan: Record<string, unknown>; production_enabled: boolean; }
+export interface DesktopYacangExecution { result: Record<string, unknown>; }
+
 export interface LxeDesktopBridge {
   dashboard: DashboardTransport;
   desktop: {
@@ -651,6 +690,8 @@ export interface LxeDesktopBridge {
     onSyntheticPerformerTaskChanged(
       listener: (task: DesktopSyntheticPerformerTask) => void,
     ): () => void;
+    previewYacangExport(input: DesktopYacangPreviewInput): Promise<DesktopYacangPreview>;
+    executeYacangExport(input: DesktopYacangExecuteInput): Promise<DesktopYacangExecution>;
     onCloudStateChanged(listener: (state: DesktopCloudState) => void): () => void;
     onConversationEvent(listener: (event: DesktopConversationEvent) => void): () => void;
     onSessionStatus(listener: (snapshot: SessionStatusSnapshot) => void): () => void;

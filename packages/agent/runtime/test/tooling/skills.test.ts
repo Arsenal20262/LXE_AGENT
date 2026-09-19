@@ -15,15 +15,40 @@ afterEach(() => {
 });
 
 describe("skill context", () => {
-  test("loads the nine bundled replenishment skills and their local references outside the source checkout", () => {
+  test("discovers the Shangman export skill under its production permission type", () => {
+    const source = repositoryRoot(import.meta.dir);
+    const skills = new SkillCatalog(source, join(source, "missing-user"), { sharedSkillsRoot: false }).list();
+    const skill = skills.find((entry) => entry.name === "shangman-goods-export-workflow-map");
+    expect(skill).toBeDefined();
+    expect(skill?.type).toBe("amazon_replenish");
+    expect(skill?.commands).toEqual([
+      "lxeskill shangman export preview",
+      "lxeskill shangman export run",
+    ]);
+  });
+
+  test("discovers the Yacang skill only with the replenishment permission type", () => {
+    const root = mkdtempSync(join(tmpdir(), "lxe-yacang-skill-permission-"));
+    roots.push(root);
+    const source = join(repositoryRoot(import.meta.dir), "skills", "yacang-export-workflow-map");
+    cpSync(source, join(root, "skills", "yacang-export-workflow-map"), { recursive: true });
+    const catalog = new SkillCatalog(root, join(root, "missing-user"), { sharedSkillsRoot: false });
+
+    expect(catalog.snapshot({ allowedTypes: new Set(["amazon_replenish"]) }).names)
+      .toEqual(["yacang-export-workflow-map"]);
+    expect(catalog.snapshot({ allowedTypes: new Set(["default"]) }).names).toEqual([]);
+    expect(catalog.snapshot({ allowedTypes: new Set() }).names).toEqual([]);
+  });
+
+  test("loads the ten bundled replenishment skills and their local references outside the source checkout", () => {
     const root = mkdtempSync(join(tmpdir(), "lxe-replenishment-skills-"));
     roots.push(root);
     const source = join(repositoryRoot(import.meta.dir), "skills");
     const names = readdirSync(source).filter((name) => name.startsWith("replenishment-"));
-    expect(names).toHaveLength(9);
+    expect(names).toHaveLength(10);
     for (const name of names) cpSync(join(source, name), join(root, "skills", name), { recursive: true });
     const skills = new SkillCatalog(root, join(root, "missing-user"), { sharedSkillsRoot: false }).list();
-    expect(skills).toHaveLength(9);
+    expect(skills).toHaveLength(10);
     const references = skills.flatMap((skill) => skill.references.map((reference) => {
       expect(readFileSync(join(skill.root, reference.path), "utf8").length).toBeGreaterThan(100);
       return reference;

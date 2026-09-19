@@ -17,6 +17,7 @@
   "fba-workflow-map": "FBA 流程导览",
   "replenishment-algorithm-config-manage": "备货算法参数管理",
   "replenishment-amazon-restock-inventory-snapshot": "亚马逊补充库存报告解析",
+  "replenishment-brazil-overseas-export": "巴西海外仓数据导出",
   "replenishment-calculate": "备货建议计算",
   "replenishment-msku-download": "店铺 MSKU 数据下载",
   "replenishment-real-inventory-report": "深圳仓真实库存报告",
@@ -24,6 +25,13 @@
   "replenishment-store-resolve": "马帮店铺名称解析",
   "replenishment-unlinked-shipment-download": "未关联货件下载",
   "replenishment-workflow-map": "备货流程导览",
+  "shangman-goods-export-workflow-map": "智慧印尼商品导出",
+  "yacang-export-workflow-map": "雅仓数据导出路由",
+  "yacang-inbound-listing-time-export": "雅仓入库上架时间导出",
+  "yacang-inventory-month-end-export": "雅仓库存列表导出",
+  "yacang-inventory-sales-export": "雅仓库存动销导出",
+  "yacang-sales-90d-export": "雅仓日度 90 天销量导出",
+  "yacang-sales-monthly-export": "雅仓库存动销 7/15/30 导出",
   "zhihui-tms-product-export": "智汇 TMS",
   "ziniao-browser": "紫鸟浏览器"
 }

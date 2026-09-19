@@ -1,19 +1,22 @@
+import { dashboardDevUrl, resolveDashboardDevPort } from "../../dashboard/vite/dev-server";
+
 const root = new URL("../../..", import.meta.url).pathname;
 const desktopEnvironment: Record<string, string | undefined> = { ...process.env };
 delete desktopEnvironment.LXE_DATA_ROOT;
 desktopEnvironment.LXE_SOURCE_ROOT = root;
-desktopEnvironment.LXE_DASHBOARD_DEV_URL = "http://127.0.0.1:5173";
+desktopEnvironment.LXE_DASHBOARD_DEV_PORT = String(resolveDashboardDevPort(desktopEnvironment));
+desktopEnvironment.LXE_DASHBOARD_DEV_URL = dashboardDevUrl(desktopEnvironment);
 const dashboard = Bun.spawn(["bun", "run", "--cwd", "apps/dashboard", "dev"], {
   cwd: root,
   stdout: "inherit",
   stderr: "inherit",
-  env: { ...process.env },
+  env: desktopEnvironment,
 });
 
 const deadline = Date.now() + 30_000;
 while (Date.now() < deadline) {
   try {
-    const response = await fetch("http://127.0.0.1:5173");
+    const response = await fetch(desktopEnvironment.LXE_DASHBOARD_DEV_URL);
     if (response.ok) break;
   } catch {
     // Vite is still starting.
@@ -21,7 +24,7 @@ while (Date.now() < deadline) {
   await Bun.sleep(100);
 }
 
-const electron = Bun.spawn(["bunx", "electron", "."], {
+const electron = Bun.spawn([process.execPath, "x", "electron", "."], {
   cwd: new URL("..", import.meta.url).pathname,
   stdout: "inherit",
   stderr: "inherit",

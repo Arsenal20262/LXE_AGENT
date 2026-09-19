@@ -87,6 +87,8 @@ def load_catalog() -> dict[str, dict[str, Any]]:
             expected = (
                 f"mabang_{module.rsplit('.', 1)[-1]}"
                 if module.startswith("services.agent_cli.mabang.")
+                else f"yacang_{module.rsplit('.', 1)[-1]}"
+                if module.startswith("services.agent_cli.yacang.")
                 else f"amazon_fba_{module.rsplit('.', 1)[-1]}"
                 if module.startswith("services.agent_cli.browser.amazon_fba.")
                 else f"amazon_operations_{module.rsplit('.', 1)[-1]}"
@@ -95,6 +97,8 @@ def load_catalog() -> dict[str, dict[str, Any]]:
                 if module.startswith("services.media.")
                 else f"assets_{module.rsplit('.', 1)[-1]}"
                 if module.startswith("services.assets.")
+                else f"shangman_{module.rsplit('.', 1)[-1]}"
+                if module.startswith("services.agent_cli.shangman.")
                 else f"zhihui_{module.rsplit('.', 1)[-1]}"
                 if module.startswith("services.agent_cli.zhihui.")
                 else ""
@@ -238,7 +242,15 @@ def _finalize_payload(
     content = [{"type": "text", "text": json.dumps(payload, ensure_ascii=False, separators=(",", ":"))}]
     if success:
         return True, content, files, None
-    message = str(payload.get("exception") or payload.get("message") or payload.get("notice") or f"{module_name} failed").strip()
+    nested_error = payload.get("error")
+    nested_message = nested_error.get("message") if isinstance(nested_error, dict) else ""
+    message = str(
+        payload.get("exception")
+        or payload.get("message")
+        or nested_message
+        or payload.get("notice")
+        or f"{module_name} failed"
+    ).strip()
     return False, content, files, {"code": "business_cli_failed", "message": message}
 
 

@@ -61,6 +61,16 @@ export class DesktopConfigValidation {
     ].filter((value): value is string => Boolean(value));
   }
 
+  yacangIssues(
+    yacang: DesktopConfig["integrations"]["yacang"],
+    secrets: DesktopSecrets,
+  ): string[] {
+    return [
+      !yacang.mobile && "缺少账号",
+      !secrets.yacang_password && "缺少密码",
+    ].filter((value): value is string => Boolean(value));
+  }
+
   zhihuiTmsIssues(
     zhihuiTms: DesktopConfig["integrations"]["zhihui_tms"],
     secrets: DesktopSecrets,
@@ -78,6 +88,17 @@ export class DesktopConfigValidation {
     return [
       !feishu.app_id && "缺少 App ID",
       !secrets.feishu_app_secret && "缺少 App Secret",
+    ].filter((value): value is string => Boolean(value));
+  }
+
+  shangmanIssues(
+    shangman: DesktopConfig["integrations"]["shangman"],
+    secrets: DesktopSecrets,
+  ): string[] {
+    return [
+      !shangman.tenant_id && "缺少 ID",
+      !shangman.username && "缺少账号",
+      !secrets.shangman_processed_password && "缺少已处理密码",
     ].filter((value): value is string => Boolean(value));
   }
 

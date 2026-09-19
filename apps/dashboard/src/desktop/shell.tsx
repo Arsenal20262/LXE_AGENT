@@ -59,7 +59,7 @@ import {
 } from "./settings-model";
 
 type Provider = DesktopModelProvider;
-type IntegrationName = "ziniao" | "mabang" | "zhihui_tms" | "feishu";
+type IntegrationName = "ziniao" | "mabang" | "yacang" | "zhihui_tms" | "feishu" | "shangman";
 type SetupForm = DesktopSettingsFormValue;
 type DesktopConfirmation =
   | { kind: "diagnostic" }
@@ -167,8 +167,10 @@ function DesktopSettingsNavigation({
         <p className="desktop-settings-nav-group">{t.desktop.integrationsGroup}</p>
         {item("ziniao", t.desktop.sectionTitles.ziniao, desktopSettingsSectionStatus(t.desktop, "ziniao", setup), Globe)}
         {item("mabang", t.desktop.sectionTitles.mabang, desktopSettingsSectionStatus(t.desktop, "mabang", setup), Store)}
+        {item("yacang", t.desktop.sectionTitles.yacang, desktopSettingsSectionStatus(t.desktop, "yacang", setup), Store)}
         {item("zhihui_tms", t.desktop.sectionTitles.zhihui_tms, desktopSettingsSectionStatus(t.desktop, "zhihui_tms", setup), Store)}
         {item("feishu", t.desktop.sectionTitles.feishu, desktopSettingsSectionStatus(t.desktop, "feishu", setup), Feather)}
+        {item("shangman", t.desktop.sectionTitles.shangman, desktopSettingsSectionStatus(t.desktop, "shangman", setup), ShieldCheck)}
         {item("logging", t.desktop.sectionTitles.logging, desktopSettingsSectionStatus(t.desktop, "logging", setup), ScrollText)}
       </div>
       <div className="desktop-settings-nav-footer">
@@ -830,6 +832,61 @@ function DesktopSettingsForm({
     );
   }
 
+  if (activeSection === "yacang") {
+    const status = desktopSettingsSectionStatus(t.desktop, "yacang", setup);
+    return (
+      <section className="desktop-settings-section">
+        <DesktopSectionHeading
+          badge={status}
+          badgeClassName={integrationStatusClass(setup.yacang.managed, setup.yacang.configured)}
+          description={t.desktop.yacang.description}
+          headingRef={headingRef}
+          title={t.desktop.sectionTitles.yacang}
+        />
+        <div className="desktop-integration-fields">
+          <IntegrationIssues issues={setup.yacang.issues} />
+          <div className="desktop-field-grid">
+            <label>
+              <span>{t.desktop.yacang.mobile}</span>
+              <input
+                autoComplete="username"
+                onChange={(event) => onChange({ yacangMobile: event.target.value })}
+                value={form.yacangMobile}
+              />
+            </label>
+            <label>
+              <span>{t.desktop.yacang.password}{setup.yacang.password_configured ? t.desktop.keepBlankSuffix : ""}</span>
+              <input
+                autoComplete="new-password"
+                onChange={(event) => onChange({ yacangPassword: event.target.value })}
+                placeholder={setup.yacang.password_configured ? t.desktop.storedPlaceholder : t.desktop.yacang.passwordPlaceholder}
+                type="password"
+                value={form.yacangPassword}
+              />
+            </label>
+          </div>
+          <label className="desktop-production-toggle">
+            <input
+              checked={form.yacangProductionEnabled}
+              disabled={!setup.yacang.configured}
+              onChange={(event) => onChange({ yacangProductionEnabled: event.target.checked })}
+              type="checkbox"
+            />
+            <span>
+              <strong>{t.desktop.yacang.productionEnabled}</strong>
+              <small>{t.desktop.yacang.productionEnabledDescription}</small>
+            </span>
+          </label>
+          {setup.yacang.managed ? (
+            <button className="desktop-clear-integration" onClick={() => onClearIntegration("yacang")} type="button">
+              <Trash2 size={14} />{t.desktop.clearIntegration}
+            </button>
+          ) : null}
+        </div>
+      </section>
+    );
+  }
+
   if (activeSection === "zhihui_tms") {
     const status = desktopSettingsSectionStatus(t.desktop, "zhihui_tms", setup);
     return (
@@ -920,6 +977,70 @@ function DesktopSettingsForm({
           </div>
           {setup.feishu.managed ? (
             <button className="desktop-clear-integration" onClick={() => onClearIntegration("feishu")} type="button">
+              <Trash2 size={14} />{t.desktop.clearIntegration}
+            </button>
+          ) : null}
+        </div>
+      </section>
+    );
+  }
+
+  if (activeSection === "shangman") {
+    const status = desktopSettingsSectionStatus(t.desktop, "shangman", setup);
+    return (
+      <section className="desktop-settings-section">
+        <DesktopSectionHeading
+          badge={status}
+          badgeClassName={integrationStatusClass(setup.shangman.managed, setup.shangman.configured)}
+          description={t.desktop.shangman.description}
+          headingRef={headingRef}
+          title={t.desktop.sectionTitles.shangman}
+        />
+        <div className="desktop-integration-fields">
+          <IntegrationIssues issues={setup.shangman.issues} />
+          <div className="desktop-field-grid">
+            <label>
+              <span>{t.desktop.shangman.tenantId}</span>
+              <input
+                autoComplete="off"
+                onChange={(event) => onChange({ shangmanTenantId: event.target.value })}
+                value={form.shangmanTenantId}
+              />
+            </label>
+            <label>
+              <span>{t.desktop.shangman.username}</span>
+              <input
+                autoComplete="username"
+                onChange={(event) => onChange({ shangmanUsername: event.target.value })}
+                value={form.shangmanUsername}
+              />
+            </label>
+            <label>
+              <span>{t.desktop.shangman.processedPassword}{setup.shangman.password_configured ? t.desktop.keepBlankSuffix : ""}</span>
+              <input
+                autoComplete="new-password"
+                onChange={(event) => onChange({ shangmanProcessedPassword: event.target.value })}
+                placeholder={setup.shangman.password_configured ? t.desktop.storedPlaceholder : t.desktop.shangman.processedPasswordPlaceholder}
+                type="password"
+                value={form.shangmanProcessedPassword}
+              />
+            </label>
+          </div>
+          <div className="desktop-production-switch-row">
+            <div>
+              <strong>{t.desktop.shangman.productionLabel}</strong>
+              <small>{t.desktop.shangman.productionDescription}</small>
+            </div>
+            <button
+              aria-checked={form.shangmanProductionEnabled}
+              className={`desktop-switch ${form.shangmanProductionEnabled ? "is-on" : ""}`}
+              onClick={() => onChange({ shangmanProductionEnabled: !form.shangmanProductionEnabled })}
+              role="switch"
+              type="button"
+            ><span /></button>
+          </div>
+          {setup.shangman.managed ? (
+            <button className="desktop-clear-integration" onClick={() => onClearIntegration("shangman")} type="button">
               <Trash2 size={14} />{t.desktop.clearIntegration}
             </button>
           ) : null}
@@ -1395,9 +1516,17 @@ export function DesktopShell({
       form.ziniaoWebDriverPath,
     ) || setup.ziniao.configured;
     const mabangTouched = hasText(form.mabangAccount, form.mabangPassword) || setup.mabang.configured;
+    const yacangTouched = hasText(form.yacangMobile, form.yacangPassword)
+      || setup.yacang.configured
+      || form.yacangProductionEnabled !== setup.yacang.production_enabled;
     const zhihuiTmsTouched = hasText(form.zhihuiTmsAccount, form.zhihuiTmsPassword)
       || form.zhihuiTmsProductionEnabled || setup.zhihui_tms.password_configured;
     const feishuTouched = hasText(form.feishuAppId, form.feishuAppSecret) || setup.feishu.configured;
+    const shangmanTouched = hasText(
+      form.shangmanTenantId,
+      form.shangmanUsername,
+      form.shangmanProcessedPassword,
+    ) || setup.shangman.configured || form.shangmanProductionEnabled !== setup.shangman.production_enabled;
     return {
       ...baseInput(),
       ...(ziniaoTouched ? {
@@ -1418,6 +1547,14 @@ export function DesktopShell({
           ...(form.mabangPassword ? { password: form.mabangPassword } : {}),
         },
       } : {}),
+      ...(yacangTouched ? {
+        yacang: {
+          action: "save" as const,
+          mobile: form.yacangMobile,
+          production_enabled: form.yacangProductionEnabled,
+          ...(form.yacangPassword ? { password: form.yacangPassword } : {}),
+        },
+      } : {}),
       ...(zhihuiTmsTouched ? {
         zhihui_tms: {
           action: "save" as const,
@@ -1431,6 +1568,15 @@ export function DesktopShell({
           action: "save" as const,
           app_id: form.feishuAppId,
           ...(form.feishuAppSecret ? { app_secret: form.feishuAppSecret } : {}),
+        },
+      } : {}),
+      ...(shangmanTouched ? {
+        shangman: {
+          action: "save" as const,
+          tenant_id: form.shangmanTenantId,
+          username: form.shangmanUsername,
+          production_enabled: form.shangmanProductionEnabled,
+          ...(form.shangmanProcessedPassword ? { processed_password: form.shangmanProcessedPassword } : {}),
         },
       } : {}),
     };

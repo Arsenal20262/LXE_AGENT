@@ -7,6 +7,7 @@ import type { Logger } from "@lxe/core";
 import { resolveMachineIdentity } from "@lxe/core/machine-identity";
 import { DesktopCloudEnrollmentManager, type CloudEnrollmentPayload } from "../src/main/cloud-enrollment";
 import { DesktopConfigStore } from "../src/main/config-store";
+import { SETTINGS_SCHEMA_VERSION } from "../src/main/config-store/model";
 import { DesktopCloudService, type DesktopCloudClock } from "../src/main/desktop-cloud";
 import { WireGuardProvisioningError } from "../src/main/wireguard-provisioner";
 
@@ -382,7 +383,7 @@ describe("DesktopCloudService", () => {
       LXE_MANAGED_LLM_API_KEY: "",
     });
     expect(JSON.parse(readFileSync(join(root, "config", "settings.json"), "utf8"))).toMatchObject({
-      schema_version: 8,
+      schema_version: SETTINGS_SCHEMA_VERSION,
       llm: { managed_target: { provider: "future_vendor", model: "future-model" } },
     });
     expect(readFileSync(join(root, "config", "settings.json"), "utf8"))

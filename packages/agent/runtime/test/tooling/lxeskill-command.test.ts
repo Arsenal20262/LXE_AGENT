@@ -49,7 +49,7 @@ describe("lxeskill command recognition", () => {
     // Every directory is owned by exactly one business module — the property the
     // <module>/<data-type> layout depends on.
     const modules = new Set(datasets.map((entry) => entry.dir.split("/")[0]));
-    expect([...modules].sort()).toEqual(["amazon", "browser", "fba", "replenish"]);
+    expect([...modules].sort()).toEqual(["amazon", "browser", "fba", "replenish", "yacang"]);
     expect(new Set(datasets.map((entry) => entry.dir)).size).toBe(datasets.length);
     expect(datasets.every((entry) => entry.holds.length > 0)).toBe(true);
   });
@@ -72,6 +72,14 @@ describe("lxeskill command recognition", () => {
         ownerSkills: ["fba-shipment-delivery-csv-download"],
         attributionSkill: "fba-shipment-delivery-csv-download",
       });
+    expect(entries.find((entry) => entry.name === "mabang_brazil_overseas_export"))
+      .toMatchObject({
+        command: "lxeskill replenish brazil-overseas export",
+        module: "services.agent_cli.mabang.brazil_overseas_export",
+        ownerSkills: ["replenishment-brazil-overseas-export"],
+        attributionSkill: "replenishment-brazil-overseas-export",
+        artifactPaths: [{ field: "xlsx_path", role: "deliverable" }],
+      });
     expect(entries.find((entry) => entry.name === "mabang_regenerate_purchase_files"))
       .toMatchObject({
         command: "lxeskill fba purchase files-regenerate",
@@ -83,6 +91,54 @@ describe("lxeskill command recognition", () => {
           { field: "restock_xlsx_paths[]", role: "deliverable" },
           { field: "contract_xlsx_paths[]", role: "deliverable" },
         ],
+      });
+    expect(entries.find((entry) => entry.name === "yacang_export_inventory_sales"))
+      .toMatchObject({
+        command: "lxeskill yacang inventory-sales export",
+        module: "services.agent_cli.yacang.export_inventory_sales",
+        visibility: "internal",
+        ownerSkills: [],
+        artifactPaths: [{ field: "xlsx_paths[]", role: "deliverable" }],
+      });
+    expect(entries.find((entry) => entry.name === "yacang_export_workflow"))
+      .toMatchObject({
+        command: "lxeskill yacang export run",
+        module: "services.agent_cli.yacang.export_workflow",
+        ownerSkills: ["yacang-export-workflow-map"],
+        attributionSkill: "yacang-export-workflow-map",
+        artifactPaths: [{ field: "artifacts[].path", role: "deliverable" }],
+      });
+    expect(entries.find((entry) => entry.name === "yacang_export_sales_monthly"))
+      .toMatchObject({
+        command: "lxeskill yacang export sales-monthly",
+        module: "services.agent_cli.yacang.export_sales_monthly",
+        visibility: "internal",
+        ownerSkills: [],
+        artifactPaths: [{ field: "xlsx_paths[]", role: "deliverable" }],
+      });
+    expect(entries.find((entry) => entry.name === "yacang_export_sales_90d"))
+      .toMatchObject({
+        command: "lxeskill yacang export sales-90d",
+        module: "services.agent_cli.yacang.export_sales_90d",
+        visibility: "internal",
+        ownerSkills: [],
+        artifactPaths: [{ field: "xlsx_paths[]", role: "deliverable" }],
+      });
+    expect(entries.find((entry) => entry.name === "yacang_export_inventory_month_end"))
+      .toMatchObject({
+        command: "lxeskill yacang export inventory-month-end",
+        module: "services.agent_cli.yacang.export_inventory_month_end",
+        visibility: "internal",
+        ownerSkills: [],
+        artifactPaths: [{ field: "xlsx_paths[]", role: "deliverable" }],
+      });
+    expect(entries.find((entry) => entry.name === "yacang_export_inbound_listing_time"))
+      .toMatchObject({
+        command: "lxeskill yacang export inbound-listing-time",
+        module: "services.agent_cli.yacang.export_inbound_listing_time",
+        visibility: "internal",
+        ownerSkills: [],
+        artifactPaths: [{ field: "xlsx_paths[]", role: "deliverable" }],
       });
     expect(entries.find((entry) => entry.name === "zhihui_export_products"))
       .toMatchObject({
@@ -96,6 +152,11 @@ describe("lxeskill command recognition", () => {
       artifactPaths: [{ field: "screenshot_path", role: "model_input" }],
       attributionSkill: "ziniao-browser",
     });
+
+    expect(entries
+      .filter((entry) => entry.command.startsWith("lxeskill yacang ") && entry.visibility !== "internal")
+      .map((entry) => entry.command))
+      .toEqual(["lxeskill yacang export run"]);
     expect(entries.find((entry) => entry.name === "mabang_resolve_fba_store"))
       .toMatchObject({
         attributionSkill: "replenishment-store-resolve",
@@ -104,5 +165,21 @@ describe("lxeskill command recognition", () => {
           "replenishment-unlinked-shipment-download",
         ]),
       });
+    expect(entries.find((entry) => entry.name === "shangman_goods_export_preview")).toMatchObject({
+      command: "lxeskill shangman export preview",
+      module: "services.agent_cli.shangman.goods_export_preview",
+      ownerSkills: ["shangman-goods-export-workflow-map"],
+      attributionSkill: "shangman-goods-export-workflow-map",
+    });
+    expect(entries.find((entry) => entry.name === "shangman_goods_export_run")).toMatchObject({
+      command: "lxeskill shangman export run",
+      module: "services.agent_cli.shangman.goods_export_run",
+      ownerSkills: ["shangman-goods-export-workflow-map"],
+      artifactPaths: [{ field: "artifact_path", role: "deliverable" }],
+    });
+    const shangmanEntries = entries.filter((entry) => entry.command.startsWith("lxeskill shangman export "));
+    expect(shangmanEntries).toHaveLength(2);
+    expect(shangmanEntries.every((entry) => entry.ownerSkills.length === 1
+      && entry.ownerSkills[0] === "shangman-goods-export-workflow-map")).toBe(true);
   });
 });

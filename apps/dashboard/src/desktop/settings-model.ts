@@ -50,8 +50,10 @@ export type DesktopSettingsSection =
   | "base"
   | "ziniao"
   | "mabang"
+  | "yacang"
   | "zhihui_tms"
   | "feishu"
+  | "shangman"
   | "logging";
 
 export type EditableDesktopSettingsSection = Exclude<DesktopSettingsSection, "status" | "appearance" | "cloud">;
@@ -68,11 +70,18 @@ export interface DesktopSettingsFormValue {
   ziniaoWebDriverPath: string;
   mabangAccount: string;
   mabangPassword: string;
+  yacangMobile: string;
+  yacangPassword: string;
+  yacangProductionEnabled: boolean;
   zhihuiTmsAccount: string;
   zhihuiTmsPassword: string;
   zhihuiTmsProductionEnabled: boolean;
   feishuAppId: string;
   feishuAppSecret: string;
+  shangmanTenantId: string;
+  shangmanUsername: string;
+  shangmanProcessedPassword: string;
+  shangmanProductionEnabled: boolean;
   logProfile: DesktopLogProfile;
   logRetentionDays: DesktopLogRetentionDays;
 }
@@ -89,11 +98,18 @@ export const desktopSettingsForm = (state: DesktopSetupState): DesktopSettingsFo
   ziniaoWebDriverPath: state.ziniao.webdriver_path,
   mabangAccount: state.mabang.account,
   mabangPassword: "",
+  yacangMobile: state.yacang.mobile,
+  yacangPassword: "",
+  yacangProductionEnabled: state.yacang.production_enabled,
   zhihuiTmsAccount: state.zhihui_tms.account,
   zhihuiTmsPassword: "",
   zhihuiTmsProductionEnabled: state.zhihui_tms.production_enabled,
   feishuAppId: state.feishu.app_id,
   feishuAppSecret: "",
+  shangmanTenantId: state.shangman.tenant_id,
+  shangmanUsername: state.shangman.username,
+  shangmanProcessedPassword: "",
+  shangmanProductionEnabled: state.shangman.production_enabled,
   logProfile: state.logging.profile,
   logRetentionDays: state.logging.retention_days,
 });
@@ -109,8 +125,10 @@ const SECTION_FIELDS: Record<EditableDesktopSettingsSection, readonly (keyof Des
     "ziniaoWebDriverPath",
   ],
   mabang: ["mabangAccount", "mabangPassword"],
+  yacang: ["yacangMobile", "yacangPassword", "yacangProductionEnabled"],
   zhihui_tms: ["zhihuiTmsAccount", "zhihuiTmsPassword", "zhihuiTmsProductionEnabled"],
   feishu: ["feishuAppId", "feishuAppSecret"],
+  shangman: ["shangmanTenantId", "shangmanUsername", "shangmanProcessedPassword", "shangmanProductionEnabled"],
   logging: ["logProfile", "logRetentionDays"],
 };
 

@@ -253,7 +253,13 @@ export function createExecTools(dependencies: ExecToolDependencies): ToolDefinit
           toolCallId: context.tool_call_id ?? "",
           trackZhihuiProgress: zhihuiProgress,
           ...(context.turn_id === undefined ? {} : { turnId: context.turn_id }),
-          ...(options.execEnv ? { env: options.execEnv({ skillNames: context.skill_names ?? [] }) } : {}),
+          ...(options.execEnv ? {
+            env: options.execEnv({
+              skillNames: context.skill_names ?? [],
+              sessionId: context.session_id,
+              turnId: context.turn_id ?? "",
+            }),
+          } : {}),
         });
         return await commandResult(
           payload,

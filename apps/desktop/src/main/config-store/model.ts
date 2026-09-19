@@ -41,7 +41,7 @@ export const OUTPUT_DIRECTORY_ENV_NAMES = [
 export type OutputDirectoryEnvironmentName = typeof OUTPUT_DIRECTORY_ENV_NAMES[number];
 
 export interface DesktopConfig {
-  schema_version: 8;
+  schema_version: 10;
   migration_version: number;
   llm: {
     provider: DesktopModelProvider;
@@ -65,8 +65,10 @@ export interface DesktopConfig {
       webdriver_path: string;
     };
     mabang: { managed: boolean; account: string };
+    yacang: { managed: boolean; mobile: string; production_enabled: boolean };
     zhihui_tms: { managed: boolean; account: string; production_enabled: boolean };
     feishu: { managed: boolean; app_id: string };
+    shangman: { managed: boolean; tenant_id: string; username: string; production_enabled: boolean };
   };
   logging: {
     profile: DesktopLogProfile;
@@ -88,8 +90,11 @@ export interface DesktopConfig {
 export interface DesktopSecrets {
   ziniao_password: string;
   mabang_password: string;
+  yacang_password: string;
   zhihui_tms_password: string;
   feishu_app_secret: string;
+  shangman_processed_password: string;
+  shangman_basic_auth: string;
   data_server_api_key: string;
   cloud_identity_candidate: string;
   cloud_business_token: string;
@@ -107,7 +112,7 @@ export interface DesktopSecrets {
 export const LOG_RETENTION_DAYS = new Set<DesktopLogRetentionDays>([3, 7, 14, 30]);
 export const MODEL_AUTH_MIGRATION_VERSION = 5;
 
-export const SETTINGS_SCHEMA_VERSION = 8 as const;
+export const SETTINGS_SCHEMA_VERSION = 10 as const;
 
 const developmentCatalog = (): LlmProviderCatalog => loadLlmProviderCatalog(
   join(repositoryRoot(dirname(fileURLToPath(import.meta.url))), "config", "llm"),
@@ -142,8 +147,10 @@ const defaultConfig = (catalog: LlmProviderCatalog): DesktopConfig => {
         webdriver_path: "",
       },
       mabang: { managed: false, account: "" },
+      yacang: { managed: false, mobile: "", production_enabled: false },
       zhihui_tms: { managed: false, account: "", production_enabled: false },
       feishu: { managed: false, app_id: "" },
+      shangman: { managed: false, tenant_id: "", username: "", production_enabled: false },
     },
     logging: { profile: "standard", retention_days: 7 },
     cloud: {
@@ -163,8 +170,11 @@ const defaultConfig = (catalog: LlmProviderCatalog): DesktopConfig => {
 const DEFAULT_SECRETS: DesktopSecrets = {
   ziniao_password: "",
   mabang_password: "",
+  yacang_password: "",
   zhihui_tms_password: "",
   feishu_app_secret: "",
+  shangman_processed_password: "",
+  shangman_basic_auth: "",
   data_server_api_key: "",
   cloud_identity_candidate: "",
   cloud_business_token: "",
@@ -207,7 +217,7 @@ export const cloneConfig = (catalog: LlmProviderCatalog = developmentCatalog()):
   structuredClone(defaultConfig(catalog));
 export const cloneSecrets = (): DesktopSecrets => structuredClone(DEFAULT_SECRETS);
 
-const secretFieldPattern = /(?:secret|password|api[_-]?key|token)/iu;
+const secretFieldPattern = /(?:secret|password|api[_-]?key|token|basic[_-]?auth)/iu;
 
 const assertNoSecretFields = (value: unknown, path = "settings"): void => {
   if (value === null || typeof value !== "object") return;
@@ -251,6 +261,7 @@ export const parseSettings = (
   const value = objectValue(raw);
   if (value.schema_version !== 4 && value.schema_version !== 5
     && value.schema_version !== 6 && value.schema_version !== 7
+    && value.schema_version !== 8 && value.schema_version !== 9
     && value.schema_version !== SETTINGS_SCHEMA_VERSION) {
     throw new Error(`unsupported settings schema_version: ${String(value.schema_version ?? "missing")}`);
   }
@@ -276,7 +287,7 @@ export const parseSettings = (
   if (value.schema_version !== 4) {
     assertFieldTypes(llm, { credential_source: "string", last_local_provider: "string" }, "settings.llm");
   }
-  if (value.schema_version === 7 || value.schema_version === SETTINGS_SCHEMA_VERSION) {
+  if (Number(value.schema_version) >= 7) {
     const managedTarget = objectValue(llm.managed_target);
     assertOnlyFields(managedTarget, ["provider", "model"], "settings.llm.managed_target");
     assertFieldTypes(managedTarget, { provider: "string", model: "string" }, "settings.llm.managed_target");
@@ -289,8 +300,9 @@ export const parseSettings = (
       ? ["kimi_coding", "deepseek"]
       : ["kimi_coding", "deepseek", "glm"];
     const validProviderName = /^[A-Za-z0-9_-]{1,128}$/u.test(name);
-    if ((value.schema_version === SETTINGS_SCHEMA_VERSION && !validProviderName)
-      || (value.schema_version !== SETTINGS_SCHEMA_VERSION && !acceptedLegacyProviders.includes(name))) {
+    if (value.schema_version >= 8
+      ? !validProviderName
+      : !acceptedLegacyProviders.includes(name)) {
       throw new Error(`settings.llm.profiles.${name} is not a supported setting`);
     }
     const profileValue = objectValue(profile);
@@ -307,26 +319,42 @@ export const parseSettings = (
   const integrations = objectValue(value.integrations);
   const ziniao = objectValue(integrations.ziniao);
   const mabang = objectValue(integrations.mabang);
+  const yacang = objectValue(integrations.yacang);
   const zhihuiTms = objectValue(integrations.zhihui_tms);
   const feishu = objectValue(integrations.feishu);
-  assertOnlyFields(integrations, ["ziniao", "mabang", "zhihui_tms", "feishu"], "settings.integrations");
+  const shangman = objectValue(integrations.shangman);
+  assertOnlyFields(integrations, ["ziniao", "mabang", "yacang", "zhihui_tms", "feishu", "shangman"], "settings.integrations");
   assertOnlyFields(ziniao, [
     "managed", "company", "username", "app_version", "app_path", "webdriver_path",
   ], "settings.integrations.ziniao");
   assertOnlyFields(mabang, ["managed", "account"], "settings.integrations.mabang");
+  assertOnlyFields(yacang, ["managed", "mobile", "production_enabled"], "settings.integrations.yacang");
   assertOnlyFields(zhihuiTms, ["managed", "account", "production_enabled"], "settings.integrations.zhihui_tms");
   assertOnlyFields(feishu, ["managed", "app_id"], "settings.integrations.feishu");
+  assertOnlyFields(shangman, ["managed", "tenant_id", "username", "production_enabled"], "settings.integrations.shangman");
   assertFieldTypes(ziniao, {
     managed: "boolean", company: "string", username: "string", app_version: "string",
     app_path: "string", webdriver_path: "string",
   }, "settings.integrations.ziniao");
   assertFieldTypes(mabang, { managed: "boolean", account: "string" }, "settings.integrations.mabang");
+  if (value.schema_version === SETTINGS_SCHEMA_VERSION) {
+    assertFieldTypes(yacang, { managed: "boolean", mobile: "string" }, "settings.integrations.yacang");
+  }
+  if (yacang.production_enabled !== undefined && typeof yacang.production_enabled !== "boolean") {
+    throw new Error("settings.integrations.yacang.production_enabled must be a boolean");
+  }
   if (integrations.zhihui_tms !== undefined) {
     assertFieldTypes(zhihuiTms, {
       managed: "boolean", account: "string", production_enabled: "boolean",
     }, "settings.integrations.zhihui_tms");
   }
   assertFieldTypes(feishu, { managed: "boolean", app_id: "string" }, "settings.integrations.feishu");
+  if (value.schema_version >= SETTINGS_SCHEMA_VERSION || Object.keys(shangman).length > 0) {
+    assertFieldTypes(shangman, {
+      managed: "boolean", tenant_id: "string", username: "string",
+      ...(value.schema_version >= SETTINGS_SCHEMA_VERSION ? { production_enabled: "boolean" as const } : {}),
+    }, "settings.integrations.shangman");
+  }
   const logging = objectValue(value.logging);
   const cloud = objectValue(value.cloud);
   assertOnlyFields(logging, ["profile", "retention_days"], "settings.logging");
@@ -359,8 +387,10 @@ export const parseConfig = (
   const integrations = objectValue(value.integrations);
   const rawZiniao = objectValue(integrations.ziniao);
   const rawMabang = objectValue(integrations.mabang);
+  const rawYacang = objectValue(integrations.yacang);
   const rawZhihuiTms = objectValue(integrations.zhihui_tms);
   const rawFeishu = objectValue(integrations.feishu);
+  const rawShangman = objectValue(integrations.shangman);
   const rawLogging = objectValue(value.logging);
   const rawCloud = objectValue(value.cloud);
   const rawOutputDirectories = objectValue(value.output_directories);
@@ -437,6 +467,11 @@ export const parseConfig = (
         managed: Boolean(rawMabang.managed),
         account: text(rawMabang.account),
       },
+      yacang: {
+        managed: Boolean(rawYacang.managed),
+        mobile: text(rawYacang.mobile),
+        production_enabled: Boolean(rawYacang.production_enabled),
+      },
       zhihui_tms: {
         managed: Boolean(rawZhihuiTms.managed),
         account: text(rawZhihuiTms.account),
@@ -445,6 +480,12 @@ export const parseConfig = (
       feishu: {
         managed: Boolean(rawFeishu.managed) || Boolean(legacyFeishuAppId),
         app_id: text(rawFeishu.app_id) || legacyFeishuAppId,
+      },
+      shangman: {
+        managed: Boolean(rawShangman.managed),
+        tenant_id: text(rawShangman.tenant_id),
+        username: text(rawShangman.username),
+        production_enabled: rawShangman.production_enabled === true,
       },
     },
     logging: {
@@ -491,8 +532,11 @@ export const parseSecrets = (raw: unknown): DesktopSecrets => {
   return {
     ziniao_password: text(value.ziniao_password),
     mabang_password: text(value.mabang_password),
+    yacang_password: text(value.yacang_password),
     zhihui_tms_password: text(value.zhihui_tms_password),
     feishu_app_secret: text(value.feishu_app_secret),
+    shangman_processed_password: text(value.shangman_processed_password),
+    shangman_basic_auth: text(value.shangman_basic_auth),
     data_server_api_key: text(value.data_server_api_key),
     cloud_identity_candidate: text(value.cloud_identity_candidate),
     cloud_business_token: text(value.cloud_business_token),

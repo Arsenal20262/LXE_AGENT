@@ -1,6 +1,19 @@
 import type { DesktopStreamMutation, DisplayMetrics, ToolStep, TurnProcessPart } from "@lxe/protocol";
 import { parseUserQuestionSubmission, type PendingUserQuestion, type SubmitUserQuestionAnswer } from "@lxe/protocol/user-questions";
 export type { PendingUserQuestion, UserQuestion, UserQuestionAnswer, SubmitUserQuestionAnswer } from "@lxe/protocol/user-questions";
+
+export interface PendingShangmanCaptcha {
+  session_id: string;
+  challenge_id: string;
+  image_data_url: string;
+  expires_at: number;
+}
+
+export interface SubmitShangmanCaptchaAnswer {
+  session_id: string;
+  challenge_id: string;
+  code: string;
+}
 import { validateSessionStatusRequest, type SessionStatusSnapshot } from "@lxe/protocol/session-status";
 export type { TurnProcessPart } from "@lxe/protocol";
 
@@ -470,8 +483,9 @@ export type StatsOverviewPayload = {
 export type DashboardRpcEmptyInput = Record<string, never>;
 
 export interface DashboardRpcSpec {
-  "sessions.questions": { input: DashboardRpcEmptyInput; result: { items: PendingUserQuestion[] } };
+  "sessions.questions": { input: { session_id?: string }; result: { items: PendingUserQuestion[]; shangman_captcha?: PendingShangmanCaptcha } };
   "sessions.answer": { input: SubmitUserQuestionAnswer; result: { accepted: true; request_id: string } };
+  "sessions.shangman_captcha.answer": { input: SubmitShangmanCaptchaAnswer; result: { accepted: true; challenge_id: string } };
   "sessions.list": {
     input: { query?: string; limit?: number; offset?: number };
     result: SessionListPayload;
@@ -606,6 +620,7 @@ export class DashboardRpcError extends Error {
 
 const MAX_INPUT_BYTES = 1_000_000;
 const MAX_TEXT_LENGTH = 8_192;
+const MAX_SHANGMAN_CAPTCHA_CODE_LENGTH = 128;
 
 const rpcError = (message: string): never => {
   throw new DashboardRpcError("invalid_request", message);
@@ -689,12 +704,25 @@ export function parseDashboardRpcCall(value: unknown): DashboardRpcCall {
 
   switch (operation) {
     case "sessions.questions":
-      exactKeys(input, [], `${operation}.input`);
-      return { operation, input: {} };
+      exactKeys(input, ["session_id"], `${operation}.input`);
+      return { operation, input: input.session_id === undefined
+        ? {}
+        : { session_id: textValue(input.session_id, `${operation}.session_id`)! } };
     case "sessions.answer":
       exactKeys(input, ["session_id", "request_id", "answers"], `${operation}.input`);
       try { return { operation, input: parseUserQuestionSubmission(input) }; }
       catch (error) { return rpcError(error instanceof Error ? error.message : String(error)); }
+    case "sessions.shangman_captcha.answer":
+      exactKeys(input, ["session_id", "challenge_id", "code"], `${operation}.input`);
+      {
+        const code = textValue(input.code, `${operation}.code`)!;
+        if (code.length > MAX_SHANGMAN_CAPTCHA_CODE_LENGTH) rpcError(`${operation}.code is too long`);
+        return { operation, input: {
+          session_id: textValue(input.session_id, `${operation}.session_id`)!,
+          challenge_id: textValue(input.challenge_id, `${operation}.challenge_id`)!,
+          code,
+        } };
+      }
     case "sessions.list":
       exactKeys(input, ["query", "limit", "offset"], `${operation}.input`);
       return { operation, input: {
