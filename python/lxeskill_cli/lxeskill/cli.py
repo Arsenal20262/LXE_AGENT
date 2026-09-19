@@ -475,8 +475,21 @@ def _run_doctor(catalog: dict[str, dict[str, Any]]) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    if arguments and arguments[0] == "cloud-status":
+        # Self discovery must not initialize business workspaces, logs or desktop state.
+        from lxeskill.cloud_status import run_cloud_status
+
+        _configure_stdio()
+        try:
+            result, exit_code = run_cloud_status(arguments[1:])
+        except KeyboardInterrupt:
+            result, exit_code = {"type": "result", "command": "cloud-status", "ok": False,
+                "data": {}, "files": [], "error": {"code": "cancelled", "message": "command cancelled"}}, 130
+        _emit(result)
+        return exit_code
     activate_project_workspace()
-    return _main(argv)
+    return _main(arguments)
 
 
 def _main(argv: list[str] | None = None) -> int:
@@ -492,7 +505,7 @@ def _main(argv: list[str] | None = None) -> int:
                     "command": "help",
                     "ok": True,
                     "data": {
-                        "usage": "lxeskill <list|describe|doctor|command> [options]",
+                        "usage": "lxeskill <list|describe|doctor|cloud-status|command> [options]",
                         "input_modes": ["flags", "--input-json <path>", "--stdin-json"],
                     },
                     "files": [],
