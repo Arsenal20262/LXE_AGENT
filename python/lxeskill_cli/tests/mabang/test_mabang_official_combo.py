@@ -343,7 +343,8 @@ def test_transport_auth_and_retries(transport):
     assert sleeps == [3, 2] and len(session.calls) == 3
     url, kw = session.calls[0]
     assert url == 'http://data.test/api/v1/data-sources/mabang/shops/list'
-    assert kw['headers']['Authorization'] == 'Bearer data-secret'
+    assert kw['headers']['X-LXE-Client'] == 'cli'
+    assert 'Authorization' not in kw['headers']
     assert kw['timeout'].total == 60 and kw['allow_redirects'] is False
     assert 'Cookie' not in kw['headers']
 
@@ -457,12 +458,20 @@ def test_retry_after_validation(value, expected):
     assert http.retry_delay(value, 2) == expected
 
 
-def test_missing_credentials_do_not_call_network(monkeypatch, transport):
+def test_missing_server_url_does_not_call_network(monkeypatch, transport):
     session, _ = transport([])
-    monkeypatch.delenv('LXE_DATA_SERVER_API_KEY')
+    monkeypatch.delenv('LXE_DATA_SERVER_URL')
     with pytest.raises(http.OfficialApiError, match='未配置'):
         asyncio.run(http.post_json('shops/list', {}, context='shop'))
     assert session.calls == []
+
+
+def test_native_transport_needs_no_desktop_credential(monkeypatch, transport):
+    session, _ = transport([Response(payload={'code': 200, 'data': {}})])
+    monkeypatch.delenv('LXE_DATA_SERVER_API_KEY')
+    monkeypatch.delenv('LXE_ERP_API_KEY')
+    assert asyncio.run(http.post_json('shops/list', {}, context='shop'))['code'] == 200
+    assert session.calls[0][1]['headers'] == {'X-LXE-Client': 'cli', 'Accept': 'application/json'}
 
 
 def test_quoted_secret_with_spaces_is_fully_redacted():

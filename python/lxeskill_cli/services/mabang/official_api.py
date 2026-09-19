@@ -80,15 +80,14 @@ def _business_failure(payload: Any) -> bool:
 
 async def post_json(endpoint: str, body: dict[str, Any], *, context: str) -> dict[str, Any]:
     base = os.getenv("LXE_DATA_SERVER_URL", "").strip().rstrip("/")
-    key = os.getenv("LXE_DATA_SERVER_API_KEY", "").strip()
-    if not base or not key:
-        raise OfficialApiError(context, "LXE_DATA_SERVER_URL / LXE_DATA_SERVER_API_KEY 未配置")
+    if not base:
+        raise OfficialApiError(context, "LXE_DATA_SERVER_URL 未配置")
     for attempt in range(MAX_ATTEMPTS):
         try:
             async with data_service_http_session.post(
                 base + ROOT + endpoint,
                 json=body,
-                headers={"Authorization": f"Bearer {key}", "Accept": "application/json"},
+                headers={"X-LXE-Client": "cli", "Accept": "application/json"},
                 timeout=aiohttp.ClientTimeout(total=REQUEST_TIMEOUT_SECONDS),
                 allow_redirects=False,
             ) as response:
