@@ -23,7 +23,7 @@ uv run --frozen lxeskill cloud-status --server http://10.88.0.1:8000
 
 ## CLI 内部公共通信模块
 
-`shared.infra.cloud_client` 提供与本服务器通信的基础能力。目前只有 `cloud-status` 接入，采购、装箱、报关和备货 SKU 核验继续使用原来的请求与鉴权代码。
+`shared.infra.cloud_client` 提供与本服务器通信的基础能力。`cloud-status`、采购、装箱、报关和备货 SKU 核验均已接入。上述业务请求通过 WireGuard 设备鉴权，无需桌面业务 Token；详见 `business-cloud-access.md`。
 
 ```python
 from shared.infra.cloud_client import CloudClient, diagnostic
@@ -36,4 +36,4 @@ response = client.request_json("GET", "/api/v1/device-context")
 
 返回值包含 `status_code`、`elapsed_ms`、`payload`、`json_valid`、`truncated`。HTTP 拒绝仍返回实际响应，连接失败抛出 `CloudConnectionError`；业务代码自己判断状态、JSON 结构和业务错误码。`truncated=True` 时不得把结果当作完整数据继续处理。正常数据不会自动脱敏或裁剪，对外展示错误时调用 `diagnostic(...)` 做脱敏和明确截断。
 
-模块不查询或缓存权限，不处理马帮业务码、ERP 文件下载或异步重试；这些能力在后续业务迁移时按实际需求接入。用户不需要先运行自检才能使用业务命令。
+模块不查询或缓存权限，不处理马帮业务码。`request_bytes` 支持文件响应，`AsyncCloudClient` 支持异步请求并管理会话关闭；重试仍由马帮业务适配层决定。用户不需要先运行自检才能使用业务命令。

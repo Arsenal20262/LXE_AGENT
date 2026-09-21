@@ -5,8 +5,9 @@ HTTP failures are responses; only connection failures raise CloudConnectionError
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import json
+from http.client import HTTPException
 import math
 import os
 import re
@@ -93,22 +94,34 @@ class CloudResponse:
     payload: Any
     json_valid: bool
     truncated: bool
+    headers: dict[str, str] = field(default_factory=dict)
+    content: bytes = b""
+
+    @property
+    def text(self) -> str:
+        return self.content.decode("utf-8", errors="replace")
+
+    def json(self) -> Any:
+        if not self.json_valid:
+            raise ValueError("Response is not valid JSON")
+        return self.payload
 
 
 class CloudConnectionError(RuntimeError):
-    def __init__(self, cause: Exception, elapsed_ms: int, http_status: int | None = None):
+    def __init__(self, cause: Exception, elapsed_ms: int, http_status: int | None = None, *, retryable: bool = False):
         super().__init__(diagnostic(f"{type(cause).__name__}: {cause}"))
         self.elapsed_ms = elapsed_ms
+        self.retryable = retryable
         self.http_status = http_status
 
 
 class CloudClient:
     def __init__(self, server_url: str, *, timeout: float = TIMEOUT_SECONDS,
-                 max_response_bytes: int = MAX_RESPONSE_BYTES):
+                 max_response_bytes: int | None = MAX_RESPONSE_BYTES):
         self.server_url = normalize_server_url(server_url)
         if not math.isfinite(timeout) or timeout <= 0:
             raise ValueError("Cloud timeout must be positive and finite")
-        if not isinstance(max_response_bytes, int) or isinstance(max_response_bytes, bool) or max_response_bytes <= 0:
+        if max_response_bytes is not None and (not isinstance(max_response_bytes, int) or isinstance(max_response_bytes, bool) or max_response_bytes <= 0):
             raise ValueError("Cloud response limit must be a positive integer")
         self.timeout = timeout
         self.max_response_bytes = max_response_bytes
@@ -120,6 +133,12 @@ class CloudClient:
         return cls(value, **options)
 
     def request_json(self, method: str, path: str, *, json_body: Any = None) -> CloudResponse:
+        return self._request(method, path, json_body=json_body, accept="application/json")
+
+    def request_bytes(self, method: str, path: str) -> CloudResponse:
+        return self._request(method, path, accept="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/octet-stream, application/json")
+
+    def _request(self, method: str, path: str, *, json_body: Any = None, accept: str) -> CloudResponse:
         """Perform one request; preserve non-JSON bodies and HTTP errors for callers.
 
         payload is unmodified application data. Use diagnostic/redact at output
@@ -131,7 +150,7 @@ class CloudClient:
             raise ValueError("Cloud client currently supports GET and POST")
         if method == "GET" and json_body is not None:
             raise ValueError("GET requests cannot contain a JSON body")
-        headers = {"X-LXE-Client": "cli", "Accept": "application/json"}
+        headers = {"X-LXE-Client": "cli", "Accept": accept}
         data = None
         if json_body is not None:
             data = json.dumps(json_body, ensure_ascii=False, allow_nan=False).encode("utf-8")
@@ -146,17 +165,30 @@ class CloudClient:
                 response = exc
             with response:
                 status = response.code
-                raw = response.read(self.max_response_bytes + 1)
-        except (URLError, OSError, ValueError) as exc:
+                raw = response.read() if self.max_response_bytes is None else response.read(self.max_response_bytes + 1)
+                headers = response_headers(getattr(response, "headers", {}))
+        except (URLError, OSError, ValueError, HTTPException) as exc:
             elapsed_ms = round((time.monotonic() - started) * 1000)
             raise CloudConnectionError(exc, elapsed_ms, status) from exc
         elapsed_ms = round((time.monotonic() - started) * 1000)
-        truncated = len(raw) > self.max_response_bytes
-        text = raw[:self.max_response_bytes].decode("utf-8", errors="replace")
-        try:
-            payload = json.loads(text)
-            json_valid = True
-        except ValueError:
-            payload = text
-            json_valid = False
-        return CloudResponse(status, elapsed_ms, payload, json_valid, truncated)
+        return parse_response(status, elapsed_ms, raw, self.max_response_bytes, headers)
+
+
+def response_headers(headers) -> dict[str, str]:
+    # Only metadata needed by callers; never propagate cookies/authentication.
+    return {key.title(): value for key, value in headers.items()
+            if key.lower() in {"content-type", "content-disposition", "retry-after"}}
+
+
+def parse_response(status: int, elapsed_ms: int, raw: bytes, limit: int | None,
+                   headers: dict[str, str]) -> CloudResponse:
+    truncated = limit is not None and len(raw) > limit
+    content = raw if limit is None else raw[:limit]
+    text = content.decode("utf-8", errors="replace")
+    try:
+        payload = json.loads(text)
+        json_valid = True
+    except ValueError:
+        payload = text
+        json_valid = False
+    return CloudResponse(status, elapsed_ms, payload, json_valid, truncated, headers, content)
