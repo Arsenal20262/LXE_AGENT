@@ -14,6 +14,7 @@ DEFAULT_OUTPUT_DIR = dataset_dir("replenish_brazil_overseas")
 
 class BrazilExportKind(StrEnum):
     INVENTORY_SALES_SNAPSHOT = "inventory_sales_snapshot"
+    ALLOCATION_BOTH = "allocation_both"
     ALLOCATION_SIGNED_BEFORE_3M = "allocation_signed_before_3m"
     ALLOCATION_PENDING_DEFAULT_3M = "allocation_pending_default_3m"
 

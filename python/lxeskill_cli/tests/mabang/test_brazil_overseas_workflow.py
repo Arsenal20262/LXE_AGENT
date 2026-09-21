@@ -50,6 +50,38 @@ def test_routes_allocation_parameters_to_matching_export(monkeypatch, kind, expe
     assert calls == [(kind, {})]
 
 
+def test_routes_unspecified_documents_to_pending_and_signed_exports(monkeypatch) -> None:
+    calls: list[BrazilExportKind] = []
+    paths = {
+        BrazilExportKind.ALLOCATION_PENDING_DEFAULT_3M: "/artifacts/replenish/brazil_overseas/pending.xls",
+        BrazilExportKind.ALLOCATION_SIGNED_BEFORE_3M: "/artifacts/replenish/brazil_overseas/signed.xls",
+    }
+
+    async def fake_allocation_export(kind: BrazilExportKind, **_kwargs):
+        calls.append(kind)
+        return BrazilOverseasAllocationExportResult(kind=kind, xlsx_path=paths[kind])
+
+    monkeypatch.setattr(workflow, "export_brazil_overseas_allocation", fake_allocation_export)
+
+    result = asyncio.run(
+        workflow.export_brazil_overseas(
+            warehouse="brazil_overseas",
+            export_kind=BrazilExportKind.ALLOCATION_BOTH.value,
+        )
+    )
+
+    assert result.kind is BrazilExportKind.ALLOCATION_BOTH
+    assert result.xlsx_path == ""
+    assert result.xlsx_paths == (
+        "/artifacts/replenish/brazil_overseas/pending.xls",
+        "/artifacts/replenish/brazil_overseas/signed.xls",
+    )
+    assert calls == [
+        BrazilExportKind.ALLOCATION_PENDING_DEFAULT_3M,
+        BrazilExportKind.ALLOCATION_SIGNED_BEFORE_3M,
+    ]
+
+
 def test_returns_actionable_clarification_without_calling_erp() -> None:
     with pytest.raises(workflow.BrazilOverseasRequestClarificationError) as raised:
         asyncio.run(workflow.export_brazil_overseas(warehouse="brazil_overseas", export_kind="unknown"))

@@ -40,21 +40,22 @@ describe("skill context", () => {
     expect(catalog.snapshot({ allowedTypes: new Set() }).names).toEqual([]);
   });
 
-  test("loads the ten bundled replenishment skills and their local references outside the source checkout", () => {
+  test("loads the bundled replenishment skills and their local references outside the source checkout", () => {
     const root = mkdtempSync(join(tmpdir(), "lxe-replenishment-skills-"));
     roots.push(root);
     const source = join(repositoryRoot(import.meta.dir), "skills");
     const names = readdirSync(source).filter((name) => name.startsWith("replenishment-"));
-    expect(names).toHaveLength(10);
+    expect(names).toHaveLength(9);
     for (const name of names) cpSync(join(source, name), join(root, "skills", name), { recursive: true });
     const skills = new SkillCatalog(root, join(root, "missing-user"), { sharedSkillsRoot: false }).list();
-    expect(skills).toHaveLength(10);
+    expect(skills).toHaveLength(9);
     const references = skills.flatMap((skill) => skill.references.map((reference) => {
       expect(readFileSync(join(skill.root, reference.path), "utf8").length).toBeGreaterThan(100);
       return reference;
     }));
     expect(references).toHaveLength(5);
-    expect(skills.find((skill) => skill.name === "replenishment-workflow-map")?.commands).toEqual([]);
+    expect(skills.find((skill) => skill.name === "replenishment-workflow-map")?.commands)
+      .toEqual(["lxeskill replenish brazil-overseas export"]);
   });
 
   test("indexes allowed skill manifests and points the agent to their source", () => {

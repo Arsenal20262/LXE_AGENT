@@ -10,6 +10,7 @@ from openpyxl import Workbook, load_workbook
 
 from services.agent_cli.yacang.export_inbound_listing_time import run
 from services.yacang.errors import YacangError
+from services.yacang.exports import inbound_listing_time as inbound_listing_time_module
 from services.yacang.exports.inbound_listing_time import (
     InboundListingTimeRequest,
     export_inbound_listing_time,
@@ -159,9 +160,13 @@ def test_global_risk_controller_rejects_duplicate_submission() -> None:
         )
 
 
-def test_cli_failure_is_factual_without_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_cli_failure_is_factual_without_credentials(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.delenv("LXE_YACANG_MOBILE", raising=False)
     monkeypatch.delenv("LXE_YACANG_PASSWORD", raising=False)
+    monkeypatch.setattr(inbound_listing_time_module, "dataset_dir", lambda _dataset: tmp_path)
     result = run({"as_of_date": date.today().isoformat()})
     assert result["success"] is False
     assert result["business_type"] == "inbound-listing-time"

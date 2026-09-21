@@ -1,6 +1,6 @@
 ---
 name: shangman-goods-export-workflow-map
-description: 智慧商品原始导出唯一入口。仅当用户请求同时明确提到“智慧”和“印尼”，并询问销量、库存、月末快照、入库时间或上架时间时使用；先将用户话语转换为结构化 params，再得到同一个智慧商品 XLSX，不把源文件没有的逐日或历史字段包装出来。
+description: 用户当前轮明确提到“智慧”或“智慧印尼/Shangman”，并查询销量、库存、入库、上架或最近时间时使用的唯一智慧导出入口；这些语义都交付同一个 XLSX。当前轮平台优先于历史 Context；不用于雅仓、智汇/TMS 或马帮巴西。
 type: amazon_replenish
 commands:
   - lxeskill shangman export preview
@@ -11,7 +11,9 @@ commands:
 
 ## 入口和语义
 
-- 这是智慧商品原始导出的唯一公开 Skill，仅服务同时明确提到“智慧”和“印尼”的请求。先由 AI 把用户话语转换成结构化 `params`，再交给 CLI 做 schema 校验；Python 不再通过关键词解析用户话语。
+- 这是智慧商品原始导出的唯一公开 Skill。用户只明确说“智慧”时，按当前唯一支持的印尼平台填充 `country: "印尼"`；不要追问用户客户端认证或底层参数。
+- 当前轮明确的平台、数据类型和时间高于历史 Context。只有用户说“刚才”“同上”“还是那个”时才继承缺失参数；当前轮明确雅仓、智汇/TMS 或马帮时不使用本 Skill。
+- 先由 AI 把用户话语转换成结构化 `params`，再交给 CLI 做 schema 校验；Python 不再通过关键词解析用户话语。
 - `params` 必须包含 `platform: "智慧"`、`country: "印尼"`、`operation: "goods_export"` 和非空 `requested_metrics`。可选 `sales_windows_days` 只能使用 7、14、30 或 90。
 - 可用的 `requested_metrics` 为 `sales`、`inventory`、`inbound_time`、`listing_time`。月度 7/14/30 天销量、90 天日度销量、库存、月末快照、入库时间和上架时间都归一为同一个 `goods-export` 任务。
 - 例如“导出智慧印尼 30 天销量和库存”应先转换为 `{"platform":"智慧","country":"印尼","operation":"goods_export","requested_metrics":["sales","inventory"],"sales_windows_days":[30]}`，再调用命令。
@@ -19,8 +21,9 @@ commands:
 
 ## 执行
 
-- 先由 AI 生成结构化参数，再通过 `exec` 调用 `lxeskill shangman export preview --params '<JSON>'`，读取最终 `type="result"` 的 `data.intent` 和 `data.plan`。
-- 需要执行时调用 `lxeskill shangman export run --params '<同一份 JSON>'`，只把最终 terminal 的 `files` 中的一个原始 XLSX 交付给用户。
+- 用户已明确要查询或导出，且结构化参数齐全时，直接调用 `run`，不先执行重复校验的 `preview`。
+- 只有用户明确要求预览执行计划时，才调用 `lxeskill shangman export preview --params '<JSON>'`。
+- 执行时调用 `lxeskill shangman export run --params '<JSON>'`，只把最终 terminal 的 `files` 中的一个原始 XLSX 交付给用户。
 - `run` 的业务结果可能等待生产授权、运行环境凭据或人工验证码输入；保留 `data.error.code`、`data.error.message` 和 `data.error.recoverable`，向用户说明需要的下一步，不猜验证码、不绕过权限、不重复启动请求。
 - 只有 `ok=true` 且 `files` 有真实路径时才说文件已生成。没有 artifact 时不能猜测文件名或路径。
 

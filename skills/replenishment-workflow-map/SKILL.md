@@ -1,7 +1,9 @@
 ---
 name: replenishment-workflow-map
-description: 备货流程介绍与完整任务编排入口。用户要求为某店铺完成备货、生成完整补货建议，或询问备货步骤与缺失数据时使用；按业务 Skill 自动完成本轮采集、核验、计算和交付。单步请求路由到对应技能。
+description: 现有 Mabang/马帮体系的备货编排与子流程入口。用户要求马帮店铺备货、补货建议，或当前轮明确查询马帮巴西海外仓库存、销量、单据、待签或已签数据时使用。不用于雅仓、智慧印尼或智汇/TMS；当前轮平台高于历史 Context。
 type: amazon_replenish
+commands:
+  - lxeskill replenish brazil-overseas export
 ---
 
 # 备货流程介绍与完整任务编排
@@ -20,10 +22,25 @@ type: amazon_replenish
 ## 入口与范围
 
 - 用户询问流程时解释关系，不执行命令。
-- 用户明确查询巴西海外仓的库存、销量、已签收调拨单或待签收调拨单时，先读取 replenishment-brazil-overseas-export 并只执行其单步导出；不解析 Amazon 店铺、不进入店铺 MSKU 全流程，也不生成补货建议。
+- 用户当前轮明确查询马帮巴西海外仓的库存、销量或调拨单时，直接进入本 Skill 的 Brazil Overseas 子工作流；不解析 Amazon 店铺、不进入店铺 MSKU 全流程，也不生成补货建议。
 - 用户说“帮某店铺做备货/生成补货建议”且未限制只做单步时，承担完整任务，默认重新采集本轮数据；用户明确要求复用时才使用已有合格数据。
 - 仅下载、仅销量分析、仅查库存、仅管理参数或明确基于指定输入计算，属于单步任务。读取对应业务 Skill 后执行，不把单步请求扩大为完整流程。
-- 本入口不重复声明业务命令；每个步骤先读对应 Skill，使用它声明的 CLI。不要为了完整任务一次性加载所有参考文档。
+- 除 frontmatter 中的 Brazil Overseas 子工作流命令外，其他单步业务仍先读对应 Skill，使用它声明的 CLI。不要为了完整任务一次性加载所有参考文档。
+
+## Brazil Overseas 子工作流
+
+本子工作流属于现有 Mabang Skill，不是与马帮并列的全局平台 Skill。只有当前轮明确提到“马帮巴西海外仓”或“巴西海外仓”时才使用；当前轮明确平台、业务对象和状态优先于历史 Context。只有用户说“刚才”“同上”“还是那个”时才继承缺失参数。
+
+```text
+lxeskill replenish brazil-overseas export --warehouse brazil_overseas --export-kind <枚举值>
+```
+
+- 库存、库存快照或任意销量表述 → `inventory_sales_snapshot` → 一个马帮原始库存 XLSX。
+- 只说单据、调拨单据，未指定签收状态 → `allocation_both` → 三个月内待签收和三个月前已签收两个 XLS。
+- 未签、待签、待签收 → `allocation_pending_default_3m` → 三个月内待签收 XLS。
+- 已签、已签收、签收完成 → `allocation_signed_before_3m` → 三个月前已签收 XLS。
+- 参数只允许 `warehouse=brazil_overseas` 和上述 `export_kind`，不手工拼接仓库 ID、Cookie、Token 或下载地址。
+- 成功后只交付 terminal `files`。不改名、合并或加工原始文件；认证、403、429、风控或导出不确定时保留真实脱敏错误并停止，不重试。
 
 ## 完整任务
 

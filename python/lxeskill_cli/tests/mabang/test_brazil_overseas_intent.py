@@ -52,5 +52,14 @@ def test_output_filenames_use_beijing_time(kind: BrazilExportKind, expected: str
     assert output_filename(kind, executed_at=executed_at) == expected
 
 
+def test_documents_without_status_use_the_existing_command_and_both_exports() -> None:
+    plan = validate_brazil_export_parameters(
+        warehouse="brazil_overseas",
+        export_kind="allocation_both",
+    )
+
+    assert plan.kind is BrazilExportKind.ALLOCATION_BOTH
+
+
 def test_brazil_exports_use_the_registered_replenishment_artifact_partition() -> None:
     assert DEFAULT_OUTPUT_DIR.as_posix().endswith("artifacts/replenish/brazil_overseas")

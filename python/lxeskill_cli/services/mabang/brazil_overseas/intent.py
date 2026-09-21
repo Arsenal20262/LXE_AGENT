@@ -27,7 +27,10 @@ def validate_brazil_export_parameters(
     except ValueError:
         return BrazilIntentClarification(
             code="brazil_export_kind_required",
-            message="export_kind 必须是 inventory_sales_snapshot、allocation_signed_before_3m 或 allocation_pending_default_3m。",
+            message=(
+                "export_kind 必须是 inventory_sales_snapshot、allocation_both、"
+                "allocation_signed_before_3m 或 allocation_pending_default_3m。"
+            ),
         )
     return BrazilExportPlan(kind=kind)
 

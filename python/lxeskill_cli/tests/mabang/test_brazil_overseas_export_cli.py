@@ -28,6 +28,34 @@ def test_cli_returns_one_deliverable_path(monkeypatch) -> None:
     }
 
 
+def test_cli_returns_both_document_paths(monkeypatch) -> None:
+    async def fake_workflow(*, warehouse: str, export_kind: str):
+        assert warehouse == "brazil_overseas"
+        assert export_kind == "allocation_both"
+        return BrazilOverseasWorkflowResult(
+            kind=BrazilExportKind.ALLOCATION_BOTH,
+            xlsx_paths=(
+                "/artifacts/replenish/brazil_overseas/pending.xls",
+                "/artifacts/replenish/brazil_overseas/signed.xls",
+            ),
+            source_data_note="马帮分仓调拨原始导出",
+        )
+
+    monkeypatch.setattr(cli, "export_brazil_overseas", fake_workflow)
+
+    assert cli.run({"warehouse": "brazil_overseas", "export_kind": "allocation_both"}) == {
+        "success": True,
+        "kind": "allocation_both",
+        "xlsx_paths": [
+            "/artifacts/replenish/brazil_overseas/pending.xls",
+            "/artifacts/replenish/brazil_overseas/signed.xls",
+        ],
+        "warehouse_id": "1072376",
+        "warehouse_label": "巴西海外仓",
+        "source_data_note": "马帮分仓调拨原始导出",
+    }
+
+
 def test_cli_preserves_auth_failure_without_requesting_a_retry(monkeypatch) -> None:
     async def fail_workflow(*, warehouse: str, export_kind: str):
         raise MabangAuthError("实际认证错误")

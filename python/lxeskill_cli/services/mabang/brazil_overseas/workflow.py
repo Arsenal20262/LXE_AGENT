@@ -30,20 +30,25 @@ class BrazilOverseasRequestClarificationError(MabangBusinessError):
 @dataclass(frozen=True)
 class BrazilOverseasWorkflowResult:
     kind: BrazilExportKind
-    xlsx_path: str
+    xlsx_path: str = ""
+    xlsx_paths: tuple[str, ...] = ()
     warehouse_id: str = BRAZIL_OVERSEAS_WAREHOUSE_ID
     warehouse_label: str = BRAZIL_OVERSEAS_WAREHOUSE_LABEL
     source_data_note: str = ""
 
-    def to_payload(self) -> dict[str, str | bool]:
-        return {
+    def to_payload(self) -> dict[str, str | bool | list[str]]:
+        payload: dict[str, str | bool | list[str]] = {
             "success": True,
             "kind": self.kind.value,
-            "xlsx_path": self.xlsx_path,
             "warehouse_id": self.warehouse_id,
             "warehouse_label": self.warehouse_label,
             "source_data_note": self.source_data_note,
         }
+        if self.xlsx_path:
+            payload["xlsx_path"] = self.xlsx_path
+        if self.xlsx_paths:
+            payload["xlsx_paths"] = list(self.xlsx_paths)
+        return payload
 
 
 def _raise_clarification(clarification: BrazilIntentClarification) -> NoReturn:
@@ -62,6 +67,19 @@ async def export_brazil_overseas(*, warehouse: str, export_kind: str) -> BrazilO
             kind=resolved.kind,
             xlsx_path=result.xlsx_path,
             source_data_note=INVENTORY_SALES_SOURCE_NOTE,
+        )
+
+    if resolved.kind is BrazilExportKind.ALLOCATION_BOTH:
+        pending = await export_brazil_overseas_allocation(
+            BrazilExportKind.ALLOCATION_PENDING_DEFAULT_3M
+        )
+        signed = await export_brazil_overseas_allocation(
+            BrazilExportKind.ALLOCATION_SIGNED_BEFORE_3M
+        )
+        return BrazilOverseasWorkflowResult(
+            kind=resolved.kind,
+            xlsx_paths=(pending.xlsx_path, signed.xlsx_path),
+            source_data_note=ALLOCATION_SOURCE_NOTE,
         )
 
     result = await export_brazil_overseas_allocation(resolved.kind)

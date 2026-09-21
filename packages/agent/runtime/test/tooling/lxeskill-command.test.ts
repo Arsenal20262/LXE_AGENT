@@ -76,9 +76,12 @@ describe("lxeskill command recognition", () => {
       .toMatchObject({
         command: "lxeskill replenish brazil-overseas export",
         module: "services.agent_cli.mabang.brazil_overseas_export",
-        ownerSkills: ["replenishment-brazil-overseas-export"],
-        attributionSkill: "replenishment-brazil-overseas-export",
-        artifactPaths: [{ field: "xlsx_path", role: "deliverable" }],
+        ownerSkills: ["replenishment-workflow-map"],
+        attributionSkill: "replenishment-workflow-map",
+        artifactPaths: [
+          { field: "xlsx_path", role: "deliverable" },
+          { field: "xlsx_paths[]", role: "deliverable" },
+        ],
       });
     expect(entries.find((entry) => entry.name === "mabang_regenerate_purchase_files"))
       .toMatchObject({
