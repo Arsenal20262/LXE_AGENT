@@ -8,7 +8,6 @@ from shared.repository import repository_root
 SECRET_ENV_KEYS = {
     "FEISHU_APP_SECRET",
     "LXE_DATA_SERVER_API_KEY",
-    "LXE_DATA_SERVER_FALLBACK_API_KEY",
     "LXE_ERP_API_KEY",
     "LXE_SAIHU_MCP_API_KEY",
     "MABANG_PASSWORD",
