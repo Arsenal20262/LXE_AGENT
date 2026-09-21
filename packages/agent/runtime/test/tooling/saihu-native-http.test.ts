@@ -78,8 +78,7 @@ test("native fetch cancellation closes a pending stream", async () => {
 
 test("direct transport streams SSE, decodes compressed errors and cancels an active body", async () => {
   let mode = "sse";
-  // Bun.serve crashes on Windows 1.4.2 when this deliberately endless body is aborted.
-  // A Node HTTP fixture exercises the same real client cancellation without that server bug.
+  // Use a direct HTTP fixture for a deliberately unfinished response body.
   const server = createServer((_request, response) => {
     if (mode === "error") {
       response.writeHead(502, { "Content-Encoding": "gzip" });
@@ -97,7 +96,11 @@ test("direct transport streams SSE, decodes compressed errors and cancels an act
     const reader = response.body!.getReader();
     expect(new TextDecoder().decode((await reader.read()).value)).toContain("data: first");
     const next = reader.read(); abort.abort();
-    await expect(next).rejects.toThrow();
+    // Bun 1.4.2 on Windows crashes when the async rejects matcher owns this stream error.
+    // Await and assert the same rejection explicitly; do not skip cancellation coverage.
+    let rejection: unknown;
+    try { await next; } catch (error) { rejection = error; }
+    expect(rejection).toBeInstanceOf(Error);
     mode = "error";
     const error = await saihuNativeFetch(url)(url);
     expect(error.status).toBe(502); expect(await error.text()).toBe("actual compressed failure");
