@@ -1,11 +1,11 @@
-import {createRequire} from "node:module";
+import {NsisUpdater} from "electron-updater";
+import {Provider} from "electron-updater/out/providers/Provider";
 import {createHash} from "node:crypto";
 import {createReadStream,statSync} from "node:fs";
 import type {DesktopUpdateRelease} from "@lxe/desktop-protocol";
 import type {LatestUpdate,UpdateApi,UpdateInstaller} from "./update-service";
 import {updateDiagnostic} from "./update-service";
 const COS_HOST="lxe-agent-updates-1317107914.cos.ap-guangzhou.myqcloud.com";
-const require=createRequire(import.meta.url);
 
 export function parseUpdateRelease(value:any):DesktopUpdateRelease {
  if(!value||typeof value.version!=="string"||typeof value.build_id!=="string"||! /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(value.version)
@@ -49,7 +49,6 @@ export class DesktopUpdateApi implements UpdateApi{
 export class ElectronUpdateInstaller implements UpdateInstaller {
  private updater:any;
  constructor(onError:(error:unknown)=>void=()=>{}){
-  const {NsisUpdater}=require("electron-updater");
   this.updater=new NsisUpdater();
   this.updater.autoDownload=false;this.updater.autoInstallOnAppQuit=false;
   this.updater.disableDifferentialDownload=true;this.updater.disableWebInstaller=true;
@@ -59,8 +58,7 @@ export class ElectronUpdateInstaller implements UpdateInstaller {
   this.updater.on("error",onError);
  }
  async download(release:DesktopUpdateRelease,url:string,progress:(percent:number)=>void):Promise<string>{
-  const {Provider}=require("electron-updater/out/providers/Provider");
-  class PrivateProvider extends Provider {
+  class PrivateProvider extends Provider<any> {
    constructor(_options:any,_updater:any,runtime:any){super(runtime);}
    async getLatestVersion(){return {version:release.version,files:[{url:release.file_name,size:release.size,sha512:release.sha512}]};}
    resolveFiles(info:any){return [{url:new URL(url),info:info.files[0]}];}

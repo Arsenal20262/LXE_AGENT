@@ -29,6 +29,10 @@ describe("Desktop build output", () => {
     const main = readFileSync(mainPath, "utf8");
     const preload = readFileSync(preloadPath, "utf8");
     expect(main).toMatch(/^\s*import\s/m);
+    // The installed ASAR has no workspace node_modules: updater code must be bundled.
+    expect(main).toContain("ERR_UPDATER_NO_FILES_PROVIDED");
+    expect(main).not.toMatch(/(?:require\(|from\s+)["']electron-updater(?:["'/])/);
+
     expect(preload).toContain('require("electron")');
     expect(preload).not.toMatch(/^\s*import\s/m);
   }, 30_000);
