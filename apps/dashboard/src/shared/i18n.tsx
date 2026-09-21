@@ -679,7 +679,8 @@ export const ZH_TEXT = {
       passwordPlaceholder: "输入管理员单独发送的密码",
       activating: "正在配置…",
       activate: "激活",
-      connected: "公司云端连接正常",
+      connected: "设备身份验证正常",
+      businessCredentialError: "旧业务凭据刷新失败",
       checking: "正在检查公司网络",
       retry: "重试连接",
       reconnect: "重新连接",
@@ -724,6 +725,8 @@ export const ZH_TEXT = {
         labelLocale: "zh-CN",
         status: {
           pending_verification: "待服务器验证，当前不开放仓库 Skill",
+          denied: "设备权限查询被拒绝",
+          error: "Skill 权限查询失败",
           verified: "已由服务器验证",
           cached: "正在沿用最近一次验证快照",
           unassigned: "服务器尚未分配权限，当前不开放仓库 Skill"
@@ -1513,7 +1516,8 @@ export const UI_TEXT: Record<Language, UiText> = {
         passwordPlaceholder: "Enter the password sent separately by your admin",
         activating: "Provisioning…",
         activate: "Activate",
-        connected: "Company cloud connection is healthy",
+        connected: "Device identity verified",
+        businessCredentialError: "Legacy business credential refresh failed",
         checking: "Checking the company network",
         retry: "Retry connection",
         reconnect: "Reconnect",
@@ -1558,6 +1562,8 @@ export const UI_TEXT: Record<Language, UiText> = {
           labelLocale: "en-US",
           status: {
             pending_verification: "Awaiting server verification; repository Skills are unavailable",
+            denied: "Device permission query denied",
+            error: "Skill permission query failed",
             verified: "Verified by the server",
             cached: "Using the most recently verified snapshot",
             unassigned: "No server profile is assigned; repository Skills are unavailable"

@@ -11,8 +11,11 @@ from lxeskill import cli
 from lxeskill import cloud_status as cloud
 from shared.infra import cloud_client as transport
 
-CONTEXT = {"response_schema": "lxe.device-context.v1", "device": {"id": "fixture", "display_name": "Test PC"},
-           "permission": {"grants": {"server_capabilities": ["mabang_read"]}}}
+CONTEXT = {"response_schema": "lxe.device-context.v1",
+    "device": {"kind": "managed_device", "id": "fixture", "display_name": "Test PC", "wireguard_ip": "10.88.0.8"},
+    "permission": {"assignment_version": 1,
+        "profile": {"id": "fba", "revision": 1, "labels": {"zh-CN": "FBA", "en-US": "FBA"}},
+        "grants": {"skill_types": ["amazon_fba"], "desktop_features": [], "server_capabilities": ["mabang_read"], "erp_actions": []}}}
 CATALOG = {"data_source": "mabang", "apis": [{"id": "fixture"}]}
 
 

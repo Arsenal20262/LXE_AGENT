@@ -1,28 +1,21 @@
 """Read-only native cloud diagnostics, independent of desktop credentials."""
 from __future__ import annotations
 
-import os
 
 from shared.infra.cloud_client import (
     CloudClient,
     CloudConnectionError,
     diagnostic,
-    normalize_server_url,
     redact,
 )
 
-CONTEXT_PATH = "/api/v1/device-context"
+from lxeskill.cloud_context import CONTEXT_PATH, query_device_context, server_url, validate_device_context
+
 MABANG_PATH = "/api/v1/data-sources/mabang/apis"
 
 
 def _server_url(arguments):
-    if not arguments:
-        value = os.getenv("LXE_DATA_SERVER_URL", "").strip()
-    elif len(arguments) == 2 and arguments[0] == "--server":
-        value = arguments[1].strip()
-    else:
-        raise ValueError("Usage: lxeskill cloud-status [--server <http(s)://host:port>]")
-    return normalize_server_url(value)
+    return server_url(arguments, "cloud-status")
 
 
 def run_cloud_status(arguments):
@@ -46,7 +39,7 @@ def run_cloud_status(arguments):
         check = {"name": name, "path": path, "ok": False}
         result["data"]["checks"].append(check)
         try:
-            response = client.request_json("GET", path)
+            response = query_device_context(client) if name == "device_context" else client.request_json("GET", path)
         except CloudConnectionError as exc:
             if exc.http_status is not None:
                 check["http_status"] = exc.http_status
@@ -66,9 +59,10 @@ def run_cloud_status(arguments):
             return result, 4
         valid = isinstance(payload, dict) and not truncated
         if name == "device_context":
-            valid = (valid and payload.get("response_schema") == "lxe.device-context.v1"
-                     and isinstance(payload.get("device"), dict) and bool(payload["device"].get("id"))
-                     and isinstance(payload.get("permission"), dict))
+            try:
+                validate_device_context(payload)
+            except (ValueError, TypeError):
+                valid = False
         else:
             valid = valid and payload.get("data_source") == "mabang" and isinstance(payload.get("apis"), list)
         if not valid:

@@ -740,7 +740,10 @@ button {
 .desktop-cloud-permission span { color: var(--muted); font-size: 0.6875rem; }
 .desktop-cloud-permission.cached { border-color: #dfc99d; }
 .desktop-cloud-permission.pending_verification,
-.desktop-cloud-permission.unassigned { border-color: #e7b8b0; }
+.desktop-cloud-permission.unassigned,
+.desktop-cloud-permission.denied,
+.desktop-cloud-permission.error { border-color: #e7b8b0; }
+.desktop-cloud-permission p { margin: 6px 0; overflow-wrap: anywhere; font-size: 0.75rem; }
 .desktop-cloud-permission dl { display: flex; gap: 18px; margin: 0; }
 .desktop-cloud-permission dl div { display: grid; gap: 3px; }
 .desktop-cloud-permission dt { color: var(--muted); font-size: 0.625rem; }
