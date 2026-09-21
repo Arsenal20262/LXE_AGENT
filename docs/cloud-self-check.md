@@ -20,3 +20,20 @@ uv run --frozen lxeskill cloud-status --server http://10.88.0.1:8000
 收回马帮权限后，设备识别仍应成功，马帮检查应返回 403；停用设备后第一步即应拒绝。线上验证只针对已确认的测试设备，保存原模板及版本，通过正常管理接口切换并恢复；不得修改共享模板影响其他设备。
 
 此命令验证客户端独立运行、网络和设备鉴权，不验证马帮上游凭据有效性，也不代表马帮实际业务查询已成功。现有马帮业务命令及 ERP、模型和管理员凭据流程不因该命令而改变。
+
+## CLI 内部公共通信模块
+
+`shared.infra.cloud_client` 提供与本服务器通信的基础能力。目前只有 `cloud-status` 接入，采购、装箱、报关和备货 SKU 核验继续使用原来的请求与鉴权代码。
+
+```python
+from shared.infra.cloud_client import CloudClient, diagnostic
+
+client = CloudClient.from_env()  # 也可显式传入 server_url
+response = client.request_json("GET", "/api/v1/device-context")
+```
+
+客户端支持 GET、POST 和 JSON 请求体；POST 使用 `json_body=...`。请求路径必须是本站路径，本轮不接受路径内查询串、跨站地址或路径跳转。不提供自定义认证头，不发送业务凭据，不重试或跟随重定向。默认超时 15 秒、读取上限 1 MiB，可由调用代码通过 `timeout`、`max_response_bytes` 显式设置。
+
+返回值包含 `status_code`、`elapsed_ms`、`payload`、`json_valid`、`truncated`。HTTP 拒绝仍返回实际响应，连接失败抛出 `CloudConnectionError`；业务代码自己判断状态、JSON 结构和业务错误码。`truncated=True` 时不得把结果当作完整数据继续处理。正常数据不会自动脱敏或裁剪，对外展示错误时调用 `diagnostic(...)` 做脱敏和明确截断。
+
+模块不查询或缓存权限，不处理马帮业务码、ERP 文件下载或异步重试；这些能力在后续业务迁移时按实际需求接入。用户不需要先运行自检才能使用业务命令。

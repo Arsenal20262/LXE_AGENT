@@ -9,6 +9,7 @@ from threading import Thread
 import pytest
 from lxeskill import cli
 from lxeskill import cloud_status as cloud
+from shared.infra import cloud_client as transport
 
 CONTEXT = {"response_schema": "lxe.device-context.v1", "device": {"id": "fixture", "display_name": "Test PC"},
            "permission": {"grants": {"server_capabilities": ["mabang_read"]}}}
@@ -92,6 +93,9 @@ def test_real_denial_stops_without_retry_or_fallback(stage, monkeypatch):
     assert 'private-fixture' not in str(result)
     assert len(calls) == (1 if stage == cloud.CONTEXT_PATH else 2)
     assert calls[-1][0] == stage
+    if stage == cloud.MABANG_PATH:
+        assert result['data']['device_context'] == CONTEXT
+        assert result['data']['checks'][0]['ok'] is True
 
 
 def test_redirect_is_not_followed():
@@ -116,7 +120,7 @@ def test_invalid_success_preserves_actual_response(body):
 
 
 def test_response_is_bounded_and_explicitly_truncated(monkeypatch):
-    monkeypatch.setattr(cloud, 'MAX_RESPONSE_BYTES', 512)
+    monkeypatch.setattr(cloud, 'CloudClient', lambda url: transport.CloudClient(url, max_response_bytes=512))
     items = responses()
     items[cloud.CONTEXT_PATH] = (503, b'actual failure ' + b'x' * 1024, {})
     with server(items) as (url, _):
@@ -130,9 +134,9 @@ def test_connection_error_preserves_exception_and_has_no_retry(monkeypatch):
         calls = 0
         def open(self, *args, **kwargs):
             self.calls += 1
-            raise cloud.URLError('connection fixture refused')
+            raise transport.URLError('connection fixture refused')
     broken = Broken()
-    monkeypatch.setattr(cloud, 'build_opener', lambda *args: broken)
+    monkeypatch.setattr(transport, 'build_opener', lambda *args: broken)
     result, code = cloud.run_cloud_status(['--server', 'http://127.0.0.1:1'])
     assert code == 3 and broken.calls == 1
     assert 'connection fixture refused' in result['error']['message']
@@ -143,7 +147,7 @@ def test_connection_error_preserves_exception_and_has_no_retry(monkeypatch):
     ['--server', 'http://host?token=private'], ['--server', 'http://host:invalid']])
 def test_bad_configuration_fails_before_network(args, monkeypatch):
     monkeypatch.delenv('LXE_DATA_SERVER_URL', raising=False)
-    monkeypatch.setattr(cloud, 'build_opener', lambda *args: pytest.fail('unexpected network'))
+    monkeypatch.setattr(transport, 'build_opener', lambda *args: pytest.fail('unexpected network'))
     result, code = cloud.run_cloud_status(args)
     assert code == 2 and not result['ok']
     assert 'user:password' not in str(result)
@@ -155,3 +159,24 @@ def test_environment_server_and_help(monkeypatch):
         monkeypatch.setenv('LXE_DATA_SERVER_URL', url)
         assert cloud.run_cloud_status([])[1] == 0
     assert cloud.run_cloud_status(['--help'])[1] == 0
+
+
+def test_read_failure_preserves_received_http_status(monkeypatch):
+    class BrokenResponse:
+        code = 200
+        closed = False
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            self.closed = True
+        def read(self, limit):
+            raise OSError('actual interrupted response')
+    response = BrokenResponse()
+    class Opener:
+        def open(self, *args, **kwargs):
+            return response
+    monkeypatch.setattr(transport, 'build_opener', lambda *args: Opener())
+    result, code = cloud.run_cloud_status(['--server', 'http://localhost'])
+    assert code == 3 and response.closed
+    assert result['data']['checks'][0]['http_status'] == 200
+    assert result['error']['message'] == 'OSError: actual interrupted response'
