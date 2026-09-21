@@ -11,6 +11,7 @@ const readSource = (relativePath) => readFileSync(path.join(sourceDir, relativeP
 
 const index = readFileSync(path.join(dashboardRoot, "index.html"), "utf8");
 const main = readSource("main.tsx");
+const status = readSource("desktop/sidebar-status.tsx");
 const shell = readSource("desktop/shell.tsx");
 const failure = readSource("root-error-boundary.tsx");
 const brandMark = readSource("shared/ui/brand-mark.tsx");
@@ -18,7 +19,7 @@ const styles = readSource("styles.css");
 
 test("every Renderer brand entry uses the approved local application logo", () => {
   assert.match(index, /type="image\/png" href="\/src\/assets\/brand\/lxe-agent-logo\.png"/);
-  assert.match(main, /className="sidebar-status-icon">\s*<BrandMark \/>/);
+  assert.match(status, /className="sidebar-status-icon">\s*<BrandMark \/>/);
   assert.doesNotMatch(main, /Settings2/);
   assert.match(shell, /desktop-onboarding-mark"><BrandMark title="LXE Agent"/);
   assert.match(failure, /desktop-fatal-mark"><BrandMark title="LXE Agent"/);

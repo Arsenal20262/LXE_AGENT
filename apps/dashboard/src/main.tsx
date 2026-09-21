@@ -22,7 +22,7 @@ import {
 
 import "./styles.css";
 import "./desktop/update-control.css";
-import { UpdateControl } from "./desktop/update-control";
+import { SidebarStatus } from "./desktop/sidebar-status";
 import { ConversationDisplayController, sendConversationMessage } from "./features/sessions/display-controller";
 import { useConversationEntry } from "./features/sessions/use-conversation-entry";
 import { useSessionStatus } from "./api/queries";
@@ -98,7 +98,6 @@ import { InputAssetsWorkbench, useInputAssetSlots } from "./features/workbench/i
 import { DesktopShell } from "./desktop/shell";
 import type { DesktopSettingsSection } from "./desktop/settings-model";
 import { DashboardRootErrorBoundary } from "./root-error-boundary";
-import { BrandMark } from "./shared/ui/brand-mark";
 import {
   dashboardRouteFromHistory,
   type WorkbenchView,
@@ -906,23 +905,7 @@ function App({
               deleteBlockedSessionIds={deleteBlockedSessionIds}
             />
           </div>
-          <div className="sidebar-status-card">
-          <button
-            aria-label={t.sidebar.statusAndSettings}
-            className="sidebar-settings-button"
-            title={t.sidebar.statusAndSettings}
-            type="button"
-            onClick={() => onOpenDesktopSettings?.("status")}
-          >
-            <span className="sidebar-status-icon">
-              <BrandMark />
-            </span>
-            <span className="sidebar-status-copy">
-              <span className="sidebar-status-title">{t.sidebar.statusAndSettings}</span>
-            </span>
-          </button>
-          <UpdateControl />
-          </div>
+          <SidebarStatus onOpen={() => onOpenDesktopSettings?.("status")} />
         </aside>
 
         <section className={showDashboardHome ? "main-panel dashboard-home-panel" : "main-panel"}>
