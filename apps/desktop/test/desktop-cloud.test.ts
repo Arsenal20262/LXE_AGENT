@@ -1,3 +1,4 @@
+import { CloudContextError } from "../src/main/cloud-context";
 import { afterEach, describe, expect, test } from "bun:test";
 import { createCipheriv, randomBytes, scryptSync } from "node:crypto";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -174,9 +175,31 @@ const identityJson = (value: any, init?: ResponseInit): Response => Response.jso
 }, init);
 const cloudService = (options: ConstructorParameters<typeof DesktopCloudService>[0]): DesktopCloudService => {
   const fetcher = options.fetch;
-  return new DesktopCloudService({ ...options, ...(fetcher ? { fetch: async (input, init) => {
-    if (String(input).endsWith("/identity/business-credential")) return Response.json(businessFixture);
-    return fetcher(input, init);
+  let identityResponse: Promise<Response> | undefined;
+  const contextClient = options.contextClient ?? { query: async () => {
+    if (!identityResponse) throw new Error("offline context fixture");
+    const response = await identityResponse;
+    if (!response.ok) throw new CloudContextError(await response.clone().text(), "context_http_error", response.status);
+    const body = await response.clone().json() as any;
+    const v1 = body.permission;
+    const permission = body.permission_v2 ?? (v1 ? {
+      assignment_version: v1.permission_version,
+      profile: v1.permission_profile === null ? null : { id: v1.permission_profile, revision: v1.profile_revision,
+        labels: v1.profile_labels },
+      grants: { skill_types: v1.allowed_skill_types, desktop_features: v1.desktop_features },
+    } : undefined);
+    return { response_schema: "lxe.device-context.v1",
+      device: { id: body.device_id, kind: body.principal_kind ?? "managed_device", display_name: body.display_name, wireguard_ip: body.wireguard_ip },
+      permission: permission ? { ...permission, grants: { server_capabilities: [], erp_actions: [], ...permission.grants } } : null };
+  } };
+  return new DesktopCloudService({ ...options, contextClient, ...(fetcher ? { fetch: (input, init) => {
+    if (String(input).endsWith("/identity/business-credential")) return Promise.resolve(Response.json(businessFixture));
+    const response = Promise.resolve(fetcher(input, init));
+    if (/\/identity(?:\/activate)?$/u.test(String(input))) {
+      identityResponse = response.then((r) => r.clone());
+      void identityResponse.catch(() => undefined);
+    }
+    return response;
   } } : {}) });
 };
 const configuredIdentity = (config: DesktopConfigStore): void => config.saveCloudEnrollment({
@@ -455,7 +478,7 @@ describe("DesktopCloudService", () => {
     });
     expect(service.allowedSkillTypes()).toEqual(["amazon_fba", "ziniao_browser", "default"]);
     expect(provisioned).toBe(1);
-    expect(events.map(({ message }) => message)).toEqual([
+    expect(events.filter(({ message }) => message !== "cloud_skill_permission_failed").map(({ message }) => message)).toEqual([
       "cloud_enrollment_activation_started",
       "cloud_enrollment_decrypted",
       "cloud_device_activation_failed",
@@ -910,7 +933,7 @@ describe("DesktopCloudService", () => {
       LXE_DATA_SERVER_API_KEY: "",
       LXE_ERP_API_KEY: "",
     });
-    expect(events.map(({ message }) => message)).toEqual([
+    expect(events.filter(({ message }) => message !== "cloud_skill_permission_failed").map(({ message }) => message)).toEqual([
       "cloud_enrollment_activation_started",
       "cloud_device_activation_failed",
     ]);
@@ -943,7 +966,8 @@ describe("DesktopCloudService", () => {
     const selection = service.select(enrollmentPath);
     const state = await service.activate({ enrollment_id: selection.enrollment_id, password });
     expect(state).toMatchObject({ connection: "error", last_error: expected });
-    expect(events.at(-1)?.fields).toMatchObject({ http_status: 409, observed_error: body });
+    expect(events.findLast(event => event.message === "cloud_device_activation_failed")?.fields)
+      .toMatchObject({ http_status: 409, observed_error: body });
     expect(state.last_error).not.toContain("Do not render");
   });
 
@@ -957,15 +981,24 @@ describe("DesktopCloudService", () => {
     let hint = "Server user hint";
     const service = cloudService({ dataRoot: root, supported: true, config, enrollments: new DesktopCloudEnrollmentManager(),
       logger: testLogger(events), provisioner: { provision: async () => undefined }, onConfigured: async () => undefined,
+      contextClient: { query: async () => ({
+        response_schema: "lxe.device-context.v1",
+        device: { id: enrollmentPayload.device.id, kind: "managed_device", display_name: enrollmentPayload.device.name, wireguard_ip: "10.88.0.8" },
+        permission: { ...devicePermissionV2(), grants: { ...devicePermissionV2().grants, server_capabilities: [], erp_actions: [] } },
+      }) },
       fetch: async () => Response.json({ detail: { code: "future_error", message: "Original diagnostic", user_message: hint } }, { status }),
     });
     const before = config.cloudIdentityCredential();
-    expect(await service.check()).toMatchObject({ connection: status >= 500 ? "offline" : "error", last_error: hint });
+    expect(await service.check()).toMatchObject({ connection: status >= 500 ? "offline" : "error", last_error: hint,
+      permission_status: "verified", permission_error: "", permission_profile: "shopee" });
     hint = "Updated hint without a client release";
-    expect(await service.check()).toMatchObject({ connection: status >= 500 ? "offline" : "error", last_error: hint });
+    expect(await service.check()).toMatchObject({ connection: status >= 500 ? "offline" : "error", last_error: hint,
+      permission_status: "verified", permission_error: "", permission_profile: "shopee" });
     expect(config.cloudIdentityCredential()).toBe(before);
-    expect(events.at(-1)?.fields).toMatchObject({ http_status: status, error_code: "future_error" });
-    expect(events.at(-1)?.fields.observed_error).toContain("Original diagnostic");
+    expect(service.allowedSkillTypes()).toEqual(["shopee_operations", "default"]);
+    const identityError = events.findLast(event => event.message === "cloud_status_check_failed");
+    expect(identityError?.fields).toMatchObject({ http_status: status, error_code: "future_error" });
+    expect(identityError?.fields.observed_error).toContain("Original diagnostic");
   });
 
   test("logs an HTTP credential rejection without changing the public cloud state", async () => {
@@ -992,7 +1025,7 @@ describe("DesktopCloudService", () => {
     const state = await service.activate({ enrollment_id: selection.enrollment_id, password });
 
     expect(state).toMatchObject({ connection: "error", last_error: "设备凭证已失效，请联系管理员" });
-    expect(events.at(-1)).toMatchObject({
+    expect(events.findLast(({ message }) => message === "cloud_device_activation_failed")).toMatchObject({
       message: "cloud_device_activation_failed",
       fields: { failed_stage: "activate_device", http_status: 403, connection: "error" },
     });
@@ -1059,7 +1092,7 @@ describe("DesktopCloudService", () => {
     await service.check();
     expect(requests).toHaveLength(2);
     expect(service.state()).toMatchObject({ connection: "connected", last_checked_at: 61 });
-    expect(states).toEqual(["connected:1", "connected:61"]);
+    expect([...new Set(states.filter((state) => state.startsWith("connected:")))]).toEqual(["connected:1", "connected:61"]);
 
     await service.stop();
     expect(clock.intervals.size).toBe(0);
@@ -1209,7 +1242,7 @@ describe("DesktopCloudService", () => {
     const permissions = [
       devicePermission("replenishment", 3),
       devicePermission("fba", 2),
-      { ...devicePermission("fba", 3), allowed_skill_types: ["*"] },
+      { ...devicePermission("fba", 3), allowed_skill_types: ["*", "default"] },
     ];
     const updates: string[][] = [];
     const service = cloudService({
@@ -1241,18 +1274,18 @@ describe("DesktopCloudService", () => {
     expect(updates).toEqual([["amazon_replenish", "default"]]);
 
     expect(await service.check()).toMatchObject({
-      connection: "error",
+      connection: "connected",
       permission_status: "cached",
       permission_profile: "replenishment",
       permission_version: 3,
-      last_error: expect.stringContaining("regressed"),
+      permission_error: expect.stringContaining("regressed"),
     });
     expect(await service.check()).toMatchObject({
-      connection: "error",
+      connection: "connected",
       permission_status: "cached",
       permission_profile: "replenishment",
       permission_version: 3,
-      last_error: expect.stringContaining("does not match"),
+      permission_error: expect.stringContaining("wildcard"),
     });
     expect(updates).toHaveLength(1);
     expect(config.cloudPermissionSnapshot()).toMatchObject({
@@ -1360,14 +1393,14 @@ describe("DesktopCloudService", () => {
       desktop_features: ["orders_dashboard"],
     });
     expect(await service.check()).toMatchObject({
-      connection: "error",
+      connection: "connected",
       profile_revision: 2,
-      last_error: expect.stringContaining("without a profile revision increase"),
+      permission_error: expect.stringContaining("without a profile revision increase"),
     });
     expect(await service.check()).toMatchObject({
-      connection: "error",
+      connection: "connected",
       profile_revision: 2,
-      last_error: expect.stringContaining("revision regressed"),
+      permission_error: expect.stringContaining("revision regressed"),
     });
     expect(observedContracts).toEqual(["2", "2", "2", "2"]);
   });
@@ -1463,5 +1496,106 @@ describe("DesktopCloudService", () => {
     expect(sequence).toEqual(["reconnect", "probe"]);
     await service.stop();
     expect(sequence).toEqual(["reconnect", "probe"]);
+  });
+});
+
+describe("independent CLI skill permissions", () => {
+  function fixture() {
+    const root = mkdtempSync(join(tmpdir(), "lxe-skill-context-service-")); roots.push(root);
+    const config = new DesktopConfigStore(root, join(root, "workspace"), safeStorage, { platform: "win32" });
+    configuredIdentity(config);
+    const context = (skills = ["amazon_fba"], version = 1) => ({
+      response_schema: "lxe.device-context.v1",
+      device: { id: enrollmentPayload.device.id, kind: "managed_device", display_name: "Finance PC", wireguard_ip: "10.88.0.8" },
+      permission: { ...devicePermissionV2("custom", version, 1, skills), grants: { skill_types: skills, desktop_features: [], server_capabilities: [], erp_actions: [] } },
+    });
+    const updates: string[][] = [];
+    let query: (url: string, signal: AbortSignal) => Promise<unknown> = async () => context();
+    let identityFetch: typeof fetch = async () => Response.json({ detail: "identity credential expired" }, { status: 401 });
+    const make = () => new DesktopCloudService({ dataRoot: root, config, supported: true,
+      logger: testLogger([]), provisioner: { provision: async () => {} }, enrollments: new DesktopCloudEnrollmentManager(),
+      onConfigured: async () => {}, onPermissionChanged: (skills) => { updates.push([...skills]); },
+      contextClient: { query: (url, signal) => query(url, signal) }, fetch: (input, init) => identityFetch(input, init),
+    });
+    return { root, config, context, updates, make,
+      setQuery: (next: typeof query) => { query = next; }, setIdentity: (next: typeof fetch) => { identityFetch = next; } };
+  }
+  test("identity refusal does not block CLI skill discovery or server address", async () => {
+    const f = fixture(), service = f.make();
+    expect(await service.check()).toMatchObject({ connection: "error", permission_status: "verified", permission_profile: "custom", is_admin: false });
+    expect(service.allowedSkillTypes()).toEqual(["amazon_fba"]);
+    expect(f.config.environment()).toMatchObject({ LXE_DATA_SERVER_URL: enrollmentPayload.data_server.url, LXE_DATA_SERVER_ENABLED: "0", LXE_DATA_SERVER_API_KEY: "" });
+    f.config.cloudIdentityCredential = () => "";
+    expect(await service.check()).toMatchObject({ permission_status: "verified", permission_profile: "custom" });
+    await service.stop();
+  });
+  test("a temporary transport failure without cache remains pending, not denied", async () => {
+    const f = fixture();
+    f.setQuery(async () => { throw new CloudContextError("connection refused", "cloud_connection_failed"); });
+    const service = f.make();
+    expect(await service.check()).toMatchObject({ permission_status: "pending_verification", permission_error: "connection refused" });
+    expect(service.allowedSkillTypes()).toEqual([]);
+    await service.stop();
+  });
+  test("native grants override identity permissions and business refresh errors stay separate", async () => {
+    const f = fixture();
+    f.setIdentity(async (input) => String(input).endsWith("/business-credential")
+      ? Response.json({ detail: "actual business refresh failure" }, { status: 503 })
+      : identityJson({ status: "ok", activation_required: false, device_id: enrollmentPayload.device.id,
+        display_name: enrollmentPayload.device.name, wireguard_ip: "10.88.0.8",
+        machine_id: resolveMachineIdentity(join(f.root, "db", "machine_identity.json")).machine_id,
+        permission_v2: devicePermissionV2("full_access", 99, 1, ["*"]), managed_llm: { available: false } }));
+    const service = f.make();
+    expect(await service.check()).toMatchObject({ connection: "connected", permission_status: "verified", permission_profile: "custom", business_credential_error: expect.stringContaining("actual business refresh failure") });
+    expect(service.allowedSkillTypes()).toEqual(["amazon_fba"]);
+    expect(f.config.environment().LXE_DATA_SERVER_URL).toBe(enrollmentPayload.data_server.url);
+    await service.stop();
+  });
+  test("retains offline cache, applies revocation, persists denial and never restores it on restart", async () => {
+    const f = fixture(), service = f.make();
+    await service.check();
+    f.setQuery(async () => { throw new Error("actual offline error"); });
+    expect(await service.check()).toMatchObject({ permission_status: "cached", permission_error: "actual offline error" });
+    expect(service.allowedSkillTypes()).toEqual(["amazon_fba"]);
+    f.setQuery(async () => f.context([], 2));
+    await service.check();
+    expect(service.allowedSkillTypes()).toEqual([]);
+    f.setQuery(async () => f.context(["amazon_replenish"], 3));
+    await service.check();
+    f.setQuery(async () => { throw new CloudContextError("device is disabled", "business_device_denied", 403); });
+    expect(await service.check()).toMatchObject({ permission_status: "denied", permission_error: "device is disabled" });
+    expect(f.config.cloudPermissionSnapshot()).toBeNull();
+    expect(service.allowedSkillTypes()).toEqual([]);
+    await service.stop();
+    f.setQuery(async () => { throw new Error("offline after restart"); });
+    const restarted = f.make();
+    await restarted.check();
+    expect(restarted.allowedSkillTypes()).toEqual([]);
+    expect(f.updates).toEqual([["amazon_fba"], [], ["amazon_replenish"], []]);
+    await restarted.stop();
+  });
+  test("identity mismatch clears grants, unassigned versions remain monotonic", async () => {
+    const f = fixture(), service = f.make();
+    await service.check();
+    f.setQuery(async () => ({ ...f.context(), device: { ...f.context().device, id: "other-device" } }));
+    expect(await service.check()).toMatchObject({ permission_status: "denied" });
+    expect(f.config.cloudPermissionSnapshot()).toBeNull();
+    f.setQuery(async () => ({ ...f.context([], 7), permission: { ...f.context([], 7).permission, profile: null } }));
+    expect(await service.check()).toMatchObject({ permission_status: "unassigned", permission_version: 7 });
+    expect(f.config.cloudPermissionSnapshot()?.permission_version).toBe(7);
+    await service.stop();
+  });
+  test("coalesces queries and ignores a response after binding changes", async () => {
+    const f = fixture(); let finish!: (value: unknown) => void; let calls = 0;
+    f.setQuery(() => { calls++; return new Promise((resolve) => { finish = resolve; }); });
+    const service = f.make();
+    const first = service.check(), second = service.check();
+    expect(first).toBe(second); expect(calls).toBe(1);
+    f.config.clearCloudEnrollment();
+    finish(f.context());
+    await first;
+    expect(f.config.cloudPermissionSnapshot()).toBeNull();
+    expect(service.allowedSkillTypes()).toEqual([]);
+    await service.stop();
   });
 });
