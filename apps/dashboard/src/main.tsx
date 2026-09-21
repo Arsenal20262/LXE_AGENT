@@ -21,6 +21,8 @@ import {
 } from "lucide-react";
 
 import "./styles.css";
+import "./desktop/update-control.css";
+import { UpdateControl } from "./desktop/update-control";
 import { ConversationDisplayController, sendConversationMessage } from "./features/sessions/display-controller";
 import { useConversationEntry } from "./features/sessions/use-conversation-entry";
 import { useSessionStatus } from "./api/queries";
@@ -904,9 +906,10 @@ function App({
               deleteBlockedSessionIds={deleteBlockedSessionIds}
             />
           </div>
+          <div className="sidebar-status-card">
           <button
             aria-label={t.sidebar.statusAndSettings}
-            className="sidebar-status-card"
+            className="sidebar-settings-button"
             title={t.sidebar.statusAndSettings}
             type="button"
             onClick={() => onOpenDesktopSettings?.("status")}
@@ -918,6 +921,8 @@ function App({
               <span className="sidebar-status-title">{t.sidebar.statusAndSettings}</span>
             </span>
           </button>
+          <UpdateControl />
+          </div>
         </aside>
 
         <section className={showDashboardHome ? "main-panel dashboard-home-panel" : "main-panel"}>

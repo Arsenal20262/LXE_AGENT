@@ -36,6 +36,9 @@ export function createDesktopBridge(
     },
     desktop: {
       platform,
+      getUpdateState: () => ipc.invoke(IPC_CHANNELS.getUpdateState),
+      checkForUpdate: () => ipc.invoke(IPC_CHANNELS.checkForUpdate),
+      installUpdate: () => ipc.invoke(IPC_CHANNELS.installUpdate),
       selectWorkspace: () => ipc.invoke(IPC_CHANNELS.selectWorkspace),
       selectZiniaoApp: () => ipc.invoke(IPC_CHANNELS.selectZiniaoApp),
       selectZiniaoWebDriverDirectory: () => ipc.invoke(IPC_CHANNELS.selectZiniaoWebDriverDirectory),

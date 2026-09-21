@@ -44,6 +44,7 @@
     "verify:platform:mac": "bun scripts/assert-host-platform.ts darwin && bun run desktop:tools:mac && bun run verify:source && bun scripts/verify-desktop-macos-media.ts"
   },
   "devDependencies": {
-    "typescript": "7.0.2"
+    "typescript": "7.0.2",
+    "cos-nodejs-sdk-v5": "3.0.0"
   }
 }

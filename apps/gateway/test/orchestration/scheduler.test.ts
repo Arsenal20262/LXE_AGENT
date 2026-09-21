@@ -572,3 +572,20 @@ describe("HeartbeatWakeQueue", () => {
     expect(runtime.started.map((item) => item.session_id)).toEqual(["first", "second"]);
   });
 });
+
+
+test("update admission fence atomically rejects queued and incoming work", async () => {
+  const runtime = new RecordingRuntime();
+  const scheduler = new SessionScheduler({ runtime });
+  scheduler.setRuntimeReady(false);
+  await scheduler.enqueue(job("other-session", "queued"));
+  expect(scheduler.beginUpdate()).toBeUndefined();
+  const idle = new SessionScheduler({ runtime });
+  const release = idle.beginUpdate();
+  expect(release).toBeDefined();
+  await expect(idle.enqueue(job("incoming", "race"))).rejects.toThrow("update is preparing");
+  expect(idle.hasInflightJobs()).toBe(false);
+  release!();
+  await idle.enqueue(job("incoming", "after-unlock"));
+  expect(idle.beginUpdate()).toBeUndefined();
+});

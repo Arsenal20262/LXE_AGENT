@@ -2,6 +2,7 @@ import { parseManagedState, type ManagedLlmState } from "@lxe/core/managed-llm";
 import { parseJsonRpcEnvelope, parseJsonRpcJson, JsonRpcError,
   type JsonRpcId, type JsonRpcSuccess, type JsonRpcFailure, type JsonRpcResponse } from "./json-rpc";
 export * from "./json-rpc";
+export * from "./updates";
 import {
   desktopStreamBatchValidationError,
   validateAgentJob,
@@ -592,6 +593,9 @@ export interface LxeDesktopBridge {
   dashboard: DashboardTransport;
   desktop: {
     readonly platform: DesktopPlatform;
+    getUpdateState?(): Promise<import("./updates").DesktopUpdateState>;
+    checkForUpdate?(): Promise<import("./updates").DesktopUpdateState>;
+    installUpdate?(): Promise<import("./updates").DesktopUpdateState>;
     selectWorkspace(): Promise<string | null>;
     selectZiniaoApp(): Promise<string | null>;
     selectZiniaoWebDriverDirectory(): Promise<string | null>;

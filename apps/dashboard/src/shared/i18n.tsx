@@ -8,6 +8,7 @@ const LEGACY_LANGUAGE_STORAGE_KEY = "agent-dashboard-language";
 export type Language = "zh" | "en";
 
 export const ZH_TEXT = {
+  updates: {title:"应用更新",update:"更新",check:"检查更新",downloading:"正在下载",verifying:"正在校验更新",installing:"正在准备重启",checking:"正在检查更新",failed:"更新失败",retry:"重试",close:"关闭",restart:"重启更新",confirm:"将关闭并重新启动 LXE。有任务正在运行时不会安装，请先结束任务。"},
   userSkills: {
     add: "添加技能", userDirectory: "用户目录", use: "在对话中使用",
     delete: "移至回收目录", disabled: "已禁用", unavailable: "不可用",
@@ -846,6 +847,7 @@ export type UiText = typeof ZH_TEXT;
 export const UI_TEXT: Record<Language, UiText> = {
   zh: ZH_TEXT,
   en: {
+    updates: {title:"App update",update:"Update",check:"Check for updates",downloading:"Downloading",verifying:"Verifying update",installing:"Preparing restart",checking:"Checking for updates",failed:"Update failed",retry:"Retry",close:"Close",restart:"Restart and update",confirm:"LXE will close and restart. Finish all running tasks before installing."},
     userSkills: {
       add: "Add skill", userDirectory: "User directory", use: "Use in conversation",
       delete: "Move to recycle folder", disabled: "Disabled", unavailable: "Unavailable",

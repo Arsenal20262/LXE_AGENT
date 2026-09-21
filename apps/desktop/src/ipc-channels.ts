@@ -1,4 +1,7 @@
 export const IPC_CHANNELS = {
+  getUpdateState: "lxe:desktop:update-state",
+  checkForUpdate: "lxe:desktop:update-check",
+  installUpdate: "lxe:desktop:update-install",
   dashboardCall: "lxe:dashboard:call",
   selectWorkspace: "lxe:desktop:select-workspace",
   selectZiniaoApp: "lxe:desktop:select-ziniao-app",

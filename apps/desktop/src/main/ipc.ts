@@ -38,6 +38,9 @@ import {
 } from "./ipc-validation";
 
 export interface DesktopIpcApplication {
+  getUpdateState?(): import("@lxe/desktop-protocol").DesktopUpdateState;
+  checkForUpdate?(): Promise<import("@lxe/desktop-protocol").DesktopUpdateState>;
+  installUpdate?(): Promise<import("@lxe/desktop-protocol").DesktopUpdateState>;
   dashboardCall<O extends DashboardRpcOperation>(call: DashboardRpcCall<O>): Promise<DashboardRpcResult<O>>;
   getHealth(): DesktopHealth;
   restartAgent(): Promise<DesktopHealth>;
@@ -85,6 +88,9 @@ const stringArray = (value: unknown, label: string): string[] => {
 };
 
 export function registerDesktopIpc(application: DesktopIpcApplication): () => void {
+  ipcMain.handle(IPC_CHANNELS.getUpdateState, () => application.getUpdateState?.() ?? {phase:"unsupported"});
+  ipcMain.handle(IPC_CHANNELS.checkForUpdate, () => application.checkForUpdate?.() ?? {phase:"unsupported"});
+  ipcMain.handle(IPC_CHANNELS.installUpdate, () => application.installUpdate?.() ?? {phase:"unsupported"});
   ipcMain.handle(IPC_CHANNELS.dashboardCall, (_event, call: unknown) =>
     application.dashboardCall(validateDashboardRpcCall(call)));
   ipcMain.handle(IPC_CHANNELS.selectWorkspace, async () => {

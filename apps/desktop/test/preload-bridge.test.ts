@@ -23,6 +23,7 @@ describe("preload bridge", () => {
     expect(Object.keys(bridge).sort()).toEqual(["dashboard", "desktop"]);
     expect(Object.keys(bridge.dashboard)).toEqual(["call"]);
     expect(Object.keys(bridge.desktop).sort()).toEqual([
+      "getUpdateState", "checkForUpdate", "installUpdate",
       "activateCloudEnrollment",
       "applyAppearance",
       "cancelSyntheticPerformerTask",
@@ -61,7 +62,7 @@ describe("preload bridge", () => {
       "stageDroppedConversationFiles",
       "stagePastedConversationFiles",
       "startSyntheticPerformerTask",
-    ]);
+    ].sort());
     expect(bridge.desktop.platform).toBe("win32");
     await bridge.dashboard.call({ operation: "models.list", input: {} });
     await bridge.desktop.saveLocalModelCredential({ provider: "deepseek", api_key: "local-key" });

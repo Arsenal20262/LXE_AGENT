@@ -17,7 +17,8 @@
     "@lxe/core": "workspace:*",
     "@lxe/desktop-protocol": "workspace:*",
     "@lxe/gateway": "workspace:*",
-    "@lxe/protocol": "workspace:*"
+    "@lxe/protocol": "workspace:*",
+    "electron-updater": "6.6.2"
   },
   "devDependencies": {
     "@types/node": "24.10.1",

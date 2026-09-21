@@ -1,3 +1,4 @@
+import { UpdateBusyError } from "./update-service";
 import { prepareConversationAttachments } from "./conversation-submission";
 import { existsSync, mkdirSync } from "node:fs";
 import { access } from "node:fs/promises";
@@ -116,6 +117,7 @@ export interface DesktopGatewayOptions {
 }
 
 export class DesktopGateway {
+  private updatePreparing = false;
   private readonly imageProcessor = new ElectronInboundImageProcessor();
   private composition: DirectGatewayComposition | undefined;
   private runtime: ProcessAgentRuntime | undefined;
@@ -127,6 +129,7 @@ export class DesktopGateway {
   constructor(private readonly options: DesktopGatewayOptions) {}
 
   async start(): Promise<void> {
+    if (this.updatePreparing) throw new Error("Application update is preparing");
     if (this.composition) return;
     this.gatewayState = "starting";
     this.publishHealth();
@@ -295,10 +298,21 @@ export class DesktopGateway {
     }
   }
 
-  async stop(): Promise<void> {
+  beginUpdate(): () => void {
+    if (!this.composition || !this.runtime?.isReady) throw new UpdateBusyError("Agent 状态尚未就绪，无法确认是否空闲");
+    const release = this.composition.parts.scheduler.beginUpdate();
+    if (!release) throw new UpdateBusyError("仍有任务正在运行或排队，请结束任务后再次点击更新");
+    this.updatePreparing = true;
+    return () => { this.updatePreparing = false; release(); };
+  }
+
+  async stop(strict = false): Promise<void> {
     const composition = this.composition;
-    this.composition = undefined;
     if (composition) await composition.stop();
+    if (strict && composition?.parts.lifecycle.shutdownError) {
+      throw new Error("更新前清理失败：" + composition.parts.lifecycle.shutdownError + "。请手动重启应用后重试");
+    }
+    this.composition = undefined;
     this.store?.stop();
     this.store = undefined;
     this.runtime = undefined;
@@ -308,11 +322,13 @@ export class DesktopGateway {
   }
 
   async restart(): Promise<void> {
+    if (this.updatePreparing) throw new Error("Application update is preparing");
     await this.stop();
     await this.start();
   }
 
   async restartAgent(): Promise<DesktopHealth> {
+    if (this.updatePreparing) throw new Error("Application update is preparing");
     if (!this.runtime) {
       await this.start();
       return this.health();

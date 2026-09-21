@@ -32,6 +32,7 @@ import type {
   DesktopSetupState,
   DesktopZiniaoVersion,
 } from "@lxe/desktop-protocol";
+import { UpdateControl } from "./update-control";
 import { BrandMark } from "../shared/ui/brand-mark";
 import { useUiText } from "../shared/i18n";
 import type { Language, UiText } from "../shared/i18n";
@@ -469,6 +470,7 @@ function DesktopStatusPanel({
     : false;
   return (
     <section className="desktop-settings-section desktop-status-panel">
+      <UpdateControl manual />
       <DesktopSectionHeading
         description={t.desktop.status.description}
         headingRef={headingRef}

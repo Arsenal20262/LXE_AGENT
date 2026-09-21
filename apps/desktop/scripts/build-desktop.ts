@@ -38,6 +38,8 @@ export function buildDesktop(options: DesktopBuildOptions = {}): void {
     "--format",
     "esm",
     "--external",
+    "electron-updater",
+    "--external",
     "electron",
     "--external",
     "node:sqlite",
