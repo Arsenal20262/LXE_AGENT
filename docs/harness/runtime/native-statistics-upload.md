@@ -10,6 +10,6 @@
 
 HTTP 409 归属冲突暂停该运行时上传，保留真实诊断；管理员核实修复归属后重启运行时。401/403 和网络失败保留数据，后续周期重试。服务端对来源设备的检查不会被正文 machine_id 或转发头替代。
 
-服务器必须先部署兼容版本。已知未验证的历史统计实例需先核实归属；不要用新建 machine_id 绕过。详细操作见服务器仓库 `docs/native-statistics-upload.md`。独立飞书网关的本机 MCP 转发、配置迁移和未来发布步骤见该仓库 `docs/company-device-auth.md`。
+服务器必须先部署兼容版本。已知未验证的历史统计实例需先核实归属；不要用新建 machine_id 绕过。详细操作见服务器仓库 `docs/native-statistics-upload.md`。独立飞书网关的 MCP 直接连接、配置迁移和未来发布步骤见该仓库 `docs/company-device-auth.md`。Codex 已限制跨源重定向，之前增加的公司 MCP 本机转发层已撤除。
 
 本轮不生成桌面安装包，不发布或重启 Mac mini 飞书网关，不发送飞书消息，不向生产写入模拟统计。
