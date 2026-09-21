@@ -15,7 +15,8 @@ export function sameRelease(a:DesktopUpdateRelease|undefined|null,b:DesktopUpdat
  return !!a&&!!b&&a.version===b.version&&a.build_id===b.build_id&&a.sha512===b.sha512&&a.size===b.size;
 }
 export function updateDiagnostic(error:unknown):string{
- return String(error instanceof Error?error.message:error).replace(/https?:\/\/[^\s"<>]+/g,"[URL redacted]").slice(0,2000);
+ const message=String(error instanceof Error?error.message:error).replace(/https?:\/\/[^\s"<>]+/g,"[URL redacted]");
+ return message.slice(0,2000)+(message.length>2000?" [truncated]":"");
 }
 export class DesktopUpdateService {
  private value:DesktopUpdateState={phase:"idle"};

@@ -1,5 +1,5 @@
 import {expect,test} from "bun:test";
-import {DesktopUpdateService,UpdateBusyError,UPDATE_INTERVAL_MS,type LatestUpdate} from "../src/main/update-service";
+import {DesktopUpdateService,UpdateBusyError,updateDiagnostic,UPDATE_INTERVAL_MS,type LatestUpdate} from "../src/main/update-service";
 import type {DesktopUpdateRelease} from "@lxe/desktop-protocol";
 const release:DesktopUpdateRelease={version:"0.2.18",build_id:"one",file_name:"LXE-Agent-0.2.18-windows-x64.exe",size:3,sha512:"hash",notes:"notes"};
 function fixture(){
@@ -56,4 +56,9 @@ test("expired URL gets one renewal, never unbounded retry",async()=>{
 test("concurrent checks share a single download",async()=>{
  const f=fixture();await Promise.all([f.service.check(),f.service.check()]);
  expect(f.calls.filter(x=>x==="download")).toHaveLength(1);
+});
+
+test("update diagnostics redact signed URLs and mark truncation",()=>{
+ const message=updateDiagnostic(new Error("https://private/file?signature=secret "+"x".repeat(2100)));
+ expect(message).not.toContain("signature");expect(message).toContain("[URL redacted]");expect(message).toEndWith(" [truncated]");
 });
