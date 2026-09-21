@@ -60,7 +60,11 @@ test("actual MCP SDK initializes, lists and calls without tokens, then preserves
     expect(connection.tools.map(t => t.name)).toEqual(["fixture_read"]);
     expect((await connection.callTool("fixture_read", {})).content[0]?.text).toBe("actual fixture result");
     denied = true;
-    await expect(connection.callTool("fixture_read", {})).rejects.toThrow("actual sai hu denial");
+    // Bun 1.4.2 Windows can crash when the async matcher owns an HTTP stream error.
+    let deniedError: unknown;
+    try { await connection.callTool("fixture_read", {}); } catch (error) { deniedError = error; }
+    expect(deniedError).toBeInstanceOf(Error);
+    expect(String(deniedError)).toContain("actual sai hu denial");
     expect(calls.filter(method => method === "tools/call")).toHaveLength(2);
   } finally { await connection?.close(); server.stop(true); rmSync(root, { recursive: true, force: true }); }
 });
@@ -72,7 +76,9 @@ test("native fetch cancellation closes a pending stream", async () => {
     const controller = new AbortController();
     const pending = saihuNativeFetch(url)(url, { signal: controller.signal });
     controller.abort();
-    await expect(pending).rejects.toThrow();
+    let cancelled: unknown;
+    try { await pending; } catch (error) { cancelled = error; }
+    expect(cancelled).toBeInstanceOf(Error);
   } finally { server.stop(true); }
 });
 
