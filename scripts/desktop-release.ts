@@ -83,6 +83,7 @@ export async function main(args=process.argv.slice(2),ports?:{cos:unknown;lockRo
  }finally{rmSync(lock,{recursive:true});}
 }
 if(import.meta.main)main().catch(error=>{
- console.error(JSON.stringify({message:String(error?.error?.Message||error?.message||error).replace(/https?:\/\/\S+/g,"[URL redacted]").slice(0,1500),code:error?.error?.Code,status:error?.statusCode}));
+ const message=String(error?.error?.Message||error?.message||error).replace(/https?:\/\/\S+/g,"[URL redacted]");
+ console.error(JSON.stringify({message:message.slice(0,1500)+(message.length>1500?" [truncated]":""),code:error?.error?.Code,status:error?.statusCode}));
  process.exitCode=1;
 });

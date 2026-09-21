@@ -27,7 +27,7 @@ export class DesktopUpdateApi implements UpdateApi{
   });
   const text=await response.text();
   if(text.length>131072)throw new Error("更新服务响应超过大小限制");
-  let result:any;try{result=JSON.parse(text);}catch{throw new Error("更新服务返回非 JSON 响应："+response.status+" "+text.slice(0,1000));}
+  let result:any;try{result=JSON.parse(text);}catch{throw new Error("更新服务返回非 JSON 响应："+response.status+" "+updateDiagnostic(text));}
   if(!response.ok)throw new Error("HTTP "+response.status+" "+updateDiagnostic(JSON.stringify(result.detail??result))+
    (response.headers.has("Retry-After")?"；请在 "+response.headers.get("Retry-After")+" 秒后重试":""));
   return result;
