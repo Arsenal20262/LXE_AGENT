@@ -34,8 +34,6 @@ export class DesktopCloudConfigService {
       device_name: text(input.deviceName),
       vpn_ip: text(input.vpnIp),
       data_server_url: text(input.dataServerUrl).replace(/\/+$/u, ""),
-      local_fallback_enabled: config.cloud.local_fallback_enabled,
-      local_fallback_url: config.cloud.local_fallback_url,
       tunnel_name: text(input.tunnelName) || "lxe-agent",
       switch_in_progress: false,
     };

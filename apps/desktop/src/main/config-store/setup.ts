@@ -525,16 +525,11 @@ export class DesktopSetupService {
       AGENT_SSE_WIRE_TRACE_ENABLED: diagnostic ? "1" : "0",
       ZINIAO_DIAGNOSTIC_TRACE_ENABLED: diagnostic ? "1" : "0",
       FEISHU_RAW_EVENT_DUMP_ENABLED: diagnostic ? "1" : "0",
-      LXE_DATA_SERVER_ENABLED: cloudEnabled ? "1" : "0",
+      LXE_DATA_SERVER_ENABLED: config.cloud.managed && !config.cloud.switch_in_progress && Boolean(config.cloud.data_server_url) ? "1" : "0",
       LXE_DATA_SERVER_URL: config.cloud.managed && !config.cloud.switch_in_progress ? config.cloud.data_server_url : "",
       LXE_DATA_SERVER_API_KEY: cloudEnabled ? secrets.cloud_business_token : "",
-      LXE_DATA_SERVER_FALLBACK_API_KEY: config.cloud.local_fallback_enabled
-        ? secrets.data_server_fallback_api_key
-        : "",
       LXE_ERP_API_KEY: cloudEnabled ? secrets.cloud_business_erp_token : "",
       LXE_SAIHU_MCP_API_KEY: cloudEnabled ? secrets.cloud_business_token : "",
-      LXE_DATA_SERVER_LOCAL_FALLBACK_ENABLED: config.cloud.local_fallback_enabled ? "1" : "0",
-      LXE_DATA_SERVER_FALLBACK_URL: config.cloud.local_fallback_url,
       BROWSER_AUTH_HEADLESS: "1",
     };
   }

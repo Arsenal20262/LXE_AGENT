@@ -1524,7 +1524,7 @@ describe("independent CLI skill permissions", () => {
     const f = fixture(), service = f.make();
     expect(await service.check()).toMatchObject({ connection: "error", permission_status: "verified", permission_profile: "custom", is_admin: false });
     expect(service.allowedSkillTypes()).toEqual(["amazon_fba"]);
-    expect(f.config.environment()).toMatchObject({ LXE_DATA_SERVER_URL: enrollmentPayload.data_server.url, LXE_DATA_SERVER_ENABLED: "0", LXE_DATA_SERVER_API_KEY: "" });
+    expect(f.config.environment()).toMatchObject({ LXE_DATA_SERVER_URL: enrollmentPayload.data_server.url, LXE_DATA_SERVER_ENABLED: "1", LXE_DATA_SERVER_API_KEY: "" });
     f.config.cloudIdentityCredential = () => "";
     expect(await service.check()).toMatchObject({ permission_status: "verified", permission_profile: "custom" });
     await service.stop();

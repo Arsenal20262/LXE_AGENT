@@ -41,6 +41,20 @@ const legacyPermission = (
 });
 
 describe("DesktopConfigStore", () => {
+  test("discards obsolete fallback settings while retaining enrollment configuration", () => {
+    const root = createRoot();
+    const configRoot = join(root, "config");
+    mkdirSync(configRoot, { recursive: true });
+    const old = cloneConfig();
+    Object.assign(old.cloud, { local_fallback_enabled: true, local_fallback_url: "http://obsolete.example", device_id: "fixture" });
+    writeFileSync(join(configRoot, "settings.json"), JSON.stringify(old));
+    const store = new DesktopConfigStore(root, join(root, "workspace"), safeStorage, { platform: "win32" });
+    expect(store.cloudConfiguration().device_id).toBe("fixture");
+    expect(store.cloudConfiguration()).not.toHaveProperty("local_fallback_enabled");
+    expect(store.environment()).not.toHaveProperty("LXE_DATA_SERVER_FALLBACK_URL");
+    expect(readFileSync(join(configRoot, "settings.json"), "utf8")).not.toContain("local_fallback");
+  });
+
   test("keeps every secret encrypted and maps complete integrations and diagnostic logs", () => {
     const root = createRoot();
     const appPath = join(root, "ziniao.exe");
@@ -418,11 +432,10 @@ describe("DesktopConfigStore", () => {
       address: "10.88.0.8/32",
     });
     expect(store.environment()).toMatchObject({
-      LXE_DATA_SERVER_ENABLED: "0",
+      LXE_DATA_SERVER_ENABLED: "1",
       LXE_DATA_SERVER_URL: "http://10.88.0.1:8000",
       LXE_DATA_SERVER_API_KEY: "",
       LXE_ERP_API_KEY: "",
-      LXE_DATA_SERVER_LOCAL_FALLBACK_ENABLED: "0",
     });
 
     store.saveCloudPermissionSnapshot({
@@ -499,7 +512,7 @@ describe("DesktopConfigStore", () => {
       switch_in_progress: false,
     });
     expect(store.environment()).toMatchObject({
-      LXE_DATA_SERVER_ENABLED: "0",
+      LXE_DATA_SERVER_ENABLED: "1",
       LXE_DATA_SERVER_API_KEY: "",
       LXE_ERP_API_KEY: "",
       LXE_MANAGED_LLM_API_KEY: "old-managed-model-token",

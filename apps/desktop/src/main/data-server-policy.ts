@@ -4,9 +4,6 @@ const DATA_SERVER_RUNTIME_KEYS = [
   "LXE_DATA_SERVER_ENABLED",
   "LXE_DATA_SERVER_URL",
   "LXE_DATA_SERVER_API_KEY",
-  "LXE_DATA_SERVER_LOCAL_FALLBACK_ENABLED",
-  "LXE_DATA_SERVER_FALLBACK_URL",
-  "LXE_DATA_SERVER_FALLBACK_API_KEY",
   "LXE_ERP_API_KEY",
   "LXE_SAIHU_MCP_API_KEY",
 ] as const;
@@ -37,7 +34,6 @@ export function resolveDataServerRuntimeEnvironment(
     const value = selected[name];
     if (value !== undefined) environment[name] = value;
   }
-  environment.LXE_DATA_SERVER_LOCAL_FALLBACK_ALLOWED = options.packaged ? "0" : "1";
   environment.LXE_DATA_SERVER_MACHINE_ID_PATH = options.machineIdentityPath;
   return environment;
 }

@@ -1,25 +1,25 @@
 import { dirname, join } from "node:path";
 import { hostname } from "node:os";
-import { createLogger } from "@lxe/core";
+import { nativeCloudFetch, readCloudReceipt } from "../tooling/cloud-http";
+import { createLogger, sanitizeLogValue } from "@lxe/core";
 import type { JsonObject } from "@lxe/protocol";
 import type { OneShotCliRunnerPort } from "../tooling/one-shot-cli";
 import type { SqliteRuntimeStore } from "../state/storage";
 import { resolveMachineIdentity } from "@lxe/core/machine-identity";
 
 type Environment = Record<string, string | undefined>;
-type DataServerTargetName = "cloud" | "local_fallback";
+type DataServerTargetName = "cloud";
 
 interface DataServerTarget {
   name: DataServerTargetName;
   serverUrl: string;
-  apiKey: string;
 }
 
 class DataServerUploadError extends Error {
   constructor(
     readonly target: DataServerTargetName,
     message: string,
-    readonly fallbackEligible: boolean,
+    readonly status?: number,
   ) {
     super(message);
     this.name = "DataServerUploadError";
@@ -87,9 +87,10 @@ export class MaintenanceScheduler {
   private readonly initialTimers: unknown[] = [];
   private backlogTimer: unknown | undefined;
   private stopped = true;
+  private ownershipBlocked = "";
 
   constructor(private readonly options: MaintenanceSchedulerOptions) {
-    this.fetch = options.fetch ?? globalThis.fetch;
+    this.fetch = options.fetch ?? ((input, init) => nativeCloudFetch(String(input))(input, init));
     this.clock = options.clock ?? systemClock;
   }
 
@@ -98,13 +99,11 @@ export class MaintenanceScheduler {
     this.stopped = false;
     const authEnabled = this.options.authEnabled ?? true;
     const dataEnabled = envBoolean(this.options.environment, "LXE_DATA_SERVER_ENABLED");
-    const localFallbackEnabled = this.localFallbackTarget() !== undefined;
     this.logger.info("maintenance_configured", {
       auth_enabled: authEnabled,
       auth_interval_ms: AUTH_REFRESH_INTERVAL_MS,
       data_sync_enabled: dataEnabled,
       data_sync_interval_ms: DATA_SYNC_INTERVAL_MS,
-      data_local_fallback_enabled: localFallbackEnabled,
     });
     if (authEnabled) {
       const authTimer = this.clock.setInterval(
@@ -167,53 +166,14 @@ export class MaintenanceScheduler {
   }
 
   async syncDataServer(): Promise<JsonObject> {
-    const cloud = this.dataServerTarget("cloud", "LXE_DATA_SERVER_URL", "LXE_DATA_SERVER_API_KEY");
-    if (!cloud) {
-      this.logger.info("data_sync_skipped", { reason: "missing_config" });
-      return { uploaded: false, skipped_reason: "missing_config" };
+    const serverUrl = envText(this.options.environment, "LXE_DATA_SERVER_URL").replace(/\/+$/, "");
+    if (!serverUrl) return { uploaded: false, skipped_reason: "missing_config" };
+    if (this.ownershipBlocked) throw new Error(this.ownershipBlocked);
+    try { return await this.syncTurnUsageTarget({ name: "cloud", serverUrl }); }
+    catch (error) {
+      if (error instanceof DataServerUploadError && error.status === 409) this.ownershipBlocked = error.message;
+      throw error;
     }
-    try {
-      return await this.syncTurnUsageTarget(cloud);
-    } catch (error) {
-      if (!(error instanceof DataServerUploadError) || !error.fallbackEligible || this.stopped) {
-        throw error;
-      }
-      const fallback = this.localFallbackTarget();
-      if (!fallback) throw error;
-      this.logger.warn("data_sync_fallback_started", {
-        target: fallback.name,
-        reason: error.message,
-      });
-      return this.syncTurnUsageTarget(fallback);
-    }
-  }
-
-  private dataServerTarget(
-    name: DataServerTargetName,
-    urlName: string,
-    apiKeyName: string,
-  ): DataServerTarget | undefined {
-    const serverUrl = envText(this.options.environment, urlName).replace(/\/+$/, "");
-    const apiKey = envText(this.options.environment, apiKeyName);
-    return serverUrl && apiKey ? { name, serverUrl, apiKey } : undefined;
-  }
-
-  private localFallbackTarget(): DataServerTarget | undefined {
-    const allowed = envBoolean(
-      this.options.environment,
-      "LXE_DATA_SERVER_LOCAL_FALLBACK_ALLOWED",
-      true,
-    );
-    const enabled = envBoolean(
-      this.options.environment,
-      "LXE_DATA_SERVER_LOCAL_FALLBACK_ENABLED",
-    );
-    if (!allowed || !enabled) return undefined;
-    return this.dataServerTarget(
-      "local_fallback",
-      "LXE_DATA_SERVER_FALLBACK_URL",
-      "LXE_DATA_SERVER_FALLBACK_API_KEY",
-    );
   }
 
   private async syncTurnUsageTarget(target: DataServerTarget): Promise<JsonObject> {
@@ -245,7 +205,7 @@ export class MaintenanceScheduler {
             throw new DataServerUploadError(
               target.name,
               `${target.name} turn usage record exceeds 1 MiB client batch limit`,
-              false,
+              undefined,
             );
           }
           break;
@@ -306,7 +266,8 @@ export class MaintenanceScheduler {
       try {
         response = await this.fetch(`${target.serverUrl}/api/v1/agent-data/turn-usage/batches`, {
           method: "POST",
-          headers: { authorization: `Bearer ${target.apiKey}`, "content-type": "application/json" },
+          headers: { "X-LXE-Client": "cli", "content-type": "application/json" },
+          redirect: "error",
           body,
           signal: controller.signal,
         });
@@ -315,23 +276,32 @@ export class MaintenanceScheduler {
         const message = error instanceof Error ? error.message : String(error);
         throw new DataServerUploadError(
           target.name,
-          `${target.name} data server request failed: ${message}`,
-          true,
+          `${target.name} data server request failed: ${sanitizeLogValue(message)}`,
+          undefined,
         );
       }
+      const raw = await readCloudReceipt(response);
       if (!response.ok) {
         throw new DataServerUploadError(
           target.name,
-          `${target.name} data server returned HTTP ${response.status}`,
-          response.status >= 500 && response.status <= 599,
+          `${target.name} data server returned HTTP ${response.status}: ${sanitizeLogValue(raw.text)}`,
+          response.status,
         );
       }
-      const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
+      let payload: Record<string, unknown>;
+      try {
+        if (raw.truncated) throw Error("response exceeded 1 MiB [truncated]");
+        const value: unknown = JSON.parse(raw.text);
+        if (!value || typeof value !== "object" || Array.isArray(value)) throw Error("ACK must be an object");
+        payload = value as Record<string, unknown>;
+      } catch (error) {
+        throw new DataServerUploadError(target.name, `${target.name} data server returned an invalid ACK: ${sanitizeLogValue(String(error))}; response=${sanitizeLogValue(raw.text)}`);
+      }
       const acceptedCount = Number(payload.accepted_count);
       const acceptedThroughSequence = Number(payload.accepted_through_sequence);
       if (!Number.isSafeInteger(acceptedCount) || acceptedCount !== turnCount ||
         !Number.isSafeInteger(acceptedThroughSequence) || acceptedThroughSequence !== lastSequence) {
-        throw new DataServerUploadError(target.name, `${target.name} data server returned an invalid ACK`, false);
+        throw new DataServerUploadError(target.name, `${target.name} data server returned an invalid ACK: ${sanitizeLogValue(raw.text)}`, undefined);
       }
       return { acceptedCount, acceptedThroughSequence };
     } finally {

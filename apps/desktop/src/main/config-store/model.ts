@@ -77,8 +77,6 @@ export interface DesktopConfig {
     device_name: string;
     vpn_ip: string;
     data_server_url: string;
-    local_fallback_enabled: boolean;
-    local_fallback_url: string;
     tunnel_name: string;
     switch_in_progress: boolean;
   };
@@ -93,7 +91,6 @@ export interface DesktopSecrets {
   cloud_business_token: string;
   cloud_business_erp_token: string;
   cloud_business_expires_at: number;
-  data_server_fallback_api_key: string;
   erp_api_key: string;
   saihu_mcp_api_key: string;
   cloud_permission_snapshot: DesktopCloudPermissionSnapshot | null;
@@ -149,8 +146,6 @@ const defaultConfig = (catalog: LlmProviderCatalog): DesktopConfig => {
       device_name: "",
       vpn_ip: "",
       data_server_url: "",
-      local_fallback_enabled: false,
-      local_fallback_url: "",
       tunnel_name: "lxe-agent",
       switch_in_progress: false,
     },
@@ -166,7 +161,6 @@ const DEFAULT_SECRETS: DesktopSecrets = {
   cloud_business_token: "",
   cloud_business_erp_token: "",
   cloud_business_expires_at: 0,
-  data_server_fallback_api_key: "",
   erp_api_key: "",
   saihu_mcp_api_key: "",
   cloud_permission_snapshot: null,
@@ -326,8 +320,7 @@ export const parseSettings = (
   assertFieldTypes(logging, { profile: "string", retention_days: "number" }, "settings.logging");
   assertFieldTypes(cloud, {
     managed: "boolean", device_id: "string", device_name: "string", vpn_ip: "string",
-    data_server_url: "string", local_fallback_enabled: "boolean", local_fallback_url: "string",
-    tunnel_name: "string",
+    data_server_url: "string", tunnel_name: "string",
   }, "settings.cloud");
   if (Number(value.schema_version) >= 7) {
     assertFieldTypes(cloud, { switch_in_progress: "boolean" }, "settings.cloud");
@@ -440,8 +433,6 @@ export const parseConfig = (
       device_name: text(rawCloud.device_name),
       vpn_ip: text(rawCloud.vpn_ip),
       data_server_url: text(rawCloud.data_server_url),
-      local_fallback_enabled: Boolean(rawCloud.local_fallback_enabled),
-      local_fallback_url: text(rawCloud.local_fallback_url),
       tunnel_name: text(rawCloud.tunnel_name) || "lxe-agent",
       switch_in_progress: Boolean(rawCloud.switch_in_progress),
     },
@@ -480,7 +471,6 @@ export const parseSecrets = (raw: unknown): DesktopSecrets => {
     cloud_business_token: text(value.cloud_business_token),
     cloud_business_erp_token: text(value.cloud_business_erp_token),
     cloud_business_expires_at: Number(value.cloud_business_expires_at) || 0,
-    data_server_fallback_api_key: text(value.data_server_fallback_api_key),
     erp_api_key: text(value.erp_api_key),
     saihu_mcp_api_key: text(value.saihu_mcp_api_key),
     cloud_permission_snapshot: parseStoredDevicePermission(

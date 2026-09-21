@@ -245,7 +245,7 @@ describe("MaintenanceScheduler", () => {
     });
     expect(uploads).toHaveLength(1);
     expect(uploads[0]?.url).toBe("https://cloud.example/api/v1/agent-data/turn-usage/batches");
-    expect(uploads[0]?.authorization).toBe("Bearer cloud-secret");
+    expect(uploads[0]?.authorization).toBeNull();
     expect(uploads[0]?.bytes).toBeLessThanOrEqual(1024 * 1024);
     expect(uploads[0]?.body).toMatchObject({
       protocol_version: 1,
@@ -299,7 +299,7 @@ describe("MaintenanceScheduler", () => {
     await store.stop();
   });
 
-  test("uses independent cloud and fallback watermarks", async () => {
+  test("ignores obsolete fallback configuration and retains the cloud watermark", async () => {
     const store = await createStore("lxe-maintenance-watermarks-");
     await recordTurn(store, "turn-shared");
     const uploads: UploadedBatch[] = [];
@@ -316,13 +316,13 @@ describe("MaintenanceScheduler", () => {
     });
 
     await scheduler.start();
-    await expect(scheduler.syncDataServer()).resolves.toMatchObject({ target: "local_fallback" });
+    await expect(scheduler.syncDataServer()).rejects.toThrow("offline");
     expect(store.turnUsageAcknowledgedSequence("https://cloud.example")).toBe(0);
-    expect(store.turnUsageAcknowledgedSequence("http://127.0.0.1:8000")).toBe(1);
+    expect(store.turnUsageAcknowledgedSequence("http://127.0.0.1:8000")).toBeUndefined();
     cloudOffline = false;
     await expect(scheduler.syncDataServer()).resolves.toMatchObject({ target: "cloud", accepted_count: 1 });
     expect(store.turnUsageAcknowledgedSequence("https://cloud.example")).toBe(1);
-    expect(uploads.map((upload) => upload.body.turns[0].turn_id)).toEqual(["turn-shared", "turn-shared"]);
+    expect(uploads.map((upload) => upload.body.turns[0].turn_id)).toEqual(["turn-shared"]);
     await scheduler.stop();
     await store.stop();
   });
@@ -352,6 +352,63 @@ describe("MaintenanceScheduler", () => {
     await store.stop();
   });
 
+  test("actual invalid receipt diagnostics survive without advancing progress", async () => {
+    const store = await createStore("lxe-maintenance-real-error-");
+    await recordTurn(store, "pending");
+    let body = 'not JSON: fixture upstream fault token=fixture-secret';
+    const scheduler = schedulerFor(store, async () => new Response(body));
+    try {
+      await expect(scheduler.syncDataServer()).rejects.toThrow("fixture upstream fault");
+      expect(store.turnUsageAcknowledgedSequence("https://cloud.example")).toBe(0);
+      body = '{"accepted_count":1,"accepted_through_sequence":1}' + ' '.repeat(1024 * 1024);
+      await expect(scheduler.syncDataServer()).rejects.toThrow("truncated");
+      expect(store.turnUsageAcknowledgedSequence("https://cloud.example")).toBe(0);
+    } finally { await store.stop(); }
+  });
+
+  test("native transport retries the same persisted batch after HTTP failure without credentials", async () => {
+    const store = await createStore("lxe-maintenance-native-http-");
+    await recordTurn(store, "native-pending");
+    const bodies: string[] = [];
+    let fail = true;
+    const server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(request) {
+      expect(request.headers.get("X-LXE-Client")).toBe("cli");
+      expect(request.headers.get("Authorization")).toBeNull();
+      expect(request.headers.get("Cookie")).toBeNull();
+      bodies.push(await request.text());
+      if (fail) return new Response("fixture unavailable", { status: 503 });
+      return Response.json({ accepted_count: 1, accepted_through_sequence: 1 });
+    } });
+    const url = server.url.origin;
+    const scheduler = new MaintenanceScheduler({ store, gatewayId: "native-gateway", authEnabled: false,
+      authRunner: { execute: async () => cliSuccess() }, environment: { LXE_DATA_SERVER_URL: url } });
+    try {
+      await expect(scheduler.syncDataServer()).rejects.toThrow("fixture unavailable");
+      expect(store.turnUsageAcknowledgedSequence(url)).toBe(0);
+      fail = false;
+      await scheduler.syncDataServer();
+      expect(bodies.length).toBe(2);
+      expect(bodies[0]).toBe(bodies[1]);
+      expect(store.turnUsageAcknowledgedSequence(url)).toBe(1);
+    } finally { await scheduler.stop(); await server.stop(true); await store.stop(); }
+  });
+
+  test("ownership conflicts pause repeated uploads until repaired and restarted", async () => {
+    const store = await createStore("lxe-maintenance-conflict-");
+    await recordTurn(store, "pending");
+    let calls = 0;
+    const scheduler = schedulerFor(store, async () => {
+      calls++;
+      return Response.json({ detail: { code: "upload_instance_conflict" } }, { status: 409 });
+    });
+    try {
+      await expect(scheduler.syncDataServer()).rejects.toThrow("upload_instance_conflict");
+      await expect(scheduler.syncDataServer()).rejects.toThrow("upload_instance_conflict");
+      expect(calls).toBe(1);
+      expect(store.turnUsageAcknowledgedSequence("https://cloud.example")).toBe(0);
+    } finally { await store.stop(); }
+  });
+
   test("skips records older than 365 days on first sync", async () => {
     const store = await createStore("lxe-maintenance-retention-");
     await recordTurn(store, "turn-old", { startedAt: Date.now() / 1_000 - 366 * 86_400 });
@@ -364,6 +421,29 @@ describe("MaintenanceScheduler", () => {
     expect(uploads[0]?.body.turns[0].sequence).toBe(2);
     expect(store.turnUsageAcknowledgedSequence("https://cloud.example")).toBe(2);
     await store.stop();
+  });
+
+  test("retains already pending records across the retention window and uploads without a key", async () => {
+    const store = await createStore("lxe-maintenance-aged-pending-");
+    await recordTurn(store, "pending");
+    const base = Date.now();
+    let offline = true;
+    const uploads: UploadedBatch[] = [];
+    const scheduler = schedulerFor(store, async (input, init) => {
+      expect(new Headers(init?.headers).get("X-LXE-Client")).toBe("cli");
+      expect(new Headers(init?.headers).get("authorization")).toBeNull();
+      if (offline) throw Error("fixture offline");
+      return ackingFetch(uploads)(input, init);
+    }, { environment: { LXE_DATA_SERVER_API_KEY: "" } });
+    await expect(scheduler.syncDataServer()).rejects.toThrow("fixture offline");
+    const originalNow = Date.now;
+    try {
+      Date.now = () => base + 366 * 86400_000;
+      offline = false;
+      await scheduler.syncDataServer();
+      expect(uploads[0]?.body.turns[0].turn_id).toBe("pending");
+      expect(store.turnUsageAcknowledgedSequence("https://cloud.example")).toBe(1);
+    } finally { Date.now = originalNow; await store.stop(); }
   });
 
   test("caps batches at 200 turns and 1 MiB", async () => {

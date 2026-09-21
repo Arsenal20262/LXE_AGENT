@@ -432,9 +432,9 @@ export class UsageStore {
              provider, model, status, elapsed_ms, llm_calls, tool_calls, input_tokens, output_tokens,
              cache_read_input_tokens, cache_creation_input_tokens
       FROM turn_usage
-      WHERE sequence > ? AND started_at >= ?
+      WHERE sequence > ?
       ORDER BY sequence ASC LIMIT ?
-    `, acknowledgedSequence, safeCutoff, safeLimit);
+    `, acknowledgedSequence, safeLimit);
     const turns = rows.map((row) => ({
       sequence: Number(row.sequence ?? 0),
       turn_id: clippedText(row.turn_id, 256),
@@ -463,12 +463,12 @@ export class UsageStore {
         FROM turn_usage_items AS item
         JOIN (
           SELECT turn_id FROM turn_usage
-          WHERE sequence > ? AND started_at >= ?
+          WHERE sequence > ?
           ORDER BY sequence ASC LIMIT ?
         ) AS selected ON selected.turn_id = item.turn_id
         WHERE item.kind IN ('tool', 'skill_activation', 'skill_execution')
         ORDER BY item.item_id ASC
-      `, acknowledgedSequence, safeCutoff, safeLimit);
+      `, acknowledgedSequence, safeLimit);
       const itemCounts = new Map<string, number>();
       for (const row of items) {
         const turnId = text(row.turn_id);
@@ -489,8 +489,8 @@ export class UsageStore {
     const lastSequence = Number(turns.at(-1)?.sequence ?? acknowledgedSequence);
     const more = this.get<{ present: number }>(`
       SELECT 1 AS present FROM turn_usage
-      WHERE sequence > ? AND started_at >= ? LIMIT 1
-    `, lastSequence, safeCutoff);
+      WHERE sequence > ? LIMIT 1
+    `, lastSequence);
     return { turns, acknowledged_sequence: acknowledgedSequence, has_more: Boolean(more?.present) };
   }
 
