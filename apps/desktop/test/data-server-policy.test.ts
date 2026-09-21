@@ -43,7 +43,7 @@ describe("desktop data server policy", () => {
         LXE_DATA_SERVER_URL: "http://source.example",
         LXE_DATA_SERVER_API_KEY: "source-secret",
         LXE_ERP_API_KEY: "source-erp-secret",
-       
+
         LXE_DATA_SERVER_LOCAL_FALLBACK_ENABLED: "1",
         LXE_DATA_SERVER_FALLBACK_URL: "http://127.0.0.1:8000",
         LXE_DATA_SERVER_FALLBACK_API_KEY: "fallback-secret",
