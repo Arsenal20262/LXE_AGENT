@@ -3,6 +3,8 @@ import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { gzipSync } from "node:zlib";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { saihuNativeFetch } from "../../src/tooling/saihu-native-http";
 import { OfficialMcpConnector, loadMcpConfig } from "../../src/tooling/mcp";
 
@@ -76,13 +78,19 @@ test("native fetch cancellation closes a pending stream", async () => {
 
 test("direct transport streams SSE, decodes compressed errors and cancels an active body", async () => {
   let mode = "sse";
-  const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch() {
-    if (mode === "error") return new Response(gzipSync("actual compressed failure"), { status: 502, headers: { "Content-Encoding": "gzip" } });
-    return new Response(new ReadableStream({ start(controller) {
-      controller.enqueue(new TextEncoder().encode("event: message\ndata: first\n\n"));
-    } }), { headers: { "Content-Type": "text/event-stream" } });
-  } });
-  const url = `http://127.0.0.1:${server.port}/mcp/`;
+  // Bun.serve crashes on Windows 1.4.2 when this deliberately endless body is aborted.
+  // A Node HTTP fixture exercises the same real client cancellation without that server bug.
+  const server = createServer((_request, response) => {
+    if (mode === "error") {
+      response.writeHead(502, { "Content-Encoding": "gzip" });
+      response.end(gzipSync("actual compressed failure"));
+    } else {
+      response.writeHead(200, { "Content-Type": "text/event-stream" });
+      response.write("event: message\ndata: first\n\n");
+    }
+  });
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/mcp/`;
   try {
     const abort = new AbortController();
     const response = await saihuNativeFetch(url)(url, { signal: abort.signal });
@@ -94,5 +102,5 @@ test("direct transport streams SSE, decodes compressed errors and cancels an act
     const error = await saihuNativeFetch(url)(url);
     expect(error.status).toBe(502); expect(await error.text()).toBe("actual compressed failure");
     expect(error.headers.get("content-encoding")).toBeNull();
-  } finally { server.stop(true); }
+  } finally { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); }
 });
