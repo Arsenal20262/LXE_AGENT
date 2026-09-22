@@ -15,6 +15,40 @@ function context(session_id = "s", controller = new AbortController(), platform 
 }
 
 describe("runtime user question ownership", () => {
+  test("keeps one sensitive input per session and resolves its value only to the waiter", async () => {
+    const service = new UserQuestionService(() => {});
+    const controller = new AbortController();
+    const request = {
+      request_id: "input-1", session_id: "s", kind: "image_text" as const,
+      prompt: "Enter the text", image_data_url: "data:image/png;base64,Y2FwdGNoYQ==",
+      sensitive: true as const, expires_at: Date.now() + 60_000,
+    };
+    const waiting = service.waitForPendingInput(request, controller.signal);
+    const duplicateController = new AbortController();
+    const duplicate = service.waitForPendingInput({ ...request, request_id: "input-2" }, duplicateController.signal);
+    const ordinaryController = new AbortController();
+    const ordinary = service.ask(input, context("s", ordinaryController));
+    const settles = async (promise: Promise<unknown>): Promise<"rejected" | "pending" | "resolved"> =>
+      await Promise.race([
+        promise.then(() => "resolved" as const, () => "rejected" as const),
+        Bun.sleep(0).then(() => "pending" as const),
+      ]);
+    try {
+      expect(await settles(duplicate)).toBe("rejected");
+      expect(await settles(ordinary)).toBe("rejected");
+      expect(service.pendingInputSnapshot("s")).toEqual(request);
+      expect(service.submitPendingInput({ session_id: "s", request_id: "input-1", value: " A7x9 " }))
+        .toEqual({ accepted: true, request_id: "input-1" });
+      expect(await waiting).toBe("A7x9");
+      expect(service.pendingInputSnapshot("s")).toBeUndefined();
+    } finally {
+      controller.abort();
+      duplicateController.abort();
+      ordinaryController.abort();
+      await Promise.allSettled([waiting, duplicate, ordinary]);
+    }
+  });
+
   test.each(["mixed", "all-skipped"])("explicit skips are normal answers, scoped and idempotent: %s", async kind => {
     const service = new UserQuestionService(() => {});
     const a = service.ask(input, context("a"));

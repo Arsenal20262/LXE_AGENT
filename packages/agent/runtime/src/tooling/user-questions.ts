@@ -21,7 +21,7 @@ interface Pending {
 interface PendingInput {
   request: PendingSensitiveInput;
   signal: AbortSignal;
-  resolve(): void;
+  resolve(value: string): void;
   reject(error: Error): void;
   dispose(): void;
 }
@@ -43,31 +43,46 @@ export class UserQuestionService {
     return structuredClone(values.find(entry => !sessionId || entry.request.session_id === sessionId)?.request);
   }
 
-  async waitForPendingInput(request: PendingSensitiveInput, signal: AbortSignal): Promise<void> {
+  async waitForPendingInput(request: PendingSensitiveInput, signal: AbortSignal): Promise<string> {
     signal.throwIfAborted();
-    if (this.pendingInputs.has(request.request_id)) throw failure("This pending input is already active");
-    await new Promise<void>((resolve, reject) => {
-      const abort = () => {
+    if (this.pending.has(request.session_id) || this.pendingInputForSession(request.session_id)) {
+      throw failure("This session already has a pending interaction");
+    }
+    if (this.pendingInputs.has(request.request_id) || request.expires_at <= Date.now()) {
+      throw failure("This pending input is no longer available");
+    }
+    return await new Promise<string>((resolve, reject) => {
+      let settled = false;
+      const settle = (callback: () => void) => {
+        if (settled) return;
+        settled = true;
         this.pendingInputs.delete(request.request_id);
+        clearTimeout(expire);
         signal.removeEventListener("abort", abort);
-        reject(failure("Sensitive input cancelled before an answer was accepted"));
+        callback();
         this.changed(request.session_id);
       };
-      this.pendingInputs.set(request.request_id, { request: structuredClone(request), signal, resolve, reject,
-        dispose: () => signal.removeEventListener("abort", abort) });
+      const abort = () => {
+        settle(() => reject(failure("Sensitive input cancelled before an answer was accepted")));
+      };
+      const expire = setTimeout(() => {
+        settle(() => reject(failure("Sensitive input expired before an answer was accepted")));
+      }, Math.max(1, request.expires_at - Date.now()));
+      this.pendingInputs.set(request.request_id, { request: structuredClone(request), signal, resolve: value => settle(() => resolve(value)), reject,
+        dispose: () => { clearTimeout(expire); signal.removeEventListener("abort", abort); } });
       signal.addEventListener("abort", abort, { once: true });
       this.changed(request.session_id);
     });
   }
 
   submitPendingInput(input: { session_id: string; request_id: string; value: string }): { accepted: true; request_id: string } {
-    if (!input.value.trim() || input.value.length > 128) throw failure("Sensitive input must be non-empty bounded text");
+    const value = input.value.trim();
+    if (!value || value.length > 128 || /[\u0000-\u001f\u007f]/u.test(value)) throw failure("Sensitive input must be non-empty bounded text");
     const entry = this.pendingInputs.get(input.request_id);
     if (!entry || entry.request.session_id !== input.session_id || entry.signal.aborted) throw failure("This pending input is no longer available");
     this.pendingInputs.delete(input.request_id);
     entry.dispose();
-    entry.resolve();
-    this.changed(input.session_id);
+    entry.resolve(value);
     return { accepted: true, request_id: input.request_id };
   }
 
@@ -84,7 +99,9 @@ export class UserQuestionService {
     sessionId: string; turnId: string; toolCallId: string; signal: AbortSignal;
   }): Promise<UserQuestionAnswer[]> {
     context.signal.throwIfAborted();
-    if (this.pending.has(context.sessionId)) throw failure("This session already has a pending question");
+    if (this.pending.has(context.sessionId) || this.pendingInputForSession(context.sessionId)) {
+      throw failure("This session already has a pending interaction");
+    }
     const request: PendingUserQuestion = {
       request_id: randomUUID(), session_id: context.sessionId,
       turn_id: context.turnId, tool_call_id: context.toolCallId,
@@ -135,6 +152,13 @@ export class UserQuestionService {
       entry.reject(failure("User question ended because its session or runtime closed"));
       this.changed(sessionId);
     }
+    for (const [id, input] of this.pendingInputs) {
+      if (input.request.session_id !== sessionId) continue;
+      this.pendingInputs.delete(id);
+      input.dispose();
+      input.reject(failure("Sensitive input ended because its session or runtime closed"));
+      this.changed(sessionId);
+    }
     for (const [id, value] of this.answered) if (value.request.session_id === sessionId) this.answered.delete(id);
   }
 
@@ -144,6 +168,10 @@ export class UserQuestionService {
     for (const [id, entry] of this.pendingInputs) {
       this.pendingInputs.delete(id); entry.dispose(); entry.reject(failure("Sensitive input ended because its session or runtime closed"));
     }
+  }
+
+  private pendingInputForSession(sessionId: string): PendingInput | undefined {
+    return [...this.pendingInputs.values()].find(entry => entry.request.session_id === sessionId);
   }
 }
 

@@ -13,6 +13,8 @@ export interface LxeSkillCommandConfirmation {
   cancelLabel: string;
 }
 
+export type LxeSkillRuntimeRequirement = "pending_sensitive_input";
+
 export interface LxeSkillCommandDefinition {
   command: string;
   name: string;
@@ -22,6 +24,7 @@ export interface LxeSkillCommandDefinition {
   attributionSkill?: string;
   artifactPaths?: ArtifactPathDeclaration[];
   confirmation?: LxeSkillCommandConfirmation;
+  runtimeRequirements: LxeSkillRuntimeRequirement[];
 }
 
 interface LxeSkillCatalogEntry {
@@ -105,6 +108,19 @@ const confirmationOf = (raw: Record<string, unknown>, entryName: string): LxeSki
   return { header, question, confirmLabel, cancelLabel };
 };
 
+const runtimeRequirementsOf = (
+  raw: Record<string, unknown>,
+  entryName: string,
+): LxeSkillRuntimeRequirement[] => {
+  if (raw.runtime_requirements === undefined) return [];
+  if (!Array.isArray(raw.runtime_requirements)
+    || new Set(raw.runtime_requirements).size !== raw.runtime_requirements.length
+    || raw.runtime_requirements.some((value) => value !== "pending_sensitive_input")) {
+    throw new Error(`invalid runtime requirement: ${entryName}`);
+  }
+  return raw.runtime_requirements as LxeSkillRuntimeRequirement[];
+};
+
 export function loadLxeSkillCommandCatalog(path: string): LxeSkillCommandDefinition[] {
   const document = JSON.parse(readFileSync(path, "utf8")) as LxeSkillCatalogDocument;
   if (document.protocol_version !== "1" || !Array.isArray(document.entries)) {
@@ -121,6 +137,7 @@ export function loadLxeSkillCommandCatalog(path: string): LxeSkillCommandDefinit
     }
     const artifactPaths = artifactPathsOf(raw, entry.name);
     const confirmation = confirmationOf(raw, entry.name);
+    const runtimeRequirements = runtimeRequirementsOf(raw, entry.name);
     const ownerSkills = Array.isArray(raw.owner_skills)
       ? raw.owner_skills.map((item) => String(item).trim()).filter(Boolean)
       : [];
@@ -138,6 +155,7 @@ export function loadLxeSkillCommandCatalog(path: string): LxeSkillCommandDefinit
       ...(String(raw.module ?? "").trim() ? { module: String(raw.module).trim() } : {}),
       visibility,
       ownerSkills,
+      runtimeRequirements,
       ...(attributionSkill ? { attributionSkill } : {}),
       ...(artifactPaths.length ? { artifactPaths } : {}),
       ...(confirmation ? { confirmation } : {}),

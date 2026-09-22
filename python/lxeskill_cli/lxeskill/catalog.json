@@ -1,6 +1,10 @@
 {
   "protocol_version": "1",
   "entries": [
+    {"name":"shangman_login_prepare","command_path":["shangman","login","prepare"],"visibility":"business","session_mode":"none","module":"services.agent_cli.shangman.login_prepare","owner_skills":["shangman-login"],"timeout_ms":60000,"exposed":true,"input_schema":{"type":"object","properties":{},"additionalProperties":false},"artifact_paths":[{"field":"image_path","role":"model_input"}]},
+    {"name":"shangman_login_submit","command_path":["shangman","login","submit"],"visibility":"business","session_mode":"none","module":"services.agent_cli.shangman.login_submit","owner_skills":["shangman-login"],"timeout_ms":60000,"exposed":true,"input_schema":{"type":"object","properties":{"challenge_id":{"type":"string","minLength":1},"captcha_code":{"type":"string","minLength":1,"maxLength":128}},"additionalProperties":false,"required":["challenge_id","captcha_code"]}},
+    {"name":"shangman_login_status","command_path":["shangman","login","status"],"visibility":"business","session_mode":"none","module":"services.agent_cli.shangman.login_status","owner_skills":["shangman-login"],"timeout_ms":60000,"exposed":true,"input_schema":{"type":"object","properties":{},"additionalProperties":false}},
+    {"name":"shangman_login_clear","command_path":["shangman","login","clear"],"visibility":"business","session_mode":"none","module":"services.agent_cli.shangman.login_clear","owner_skills":["shangman-login"],"timeout_ms":60000,"exposed":true,"input_schema":{"type":"object","properties":{},"additionalProperties":false}},
     {
       "name": "ziniao_browser",
       "command_path": ["browser", "store"],
@@ -490,6 +494,7 @@
     }
   ],
   "datasets": {
+    "shangman_goods_export": {"dir": "shangman/indonesia", "holds": "上马 ERP 当前配置账号可见的商品全量原始 XLSX，每次导出保存于独立运行子目录。"},
     "fba_delivery_csv": {"dir": "fba/delivery_csv", "holds": "FBA 发货单 CSV，命名 <SP单号>_*.csv；报关、发票、采购、退税汇总都从这里读。", "legacy_dirs": ["mabang_fba_delivery"]},
     "fba_stock_sku": {"dir": "fba/stock_sku", "holds": "马帮库存 SKU Excel，按发货单 SKU发货量 列导出；SKU 多时分批成多个文件。", "legacy_dirs": ["mabang_stock_sku"]},
     "fba_msku_detail": {"dir": "fba/msku_detail", "holds": "马帮 MSKU 明细 Excel。", "legacy_dirs": ["mabang_msku_detail"]},

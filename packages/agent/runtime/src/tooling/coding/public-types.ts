@@ -1,7 +1,7 @@
 import type { JsonObject } from "@lxe/protocol";
 import type { ExecShellAdapter } from "../exec-shell";
 import type { LxeSkillRuntimeStatus } from "../../operations/lxeskill-runtime";
-import type { LxeSkillCommandConfirmation } from "../lxeskill-command";
+import type { LxeSkillCommandConfirmation, LxeSkillRuntimeRequirement } from "../lxeskill-command";
 
 export interface LxeSkillRecoveryCommand {
   command: string;
@@ -9,6 +9,7 @@ export interface LxeSkillRecoveryCommand {
   ownerSkills: readonly string[];
   attributionSkill?: string;
   confirmation?: LxeSkillCommandConfirmation;
+  runtimeRequirements?: readonly LxeSkillRuntimeRequirement[];
 }
 
 export type ProcessStatus = "running" | "completed" | "failed" | "killed";
@@ -38,6 +39,7 @@ export interface CodingToolOptions {
   execShell?: ExecShellAdapter;
   execEnv?: (context: {
     skillNames: readonly string[];
+    runtimeRequirements: readonly LxeSkillRuntimeRequirement[];
     sessionId: string;
     turnId: string;
   }) => Record<string, string>;

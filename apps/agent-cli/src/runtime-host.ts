@@ -45,8 +45,6 @@ import {
   type RuntimeEmitter,
   type RuntimeHandle,
   type TurnOutcome,
-  ShangmanCaptchaBroker,
-  SHANGMAN_CAPTCHA_SKILL,
   type ZhihuiTmsProgressEvent,
 } from "@lxe/runtime";
 import { DashboardService } from "./dashboard-service";
@@ -132,10 +130,6 @@ export function createAgentRuntimeHost(
   const questions = new UserQuestionService(sessionId => {
     void Promise.resolve().then(() => options.onSessionChanged?.(sessionId, "questions"))
       .catch(error => logger.warn("question_notification_failed", { session_id: sessionId, error }));
-  });
-  const shangmanCaptcha = new ShangmanCaptchaBroker(sessionId => {
-    void Promise.resolve().then(() => options.onSessionChanged?.(sessionId, "questions"))
-      .catch(error => logger.warn("captcha_notification_failed", { session_id: sessionId, error }));
   });
   registerUserQuestionTool(tools, questions);
   const skillCatalog = new SkillCatalog(options.dataRoot, options.userSkillsRoot, {
@@ -231,13 +225,7 @@ export function createAgentRuntimeHost(
       }], { sessionId, turnId, toolCallId, signal });
       return answers[0]?.selected[0] === confirmation.confirmLabel;
     },
-    execEnv: ({ skillNames, sessionId, turnId }) => {
-      const env: Record<string, string> = { LXESKILL_SKILL_SCOPE: skillNames.join(",") };
-      if (skillNames.includes(SHANGMAN_CAPTCHA_SKILL) || shangmanCaptcha.hasSession(sessionId)) {
-        Object.assign(env, shangmanCaptcha.environmentFor(sessionId), { LXE_AGENT_TURN_ID: turnId });
-      }
-      return env;
-    },
+    execEnv: ({ skillNames }) => ({ LXESKILL_SKILL_SCOPE: skillNames.join(",") }),
     ...(options.onBackgroundTaskChanged ? { onExecComplete: options.onBackgroundTaskChanged } : {}),
     ...(options.onZhihuiTmsProgress ? { onZhihuiTmsProgress: options.onZhihuiTmsProgress } : {}),
   });
@@ -245,7 +233,7 @@ export function createAgentRuntimeHost(
   const runtimeServices: Array<{
     start(registry: ToolRegistry): Promise<void>;
     stop(): Promise<void>;
-  }> = [processes, lxeSkillRuntime, shangmanCaptcha, {
+  }> = [processes, lxeSkillRuntime, {
     async start() {
       skillCatalog.refreshIfNeeded();
       skillRefreshTimer = setInterval(() => {
@@ -265,7 +253,6 @@ export function createAgentRuntimeHost(
   let workspaceInstances!: WorkspaceInstanceManager;
   const dashboardService = new DashboardService({
     questions,
-    shangmanCaptcha,
     stateRoot: options.dataRoot,
     llmConfigRoot: options.llmConfigRoot,
     skillsRoot: options.skillsRoot,

@@ -86,6 +86,14 @@
   - `docs/superpowers/plans/2026-09-18-four-platform-isolation-and-main-sync.md`
 - 不得使用 `git reset --hard`、`git checkout --`、`git clean` 或其他破坏性命令。
 
+## 2026-09-22 收敛补充（未提交）
+
+- 此处先前记录的通用 `PendingSensitiveInputBroker` 方案已被 `upstream/main` 的上马持久化认证方案取代，不能作为当前实现依据。
+- 上马 `run` 仅读取持久化 token；无 token、过期 token 或 ERP 401 都返回 `login_required`，且 401 只使被拒 token 失效，不自动重试 ERP 导出。认证恢复通过独立 `shangman-login` Skill 完成。
+- 四平台紧凑 terminal matrix 已复验：雅仓保留完整成功、部分成功（成功文件和 `{task_id,data_type,warehouse,status,error_code}`）、失败、clarification questions；智汇、上马和马帮只暴露各自的最小业务摘要、文件和已脱敏错误。马帮巴西海外仓补齐 platform-local `terminal_projection`，不改公共 `business.py`。
+- 智汇 TMS 的 `tryRunZhihuiConfirmation`、translator/router 等旧 source 标识扫描为空；`zhihui-tms-product-export` Skill 回归确认正常请求直接 execute，未恢复确认卡或 pre-turn Provider 调用。
+- 当前验证：loopback broker 2/2、Python Shangman 19/19、四平台 terminal/TMS matrix 122/122；Runtime、Agent CLI、Dashboard typecheck 已通过。未访问生产接口、未提交、未 push。
+
 ## 新任务立即执行的顺序
 
 1. 阅读本交接、设计、实施计划和本交接的 Task 2 补充文档，执行 `git status --short --branch`，确认工作目录仍为此目录、分支仍为 `feature-amazon-replenish-multi-platform`。

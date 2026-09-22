@@ -294,7 +294,7 @@ describe("DashboardService", () => {
       mcpStatus: () => ({ connected: true, error: "", toolCount: 7, tools: [{ rawName: "read", modelName: "mcp__inventory__read" }] }),
       connectorStatePath: join(root, "config", "connectors.json"),
       terminateSession: async (sessionId) => { terminatedSessions.push(sessionId); },
-      cliCommands: [{ command: "lxeskill auth refresh", name: "browser_auth_refresh", visibility: "maintenance", ownerSkills: [] }],
+      cliCommands: [{ command: "lxeskill auth refresh", name: "browser_auth_refresh", visibility: "maintenance", ownerSkills: [], runtimeRequirements: [] }],
       providerManager,
       reloadWorkspace: async (sessionId) => {
         workspaceReloads.push(sessionId);
@@ -367,7 +367,7 @@ describe("DashboardService", () => {
       }],
     });
     expect(await call({ operation: "commands.list", input: {} })).toEqual({
-      items: [{ command: "lxeskill auth refresh", name: "browser_auth_refresh", visibility: "maintenance", ownerSkills: [] }],
+      items: [{ command: "lxeskill auth refresh", name: "browser_auth_refresh", visibility: "maintenance", ownerSkills: [], runtimeRequirements: [] }],
       total: 1,
     });
     expect(await call({ operation: "skills.content", input: { name: "demo" } }))

@@ -30,6 +30,10 @@ test("pending input answers accept only bounded local interaction fields", () =>
     operation: call.operation,
     input: { ...call.input, value: " " },
   })).toThrow();
+  expect(() => parseDashboardRpcCall({
+    operation: "sessions.shangman_captcha.answer" as never,
+    input: { session_id: "s", challenge_id: "legacy", code: "A7x9" },
+  })).toThrow();
 });
 
 test("malformed answer payloads are rejected at the boundary", () => {

@@ -59,7 +59,6 @@ export function dashboardDomainsForMutation(operation: DashboardRpcOperation): D
       return ["tools"];
     case "sessions.send":
     case "sessions.answer":
-    case "sessions.shangman_captcha.answer":
     case "sessions.stop":
     case "sessions.pin":
     case "sessions.delete":

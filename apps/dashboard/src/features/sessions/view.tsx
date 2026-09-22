@@ -1,6 +1,5 @@
 import { UserQuestionGate } from "./user-questions";
-import { ShangmanCaptchaGate } from "./shangman-captcha";
-import type { PendingShangmanCaptcha, PendingUserQuestion } from "@lxe/desktop-protocol";
+import type { PendingUserQuestion } from "@lxe/desktop-protocol";
 import type { DesktopDraftAttachmentPayload } from "@lxe/desktop-protocol";
 import { ConversationAttachmentDraft } from "./attachment-draft";
 import { useComposerDraft } from "./composer-draft";
@@ -1154,7 +1153,7 @@ function ConversationContextMeter({
 }
 
 export function ConversationComposer({
-  question, onQuestionAnswered, captcha, onCaptchaAnswered,
+  question, onQuestionAnswered,
   contextDetail,
   activity,
   conversationKey,
@@ -1172,8 +1171,6 @@ export function ConversationComposer({
 }: {
   question?: PendingUserQuestion;
   onQuestionAnswered?: () => void;
-  captcha?: PendingShangmanCaptcha;
-  onCaptchaAnswered?: () => void;
   contextDetail: SessionDetailPayload | null;
   activity: DesktopConversationActivityPayload | null;
   conversationKey: string;
@@ -1302,7 +1299,6 @@ export function ConversationComposer({
   return (
     <UserQuestionGate request={runtimeReady ? question : undefined} conversationKey={runtimeReady ? conversationKey : "offline"}
       onAnswered={onQuestionAnswered}>
-    <ShangmanCaptchaGate captcha={runtimeReady && !question ? captcha : undefined} onAnswered={onCaptchaAnswered}>
     <div className={`conversation-composer ${dragActive ? "drag-active" : ""}`}>
       {dragActive ? <div className="conversation-drop-hint">{t.conversation.dropFiles}</div> : null}
       <div className="conversation-compose-box">
@@ -1414,7 +1410,6 @@ export function ConversationComposer({
       ) : null}
       {error ? <div className="conversation-compose-error" role="alert">{error}</div> : null}
     </div>
-    </ShangmanCaptchaGate>
     </UserQuestionGate>
   );
 }
@@ -1523,7 +1518,7 @@ export const UnifiedConversationRow = React.memo(function UnifiedConversationRow
   && a.attachmentSessionId === b.attachmentSessionId && JSON.stringify(a.row) === JSON.stringify(b.row));
 
 export function SessionDetailView({
-  question, onQuestionAnswered, captcha, onCaptchaAnswered,
+  question, onQuestionAnswered,
   fallbackSession,
   detail,
   activity,
@@ -1553,8 +1548,6 @@ export function SessionDetailView({
 }: {
   question?: PendingUserQuestion;
   onQuestionAnswered?: () => void;
-  captcha?: PendingShangmanCaptcha;
-  onCaptchaAnswered?: () => void;
   fallbackSession: SessionPayload | null;
   detail: SessionDetailPayload | null;
   activity: DesktopConversationActivityPayload | null;
@@ -1689,8 +1682,6 @@ export function SessionDetailView({
         <ConversationComposer
           question={question}
           onQuestionAnswered={onQuestionAnswered}
-          captcha={captcha}
-          onCaptchaAnswered={onCaptchaAnswered}
           contextDetail={detail}
           activity={activity}
           conversationKey={sessionKey}

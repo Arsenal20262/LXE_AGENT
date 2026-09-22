@@ -75,15 +75,6 @@ export function useUserQuestionActions() {
   return { answer: answer.mutateAsync, stop: stop.mutateAsync };
 }
 
-export function useShangmanCaptchaActions() {
-  const submit = useMutation({ retry: false, mutationFn: (input: {
-    session_id: string;
-    challenge_id: string;
-    code: string;
-  }) => callDashboard({ operation: "sessions.shangman_captcha.answer", input }) });
-  return { submit: submit.mutateAsync };
-}
-
 export function useAttachmentPreviewQuery(
   sessionId: string | undefined, id: string, variant: "thumbnail" | "expanded", enabled: boolean,
 ) {

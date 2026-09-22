@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   loadLxeSkillCommandCatalog,
@@ -8,6 +10,29 @@ import {
 import { buildToolDisplayStep } from "../../src/tooling/tool-display";
 
 describe("lxeskill command recognition", () => {
+  test("loads only declared platform-neutral runtime requirements", () => {
+    const root = mkdtempSync(join(tmpdir(), "lxe-command-catalog-"));
+    const validPath = join(root, "valid.json");
+    const invalidPath = join(root, "invalid.json");
+    try {
+      writeFileSync(validPath, JSON.stringify({ protocol_version: "1", entries: [
+        { name: "sensitive", command_path: ["demo", "run"], visibility: "business", owner_skills: [], runtime_requirements: ["pending_sensitive_input"] },
+        { name: "ordinary", command_path: ["demo", "preview"], visibility: "business", owner_skills: [] },
+      ] }), "utf8");
+      writeFileSync(invalidPath, JSON.stringify({ protocol_version: "1", entries: [
+        { name: "invalid", command_path: ["demo", "run"], visibility: "business", owner_skills: [], runtime_requirements: ["unknown"] },
+      ] }), "utf8");
+
+      expect(loadLxeSkillCommandCatalog(validPath)).toEqual([
+        expect.objectContaining({ name: "sensitive", runtimeRequirements: ["pending_sensitive_input"] }),
+        expect.objectContaining({ name: "ordinary", runtimeRequirements: [] }),
+      ]);
+      expect(() => loadLxeSkillCommandCatalog(invalidPath)).toThrow("invalid runtime requirement");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   test("matches only a leading known command and chooses the longest path", () => {
     const known = new Map([
       ["lxeskill replenish inventory actual-export", ["inventory"]],
@@ -49,7 +74,7 @@ describe("lxeskill command recognition", () => {
     // Every directory is owned by exactly one business module — the property the
     // <module>/<data-type> layout depends on.
     const modules = new Set(datasets.map((entry) => entry.dir.split("/")[0]));
-    expect([...modules].sort()).toEqual(["amazon", "browser", "fba", "replenish", "yacang"]);
+    expect([...modules].sort()).toEqual(["amazon", "browser", "fba", "replenish", "shangman", "yacang"]);
     expect(new Set(datasets.map((entry) => entry.dir)).size).toBe(datasets.length);
     expect(datasets.every((entry) => entry.holds.length > 0)).toBe(true);
   });
@@ -64,6 +89,7 @@ describe("lxeskill command recognition", () => {
       visibility: "maintenance",
       ownerSkills: ["ziniao-browser"],
       attributionSkill: "ziniao-browser",
+      runtimeRequirements: [],
     });
     expect(entries.find((entry) => entry.name === "mabang_download_fba_delivery_csv"))
       .toMatchObject({

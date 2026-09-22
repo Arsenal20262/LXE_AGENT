@@ -275,6 +275,7 @@ export function createExecTools(dependencies: ExecToolDependencies): ToolDefinit
           ...(options.execEnv ? {
             env: options.execEnv({
               skillNames: context.skill_names ?? [],
+              runtimeRequirements: commandDefinition?.runtimeRequirements ?? [],
               sessionId: context.session_id,
               turnId: context.turn_id ?? "",
             }),

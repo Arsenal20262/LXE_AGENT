@@ -39,12 +39,13 @@ operation: "goods_export"
 
 ## 验证码与认证
 
-- `run` 先复用执行层可用的认证状态；平台真实要求验证码时，同一次 `run` 通过现有 Desktop 临时面板和本地安全 Broker 等待人工输入，然后继续登录和导出。
-- 验证码等待上限固定为 240 秒并响应任务取消。超时、取消、challenge 过期或通道不可用时，本次 `run` 失败并结束；不让模型调用验证码专用 Tool，也不让模型再次调用 `run`。
-- 不把验证码图片、验证码文字、`captcha_key`、`captcha_code` 或凭据放进命令、普通对话、transcript 或日志；不 OCR、不猜测、不暴力尝试、不绕过平台验证。
+- `run` 只复用按账号和凭据指纹持久化的有效认证状态；存在有效 token 时，直接执行一次商品导出，不获取验证码、不调用登录命令。
+- 没有 token、token 过期或 ERP 返回 401 时，终态返回真实的 `login_required`；401 仅使被拒 token 失效，Python 不会自动登录或重试 ERP 导出。
+- 此时把独立 `shangman-login` Skill 作为认证恢复前置步骤。登录成功后，调用方最多恢复原 `run` 一次；这是 Skill/Agent Contract，不是 Runtime 跨回合代码级计数器。恢复导出再次失败时直接交付真实失败，不循环登录或导出。
+- 验证码只允许出现在独立登录恢复的例外路径。不得把验证码图片、验证码文字、`challenge_id` 或凭据放进导出命令、terminal data、transcript 或日志；不猜测、不暴力尝试、不绕过平台验证。
 
 ## 交付边界
 
-- 文件名由底层客户端统一为 `上马印尼-商品-YYYYMMDD-HHMMSS.xlsx`。
+- 文件名由持久化认证导出器统一为 `上马-商品-YYYYMMDD-HHMMSS.xlsx`。
 - 交付的是平台原始 XLSX；不在 Skill 层重写、补列、合并或伪造日度历史数据。
-- 生产门禁和 Desktop 凭据设置由 Desktop 管理；验证码图片只在当前会话的临时 Desktop 面板展示，人工输入通过一次性本地通道返回给当前这次 `run`，不进入会话 transcript 或浏览器存储。
+- 生产门禁和 Desktop 凭据设置由 Desktop 管理；导出路径不创建验证码等待通道。

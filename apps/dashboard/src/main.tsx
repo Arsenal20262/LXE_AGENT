@@ -944,8 +944,6 @@ function App({
                   <SessionDetailView
                     question={newConversation ? undefined : pendingQuestions.find(q => q.session_id === selectedSessionId)}
                     onQuestionAnswered={() => { void questionsQuery.refetch(); }}
-                    captcha={newConversation ? undefined : questionsQuery.data?.shangman_captcha}
-                    onCaptchaAnswered={() => { void questionsQuery.refetch(); }}
                     fallbackSession={selectedSession}
                     detail={sessionDetail}
                     activity={conversationActivity}

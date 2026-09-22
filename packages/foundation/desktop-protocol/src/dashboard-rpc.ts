@@ -2,21 +2,6 @@ import type { DesktopStreamMutation, DisplayMetrics, ToolStep, TurnProcessPart }
 import { parseUserQuestionSubmission, type PendingUserQuestion, type PendingSensitiveInput, type SubmitUserQuestionAnswer } from "@lxe/protocol/user-questions";
 export type { PendingUserQuestion, PendingSensitiveInput, UserQuestion, UserQuestionAnswer, SubmitUserQuestionAnswer } from "@lxe/protocol/user-questions";
 
-/** @deprecated Pending-input migration has not yet reached the Dashboard host. */
-export interface PendingShangmanCaptcha {
-  session_id: string;
-  challenge_id: string;
-  image_data_url: string;
-  expires_at: number;
-}
-
-/** @deprecated Replaced by `sessions.pending_input.answer` once the migration is complete. */
-export interface SubmitShangmanCaptchaAnswer {
-  session_id: string;
-  challenge_id: string;
-  code: string;
-}
-
 import { validateSessionStatusRequest, type SessionStatusSnapshot } from "@lxe/protocol/session-status";
 export type { TurnProcessPart } from "@lxe/protocol";
 
@@ -486,10 +471,9 @@ export type StatsOverviewPayload = {
 export type DashboardRpcEmptyInput = Record<string, never>;
 
 export interface DashboardRpcSpec {
-  "sessions.questions": { input: { session_id?: string }; result: { items: PendingUserQuestion[]; pending_input?: PendingSensitiveInput; shangman_captcha?: PendingShangmanCaptcha } };
+  "sessions.questions": { input: { session_id?: string }; result: { items: PendingUserQuestion[]; pending_input?: PendingSensitiveInput } };
   "sessions.answer": { input: SubmitUserQuestionAnswer; result: { accepted: true; request_id: string } };
   "sessions.pending_input.answer": { input: { session_id: string; request_id: string; value: string }; result: { accepted: true; request_id: string } };
-  "sessions.shangman_captcha.answer": { input: SubmitShangmanCaptchaAnswer; result: { accepted: true; challenge_id: string } };
   "sessions.list": {
     input: { query?: string; limit?: number; offset?: number };
     result: SessionListPayload;
@@ -625,7 +609,6 @@ export class DashboardRpcError extends Error {
 const MAX_INPUT_BYTES = 1_000_000;
 const MAX_TEXT_LENGTH = 8_192;
 const MAX_PENDING_INPUT_VALUE_LENGTH = 128;
-const MAX_SHANGMAN_CAPTCHA_CODE_LENGTH = 128;
 
 const rpcError = (message: string): never => {
   throw new DashboardRpcError("invalid_request", message);
@@ -726,17 +709,6 @@ export function parseDashboardRpcCall(value: unknown): DashboardRpcCall {
           session_id: textValue(input.session_id, `${operation}.session_id`)!,
           request_id: textValue(input.request_id, `${operation}.request_id`)!,
           value,
-        } };
-      }
-    case "sessions.shangman_captcha.answer":
-      exactKeys(input, ["session_id", "challenge_id", "code"], `${operation}.input`);
-      {
-        const code = textValue(input.code, `${operation}.code`)!;
-        if (code.length > MAX_SHANGMAN_CAPTCHA_CODE_LENGTH) rpcError(`${operation}.code is too long`);
-        return { operation, input: {
-          session_id: textValue(input.session_id, `${operation}.session_id`)!,
-          challenge_id: textValue(input.challenge_id, `${operation}.challenge_id`)!,
-          code,
         } };
       }
     case "sessions.list":

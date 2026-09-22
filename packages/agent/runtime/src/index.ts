@@ -1,5 +1,4 @@
 export * from "./tooling/user-questions";
-export * from "./tooling/shangman-captcha";
 export * from "./engine/context";
 export * from "./tooling/coding-tools";
 export * from "./tooling/exec-shell";

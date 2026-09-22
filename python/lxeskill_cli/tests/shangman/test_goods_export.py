@@ -1,384 +1,236 @@
 from __future__ import annotations
 
-import asyncio
+import io
 import json
-from io import BytesIO
 from pathlib import Path
-from zipfile import ZIP_DEFLATED, ZipFile
+import re
+import threading
+import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from zipfile import ZipFile
 
 import pytest
-from openpyxl import Workbook, load_workbook
+from openpyxl import Workbook
 
-from services.shangman.goods_export import (
-    GoodsExportWorkbookError,
-    ShangmanClient,
-    ShangmanCredentials,
-    ShangmanAuthError,
-    ShangmanDownloadUrlError,
-    StaticCaptchaCodeProvider,
-)
+from services.shangman import goods_export as exports
+from services.shangman.auth import AuthError, Credentials, LoginToken
+from services.shangman.state import AuthStore, atomic_json, read_json
 
 
-BUSINESS_HEADERS = [
-    "SKU",
-    "商品名",
-    "总数量",
-    "有效库存",
-    "锁定库存",
-    "在途库存",
-    "预警库存",
-    "7天销量",
-    "15天销量",
-    "30天销量",
-    "仓库名称",
-    "创建时间",
-]
-
-BILINGUAL_BUSINESS_HEADERS = [
-    "SKU*\n(商品编码)",
-    "Goods Name*\n(商品名称)",
-    "Total Quantity\n(总数量)",
-    "Effective Stock\n(有效库存)",
-    "Lock Stock\n(锁定库存)",
-    "Transit Stock\n(在途库存)",
-    "Warning Quantity\n(预警库存)",
-    "7 Days Sales\n(7天销量)",
-    "15 Days Sales\n(15天销量)",
-    "30 Days Sales\n(30天销量)",
-    "Warehouse Name\n(仓库名称)",
-    "Create Time\n(创建时间)",
-]
+def workbook_bytes(*, empty=False, bilingual=False, bad_dimensions=False, bad_headers=False):
+    wb = Workbook()
+    sheet = wb.active
+    headers = sorted(exports.REQUIRED_HEADERS)
+    if bad_headers:
+        headers.remove("SKU")
+    translations = {"SKU": "商品编码", "商品名": "商品名称"}
+    sheet.append([f"English\n({translations.get(h, h)})"
+                  if bilingual else h for h in headers])
+    if not empty:
+        sheet.append(["source data"] * len(headers))
+    output = io.BytesIO()
+    wb.save(output)
+    wb.close()
+    if not bad_dimensions:
+        return output.getvalue()
+    rewritten = io.BytesIO()
+    with ZipFile(output) as source, ZipFile(rewritten, "w") as target:
+        for item in source.infolist():
+            content = source.read(item.filename)
+            if item.filename == "xl/worksheets/sheet1.xml":
+                content = re.sub(rb'<dimension ref="[^"]+"', b'<dimension ref="A1"', content)
+            target.writestr(item, content)
+    return rewritten.getvalue()
 
 
-class FakeResponse:
-    def __init__(
-        self,
-        *,
-        status: int = 200,
-        payload: dict | None = None,
-        body: bytes = b"",
-        text_body: str | None = None,
-    ) -> None:
-        self.status = status
-        self._payload = payload
-        self._body = body
-        self._text_body = text_body
-
-    async def json(self, content_type=None):
-        if self._payload is None:
-            raise ValueError("response is not JSON")
-        return self._payload
-
-    async def text(self) -> str:
-        if self._text_body is not None:
-            return self._text_body
-        return json.dumps(self._payload or {}, ensure_ascii=False)
-
-    async def read(self) -> bytes:
-        return self._body
+@pytest.fixture
+def context(tmp_path, monkeypatch):
+    from shared import workspace
+    monkeypatch.setenv("LXE_DATA_ROOT", str(tmp_path))
+    monkeypatch.delenv("LXE_SHANGMAN_CONFIG_REVISION", raising=False)
+    for key, value in zip(("TENANT_ID", "USERNAME", "PROCESSED_PASSWORD"), ("tenant-123", "operator-456", "password-789")):
+        monkeypatch.setenv("LXE_SHANGMAN_" + key, value)
+    monkeypatch.setattr(workspace, "_artifact_root", tmp_path / "artifacts")
+    credentials = Credentials.from_environment()
+    store = AuthStore(credentials)
+    store.save(LoginToken("private-token", 300))
+    return credentials, store, tmp_path
 
 
-class FakeRequest:
-    def __init__(self, response: FakeResponse) -> None:
-        self.response = response
+@pytest.fixture
+def server(context, monkeypatch):
+    state = {"post_status": 200, "get_status": 200, "xlsx": workbook_bytes(), "calls": []}
 
-    async def __aenter__(self) -> FakeResponse:
-        return self.response
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self):
+            state["calls"].append(("POST", self.path, dict(self.headers)))
+            if state.get("before_response"):
+                state["before_response"]()
+            self.send_response(state["post_status"])
+            self.send_header("Location", "/must-not-follow")
+            self.end_headers()
+            body = state.get("payload", {"code": 200, "success": True, "data": state["url"]})
+            self.wfile.write((body if isinstance(body, str) else json.dumps(body)).encode())
 
-    async def __aexit__(self, exc_type, exc, traceback) -> None:
-        return None
+        def do_GET(self):
+            state["calls"].append(("GET", self.path, dict(self.headers)))
+            self.send_response(state["get_status"])
+            self.send_header("Location", "/must-not-follow")
+            self.send_header("Set-Cookie", "ERP_SESSION=do-not-reuse")
+            self.end_headers()
+            self.wfile.write(state["xlsx"])
 
+        def log_message(self, *args):
+            pass
 
-class FakeSession:
-    def __init__(self, responses: list[FakeResponse]) -> None:
-        self.responses = list(responses)
-        self.calls: list[dict] = []
-
-    def get(self, url: str, **kwargs) -> FakeRequest:
-        self.calls.append({"method": "GET", "url": url, **kwargs})
-        return FakeRequest(self.responses.pop(0))
-
-    def post(self, url: str, **kwargs) -> FakeRequest:
-        self.calls.append({"method": "POST", "url": url, **kwargs})
-        return FakeRequest(self.responses.pop(0))
-
-
-def xlsx_bytes(headers: list[str] = BUSINESS_HEADERS) -> bytes:
-    workbook = Workbook()
-    worksheet = workbook.active
-    worksheet.title = "sheet1"
-    worksheet.append(headers)
-    worksheet.append(["SKU-1", "商品", 3, 2, 1, 0, 1, 4, 8, 12, "雅加达", "2026-09-17"])
-    output = BytesIO()
-    workbook.save(output)
-    return output.getvalue()
-
-
-def corrupt_dimension(workbook_bytes: bytes) -> bytes:
-    source = BytesIO(workbook_bytes)
-    output = BytesIO()
-    with ZipFile(source) as archive, ZipFile(output, "w", ZIP_DEFLATED) as rewritten:
-        for info in archive.infolist():
-            content = archive.read(info.filename)
-            if info.filename == "xl/worksheets/sheet1.xml":
-                text = content.decode("utf-8").replace('ref="A1:L2"', 'ref="A1:A1"')
-                content = text.encode("utf-8")
-            rewritten.writestr(info, content)
-    return output.getvalue()
+    http = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=http.serve_forever, daemon=True)
+    thread.start()
+    state["url"] = f"http://localhost:{http.server_port}/goods.xlsx?signature=signed-private-value"
+    monkeypatch.setattr(exports, "BASE_URL", f"http://127.0.0.1:{http.server_port}")
+    # Only the approved-URL boundary is bypassed for this loopback integration.
+    # Its production behavior is independently tested below.
+    monkeypatch.setattr(exports.GoodsExporter, "_validate_download_url", lambda self, url: url)
+    try:
+        yield state
+    finally:
+        http.shutdown()
+        http.server_close()
+        thread.join()
 
 
-def make_client(session: FakeSession, output_dir: Path) -> ShangmanClient:
-    return ShangmanClient(
-        credentials=ShangmanCredentials(
-            tenant_id="tenant-1",
-            username="processed-user",
-            processed_password="processed-password",
-            basic_auth="Basic ZHVtbXk6cGFzcw==",
-        ),
-        captcha_provider=StaticCaptchaCodeProvider("1234"),
-        session=session,
-        output_dir=output_dir,
-        trusted_download_hosts={"erp.shangmanet.com", "download.example.test"},
-    )
+@pytest.mark.parametrize("options", [{}, {"bilingual": True}, {"bad_dimensions": True}, {"empty": True}])
+def test_real_http_chain_preserves_source_bytes_and_does_not_leak_auth(context, server, options):
+    server["xlsx"] = workbook_bytes(**options)
+    result = exports.run({})
+    assert result["success"], result
+    path = Path(result["artifact_path"])
+    assert path.read_bytes() == server["xlsx"]
+    assert path.name.startswith("上马-商品-")
+    assert path.parent.parent == context[2] / "artifacts/shangman/indonesia"
+    assert result["row_count"] == (0 if options.get("empty") else 1)
+    assert bool(result["notice"]) == bool(options.get("empty"))
+    assert len(server["calls"]) == 2
+    method, endpoint, headers = server["calls"][0]
+    assert (method, endpoint) == ("POST", exports.EXPORT_PATH)
+    assert headers["Blade-Auth"] == "bearer private-token"
+    assert headers["Authorization"] == context[0].basic_auth
+    assert headers["Tenant-Id"] == context[0].tenant_id
+    download_headers = server["calls"][1][2]
+    assert not {"Authorization", "Blade-Auth", "Tenant-Id", "Cookie"} & download_headers.keys()
+    assert "private-token" not in json.dumps(result)
+    assert "signed-private-value" not in json.dumps(result)
 
 
-def test_export_goods_authenticates_downloads_and_returns_canonical_payload(tmp_path: Path) -> None:
-    session = FakeSession(
-        [
-            FakeResponse(payload={"key": "captcha-key", "image": "data:image/png;base64,abc"}),
-            FakeResponse(payload={"access_token": "access-token"}),
-            FakeResponse(payload={"code": 200, "success": True, "data": "https://download.example.test/goods.xlsx"}),
-            FakeResponse(body=xlsx_bytes()),
-        ]
-    )
-
-    result = asyncio.run(make_client(session, tmp_path).export_goods())
-
-    assert result.to_payload() == {
-        "platform": "上马印尼",
-        "source": "shangman_goods_export",
-        "artifact_path": str(tmp_path / result.filename),
-        "filename": result.filename,
-        "sheet_names": ["sheet1"],
-        "row_count": 1,
-        "headers": BUSINESS_HEADERS,
-        "download_host": "download.example.test",
-    }
-    assert result.filename.startswith("上马印尼-商品-")
-    assert result.filename.endswith(".xlsx")
-    assert len(result.filename) == len("上马印尼-商品-YYYYMMDD-HHMMSS.xlsx")
-    assert Path(result.artifact_path).is_file()
-    assert load_workbook(result.artifact_path, read_only=True).sheetnames == ["sheet1"]
-
-    captcha_call, login_call, export_call, download_call = session.calls
-    assert captcha_call["url"].endswith("/api/blade-auth/oauth/captcha")
-    assert login_call["params"] == {
-        "tenantId": "tenant-1",
-        "username": "processed-user",
-        "password": "8e90dcfaa08d05a6b9a0e671448a7557",
-        "grant_type": "captcha",
-        "scope": "all",
-        "type": "account",
-    }
-    assert login_call["headers"] == {
-        "Captcha-Key": "captcha-key",
-        "Captcha-Code": "1234",
-        "Tenant-Id": "tenant-1",
-        "Authorization": "Basic ZHVtbXk6cGFzcw==",
-    }
-    assert "auth" not in login_call
-    assert export_call["headers"]["Blade-Auth"] == "bearer access-token"
-    assert export_call["headers"]["Tenant-Id"] == "tenant-1"
-    assert export_call["headers"]["Authorization"] == "Basic ZHVtbXk6cGFzcw=="
-    assert "auth" not in download_call
-    assert "headers" not in download_call
-    assert download_call["allow_redirects"] is False
+def test_sequential_invocations_use_new_loops_and_unique_output_directories(context, server):
+    results = [exports.run({}) for _ in range(3)]
+    assert all(r["success"] for r in results), results
+    assert len({r["artifact_path"] for r in results}) == 3
+    assert len(server["calls"]) == 6
+    server["get_status"] = 500
+    assert exports.run({})["error"]["code"] == "download_failed"
+    server["get_status"] = 200
+    assert exports.run({})["success"]
 
 
-def test_export_reuses_process_local_login_state_across_clients(tmp_path: Path) -> None:
-    session = FakeSession(
-        [
-            FakeResponse(payload={"key": "captcha-key", "image": "data:image/png;base64,abc"}),
-            FakeResponse(payload={"access_token": "shared-token", "expires_in": 600}),
-            FakeResponse(payload={"code": 200, "success": True, "data": "https://download.example.test/first.xlsx"}),
-            FakeResponse(body=xlsx_bytes()),
-            FakeResponse(payload={"code": 200, "success": True, "data": "https://download.example.test/second.xlsx"}),
-            FakeResponse(body=xlsx_bytes()),
-        ]
-    )
-
-    first = asyncio.run(make_client(session, tmp_path / "first").export_goods())
-    second = asyncio.run(make_client(session, tmp_path / "second").export_goods())
-
-    assert first.row_count == second.row_count == 1
-    assert [call["method"] for call in session.calls] == [
-        "GET", "POST", "POST", "GET", "POST", "GET",
-    ]
-    assert session.calls[1]["url"].endswith("/oauth/token")
-    assert session.calls[2]["url"].endswith("/goods/merchant/exportNew")
-    assert session.calls[4]["url"].endswith("/goods/merchant/exportNew")
-    assert session.calls[4]["headers"]["Blade-Auth"] == "bearer shared-token"
+@pytest.mark.parametrize("state", ["missing", "expired", "changed_credentials"])
+def test_unusable_login_makes_no_http_request(context, server, state, monkeypatch):
+    _, store, _ = context
+    if state == "missing":
+        store.clear()
+    elif state == "expired":
+        payload = read_json(store.state_path)
+        payload["expires_at"] = time.time() - 1
+        atomic_json(store.state_path, payload)
+    else:
+        monkeypatch.setenv("LXE_SHANGMAN_PROCESSED_PASSWORD", "changed-password")
+    result = exports.run({})
+    assert not result["success"]
+    assert result["error"]["code"] == "login_required"
+    assert not server["calls"]
 
 
-def test_export_discards_rejected_token_and_reauthenticates_once(tmp_path: Path) -> None:
-    session = FakeSession(
-        [
-            FakeResponse(payload={"key": "captcha-key-1", "image": "data:image/png;base64,abc"}),
-            FakeResponse(payload={"access_token": "stale-token"}),
-            FakeResponse(status=401, payload={"message": "expired"}),
-            FakeResponse(payload={"key": "captcha-key-2", "image": "data:image/png;base64,abc"}),
-            FakeResponse(payload={"access_token": "fresh-token"}),
-            FakeResponse(payload={"code": 200, "success": True, "data": "https://download.example.test/goods.xlsx"}),
-            FakeResponse(body=xlsx_bytes()),
-        ]
-    )
-
-    result = asyncio.run(make_client(session, tmp_path).export_goods())
-
-    assert result.row_count == 1
-    login_calls = [call for call in session.calls if call["url"].endswith("/oauth/token")]
-    export_calls = [call for call in session.calls if call["url"].endswith("/goods/merchant/exportNew")]
-    assert len(login_calls) == 2
-    assert [call["headers"]["Blade-Auth"] for call in export_calls] == [
-        "bearer stale-token", "bearer fresh-token",
-    ]
-
-
-def test_workbook_validation_scans_rows_when_dimension_metadata_is_wrong(tmp_path: Path) -> None:
-    session = FakeSession(
-        [
-            FakeResponse(payload={"key": "key", "image": "data:image/png;base64,abc"}),
-            FakeResponse(payload={"access_token": "token"}),
-            FakeResponse(payload={"code": 200, "success": True, "data": "https://erp.shangmanet.com/file.xlsx"}),
-            FakeResponse(body=corrupt_dimension(xlsx_bytes())),
-        ]
-    )
-
-    result = asyncio.run(make_client(session, tmp_path).export_goods())
-
-    assert result.row_count == 1
-    assert result.headers == BUSINESS_HEADERS
+@pytest.mark.parametrize("http_status,payload,invalidates", [
+    (401, {"msg": "actual token rejection"}, True),
+    (200, {"code": 401, "msg": "actual token rejection"}, True),
+    (403, {"msg": "permission denied"}, False),
+    (429, {"msg": "rate limited"}, False),
+    (500, {"msg": "server failed"}, False),
+    (302, {"msg": "redirect"}, False),
+    (200, {"code": 500, "success": False, "msg": "business failed"}, False),
+    (200, "not-json", False),
+    (200, [1, 2], False),
+])
+def test_export_failures_keep_diagnostics_without_retries(context, server, http_status, payload, invalidates):
+    server.update(post_status=http_status, payload=payload)
+    result = exports.run({})
+    assert not result["success"]
+    assert len(server["calls"]) == 1
+    expected = payload.get("msg") if isinstance(payload, dict) else payload if isinstance(payload, str) else "[1, 2]"
+    assert expected in result["error"]["message"]
+    assert context[1].status()["authenticated"] is not invalidates
+    if invalidates:
+        assert result["error"]["code"] == "login_required"
 
 
-def test_export_accepts_actual_bilingual_business_headers(tmp_path: Path) -> None:
-    session = FakeSession(
-        [
-            FakeResponse(payload={"key": "key", "image": "data:image/png;base64,abc"}),
-            FakeResponse(payload={"access_token": "token"}),
-            FakeResponse(payload={"code": 200, "success": True, "data": "https://erp.shangmanet.com/goods.xlsx"}),
-            FakeResponse(body=xlsx_bytes(BILINGUAL_BUSINESS_HEADERS)),
-        ]
-    )
-
-    result = asyncio.run(make_client(session, tmp_path).export_goods())
-
-    assert result.headers == BILINGUAL_BUSINESS_HEADERS
-    assert result.row_count == 1
+def test_rejected_old_token_does_not_erase_concurrent_login(context, server):
+    server.update(post_status=401, payload={"msg": "expired"},
+                  before_response=lambda: context[1].save(LoginToken("new-token", 300)))
+    assert exports.run({})["error"]["code"] == "login_required"
+    assert context[1].read_token() == "new-token"
 
 
-def test_export_rejects_non_https_or_untrusted_download_url(tmp_path: Path) -> None:
-    session = FakeSession(
-        [
-            FakeResponse(payload={"key": "key", "image": "data:image/png;base64,abc"}),
-            FakeResponse(payload={"access_token": "token"}),
-            FakeResponse(payload={"code": 200, "success": True, "data": "http://evil.example/file.xlsx"}),
-        ]
-    )
-
-    with pytest.raises(ShangmanDownloadUrlError, match="trusted https"):
-        asyncio.run(make_client(session, tmp_path).export_goods())
-    assert len(session.calls) == 3
+@pytest.mark.parametrize("status", [401, 403, 429, 500, 302])
+def test_oss_download_failures_do_not_invalidate_erp_login(context, server, status):
+    server.update(get_status=status, xlsx=b"original OSS failure")
+    result = exports.run({})
+    assert not result["success"]
+    assert "original OSS failure" in result["error"]["message"]
+    assert len(server["calls"]) == 2
+    assert context[1].status()["authenticated"]
+    assert not list(context[2].rglob("*.xlsx"))
 
 
-def test_default_download_hosts_accept_exact_oss_host_only(tmp_path: Path) -> None:
-    session = FakeSession(
-        [
-            FakeResponse(payload={"key": "key", "image": "data:image/png;base64,abc"}),
-            FakeResponse(payload={"access_token": "token"}),
-            FakeResponse(payload={"code": 200, "success": True, "data": "https://oss.erp.shangmanet.com/goods.xlsx"}),
-            FakeResponse(body=xlsx_bytes()),
-        ]
-    )
-    client = ShangmanClient(
-        credentials=ShangmanCredentials(
-            tenant_id="tenant-1",
-            username="processed-user",
-            processed_password="processed-password",
-            basic_auth="Basic ZHVtbXk6cGFzcw==",
-        ),
-        captcha_provider=StaticCaptchaCodeProvider("1234"),
-        session=session,
-        output_dir=tmp_path,
-    )
-
-    result = asyncio.run(client.export_goods())
-
-    assert result.download_host == "oss.erp.shangmanet.com"
-    download_call = session.calls[-1]
-    assert download_call["url"] == "https://oss.erp.shangmanet.com/goods.xlsx"
-    assert "auth" not in download_call
-    assert "Blade-Auth" not in download_call.get("headers", {})
-    assert download_call["allow_redirects"] is False
-    with pytest.raises(ShangmanDownloadUrlError, match="trusted https"):
-        client._validate_download_url("https://evil.erp.shangmanet.com/goods.xlsx")
+@pytest.mark.parametrize("content", [b"", b"<html>login page</html>", workbook_bytes(bad_headers=True)])
+def test_invalid_workbooks_are_not_published(context, server, content):
+    server["xlsx"] = content
+    assert exports.run({})["error"]["code"] == "invalid_workbook"
+    assert not list(context[2].rglob("*.xlsx"))
 
 
-def test_export_rejects_xlsx_without_business_headers(tmp_path: Path) -> None:
-    session = FakeSession(
-        [
-            FakeResponse(payload={"key": "key", "image": "data:image/png;base64,abc"}),
-            FakeResponse(payload={"access_token": "token"}),
-            FakeResponse(payload={"code": 200, "success": True, "data": "https://erp.shangmanet.com/file.xlsx"}),
-            FakeResponse(body=xlsx_bytes(["unrelated", "headers"])),
-        ]
-    )
-
-    with pytest.raises(GoodsExportWorkbookError, match="business headers"):
-        asyncio.run(make_client(session, tmp_path).export_goods())
-    assert not list(tmp_path.iterdir())
+@pytest.mark.parametrize("url", [
+    "http://oss.erp.shangmanet.com/file.xlsx", "https://evil.test/file.xlsx",
+    "https://oss.erp.shangmanet.com.evil.test/file.xlsx", "https://user:pass@erp.shangmanet.com/file",
+    "https://oss.erp.shangmanet.com:8443/file", "https://oss.erp.shangmanet.com/fi\nle",
+    None,
+])
+def test_download_host_restrictions(context, url):
+    client = exports.GoodsExporter(context[0], context[1])
+    with pytest.raises(AuthError, match="HTTPS"):
+        client._validate_download_url(url)
 
 
-def test_export_rejects_malformed_xlsx_and_leaves_no_partial_artifact(tmp_path: Path) -> None:
-    session = FakeSession(
-        [
-            FakeResponse(payload={"key": "key", "image": "data:image/png;base64,abc"}),
-            FakeResponse(payload={"access_token": "token"}),
-            FakeResponse(payload={"code": 200, "success": True, "data": "https://erp.shangmanet.com/file.xlsx"}),
-            FakeResponse(body=b"not an xlsx"),
-        ]
-    )
-
-    with pytest.raises(GoodsExportWorkbookError, match="readable XLSX"):
-        asyncio.run(make_client(session, tmp_path).export_goods())
-    assert not list(tmp_path.iterdir())
+@pytest.mark.parametrize("host", ["erp.shangmanet.com", "oss.erp.shangmanet.com"])
+def test_approved_download_hosts(context, host):
+    url = f"https://{host}/goods.xlsx?sign=secret"
+    assert exports.GoodsExporter(context[0], context[1])._validate_download_url(url) == url
 
 
-def test_export_rejects_failed_export_business_response(tmp_path: Path) -> None:
-    session = FakeSession(
-        [
-            FakeResponse(payload={"key": "key", "image": "data:image/png;base64,abc"}),
-            FakeResponse(payload={"access_token": "token"}),
-            FakeResponse(payload={"code": 500, "success": False, "message": "upstream failed"}),
-        ]
-    )
-
-    with pytest.raises(Exception, match="upstream failed"):
-        asyncio.run(make_client(session, tmp_path).export_goods())
+def test_error_diagnostics_redact_token_credentials_and_signed_query(context, server):
+    server.update(post_status=500, payload={"msg": "private-token password-789 " + server["url"]})
+    message = exports.run({})["error"]["message"]
+    assert "HTTP 500" in message
+    for secret in ("private-token", "password-789", "signed-private-value"):
+        assert secret not in message
 
 
-def test_http_errors_keep_status_and_redact_credentials(tmp_path: Path) -> None:
-    session = FakeSession(
-        [
-            FakeResponse(payload={"key": "key", "image": "data:image/png;base64,abc"}),
-            FakeResponse(
-                status=401,
-                text_body='{"message":"password=processed-password token=access-token"}',
-            ),
-        ]
-    )
-
-    with pytest.raises(ShangmanAuthError) as error:
-        asyncio.run(make_client(session, tmp_path).export_goods())
-    assert "status=401" in str(error.value)
-    assert "processed-password" not in str(error.value)
-    assert "access-token" not in str(error.value)
+def test_network_timeout_preserves_exception_and_does_not_retry(context, monkeypatch):
+    calls = []
+    def timeout(*args, **kwargs):
+        calls.append(1)
+        raise TimeoutError("actual connection deadline")
+    monkeypatch.setattr(exports.aiohttp, "ClientSession", timeout)
+    result = exports.run({})
+    assert "TimeoutError: actual connection deadline" in result["error"]["message"]
+    assert calls == [1]
+    assert context[1].status()["authenticated"]

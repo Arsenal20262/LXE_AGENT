@@ -37,8 +37,8 @@ def test_coerce_parses_one_of_object_schema_as_json_object() -> None:
 def test_catalog_defines_every_cli_command_and_hidden_alias() -> None:
     catalog = load_catalog()
 
-    assert len(catalog) == 49
-    assert sum(bool(entry.get("module")) for entry in catalog.values()) == 43
+    assert len(catalog) == 53
+    assert sum(bool(entry.get("module")) for entry in catalog.values()) == 47
     assert sum(entry.get("handler") == "browser" for entry in catalog.values()) == 2
     assert sum(entry.get("visibility") == "maintenance" for entry in catalog.values()) == 4
     assert len({tuple(entry["command_path"]) for entry in catalog.values()}) == len(catalog)
@@ -61,9 +61,12 @@ def test_yacang_catalog_exposes_only_the_unified_natural_language_command() -> N
     assert [entry["command_path"] for entry in public_yacang] == [["yacang", "export", "run"]]
     entries_without_legacy_aliases = {
         name for name, entry in catalog.items()
-        if not name.startswith("browser_auth_") and entry["legacy_aliases"] != [name]
+        if not name.startswith("browser_auth_") and entry.get("legacy_aliases", []) != [name]
     }
-    assert entries_without_legacy_aliases == {"zhihui_preview_products", "zhihui_execute_products"}
+    assert entries_without_legacy_aliases == {
+        "zhihui_preview_products", "zhihui_execute_products",
+        "shangman_login_prepare", "shangman_login_submit", "shangman_login_status", "shangman_login_clear",
+    }
 
 
 @pytest.mark.parametrize(
@@ -134,7 +137,7 @@ def test_list_and_help_write_one_terminal_jsonl_record(capsys) -> None:
     assert len(records) == 1
     assert records[0]["type"] == "result"
     assert records[0]["ok"] is True
-    assert len(records[0]["data"]["commands"]) == 41
+    assert len(records[0]["data"]["commands"]) == 45
 
     assert lxeskill.main(["fba", "customs", "preview", "--help"]) == 0
     records = _records(capsys)
@@ -275,11 +278,11 @@ def test_doctor_reports_repository_contract_without_adding_a_list_command(capsys
             "command": "doctor",
             "ok": True,
             "data": {
-                "catalog_commands": 49,
-                "business_commands": 37,
-                "skill_files": 59,
-                "owner_skills": 28,
-                "command_declarations": 37,
+                    "catalog_commands": 53,
+                    "business_commands": 41,
+                    "skill_files": 60,
+                    "owner_skills": 29,
+                    "command_declarations": 41,
             },
             "files": [],
         }
