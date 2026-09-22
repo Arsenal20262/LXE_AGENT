@@ -215,3 +215,17 @@ describe("preload bridge", () => {
     expect(invocations[12]?.arguments).toEqual(["dark"]);
   });
 });
+
+
+test("draft preview bridge forwards the registered ID and requested size only", async () => {
+  const calls: unknown[][] = [];
+  const bridge = createDesktopBridge({ invoke: async <T>(...args: unknown[]): Promise<T> => {
+    calls.push(args); return { data_url: "data:image/png;base64,AQID" } as T;
+  }, on() {}, removeListener() {} }, "darwin");
+  await bridge.desktop.previewDraftConversationFile("draft-1", "thumbnail");
+  await bridge.desktop.previewDraftConversationFile("draft-1", "expanded");
+  expect(calls).toEqual([
+    [IPC_CHANNELS.previewDraftConversationFile, "draft-1", "thumbnail"],
+    [IPC_CHANNELS.previewDraftConversationFile, "draft-1", "expanded"],
+  ]);
+});

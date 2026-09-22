@@ -41,7 +41,7 @@ test("call-only saved success and fully persisted results produce the same group
   expect(groupImageViewRows(conversationRows([{ ...message, image_views: undefined }], [], [])).some(row => row.kind === "image_views")).toBe(false);
 });
 
-test("renders one expanded image group with details instead of duplicate read rows", () => {
+test("renders one expanded image group without tool detail controls or duplicate read rows", () => {
   const row = groupImageViewRows([read("a"), read("b")])[0]!;
   const noop = async () => {};
   const html = renderToStaticMarkup(<QueryClientProvider client={new QueryClient()}>
@@ -50,6 +50,6 @@ test("renders one expanded image group with details instead of duplicate read ro
   expect(html).toContain("查看了 2 张图片");
   expect(html.match(/class="sent-image-tile"/g)).toHaveLength(2);
   expect(html).toContain('aria-expanded="true"');
-  expect(html).toContain("调用详情");
+  expect(html).not.toContain("调用详情");
   expect(html).not.toContain("tool-op-summary");
 });

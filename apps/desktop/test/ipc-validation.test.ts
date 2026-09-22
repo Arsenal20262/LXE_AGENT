@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  validateDraftImagePreviewVariant,
   validateCloudActivationInput,
   validateCloudDestination,
   validateDashboardRpcCall,
@@ -153,4 +154,14 @@ describe("desktop IPC validation", () => {
     expect(() => validateLocalModelCredentialInput({ provider: "deepseek", api_key: "" }))
       .toThrow("required");
   });
+});
+
+
+test("draft image previews default to expanded and reject unsupported variants", () => {
+  expect(validateDraftImagePreviewVariant(undefined)).toBe("expanded");
+  expect(validateDraftImagePreviewVariant("thumbnail")).toBe("thumbnail");
+  expect(validateDraftImagePreviewVariant("expanded")).toBe("expanded");
+  for (const invalid of [null, "original", { path: "/tmp/image.png" }]) {
+    expect(() => validateDraftImagePreviewVariant(invalid)).toThrow("variant must be");
+  }
 });

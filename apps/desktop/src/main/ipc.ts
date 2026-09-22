@@ -25,6 +25,7 @@ import type {
 import { IPC_CHANNELS } from "../ipc-channels";
 import { readClipboardFilePaths } from "./clipboard-files";
 import {
+  validateDraftImagePreviewVariant,
   validateCloudActivationInput,
   validateCloudDestination,
   validateDashboardRpcCall,
@@ -69,7 +70,7 @@ export interface DesktopIpcApplication {
   inputAssetSlotDirectory(slot: string): Promise<string>;
   registerConversationFiles(paths: string[]): DesktopInputAttachmentPayload[];
   registerPastedConversationFiles(input: unknown): DesktopDraftAttachmentPayload[];
-  previewDraftConversationFile(attachmentId: string): Promise<{ data_url: string }>;
+  previewDraftConversationFile(attachmentId: string, variant?: "thumbnail" | "expanded"): Promise<{ data_url: string }>;
   discardConversationFiles(attachmentIds: string[]): void;
 }
 
@@ -184,9 +185,9 @@ export function registerDesktopIpc(application: DesktopIpcApplication): () => vo
     application.registerPastedConversationFiles(input));
   ipcMain.handle(IPC_CHANNELS.readClipboardConversationFiles, () =>
     application.registerConversationFiles(readClipboardFilePaths()));
-  ipcMain.handle(IPC_CHANNELS.previewDraftConversationFile, (_event, attachmentId: unknown) => {
+  ipcMain.handle(IPC_CHANNELS.previewDraftConversationFile, (_event, attachmentId: unknown, variant: unknown) => {
     if (typeof attachmentId !== "string" || !attachmentId.trim()) throw new Error("Invalid attachment ID");
-    return application.previewDraftConversationFile(attachmentId);
+    return application.previewDraftConversationFile(attachmentId, validateDraftImagePreviewVariant(variant));
   });
   ipcMain.handle(IPC_CHANNELS.discardConversationFiles, (_event, attachmentIds: unknown) =>
     application.discardConversationFiles(stringArray(attachmentIds, "attachment IDs")));

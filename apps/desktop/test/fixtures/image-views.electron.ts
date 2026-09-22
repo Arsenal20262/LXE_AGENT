@@ -35,6 +35,13 @@ app.whenReady().then(async () => {
     await js(`window.fixtureLive(${JSON.stringify(data.steps)})`);
     await wait("document.querySelectorAll('.sent-image-tile img').length===2 && [...document.querySelectorAll('.sent-image-tile img')].every(i=>i.complete&&i.naturalWidth>0)");
     assert.equal(await js("document.querySelectorAll('.image-view-summary').length"), 1);
+    for (const size of [15, 16, 18]) {
+      const font = await js(`document.documentElement.style.fontSize='${size}px';getComputedStyle(document.querySelector('.image-view-summary')).fontSize`);
+      assert.equal(parseFloat(font), size * .75, "Image count must follow the compact tool font at every text size");
+    }
+    await js("document.documentElement.style.fontSize=''");
+    assert.equal(await js("document.querySelector('.image-view-summary svg').getAttribute('width')"), "14");
+    assert.equal(await js("document.querySelector('.image-view-group').textContent.includes('调用详情')"), false);
     assert((await js("document.querySelector('.image-view-summary').textContent")).includes("2"));
     await js("document.querySelector('.sent-image-tile').click()");
     await wait("document.querySelector('[role=dialog] img')?.naturalWidth>320");

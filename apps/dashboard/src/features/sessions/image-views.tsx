@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChevronRight, Images, LoaderCircle } from "lucide-react";
 import { queryError, useImageViewPreviewQuery } from "../../api/queries";
 import { useUiText } from "../../shared/i18n";
@@ -41,21 +41,18 @@ function ImageTile({ row, sessionId }: { row: ConversationRow; sessionId?: strin
   </div>;
 }
 
-export function ImageViewGroup({ rows, sessionId, renderDetails }: {
-  rows: ConversationRow[]; sessionId?: string; renderDetails(row: ConversationRow): React.ReactNode;
+export function ImageViewGroup({ rows, sessionId }: {
+  rows: ConversationRow[]; sessionId?: string;
 }) {
   const t = useUiText();
   const [expanded, setExpanded] = useState(true);
   return <section className="image-view-group">
     <button type="button" className="image-view-summary" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
-      <Images size={18} /><span>{t.conversation.viewedImages(rows.length)}</span>
+      <Images size={14} /><span>{t.conversation.viewedImages(rows.length)}</span>
       <ChevronRight size={14} style={{ transform: expanded ? "rotate(90deg)" : undefined }} />
     </button>
     {expanded ? <>
       <div className="sent-image-list">{rows.map(row => <ImageTile key={rowImageView(row)!.view_id} row={row} sessionId={sessionId} />)}</div>
-      <details className="image-view-details"><summary>{t.conversation.imageCallDetails}</summary>
-        {rows.map(row => <div key={row.id}>{renderDetails(row)}</div>)}
-      </details>
     </> : null}
   </section>;
 }

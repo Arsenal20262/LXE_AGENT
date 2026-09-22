@@ -524,9 +524,9 @@ async function bootstrap(): Promise<void> {
     inputAssetSlotDirectory: (slot) => inputAssets.directoryFor(slot),
     registerConversationFiles: (selectedPaths) => conversationAttachments.register(selectedPaths),
     registerPastedConversationFiles: (input) => conversationAttachments.registerPaste(input),
-    previewDraftConversationFile: async (attachmentId) => {
+    previewDraftConversationFile: async (attachmentId, variant = "expanded") => {
       const [attachment] = conversationAttachments.resolve([attachmentId]);
-      return { data_url: await attachmentThumbnail(attachment!.path, 1600) };
+      return { data_url: await attachmentThumbnail(attachment!.path, variant === "thumbnail" ? 320 : 1600) };
     },
     discardConversationFiles: (attachmentIds) => conversationAttachments.discard(attachmentIds),
   };

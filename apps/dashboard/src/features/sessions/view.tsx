@@ -3,7 +3,7 @@ import type { PendingUserQuestion } from "@lxe/desktop-protocol";
 import type { DesktopDraftAttachmentPayload } from "@lxe/desktop-protocol";
 import { ConversationAttachmentDraft } from "./attachment-draft";
 import { useComposerDraft } from "./composer-draft";
-import { DraftImagePreview, SentAttachmentList } from "./sent-attachments";
+import { SentAttachmentList } from "./sent-attachments";
 import { selectContextDisplay } from "./context-display";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -89,6 +89,7 @@ import type { ConversationDisplaySnapshot } from "./display-controller";
 import { ConversationWindow } from "./virtual-window";
 import { thinkingParagraphs, formatConversationDuration } from "./typography";
 import { useProcessRows } from "./process";
+import { DraftImageAttachment } from "./draft-image-attachment";
 import { ImageViewGroup } from "./image-views";
 import { groupImageViewRows } from "./image-view-groups";
 import { conversationRows, type ConversationRow, type PendingMessage } from "./presentation";
@@ -660,8 +661,6 @@ function InputAttachmentList({
 }) {
   const t = useUiText();
   const [error, setError] = useState("");
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const expandedImage = draft ? attachments.find(item => item.attachment_id === expandedId && item.preview_data_url) : undefined;
   const open = async (attachmentId: string) => {
     if (!onOpen) return;
     setError("");
@@ -674,26 +673,28 @@ function InputAttachmentList({
   return (
     <div className={`turn-file-list input-attachment-list${draft ? " input-attachment-draft" : ""}`} role="group" aria-label={t.conversation.attachments}>
       {!draft ? <span className="turn-file-label">{t.conversation.attachments}</span> : null}
-      {attachments.map((attachment) => (
-        <span className={`input-attachment-chip${draft ? attachment.preview_data_url ? " input-attachment-image" : " input-attachment-file" : ""}`} key={attachment.attachment_id}>
+      {attachments.map((attachment) => draft && attachment.media_type.startsWith("image/") ? (
+        <DraftImageAttachment key={attachment.attachment_id} attachment={attachment} onRemove={onRemove} />
+      ) : (
+        <span className={`input-attachment-chip${draft ? " input-attachment-file" : ""}`} key={attachment.attachment_id}>
           <button
             className="turn-file-chip"
-            disabled={!onOpen && !(draft && attachment.preview_data_url)}
-            onClick={() => draft && attachment.preview_data_url ? setExpandedId(attachment.attachment_id) : void open(attachment.attachment_id)}
+            disabled={!onOpen}
+            onClick={() => void open(attachment.attachment_id)}
             title={onOpen ? t.conversation.openFile(attachment.name) : attachment.name}
             type="button"
           >
-            {attachment.preview_data_url ? <img className="input-attachment-preview" src={attachment.preview_data_url} alt={attachment.name} /> : draft ? (
+            {draft ? (
               <span className="input-attachment-file-icon" aria-hidden="true">
                 {FILE_TYPE_ICONS[attachmentSuffix(attachment.name)]
                   ? <img src={FILE_TYPE_ICONS[attachmentSuffix(attachment.name)]} alt="" draggable={false} />
                   : <FileIcon size={28} />}
               </span>
             ) : <Paperclip size={14} />}
-            {!draft || !attachment.preview_data_url ? <span className="input-attachment-info">
-              <span>{attachment.preview_data_url ? t.conversation.screenshot : attachment.name}</span>
+            <span className="input-attachment-info">
+              <span>{attachment.name}</span>
               {attachmentSuffix(attachment.name) ? <span className="input-attachment-suffix">{attachmentSuffix(attachment.name)}</span> : null}
-            </span> : null}
+            </span>
           </button>
           {onRemove ? (
             <button
@@ -708,7 +709,6 @@ function InputAttachmentList({
         </span>
       ))}
       {error ? <div className="turn-file-error" role="alert">{t.conversation.openFileFailed(error)}</div> : null}
-      {expandedImage ? <DraftImagePreview key={expandedImage.attachment_id} attachment={expandedImage} onClose={() => setExpandedId(null)} /> : null}
     </div>
   );
 }
@@ -1462,11 +1462,7 @@ export const UnifiedConversationRow = React.memo(function UnifiedConversationRow
     <ConversationStatus row={row} /><ChevronRight size={14} style={{transform: expanded ? "rotate(90deg)" : undefined}} />
   </button>;
   if (row.kind === "artifacts") return <TurnFileList files={row.artifacts ?? []} onOpenFile={onOpenFile} onRevealFile={onRevealFile} />;
-  if (row.kind === "image_views") return <ImageViewGroup rows={row.imageRows ?? []} sessionId={attachmentSessionId}
-    renderDetails={(child) => {
-      const operation = child.operation ?? (child.liveTool ? liveToolOperations([child.liveTool])[0] : undefined);
-      return operation ? <div className="tool-op-body">{child.operation ? defaultToolOperationBody(operation) : <LiveToolOperationBody operation={operation} />}</div> : null;
-    }} />;
+  if (row.kind === "image_views") return <ImageViewGroup rows={row.imageRows ?? []} sessionId={attachmentSessionId} />;
   if (row.kind === "tool") {
     const operation = row.operation ?? (row.liveTool ? liveToolOperations([row.liveTool])[0] : undefined);
     if (!operation) return null;

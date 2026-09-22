@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { File, Image as ImageIcon, LoaderCircle, X } from "lucide-react";
 import type { DesktopDraftAttachmentPayload, DesktopInputAttachmentPayload } from "@lxe/desktop-protocol";
-import { queryError, useAttachmentPreviewQuery } from "../../api/queries";
+import { queryError, useAttachmentPreviewQuery, useDraftImagePreviewQuery } from "../../api/queries";
 import { useUiText } from "../../shared/i18n";
 import { useDialogFocus } from "../../shared/ui/use-dialog-focus";
 
@@ -26,24 +26,10 @@ function ImagePreview({ attachment, sessionId, thumbnail, onClose }: {
 }
 
 export function DraftImagePreview({ attachment, onClose }: { attachment: DesktopDraftAttachmentPayload; onClose(): void }) {
-  const t = useUiText();
-  const [preview, setPreview] = useState({ url: "", error: "" });
-  useEffect(() => {
-    let active = true;
-    const load = async () => {
-      try {
-        if (!window.lxe) throw new Error(t.conversation.unavailable);
-        const result = await window.lxe.desktop.previewDraftConversationFile(attachment.attachment_id);
-        if (active) setPreview({ url: result.data_url, error: "" });
-      } catch (cause) {
-        if (active) setPreview({ url: "", error: cause instanceof Error ? cause.message : String(cause) });
-      }
-    };
-    void load();
-    return () => { active = false; };
-  }, [attachment.attachment_id, t.conversation.unavailable]);
-  return <ImagePreviewDialog attachment={attachment} url={preview.url || attachment.preview_data_url || ""}
-    error={preview.error} loading={!preview.url && !preview.error} onClose={onClose} />;
+  const preview = useDraftImagePreviewQuery(attachment.attachment_id, "expanded");
+  const error = queryError(preview.error);
+  return <ImagePreviewDialog attachment={attachment} url={preview.data?.data_url || attachment.preview_data_url || ""}
+    error={error} loading={preview.isFetching} onClose={onClose} />;
 }
 
 export function ImagePreviewDialog({ attachment, url, error, loading = false, note, onClose }: {

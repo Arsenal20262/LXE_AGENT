@@ -73,6 +73,19 @@ export function useUserQuestionActions() {
   return { answer: answer.mutateAsync, stop: stop.mutateAsync };
 }
 
+export function useDraftImagePreviewQuery(id: string, variant: "thumbnail" | "expanded", enabled = true) {
+  return useQuery({
+    queryKey: ["draft-image-preview", id, variant],
+    queryFn: async ({ signal }) => {
+      if (!window.lxe) throw new Error("Desktop bridge is unavailable");
+      const result = await window.lxe.desktop.previewDraftConversationFile(id, variant);
+      signal.throwIfAborted();
+      return result;
+    },
+    enabled, retry: false, staleTime: Infinity, gcTime: 0, refetchOnWindowFocus: false,
+  });
+}
+
 export function useImageViewPreviewQuery(
   sessionId: string | undefined, viewId: string, variant: "thumbnail" | "expanded", enabled: boolean,
 ) {

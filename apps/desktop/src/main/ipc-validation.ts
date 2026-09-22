@@ -177,3 +177,10 @@ export function validateLocalModelCredentialInput(value: unknown): DesktopLocalM
   if (!apiKey) throw new Error("Model API key is required");
   return { provider: validateModelProvider(input.provider), api_key: apiKey };
 }
+
+
+export function validateDraftImagePreviewVariant(value: unknown): "thumbnail" | "expanded" {
+  if (value === undefined) return "expanded";
+  if (value !== "thumbnail" && value !== "expanded") throw new Error("Image preview variant must be thumbnail or expanded");
+  return value;
+}

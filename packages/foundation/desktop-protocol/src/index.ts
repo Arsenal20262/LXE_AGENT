@@ -621,7 +621,7 @@ export interface LxeDesktopBridge {
     selectConversationFiles(): Promise<DesktopInputAttachmentPayload[]>;
     stageDroppedConversationFiles(files: File[]): Promise<DesktopInputAttachmentPayload[]>;
     stagePastedConversationFiles(files: File[]): Promise<DesktopDraftAttachmentPayload[]>;
-    previewDraftConversationFile(attachmentId: string): Promise<{ data_url: string }>;
+    previewDraftConversationFile(attachmentId: string, variant?: "thumbnail" | "expanded"): Promise<{ data_url: string }>;
     discardConversationFiles(attachmentIds: string[]): Promise<void>;
     startSyntheticPerformerTask(
       input: DesktopSyntheticPerformerTaskInput,
