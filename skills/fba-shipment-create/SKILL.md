@@ -30,7 +30,7 @@ commands:
 必须明确：
 
 - `store_id`: 只接受独立 `ziniao-browser` skill 的 `get_status` 返回值。
-- `site`: `US`、`UK`、`DE`、`FR`、`IT`、`ES`、`CA`、`JP`、`AU` 等标准站点代码。
+- `site`: 仅支持 `US`、`UK`、`DE`、`FR`、`IT`、`ES`、`CA`、`JP`、`AU`、`SA`（沙特阿拉伯）、`AE`（阿联酋）。代码不区分大小写，也接受这些国家的中文名称；店铺必须实际具备目标站点。
 - `consignment_no`: 托运单号。
 - `transport_mode`: 运输方式业务输入，后续 CLI 会原样回传。
 

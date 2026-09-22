@@ -41,13 +41,14 @@ def _write_template(path: Path, *, include_default_owner: bool = True, include_o
     workbook.save(path)
 
 
-def test_notus_template_writes_default_owner_and_leaves_row_owner_blank(tmp_path: Path) -> None:
+@pytest.mark.parametrize("site", ["DE", "SA", "AE"])
+def test_notus_template_writes_default_owner_and_leaves_row_owner_blank(tmp_path: Path, site: str) -> None:
     consignment_path = tmp_path / "consignment.xlsx"
     template_path = tmp_path / "template.xlsx"
     _write_consignment_excel(consignment_path)
     _write_template(template_path)
 
-    payload = fill_shipment_template_payload(str(template_path), str(consignment_path), "DE")
+    payload = fill_shipment_template_payload(str(template_path), str(consignment_path), site)
 
     assert payload["written_rows"] == 2
     workbook = load_workbook(template_path)

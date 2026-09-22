@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 from typing import Any
 
@@ -22,6 +23,8 @@ _SITE_ALIASES: dict[str, tuple[str, ...]] = {
     "CA": ("CA", "CANADA", "加拿大", "加拿大站"),
     "JP": ("JP", "JAPAN", "日本", "日本站"),
     "AU": ("AU", "AUS", "AUSTRALIA", "澳大利亚", "澳大利亚站"),
+    "SA": ("SA", "SAUDI ARABIA", "沙特", "沙特站", "沙特阿拉伯", "沙特阿拉伯站"),
+    "AE": ("AE", "UAE", "UNITED ARAB EMIRATES", "阿联酋", "阿联酋站", "阿拉伯联合酋长国"),
 }
 
 _SWITCHER_SHARED_JS = """
@@ -175,9 +178,16 @@ def _label_matches_site(label: str, site_code: str) -> bool:
     normalized_label = _normalize_alias(label)
     if not normalized_label:
         return False
-    candidates = {normalize_site_code(site_code)}
-    candidates.update(_normalize_alias(alias) for alias in site_aliases(site_code))
-    return any(candidate and candidate in normalized_label for candidate in candidates)
+    for alias in site_aliases(site_code):
+        if alias.isascii():
+            # Country codes must be separate words: SA must not match USA,
+            # nor IT the country name United Arab Emirates.
+            pattern = r"\s*".join(re.escape(word) for word in alias.split())
+            if re.search(rf"(?<![A-Z]){pattern}(?![A-Z])", str(label).upper()):
+                return True
+        elif _normalize_alias(alias) in normalized_label:
+            return True
+    return False
 
 
 def _read_switcher_state(session: Any) -> dict[str, Any]:
