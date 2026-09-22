@@ -742,9 +742,11 @@ button {
   gap: 3px;
 }
 
-.desktop-cloud-shortcuts-heading strong {
+.desktop-cloud-shortcuts-heading strong,
+.desktop-cloud-permission-heading {
   color: var(--text-strong);
   font-size: 0.8125rem;
+  font-weight: 700;
 }
 
 .desktop-cloud-shortcuts-heading span {
