@@ -35,6 +35,10 @@ app.whenReady().then(async () => {
     await js(`window.fixtureLive(${JSON.stringify(data.steps)})`);
     await wait("document.querySelectorAll('.sent-image-tile img').length===2 && [...document.querySelectorAll('.sent-image-tile img')].every(i=>i.complete&&i.naturalWidth>0)");
     assert.equal(await js("document.querySelectorAll('.image-view-summary').length"), 1);
+    assert.deepEqual(await js(`[...document.querySelectorAll('.sent-image-tile')].map(tile=>{
+      const image=tile.querySelector('img'), box=tile.getBoundingClientRect();
+      return [box.width,box.height,getComputedStyle(tile).borderRadius,getComputedStyle(image).objectFit,getComputedStyle(image).objectPosition];
+    })`), [[96,96,"10px","cover","50% 50%"],[96,96,"10px","cover","50% 50%"]]);
     for (const size of [15, 16, 18]) {
       const font = await js(`document.documentElement.style.fontSize='${size}px';getComputedStyle(document.querySelector('.image-view-summary')).fontSize`);
       assert.equal(parseFloat(font), size * .75, "Image count must follow the compact tool font at every text size");
@@ -56,6 +60,10 @@ app.whenReady().then(async () => {
     await js(`window.fixtureHistory(${JSON.stringify(data.messages)})`);
     await wait("document.querySelectorAll('.sent-image-tile img').length===2");
     assert.equal(await js("document.querySelectorAll('.image-view-summary').length"), 1);
+    assert.deepEqual(await js(`[...document.querySelectorAll('.sent-image-tile')].map(tile=>{
+      const image=tile.querySelector('img'), box=tile.getBoundingClientRect();
+      return [box.width,box.height,getComputedStyle(tile).borderRadius,getComputedStyle(image).objectFit,getComputedStyle(image).objectPosition];
+    })`), [[96,96,"10px","cover","50% 50%"],[96,96,"10px","cover","50% 50%"]]);
     const screenshot = join(dirname(process.argv[4]!), "image-views.png");
     writeFileSync(screenshot, (await window.webContents.capturePage()).toPNG());
     // Expanded queries remount: replacing the source must show the current file.

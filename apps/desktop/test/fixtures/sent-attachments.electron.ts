@@ -15,7 +15,7 @@ app.whenReady().then(async () => {
   const errors: string[] = [];
   let window: BrowserWindow | undefined;
   try {
-    for (const [id, width, height, color] of [["image-one", 600, 300, 170], ["image-two", 300, 600, 230]] as const) {
+    for (const [id, width, height, color] of [["image-one", 600, 300, 170], ["image-two", 300, 600, 230], ["image-3", 200, 2000, 190], ["image-4", 400, 400, 210]] as const) {
       const path = join(root, `${id}.png`);
       const bitmap = Buffer.alloc(width * height * 4);
       for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
@@ -28,7 +28,7 @@ app.whenReady().then(async () => {
       writeFileSync(path, nativeImage.createFromBitmap(bitmap, { width, height }).toPNG());
       paths.set(id, path);
     }
-    for (let index = 3; index <= 6; index++) paths.set(`image-${index}`, paths.get("image-one")!);
+    for (let index = 3; index <= 6; index++) if (!paths.has(`image-${index}`)) paths.set(`image-${index}`, paths.get("image-one")!);
     const big = join(root, "huge.png"); writeFileSync(big, ""); truncateSync(big, 5 * 1024 ** 3);
     await assert.rejects(attachmentThumbnail(big, 320), /20 MiB/);
     const link = join(root, "linked.png"); symlinkSync(paths.get("image-one")!, link);
@@ -59,7 +59,15 @@ app.whenReady().then(async () => {
         document.documentElement.scrollWidth<=innerWidth];
     })()`), [true, true, true, true]);
     assert.equal(await js(`(()=>{const list=document.querySelector('.sent-file-list');list.scrollLeft=100;return list.scrollWidth>list.clientWidth && list.scrollLeft>0})()`), true);
+    await js("window.fixtureImageCount(4)");
+    await waitFor("document.querySelectorAll('.sent-image-tile img').length===4 && [...document.querySelectorAll('.sent-image-tile img')].every(image=>image.complete&&image.naturalWidth>0)");
+    assert.deepEqual(await js(`[...document.querySelectorAll('.sent-image-tile')].map(tile=>{
+      const image=tile.querySelector('img'), box=tile.getBoundingClientRect();
+      return [box.width,box.height,getComputedStyle(tile).borderRadius,getComputedStyle(image).objectFit,getComputedStyle(image).objectPosition];
+    })`), Array.from({length:4},()=>[96,96,"10px","cover","50% 50%"]));
     writeFileSync("/tmp/lxe-sent-attachments-light.png", (await window.webContents.capturePage()).toPNG());
+    await js("window.fixtureImageCount(2)");
+    await waitFor("document.querySelectorAll('.sent-image-tile').length===2");
     await js("document.documentElement.dataset.theme='dark'; document.querySelector('.sent-image-tile').click()");
     await waitFor("document.querySelector('[role=dialog] img')?.naturalWidth > 320");
     assert.equal(await js("document.querySelector('[role=dialog] img').naturalWidth/document.querySelector('[role=dialog] img').naturalHeight"), 2);

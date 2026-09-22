@@ -11312,7 +11312,7 @@ pre {
   scrollbar-width: thin;
   padding-bottom: 4px;
 }
-.sent-image-item { flex: 0 0 144px; width: 144px; min-width: 0; }
+.sent-image-item { flex: 0 0 96px; width: 96px; min-width: 0; }
 .sent-image-tile {
   display: flex;
   flex-direction: column;
@@ -11324,12 +11324,12 @@ pre {
   overflow: hidden;
   padding: 0;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--conversation-muted-fill);
   color: var(--muted);
   cursor: zoom-in;
 }
-.sent-image-tile > img { width: 100%; height: 100%; object-fit: contain; }
+.sent-image-tile > img { width: 100%; height: 100%; object-fit: cover; object-position: center; }
 .sent-image-tile > span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 8px; }
 .sent-image-tile:disabled { cursor: default; }
 .sent-file-card {
