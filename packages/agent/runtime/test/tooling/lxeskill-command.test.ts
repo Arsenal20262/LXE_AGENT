@@ -49,7 +49,7 @@ describe("lxeskill command recognition", () => {
     // Every directory is owned by exactly one business module — the property the
     // <module>/<data-type> layout depends on.
     const modules = new Set(datasets.map((entry) => entry.dir.split("/")[0]));
-    expect([...modules].sort()).toEqual(["amazon", "browser", "fba", "replenish"]);
+    expect([...modules].sort()).toEqual(["amazon", "browser", "fba", "replenish", "shangman"]);
     expect(new Set(datasets.map((entry) => entry.dir)).size).toBe(datasets.length);
     expect(datasets.every((entry) => entry.holds.length > 0)).toBe(true);
   });
@@ -106,4 +106,18 @@ test("Shangman login commands belong to the login skill and expose only the capt
   expect(commands).toHaveLength(4);
   for (const entry of commands) expect(entry.ownerSkills).toEqual(["shangman-login"]);
   expect(commands.find(entry => entry.name === "shangman_login_prepare")?.artifactPaths).toEqual([{ field: "image_path", role: "model_input" }]);
+});
+
+test("Shangman export is a separate command delivering one workbook", () => {
+  const path = join(process.cwd(), "python/lxeskill_cli/lxeskill/catalog.json");
+  const entries = loadLxeSkillCommandCatalog(path);
+  const entry = entries.find(entry => entry.name === "shangman_goods_export");
+  expect(entry).toMatchObject({
+    command: "lxeskill shangman export run",
+    module: "services.agent_cli.shangman.goods_export",
+    ownerSkills: ["shangman-goods-export"],
+    artifactPaths: [{ field: "artifact_path", role: "deliverable" }],
+  });
+  expect(loadLxeSkillDatasets(path).find(entry => entry.id === "shangman_goods_export")?.dir)
+    .toBe("shangman/indonesia");
 });
