@@ -1,3 +1,4 @@
+import { omitImageData } from "../messages/image-content";
 import { validContextDisplaySnapshot, type ContextDisplaySnapshot } from "@lxe/protocol";
 import { existsSync, mkdirSync, statSync } from "node:fs";
 import { appendFile, mkdir, open, readFile, rename, stat, truncate, unlink } from "node:fs/promises";
@@ -106,7 +107,12 @@ const publicAttachment = (attachment: RuntimeAttachmentRecord): JsonObject => ({
 });
 
 const publicMessage = (value: JsonObject): JsonObject => {
-  const message = structuredClone(value);
+  // Attached images already have a preview reference; do not add a visible placeholder.
+  const hasAttachments = Array.isArray(value.content) && value.content.some((block) => transcriptAttachment(block));
+  const message = omitImageData(hasAttachments ? {
+    ...value,
+    content: (value.content as JsonValue[]).filter((block) => parseObject(block).type !== "image"),
+  } : value) as JsonObject;
   delete message.image_views;
   delete message.artifacts;
   delete message.attachments;
@@ -141,40 +147,6 @@ const mergeObjects = (base: JsonObject, patch: JsonObject): JsonObject => {
 };
 
 const retiredWorkspaceColumn = ["workspace", "server", "scope"].join("_");
-
-const imagePlaceholder = (): JsonObject => ({
-  type: "text",
-  text: "[Image omitted from persisted transcript after this turn]",
-});
-
-const sanitizePersistedValue = (value: JsonValue): JsonValue => {
-  if (Array.isArray(value)) return value.map(sanitizePersistedValue);
-  if (value === null || typeof value !== "object") {
-    return typeof value === "string" && /^data:image\/[^;]+;base64,/iu.test(value)
-      ? "[Image data URL omitted from persisted transcript after this turn]"
-      : value;
-  }
-  const source = parseObject(value.source);
-  if (text(value.type) === "image" && (text(source.type) === "base64" || typeof source.data === "string")) {
-    return imagePlaceholder();
-  }
-  return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, sanitizePersistedValue(item)]));
-};
-
-const persistedMessage = (message: RuntimeMessage): RuntimeMessage => {
-  if (message.role === "compactionSummary") {
-    return sanitizePersistedValue(message as unknown as JsonObject) as unknown as RuntimeMessage;
-  }
-  if (Array.isArray(message.content) && message.content.some((block) => transcriptAttachment(block))) {
-    return sanitizePersistedValue({
-      ...message,
-      // Attached images remain durable through their local_file reference;
-      // their transient visual block is only for the current provider call.
-      content: message.content.filter((block) => text(block.type) !== "image"),
-    } as unknown as JsonObject) as unknown as RuntimeMessage;
-  }
-  return sanitizePersistedValue(message as unknown as JsonObject) as unknown as RuntimeMessage;
-};
 
 const sessionTitle = (message: RuntimeMessage, reason: string): string => {
   if (message.role !== "user" || !["turn_input", "user_input", "inbound"].includes(reason)) return "";
@@ -798,7 +770,7 @@ export class SqliteRuntimeStore implements RuntimeStore {
     await this.enqueueSessionWrite(safeSessionId, async () => {
       const path = this.transcriptPath(safeSessionId);
       const cached = this.validCacheBeforeWrite(safeSessionId, path);
-      const persisted = persistedMessage(message);
+      const persisted = structuredClone(message);
       await this.appendTranscriptEvent(safeSessionId, {
         kind: "message",
         message: persisted as unknown as JsonObject,
@@ -990,7 +962,7 @@ export class SqliteRuntimeStore implements RuntimeStore {
       const path = this.transcriptPath(safeSessionId);
       const previous = await this.loadMessagesUnqueued(safeSessionId);
       this.validCacheBeforeWrite(safeSessionId, path);
-      const persisted = messages.map(persistedMessage);
+      const persisted = structuredClone(messages);
       await this.appendTranscriptEvent(
         safeSessionId,
         createContextPatchEvent(previous, persisted, replacementKind, metadata),

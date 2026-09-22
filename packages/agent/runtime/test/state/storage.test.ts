@@ -403,7 +403,7 @@ describe("SqliteRuntimeStore", () => {
     await reopened.stop();
   });
 
-  test("caches transcript replay, sanitizes persisted images, derives title, and invalidates external writes", async () => {
+  test("caches transcript replay, retains persisted images, derives title, and invalidates external writes", async () => {
     const root = mkdtempSync(join(tmpdir(), "lxe-runtime-cache-store-"));
     roots.push(root);
     const store = new SqliteRuntimeStore(join(root, "local_agent.sqlite3"));
@@ -418,8 +418,8 @@ describe("SqliteRuntimeStore", () => {
     }, "turn_input");
     const transcript = join(root, "session_transcripts", "images.jsonl");
     const persisted = readFileSync(transcript, "utf8");
-    expect(persisted).not.toContain("aGVsbG8=");
-    expect(persisted).toContain("Image omitted from persisted transcript");
+    expect(persisted).toContain("aGVsbG8=");
+    expect(JSON.stringify((await store.sessionDetail("images", { limit: 10 }))?.messages)).not.toContain("aGVsbG8=");
     expect(store.listSessions({ limit: 10, offset: 0 }).items[0]?.title).toBe("第一条真实用户消息 with title");
 
     await store.loadMessages("images");

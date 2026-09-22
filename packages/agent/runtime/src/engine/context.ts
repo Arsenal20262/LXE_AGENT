@@ -1,3 +1,4 @@
+import { omitImageData } from "../messages/image-content";
 import { latestContextAnchor, measureContext } from "./context-meter";
 import type { JsonObject, JsonValue } from "@lxe/protocol";
 import { isAbsolute } from "node:path";
@@ -28,7 +29,6 @@ export const PRECALL_COMPACTION_USAGE_THRESHOLD = 0.9;
 const MISSING_TOOL_RESULT_STUB = "[Result unavailable — see context summary above]";
 const THINKING_SUMMARY_PLACEHOLDER = "[assistant thinking omitted]";
 const REDACTED_THINKING_SUMMARY_PLACEHOLDER = "[assistant redacted thinking omitted]";
-const PROCESSED_IMAGE_PLACEHOLDER = "[image data removed - already processed by model]";
 const SPLIT_TURN_SUMMARY_SEPARATOR = "\n\n---\n\n**Turn Context (split turn):**\n\n";
 
 export const HISTORY_SUMMARY_PROMPT = `The messages above are a conversation to summarize. Create a structured context checkpoint summary that another LLM will use to continue the work.
@@ -432,45 +432,6 @@ export function trimToolResultBlocks(
   return { results: next, changed };
 }
 
-const replaceImages = (content: RuntimeMessageContent): { content: RuntimeMessageContent; changed: boolean } => {
-  if (!Array.isArray(content)) return { content, changed: false };
-  let changed = false;
-  const next = content.map((rawBlock): JsonObject => {
-    const block = jsonObject(rawBlock);
-    if (block.type === "image") {
-      changed = true;
-      return { type: "text", text: PROCESSED_IMAGE_PLACEHOLDER };
-    }
-    if (block.type === "tool_result" && Array.isArray(block.content)) {
-      const nested = block.content.map((item): JsonValue => {
-        const child = object(item);
-        if (child.type === "image") {
-          changed = true;
-          return { type: "text", text: PROCESSED_IMAGE_PLACEHOLDER };
-        }
-        return jsonObject(child);
-      });
-      return { ...block, content: nested };
-    }
-    return block;
-  });
-  return { content: next, changed };
-};
-
-export function pruneProcessedHistoryImages(messages: readonly RuntimeMessage[]): {
-  messages: RuntimeMessage[];
-  changed: boolean;
-} {
-  let changed = false;
-  const next = messages.map((message): RuntimeMessage => {
-    if (message.role === "compactionSummary") return structuredClone(message) as RuntimeMessage;
-    const replaced = replaceImages(message.content);
-    changed ||= replaced.changed;
-    return { ...message, content: replaced.content } as RuntimeMessage;
-  });
-  return { messages: next, changed };
-}
-
 interface FileInventory {
   readFiles: string[];
   modifiedFiles: string[];
@@ -738,7 +699,8 @@ const renderSummaryTranscript = (messages: readonly RuntimeMessage[]): string =>
       }
       for (const block of blocks(message)) {
         if (!isToolResult(block)) continue;
-        const content = typeof block.content === "string" ? block.content : JSON.stringify(block.content);
+        const projected = omitImageData(block.content);
+        const content = typeof projected === "string" ? projected : JSON.stringify(projected);
         lines.push(`Tool Result: ${content}`);
       }
     }
@@ -916,16 +878,8 @@ export class ContextPipeline {
     signal: AbortSignal;
     userIdentity?: RuntimeProviderUserIdentity;
   }): Promise<ContextCompactionResult> {
-    const pruned = pruneProcessedHistoryImages(params.messages);
-    let messages = pruned.messages;
-    if (pruned.changed) {
-      await this.options.store.replaceMessages(params.sessionId, messages, "context_replacement", {
-        reason: "processed_history_images",
-      });
-    }
     return this.prepare({
       ...params,
-      messages,
       toolSchemas: params.toolSchemas ?? [],
       trigger: "post_turn",
     });

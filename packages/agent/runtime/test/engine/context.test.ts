@@ -8,7 +8,6 @@ import {
   IMAGE_TOKEN_ESTIMATE,
   MIDTURN_SUMMARY_PROMPT,
   estimateTokens,
-  pruneProcessedHistoryImages,
   requestContextTokenEstimate,
   sanitizeMessagesForProvider,
   trimTextToTokenBudget,
@@ -607,15 +606,18 @@ src/b.ts
     expect(store.replacements.filter((item) => item.kind === "compaction")).toHaveLength(0);
   });
 
-  test("replaces processed images with placeholders", () => {
+  test("post-turn retains images without rewriting history below the compaction threshold", async () => {
+    const store = new MemoryStore();
+    const provider = new SummaryProvider();
+    const pipeline = new ContextPipeline({ provider, store, contextWindowTokens: 100_000 });
     const messages: RuntimeMessage[] = [{
       role: "user",
       content: [{ type: "text", text: "look" }, { type: "image", source: { type: "base64", data: "secret-base64" } }],
-    }];
-    const result = pruneProcessedHistoryImages(messages);
-    expect(result.changed).toBe(true);
-    expect(JSON.stringify(result.messages)).toContain("already processed");
-    expect(JSON.stringify(result.messages)).not.toContain("secret-base64");
+    }, { role: "assistant", content: [{ type: "text", text: "done" }] }];
+    const result = await pipeline.postTurn({ sessionId: "s1", messages, systemPrompt: "test", signal: new AbortController().signal });
+    expect(result.messages).toEqual(messages);
+    expect(store.replacements).toEqual([]);
+    expect(provider.requests).toEqual([]);
   });
 });
 
@@ -651,3 +653,43 @@ test("calibrated pressure rather than full heuristic controls threshold", async 
   expect(result.beforeTokens).toBe(100);
   expect(provider.requests).toHaveLength(0);
 });
+
+for (const fails of [false, true]) {
+  test(`image compaction ${fails ? "failure preserves history" : "omits summary payloads and retains recent images"}`, async () => {
+    const store = new MemoryStore();
+    const provider = new SummaryProvider();
+    if (fails) provider.summaries = [summaryProviderError(false)];
+    const image = (data: string): JsonObject => ({ type: "image", source: { type: "base64", media_type: "image/png", data } });
+    const recent: RuntimeMessage[] = [
+      { role: "user", content: [image("recent-payload"), { type: "text", text: "recent question" }] },
+      { role: "assistant", content: [{ type: "text", text: "recent answer" }] },
+    ];
+    const messages: RuntimeMessage[] = [
+      { role: "user", content: [image("old-user-payload"), { type: "text", text: "old question " + "x".repeat(20_000) }] },
+      { role: "assistant", content: [{ type: "tool_call", id: "read-1", name: "read", arguments: { path: "/tmp/original.png" } }] },
+      { role: "tool", content: [{ type: "tool_result", tool_call_id: "read-1", content: [image("old-tool-payload"), { type: "text", text: "image dimensions 10x10" }] }] },
+      { role: "assistant", content: [{ type: "text", text: "old visual findings" }] },
+      ...recent,
+    ];
+    const original = structuredClone(messages);
+    const pipeline = new ContextPipeline({ provider, store, contextWindowTokens: 6_000, reserveTokens: 100, recentRawTokens: 2_000 });
+    const result = await pipeline.postTurn({ sessionId: "s1", messages, systemPrompt: "test", signal: new AbortController().signal });
+    expect(provider.requests.length).toBeGreaterThan(0);
+    const summary = JSON.stringify(provider.requests);
+    for (const payload of ["old-user-payload", "old-tool-payload", "recent-payload"]) expect(summary).not.toContain(payload);
+    expect(summary).toContain("[image omitted]");
+    expect(summary).toContain("/tmp/original.png");
+    expect(summary).toContain("image dimensions 10x10");
+    expect(messages).toEqual(original);
+    if (fails) {
+      expect(result.messages).toEqual(original);
+      expect(store.replacements).toEqual([]);
+      expect(result.failureReason).toBe("summary_failed");
+    } else {
+      expect(result.compacted).toBe(true);
+      expect(result.messages.slice(-2)).toEqual(recent);
+      expect(JSON.stringify(result.messages)).not.toContain("old-tool-payload");
+      expect(store.messages).toEqual(result.messages);
+    }
+  });
+}

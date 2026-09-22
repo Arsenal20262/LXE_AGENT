@@ -2256,31 +2256,6 @@ describe("TypeScriptAgentRuntime", () => {
     await runtime.stop();
   });
 
-  test("ages processed history images after a completed turn", async () => {
-    const store = new MemoryStore();
-    store.messages = [{
-      role: "user",
-      content: [{ type: "image", source: { type: "base64", media_type: "image/png", data: "secret-base64" } }],
-    }];
-    const runtime = new TypeScriptAgentRuntime({
-      store,
-      tools: new ToolRegistry(),
-      provider: { summarize, turn: async () => (messageFixture({
-        content: [{ type: "text", text: "done" }],
-        stopReason: "stop",
-        usage: { input_tokens: 1, output_tokens: 1 },
-      })) },
-      emitter: { emit: async () => undefined, typing: async () => undefined },
-      systemPrompt: "test",
-    });
-    await runtime.start();
-    const outcome = await runtime.runTurn(job(), handle());
-    expect(outcome.status).toBe("completed");
-    expect(JSON.stringify(store.messages)).toContain("already processed");
-    expect(JSON.stringify(store.messages)).not.toContain("secret-base64");
-    await runtime.stop();
-  });
-
   test("closes remaining tool calls when cancellation arrives between dispatches", async () => {
     const store = new MemoryStore();
     const tools = new ToolRegistry();
@@ -2777,7 +2752,7 @@ test("persists coherent display observations and isolates heartbeat and persiste
   expect(JSON.stringify(store.messages)).not.toContain("context_display");
 });
 
-test("saves the post-image-cleanup measurement instead of the pre-maintenance display", async () => {
+test("keeps calibrated image occupancy after turn maintenance", async () => {
   const snapshots: import("@lxe/protocol").ContextDisplaySnapshot[]=[];
   const store=new MemoryStore() as MemoryStore & Pick<RuntimeStore,"beginContextDisplay"|"saveContextDisplay">;
   store.beginContextDisplay=async()=> "epoch";
@@ -2792,7 +2767,7 @@ test("saves the post-image-cleanup measurement instead of the pre-maintenance di
   await runtime.stop();
   const calibrated=snapshots.filter(snapshot=>snapshot.context_source==="usage_calibrated");
   expect(calibrated.length).toBeGreaterThan(1);
-  expect(calibrated.at(-1)!.context_tokens).toBeLessThan(calibrated[0]!.context_tokens);
+  expect(calibrated.at(-1)!.context_tokens).toBe(calibrated[0]!.context_tokens);
   expect(calibrated.at(-1)!.input_tokens).toBe(5000);
 });
 
