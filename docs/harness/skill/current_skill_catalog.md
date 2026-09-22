@@ -54,7 +54,7 @@ Start with `replenishment-workflow-map`. Snapshot and analysis skills prepare ex
 ## 智慧登录
 
 - `shangman-login`（`replenishment` 权限）：通过真实验证码登录智慧，保存本地登录态，并支持状态查询与清除。由普通 Agent Loop 使用 `exec`、`read` 和已有问答工具编排，不执行商品导出。
-- 在桌面“智慧”设置填写租户、账号、密码和 Basic Authorization，并开启真实接口。密码与 Basic Authorization 加密保存；Token 按马帮方式保存在应用状态目录，过期或凭据变更后重新登录。
+- 在桌面“智慧”设置填写租户、账号、密码和 Basic Authorization。密码与 Basic Authorization 加密保存；Token 按马帮方式保存在应用状态目录，过期或凭据变更后重新登录。
 - `status` 只检查本地状态，`clear` 只清除本地状态；两者都不代表平台在线验证或远程注销。
 
 ## Amazon Operations

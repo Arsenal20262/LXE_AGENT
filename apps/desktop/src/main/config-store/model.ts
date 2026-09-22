@@ -64,7 +64,7 @@ export interface DesktopConfig {
       app_path: string;
       webdriver_path: string;
     };
-    shangman: { managed: boolean; tenant_id: string; username: string; production_enabled: boolean; revision: string };
+    shangman: { managed: boolean; tenant_id: string; username: string; revision: string };
     mabang: { managed: boolean; account: string };
     feishu: { managed: boolean; app_id: string };
   };
@@ -134,7 +134,7 @@ const defaultConfig = (catalog: LlmProviderCatalog): DesktopConfig => {
         app_path: "",
         webdriver_path: "",
       },
-      shangman: { managed: false, tenant_id: "", username: "", production_enabled: false, revision: "" },
+      shangman: { managed: false, tenant_id: "", username: "", revision: "" },
       mabang: { managed: false, account: "" },
       feishu: { managed: false, app_id: "" },
     },
@@ -293,9 +293,10 @@ export const parseSettings = (
   const integrations = objectValue(value.integrations);
   const ziniao = objectValue(integrations.ziniao);
   const shangman = objectValue(integrations.shangman);
+  // Accept the retired switch in existing v9 files; normalization drops it on save.
   assertOnlyFields(shangman, ["managed", "tenant_id", "username", "production_enabled", "revision"], "settings.integrations.shangman");
   if (Number(value.schema_version) >= 9 || Object.keys(shangman).length > 0) {
-    assertFieldTypes(shangman, { managed: "boolean", tenant_id: "string", username: "string", production_enabled: "boolean", revision: "string" }, "settings.integrations.shangman");
+    assertFieldTypes(shangman, { managed: "boolean", tenant_id: "string", username: "string", revision: "string" }, "settings.integrations.shangman");
   }
   const mabang = objectValue(integrations.mabang);
   const feishu = objectValue(integrations.feishu);
@@ -418,7 +419,7 @@ export const parseConfig = (
       },
       shangman: {
         managed: Boolean(rawShangman.managed), tenant_id: text(rawShangman.tenant_id),
-        username: text(rawShangman.username), production_enabled: rawShangman.production_enabled === true,
+        username: text(rawShangman.username),
         revision: text(rawShangman.revision),
       },
       mabang: {

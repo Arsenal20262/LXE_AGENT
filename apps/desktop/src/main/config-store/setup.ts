@@ -113,7 +113,7 @@ export class DesktopSetupService {
       shangman: {
         managed: shangman.managed, configured: shangmanConfigured,
         issues: shangman.managed ? shangmanIssues : [], tenant_id: shangman.tenant_id,
-        username: shangman.username, production_enabled: shangman.production_enabled,
+        username: shangman.username,
         password_configured: Boolean(secrets.shangman_processed_password), basic_auth_configured: Boolean(secrets.shangman_basic_auth),
       },
       mabang: {
@@ -176,7 +176,7 @@ export class DesktopSetupService {
     }
 
     if (input.shangman?.action === "clear") {
-      config.integrations.shangman = { managed: true, tenant_id: "", username: "", production_enabled: false, revision: randomUUID() };
+      config.integrations.shangman = { managed: true, tenant_id: "", username: "", revision: randomUUID() };
       secrets.shangman_processed_password = "";
       secrets.shangman_basic_auth = "";
     } else if (input.shangman?.action === "save") {
@@ -188,7 +188,7 @@ export class DesktopSetupService {
       const basic_auth = text(input.shangman.basic_auth) || effectiveSecrets.shangman_basic_auth;
       if (!tenant_id || !username || !password || !basic_auth) throw new Error("智慧配置需要租户 ID、账号、密码和 Basic Authorization；更换账号时请重新填写密码");
       const changed = accountChanged || password !== effectiveSecrets.shangman_processed_password || basic_auth !== effectiveSecrets.shangman_basic_auth;
-      config.integrations.shangman = { managed: true, tenant_id, username, production_enabled: input.shangman.production_enabled,
+      config.integrations.shangman = { managed: true, tenant_id, username,
         revision: changed || !previous.revision ? randomUUID() : previous.revision };
       secrets.shangman_processed_password = password;
       secrets.shangman_basic_auth = basic_auth;
@@ -544,7 +544,6 @@ export class DesktopSetupService {
       LXE_SHANGMAN_USERNAME: shangmanConfigured ? shangman.username : "",
       LXE_SHANGMAN_PROCESSED_PASSWORD: shangmanConfigured ? secrets.shangman_processed_password : "",
       LXE_SHANGMAN_BASIC_AUTH: shangmanConfigured ? secrets.shangman_basic_auth : "",
-      LXE_SHANGMAN_PROD_ENABLED: shangmanConfigured && shangman.production_enabled ? "true" : "false",
       LXE_SHANGMAN_CONFIG_REVISION: shangman.revision,
       MABANG_ACCOUNT: mabangConfigured ? mabang.account : "",
       MABANG_PASSWORD: mabangConfigured ? secrets.mabang_password : "",

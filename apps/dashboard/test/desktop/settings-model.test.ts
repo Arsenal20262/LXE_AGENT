@@ -58,7 +58,7 @@ const setupState = (patch: Partial<DesktopSetupState> = {}): DesktopSetupState =
     app_path: "",
     webdriver_path: "",
   },
-  shangman: { managed: false, configured: false, issues: [], tenant_id: "", username: "", production_enabled: false, password_configured: false, basic_auth_configured: false },
+  shangman: { managed: false, configured: false, issues: [], tenant_id: "", username: "", password_configured: false, basic_auth_configured: false },
   mabang: {
     managed: true,
     configured: false,

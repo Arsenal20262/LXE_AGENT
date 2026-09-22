@@ -49,13 +49,11 @@ class AuthStore:
     def lock(self):
         return interprocess_lock(self.root / "auth.lock", timeout_seconds=10)
 
-    def assert_current(self, *, live: bool = False) -> None:
+    def assert_current(self) -> None:
         # Desktop's public config revision invalidates in-flight old CLI processes too.
         if self.credentials.revision:
             settings = read_json(state_root() / "config" / "settings.json")
             current = settings.get("integrations", {}).get("shangman", {})
-            if live and current.get("production_enabled") is not True:
-                raise AuthError("production_gate_required", "智慧真实接口已关闭")
             if current.get("revision") != self.credentials.revision:
                 raise AuthError("credentials_changed", "智慧配置已变更，请重新开始登录")
 
@@ -111,7 +109,7 @@ class AuthStore:
 
     def save(self, token: LoginToken, *, epoch: str | None = None) -> dict:
         with self.lock():
-            self.assert_current(live=True)
+            self.assert_current()
             epoch_path = self.root / "epoch.json"
             current_epoch = read_json(epoch_path)["epoch"] if epoch_path.exists() else ""
             if epoch is not None and epoch != current_epoch:

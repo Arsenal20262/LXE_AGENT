@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import os
 from typing import Any
 from .auth import AuthClient, AuthError, Credentials
 from .state import AuthStore
@@ -18,9 +17,7 @@ def run_action(action: str, arguments: dict[str, Any]) -> dict:
         if action == "clear":
             store.clear()
             return {"success": True, "status": "cleared", "remote_logout": False}
-        if os.getenv("LXE_SHANGMAN_PROD_ENABLED", "").strip().lower() != "true":
-            raise AuthError("production_gate_required", "请在桌面智慧设置中启用真实接口")
-        store.assert_current(live=True)
+        store.assert_current()
         client = AuthClient(credentials)
         if action == "prepare":
             key, image = asyncio.run(client.captcha())

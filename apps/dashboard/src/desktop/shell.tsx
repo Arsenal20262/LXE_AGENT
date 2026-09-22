@@ -810,8 +810,6 @@ function DesktopSettingsForm({
                 placeholder={setup.shangman.basic_auth_configured ? t.desktop.storedPlaceholder : ""}
                 onChange={event => onChange({ shangmanBasicAuth: event.target.value })} /></label>
           </div>
-          <label><input type="checkbox" checked={form.shangmanProductionEnabled} onChange={event => onChange({ shangmanProductionEnabled: event.target.checked })} /> {labels.productionEnabled}</label>
-          <p>{labels.productionHint}</p>
           {setup.shangman.managed ? <button className="desktop-clear-integration" onClick={() => onClearIntegration("shangman")} type="button"><Trash2 size={14} />{t.desktop.clearIntegration}</button> : null}
         </div>
       </section>
@@ -1388,7 +1386,6 @@ export function DesktopShell({
       } : {}),
       ...(shangmanTouched ? {
         shangman: { action: "save" as const, tenant_id: form.shangmanTenantId, username: form.shangmanUsername,
-          production_enabled: form.shangmanProductionEnabled,
           ...(form.shangmanPassword ? { password: form.shangmanPassword } : {}),
           ...(form.shangmanBasicAuth ? { basic_auth: form.shangmanBasicAuth } : {}),
         },

@@ -25,7 +25,7 @@ def context(tmp_path, monkeypatch):
     monkeypatch.setattr(workspace, "_artifact_root", tmp_path / "artifacts")
     for key, value in zip(("TENANT_ID", "USERNAME", "PROCESSED_PASSWORD", "BASIC_AUTH"), ("tenant-123", "operator-456", "password-789", "Basic fixture-auth")):
         monkeypatch.setenv("LXE_SHANGMAN_" + key, value)
-    monkeypatch.setenv("LXE_SHANGMAN_PROD_ENABLED", "true")
+    monkeypatch.delenv("LXE_SHANGMAN_PROD_ENABLED", raising=False)
     credentials = Credentials.from_environment()
     return credentials, AuthStore(credentials)
 
@@ -143,10 +143,10 @@ def test_desktop_revision_invalidates_old_process(context, monkeypatch):
     configured = AuthStore(Credentials.from_environment())
     from shared.repository import state_root
     settings = state_root() / "config" / "settings.json"
-    atomic_json(settings, {"integrations": {"shangman": {"revision": "version-1", "production_enabled": True}}})
+    atomic_json(settings, {"integrations": {"shangman": {"revision": "version-1"}}})
     challenge = configured.prepare("key", png())
     configured.save(LoginToken("private", 300))
-    atomic_json(settings, {"integrations": {"shangman": {"revision": "version-2", "production_enabled": True}}})
+    atomic_json(settings, {"integrations": {"shangman": {"revision": "version-2"}}})
     with pytest.raises(AuthError, match="配置已变更"):
         configured.read_token()
     with pytest.raises(AuthError, match="配置已变更"):
@@ -155,9 +155,12 @@ def test_desktop_revision_invalidates_old_process(context, monkeypatch):
         configured.save(LoginToken("late", 300))
 
 
-def test_production_gate_and_missing_credentials(context, monkeypatch):
+def test_retired_switch_does_not_block_login_and_credentials_are_still_required(context, monkeypatch):
     monkeypatch.setenv("LXE_SHANGMAN_PROD_ENABLED", "false")
-    assert workflow.run_action("prepare", {})["error"]["code"] == "production_gate_required"
+    async def captcha(self):
+        return "actual-key", png()
+    monkeypatch.setattr(AuthClient, "captcha", captcha)
+    assert workflow.run_action("prepare", {})["success"]
     assert workflow.run_action("status", {})["success"]
     monkeypatch.delenv("LXE_SHANGMAN_USERNAME")
     result = workflow.run_action("prepare", {})
