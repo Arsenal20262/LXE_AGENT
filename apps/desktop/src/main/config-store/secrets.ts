@@ -9,7 +9,6 @@ export function effectiveDesktopSecrets(
     ziniao_password: text(environment.ZINIAO_PASSWORD),
     mabang_password: text(environment.MABANG_PASSWORD),
     feishu_app_secret: text(environment.FEISHU_APP_SECRET),
-    data_server_api_key: text(environment.LXE_DATA_SERVER_API_KEY),
   } satisfies Partial<DesktopSecrets>;
   for (const [name, value] of Object.entries(values)) {
     if (value) effective[name as keyof typeof values] = value;
