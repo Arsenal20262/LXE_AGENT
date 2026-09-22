@@ -47,11 +47,13 @@ export async function main(args=process.argv.slice(2),ports?:{cos:unknown;lockRo
  const lock=join(ports?.lockRoot||process.env.LOCALAPPDATA||root,"LXE","release","publish.lock");mkdirSync(resolve(lock,".."),{recursive:true});
  try{mkdirSync(lock);}catch{throw new Error("Publisher locked: "+lock);}
  try{
+  if(!ports)console.log("Reading publisher credentials...");
   const credentials=ports?null:JSON.parse((await Bun.stdin.text()).replace(/^\uFEFF/,""));
   const cos=ports?.cos??new COS({SecretId:credentials.secretId,SecretKey:credentials.secretKey});
   const call=(method:string,extra:any):Promise<any>=>new Promise((ok,fail)=>(cos as any)[method]({Bucket:bucket,Region:region,...extra},(e:any,v:any)=>e?fail(e):ok(v)));
   const get=async(Key:string)=>{try{return JSON.parse(String((await call("getObject",{Key})).Body));}catch(e:any){if(e.statusCode===404)return null;throw e;}};
   const put=async(Key:string,value:unknown)=>call("putObject",{Key,Body:JSON.stringify(value),ContentType:"application/json",CacheControl:"no-store"});
+  console.log("Checking current update channel...");
   const before=await get(channelKey);
   if(action==="pause"){if(!before)throw new Error("No channel published");await put(channelKey,{...before,paused:true});console.log("Stable channel paused");return;}
   if(!arg||basename(arg)!=="candidate.json")throw new Error("Pass selected candidate.json");
@@ -60,6 +62,7 @@ export async function main(args=process.argv.slice(2),ports?:{cos:unknown;lockRo
   const file_name="LXE-Agent-"+record.version+"-windows-x64.exe";
   if(record.file_name!==file_name||record.object_key!=="artifacts/"+record.version+"/"+record.build_id+"/"+file_name)throw new Error("Invalid candidate path");
   const file=join(dir,file_name);
+  console.log("Verifying candidate "+record.version+" / "+record.build_id+"...");
   if(await sha512(file)!==record.sha512||statSync(file).size!==record.size)throw new Error("Candidate installer changed");
   if(before?.release){
    const order=compareVersions(record.version,before.release.version);
@@ -73,16 +76,28 @@ export async function main(args=process.argv.slice(2),ports?:{cos:unknown;lockRo
   const manifestKey="releases/"+record.version+"/"+record.build_id+"/release.json",existing=await get(manifestKey);
   if(existing&&JSON.stringify(existing)!==JSON.stringify(release))throw new Error("Version frozen to another build");
   let head:any;try{head=await call("headObject",{Key:record.object_key});}catch(e:any){if(e.statusCode!==404)throw e;}
-  if(!head)await call("uploadFile",{Key:record.object_key,FilePath:file,Headers:{"x-cos-meta-sha512":record.sha512}});
+  if(!head){
+   console.log("Uploading installer ("+(record.size/1024/1024).toFixed(2)+" MiB)...");
+   let lastPercent=-1;
+   await call("uploadFile",{Key:record.object_key,FilePath:file,Headers:{"x-cos-meta-sha512":record.sha512},
+    onProgress:({percent}:{percent:number})=>{
+     if(!Number.isFinite(percent))return;
+     const value=Math.floor(Math.max(0,Math.min(1,percent))*100);
+     if(value!==lastPercent){lastPercent=value;console.log("Upload progress: "+value+"%");}
+    }});
+  }else console.log("Installer already exists; verifying uploaded metadata...");
   head=await call("headObject",{Key:record.object_key});
   if(Number(head.headers["content-length"])!==record.size||head.headers["x-cos-meta-sha512"]!==record.sha512)throw new Error("Uploaded installer metadata mismatch");
+  console.log("Saving release record...");
   if(!existing)await put(manifestKey,release);
   if(JSON.stringify(await get(channelKey))!==JSON.stringify(before))throw new Error("Channel changed; review and retry");
+  console.log("Activating stable update channel...");
   await put(channelKey,{schema_version:1,paused:false,release:{version:record.version,build_id:record.build_id}});
   console.log("Published "+record.version+" / "+record.build_id);
  }finally{rmSync(lock,{recursive:true});}
 }
-if(import.meta.main)main().catch(error=>{
+// Keep the CLI alive while Windows PowerShell is delivering piped credentials.
+if(import.meta.main)await main().catch(error=>{
  const message=String(error?.error?.Message||error?.message||error).replace(/https?:\/\/\S+/g,"[URL redacted]");
  console.error(JSON.stringify({message:message.slice(0,1500)+(message.length>1500?" [truncated]":""),code:error?.error?.Code,status:error?.statusCode}));
  process.exitCode=1;
