@@ -117,7 +117,16 @@ export function createFileTools(dependencies: FileToolDependencies): ToolDefinit
     {
       name: "read",
       description: "Read any text or image file accessible to the local LXE Agent process. Relative paths resolve from the session working directory. Reading records the file version required by edit/write.",
-      input_schema: { type: "object", properties: { path: { type: "string" }, offset: { type: "integer" }, limit: { type: "integer" } }, required: ["path"], additionalProperties: false },
+      input_schema: {
+        type: "object",
+        properties: {
+          path: { type: "string", description: "Path to the file to read (absolute or relative to the session working directory)." },
+          offset: { type: "integer", description: "Line number to start reading from (1-indexed; defaults to 1). Applies only to text files; ignored for images." },
+          limit: { type: "integer", description: "Maximum number of lines to read. Applies only to text files; ignored for images. Output may be truncated by the tool's output limit." },
+        },
+        required: ["path"],
+        additionalProperties: false,
+      },
       execute: async (input, context) => {
         const target = paths.resolveReadable(context.workspace, input.path);
         const path = target.path;
