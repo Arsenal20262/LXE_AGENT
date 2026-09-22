@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   parseServerDevicePermission,
+  parseDeviceContext,
   parseServerDevicePermissionV2,
   parseStoredDevicePermission,
   permissionSnapshotsEqual,
@@ -117,4 +118,16 @@ describe("device permission snapshots", () => {
       .toBeNull();
     expect(permissionSnapshotsEqual(snapshot, { ...snapshot, verified_at: 999 })).toBe(true);
   });
+});
+
+test("complete context cache preserves business grants, rejects partial metadata and keeps legacy grants unknown", () => {
+  const context = { response_schema: "lxe.device-context.v1", device: { id: "device-1", kind: "managed_device", display_name: "Device", wireguard_ip: "10.88.0.8" },
+    permission: { ...v2Permission(), grants: { skill_types: ["replenishment"], desktop_features: [], server_capabilities: ["mabang_read"], erp_actions: [] } } };
+  const snapshot = parseDeviceContext(context, undefined, undefined, 123);
+  snapshot.observed_device!.server_url = "http://10.88.0.1:8000";
+  expect(parseStoredDevicePermission(snapshot)).toEqual(snapshot);
+  expect(parseStoredDevicePermission({ ...snapshot, erp_actions: undefined })).toBeNull();
+  expect(parseStoredDevicePermission({ ...snapshot, observed_device: { ...snapshot.observed_device, id: "other" } })).toBeNull();
+  expect(parseStoredDevicePermission(parseServerDevicePermissionV2(v2Permission(), "device-1", 123))?.server_capabilities).toBeUndefined();
+  expect(() => parseDeviceContext({ ...context, device: { ...context.device, wireguard_ip: "garbage" } }, undefined, undefined, 123)).toThrow("identity");
 });

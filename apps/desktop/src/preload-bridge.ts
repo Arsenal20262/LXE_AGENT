@@ -46,6 +46,8 @@ export function createDesktopBridge(
       activateCloudEnrollment: (input) => ipc.invoke(IPC_CHANNELS.activateCloudEnrollment, input),
       prepareCloudDependencies: () => ipc.invoke(IPC_CHANNELS.prepareCloudDependencies),
       getCloudState: () => ipc.invoke(IPC_CHANNELS.getCloudState),
+      refreshCloudContext: () => ipc.invoke(IPC_CHANNELS.refreshCloudContext),
+      confirmCloudDevice: () => ipc.invoke(IPC_CHANNELS.confirmCloudDevice),
       retryCloudConnection: () => ipc.invoke(IPC_CHANNELS.retryCloudConnection),
       openCloudDestination: (destination) => ipc.invoke(IPC_CHANNELS.openCloudDestination, destination),
       openLogsDirectory: () => ipc.invoke(IPC_CHANNELS.openLogsDirectory),

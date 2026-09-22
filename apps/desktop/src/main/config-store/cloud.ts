@@ -1,3 +1,4 @@
+import { companyServerUrl } from "../company-server";
 import { text } from "./model";
 import { randomBytes } from "node:crypto";
 import type {
@@ -43,6 +44,7 @@ export class DesktopCloudConfigService {
     secrets.data_server_api_key = apiKey;
     secrets.cloud_identity_candidate = "";
     secrets.cloud_permission_snapshot = null;
+    secrets.cloud_observed_device = null;
     secrets.cloud_wireguard = input.wireGuard ? structuredClone(input.wireGuard) : null;
     this.clearManagedLlm(config, secrets);
     this.repository.commit(config, secrets);
@@ -86,6 +88,7 @@ export class DesktopCloudConfigService {
     secrets.data_server_api_key = "";
     secrets.cloud_identity_candidate = "";
     secrets.cloud_permission_snapshot = null;
+    secrets.cloud_observed_device = null;
     secrets.cloud_wireguard = null;
     this.clearManagedLlm(config, secrets);
     this.repository.commit(config, secrets);
@@ -101,8 +104,17 @@ export class DesktopCloudConfigService {
   permissionSnapshot(): DesktopCloudPermissionSnapshot | null {
     const config = this.repository.readConfig();
     const snapshot = this.repository.readSecrets().cloud_permission_snapshot;
-    return snapshot?.device_id === config.cloud.device_id ? structuredClone(snapshot) : null;
+    if (snapshot?.observed_device) {
+      const identity = this.observedDevice();
+      return identity && snapshot.observed_device.server_url === companyServerUrl(config.cloud)
+        && snapshot.device_id === identity.id && snapshot.observed_device.wireguard_ip === identity.wireguard_ip
+        && (!config.cloud.managed || (snapshot.device_id === config.cloud.device_id && identity.wireguard_ip === config.cloud.vpn_ip))
+        ? structuredClone(snapshot) : null;
+    }
+    return config.cloud.managed && snapshot?.device_id === config.cloud.device_id ? structuredClone(snapshot) : null;
   }
+
+  observedDevice() { return structuredClone(this.repository.readSecrets().cloud_observed_device); }
 
   identityCredential(): string {
     const token = this.repository.readSecrets().data_server_api_key;
@@ -159,11 +171,16 @@ export class DesktopCloudConfigService {
   ): DesktopCloudPermissionSnapshot {
     this.repository.requireSafeStorage();
     const config = this.repository.readConfig();
-    if (!config.cloud.managed || snapshot.device_id !== config.cloud.device_id) {
+    if (config.cloud.switch_in_progress || (snapshot.observed_device
+      ? snapshot.observed_device.server_url !== companyServerUrl(config.cloud)
+        || snapshot.observed_device.id !== snapshot.device_id
+        || (config.cloud.managed && (snapshot.device_id !== config.cloud.device_id || snapshot.observed_device.wireguard_ip !== config.cloud.vpn_ip))
+      : !config.cloud.managed || snapshot.device_id !== config.cloud.device_id)) {
       throw new Error("Device permission snapshot does not match cloud enrollment");
     }
     const secrets = this.repository.readSecrets();
     secrets.cloud_permission_snapshot = structuredClone(snapshot);
+    if (snapshot.observed_device) secrets.cloud_observed_device = structuredClone(snapshot.observed_device);
     this.repository.commit(config, secrets);
     return structuredClone(snapshot);
   }

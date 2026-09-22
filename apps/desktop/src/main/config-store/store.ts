@@ -139,6 +139,8 @@ export class DesktopConfigStore {
     return this.cloud.recoverInterruptedSwitch();
   }
 
+  cloudObservedDevice() { return this.cloud.observedDevice(); }
+
   cloudPermissionSnapshot(): DesktopCloudPermissionSnapshot | null {
     return this.cloud.permissionSnapshot();
   }

@@ -1,3 +1,5 @@
+import { isIP } from "node:net";
+import type { DesktopObservedDevice } from "@lxe/desktop-protocol";
 import type { DesktopCloudPermissionSnapshot } from "@lxe/desktop-protocol";
 
 const PERMISSION_RESPONSE_SCHEMA_V2 = "lxe.device-permission.v2";
@@ -212,6 +214,14 @@ export function parseStoredDevicePermission(value: unknown): DesktopCloudPermiss
           desktop_features: object.desktop_features,
         },
       }, object.device_id.trim(), verifiedAt);
+      if (object.observed_device !== undefined) {
+        const observed = parseObservedDevice(object.observed_device);
+        if (!observed || observed.id !== snapshot.device_id) return null;
+        snapshot.observed_device = observed;
+        snapshot.server_capabilities = genericNames(object.server_capabilities, "server_capabilities");
+        snapshot.erp_actions = genericNames(object.erp_actions, "erp_actions");
+        if (snapshot.permission_profile === null && (snapshot.server_capabilities.length || snapshot.erp_actions.length)) return null;
+      }
       return renamedStoredSnapshot(snapshot);
     }
     return renamedStoredSnapshot(parseLegacyPermission({
@@ -241,7 +251,9 @@ export function permissionSnapshotsEqual(
     && left.profile_revision === right.profile_revision
     && sameLabels(left.profile_labels, right.profile_labels)
     && sameStrings(left.allowed_skill_types, right.allowed_skill_types)
-    && sameStrings(left.desktop_features, right.desktop_features);
+    && sameStrings(left.desktop_features, right.desktop_features)
+    && (left.server_capabilities === undefined || right.server_capabilities === undefined || sameStrings(left.server_capabilities, right.server_capabilities))
+    && (left.erp_actions === undefined || right.erp_actions === undefined || sameStrings(left.erp_actions, right.erp_actions));
 }
 
 export function legacySnapshotCanUpgrade(
@@ -256,7 +268,7 @@ export function legacySnapshotCanUpgrade(
 }
 
 
-export function parseDeviceContext(value: unknown, deviceId: string, vpnIp: string, verifiedAt: number): DesktopCloudPermissionSnapshot {
+export function parseDeviceContext(value: unknown, deviceId: string | undefined, vpnIp: string | undefined, verifiedAt: number): DesktopCloudPermissionSnapshot {
   const context = objectValue(value);
   const device = objectValue(context?.device);
   if (context?.response_schema !== "lxe.device-context.v1" || !device
@@ -264,7 +276,8 @@ export function parseDeviceContext(value: unknown, deviceId: string, vpnIp: stri
     || typeof device.display_name !== "string" || !device.display_name.trim()) {
     throw new Error("Invalid device context schema or device fields");
   }
-  if (device.id !== deviceId || device.wireguard_ip !== vpnIp) {
+  if (typeof device.id !== "string" || !device.id.trim() || typeof device.wireguard_ip !== "string" || !isIP(device.wireguard_ip)) throw new Error("Invalid device identity");
+  if ((deviceId !== undefined && device.id !== deviceId) || (vpnIp !== undefined && device.wireguard_ip !== vpnIp)) {
     throw new Error("Device context identity mismatch");
   }
   const permission = objectValue(context.permission);
@@ -273,5 +286,21 @@ export function parseDeviceContext(value: unknown, deviceId: string, vpnIp: stri
   const capabilities = genericNames(grants.server_capabilities, "server_capabilities");
   const actions = genericNames(grants.erp_actions, "erp_actions");
   if (permission.profile === null && (capabilities.length || actions.length)) throw new Error("Unassigned device has grants");
-  return parseServerDevicePermissionV2({ ...permission, response_schema: PERMISSION_RESPONSE_SCHEMA_V2 }, deviceId, verifiedAt);
+  return { ...parseServerDevicePermissionV2({ ...permission, response_schema: PERMISSION_RESPONSE_SCHEMA_V2 }, device.id, verifiedAt),
+    server_capabilities: capabilities, erp_actions: actions,
+    observed_device: { server_url: "", id: device.id, kind: device.kind as DesktopObservedDevice["kind"], display_name: device.display_name, wireguard_ip: device.wireguard_ip },
+  };
+}
+
+export function parseObservedDevice(value: unknown): DesktopObservedDevice | null {
+  const v = objectValue(value);
+  if (!v || typeof v.server_url !== "string" || typeof v.id !== "string" || !v.id.trim()
+    || typeof v.display_name !== "string" || !v.display_name.trim()
+    || typeof v.wireguard_ip !== "string" || !isIP(v.wireguard_ip)
+    || !["managed_device", "system_administrator"].includes(String(v.kind))) return null;
+  try { const url = new URL(v.server_url); if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.search || url.hash) return null; } catch { return null; }
+  return { server_url: v.server_url, id: v.id, kind: v.kind as DesktopObservedDevice["kind"], display_name: v.display_name, wireguard_ip: v.wireguard_ip };
+}
+export function sameObservedDevice(a: DesktopObservedDevice, b: DesktopObservedDevice): boolean {
+  return a.server_url === b.server_url && a.id === b.id && a.wireguard_ip === b.wireguard_ip && a.kind === b.kind;
 }

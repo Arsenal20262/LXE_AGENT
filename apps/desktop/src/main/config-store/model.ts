@@ -6,6 +6,7 @@ import type {
   DesktopModelProvider,
   DesktopZiniaoVersion,
   DesktopCloudPermissionSnapshot,
+  DesktopObservedDevice,
   CredentialSource,
   ManagedLlmCredential,
   ManagedLlmTarget,
@@ -18,7 +19,7 @@ import {
 } from "@lxe/core";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseStoredDevicePermission } from "../cloud-permissions";
+import { parseStoredDevicePermission, parseObservedDevice } from "../cloud-permissions";
 import {
   parseWireGuardTunnelConfiguration,
   type WireGuardTunnelConfiguration,
@@ -91,6 +92,7 @@ export interface DesktopSecrets {
   data_server_api_key: string;
   cloud_identity_candidate: string;
   cloud_permission_snapshot: DesktopCloudPermissionSnapshot | null;
+  cloud_observed_device: DesktopObservedDevice | null;
   cloud_wireguard: WireGuardTunnelConfiguration | null;
   managed_llm_credential: ManagedLlmCredential | null;
   managed_llm_state?: ManagedLlmState | null;
@@ -158,6 +160,7 @@ const DEFAULT_SECRETS: DesktopSecrets = {
   data_server_api_key: "",
   cloud_identity_candidate: "",
   cloud_permission_snapshot: null,
+  cloud_observed_device: null,
   cloud_wireguard: null,
   managed_llm_credential: null,
 };
@@ -478,6 +481,7 @@ export const parseSecrets = (raw: unknown): DesktopSecrets => {
     cloud_permission_snapshot: parseStoredDevicePermission(
       value.cloud_permission_snapshot,
     ),
+    cloud_observed_device: parseObservedDevice(value.cloud_observed_device),
     cloud_wireguard: parseWireGuardTunnelConfiguration(value.cloud_wireguard),
     managed_llm_credential: parsedManagedCredential,
     managed_llm_state: value.managed_llm_state == null ? singleManagedState(parsedManagedCredential) : parseManagedState(value.managed_llm_state),

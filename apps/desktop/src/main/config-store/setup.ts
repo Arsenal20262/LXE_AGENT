@@ -1,3 +1,4 @@
+import { companyServerUrl } from "../company-server";
 import { withManagedModels, managedTargetKey, managedCredentialFor, parseManagedState, singleManagedState, type ManagedLlmState } from "@lxe/core";
 import { randomUUID } from "node:crypto";
 import { rmSync } from "node:fs";
@@ -555,7 +556,7 @@ export class DesktopSetupService {
       ZINIAO_DIAGNOSTIC_TRACE_ENABLED: diagnostic ? "1" : "0",
       FEISHU_RAW_EVENT_DUMP_ENABLED: diagnostic ? "1" : "0",
       LXE_DATA_SERVER_ENABLED: config.cloud.managed && !config.cloud.switch_in_progress && Boolean(config.cloud.data_server_url) ? "1" : "0",
-      LXE_DATA_SERVER_URL: config.cloud.managed && !config.cloud.switch_in_progress ? config.cloud.data_server_url : "",
+      LXE_DATA_SERVER_URL: companyServerUrl(config.cloud),
       BROWSER_AUTH_HEADLESS: "1",
     };
   }

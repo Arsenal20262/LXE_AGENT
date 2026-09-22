@@ -53,6 +53,8 @@ export interface DesktopIpcApplication {
   activateCloudEnrollment(input: DesktopCloudActivationInput): Promise<DesktopCloudState>;
   prepareCloudDependencies(): Promise<DesktopCloudState>;
   getCloudState(): DesktopCloudState;
+  refreshCloudContext(): Promise<DesktopCloudState>;
+  confirmCloudDevice(): Promise<DesktopCloudState>;
   retryCloudConnection(): Promise<DesktopCloudState>;
   openCloudDestination(destination: DesktopCloudDestination): Promise<void>;
   logsDirectory: string;
@@ -130,6 +132,8 @@ export function registerDesktopIpc(application: DesktopIpcApplication): () => vo
     application.activateCloudEnrollment(validateCloudActivationInput(input)));
   ipcMain.handle(IPC_CHANNELS.prepareCloudDependencies, () => application.prepareCloudDependencies());
   ipcMain.handle(IPC_CHANNELS.getCloudState, () => application.getCloudState());
+  ipcMain.handle(IPC_CHANNELS.refreshCloudContext, () => application.refreshCloudContext());
+  ipcMain.handle(IPC_CHANNELS.confirmCloudDevice, () => application.confirmCloudDevice());
   ipcMain.handle(IPC_CHANNELS.retryCloudConnection, () => application.retryCloudConnection());
   ipcMain.handle(IPC_CHANNELS.openCloudDestination, (_event, destination: unknown) =>
     application.openCloudDestination(validateCloudDestination(destination)));

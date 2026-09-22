@@ -1,3 +1,4 @@
+import { DeviceContextPanel } from "./device-context-panel";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode, type RefObject } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -163,7 +164,7 @@ function DesktopSettingsNavigation({
       <div className="desktop-settings-nav-list">
         {showStatus ? item("status", t.desktop.sectionTitles.status, t.home.componentStates[health?.gateway ?? "starting"], Activity) : null}
         {item("appearance", t.desktop.sectionTitles.appearance, t.desktop.fontSizeStatus(fontSizeLabel(t.desktop, fontSize)), Palette)}
-        {item("cloud", t.desktop.sectionTitles.cloud, t.desktop.cloudStates[cloud.connection], Cloud)}
+        {item("cloud", t.desktop.sectionTitles.cloud, cloud.device_context ? t.desktop.cloud.permission.status[cloud.permission_status] : t.desktop.cloudStates[cloud.connection], Cloud)}
         {item("base", t.desktop.sectionTitles.base, desktopSettingsSectionStatus(t.desktop, "base", setup), Settings2)}
         <p className="desktop-settings-nav-group">{t.desktop.integrationsGroup}</p>
         {item("ziniao", t.desktop.sectionTitles.ziniao, desktopSettingsSectionStatus(t.desktop, "ziniao", setup), Globe)}
@@ -215,6 +216,8 @@ function DesktopCloudPanel({
   onPasswordChange,
   onPrepareDependencies,
   onRetry,
+  onRefreshContext,
+  onConfirmDevice,
   onSelect,
   onSwitchBinding,
   enrollmentError,
@@ -229,6 +232,8 @@ function DesktopCloudPanel({
   onPasswordChange: (value: string) => void;
   onPrepareDependencies: () => void;
   onRetry: () => void;
+  onRefreshContext: () => void;
+  onConfirmDevice: () => void;
   onSelect: () => void;
   onSwitchBinding: () => void;
   enrollmentError: string;
@@ -271,7 +276,7 @@ function DesktopCloudPanel({
   return (
     <section className="desktop-settings-section desktop-cloud-panel">
       <DesktopSectionHeading
-        badge={!cloud.configured
+        badge={!cloud.configured && !cloud.device_context?.device
           ? supported
             ? t.desktop.cloud.unconfiguredBadge
             : t.desktop.cloud.unsupportedBadge
@@ -281,6 +286,9 @@ function DesktopCloudPanel({
         headingRef={headingRef}
         title={t.desktop.sectionTitles.cloud}
       />
+      <DeviceContextPanel cloud={cloud} busy={activating} onRefresh={onRefreshContext} onConfirm={onConfirmDevice} />
+      <h3>{t.desktop.cloud.permission.enrollmentTitle}</h3>
+      {!cloud.configured ? <p className="desktop-form-hint">{t.desktop.cloud.permission.enrollmentHint}</p> : null}
       {supported && !dependenciesReady ? (
         <div className={`desktop-cloud-dependencies ${cloud.dependency_state}`}>
           <div>
@@ -325,28 +333,6 @@ function DesktopCloudPanel({
           </div>
         </div>
       ) : null}
-      {cloud.configured ? (
-        <div className={`desktop-cloud-permission ${cloud.permission_status}`}>
-          <div>
-            <strong>{t.desktop.cloud.permission.title}</strong>
-            <span>{t.desktop.cloud.permission.status[cloud.permission_status]}</span>
-          </div>
-          {cloud.permission_error ? <p role="alert">{cloud.permission_error}</p> : null}
-          <dl>
-            <div>
-              <dt>{t.desktop.cloud.permission.profile}</dt>
-              <dd>{cloud.permission_profile
-                ? cloud.profile_labels[t.desktop.cloud.permission.labelLocale]
-                  ?? cloud.permission_profile
-                : t.desktop.cloud.permission.unassigned}</dd>
-            </div>
-            <div>
-              <dt>{t.desktop.cloud.permission.version}</dt>
-              <dd>{cloud.permission_version > 0 ? `v${cloud.permission_version}` : "—"}</dd>
-            </div>
-          </dl>
-        </div>
-      ) : null}
       {!supported ? (
         <p className="desktop-form-hint">{t.desktop.cloud.unsupportedHint}</p>
       ) : !cloud.configured && dependenciesReady ? (
@@ -380,7 +366,7 @@ function DesktopCloudPanel({
       {!cloud.configured && (enrollmentError || cloud.last_error) ? (
         <p className="desktop-form-error" role="alert">{enrollmentError || cloud.last_error}</p>
       ) : null}
-      {cloud.configured ? (
+      {cloud.configured || cloud.device_context?.device ? (
         <div className="desktop-cloud-shortcuts">
           <div className="desktop-cloud-shortcuts-heading">
             <div>
@@ -389,7 +375,7 @@ function DesktopCloudPanel({
             </div>
             {!connected ? (
               <span className="desktop-cloud-shortcuts-unavailable">
-                {t.desktop.cloud.shortcuts.unavailable}
+                {!cloud.configured ? t.desktop.cloud.permission.loginMissing : t.desktop.cloud.shortcuts.unavailable}
               </span>
             ) : null}
           </div>
@@ -1331,6 +1317,13 @@ export function DesktopShell({
       setCloudActivating(false);
     }
   };
+  const queryCloudContext = async (confirm = false): Promise<void> => {
+    setCloudActivating(true);
+    setError("");
+    try { setCloud(await (confirm ? desktop.confirmCloudDevice() : desktop.refreshCloudContext())); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
+    finally { setCloudActivating(false); }
+  };
   const prepareCloudDependencies = async (): Promise<void> => {
     setCloudActivating(true);
     setCloudEnrollmentError("");
@@ -1558,6 +1551,8 @@ export function DesktopShell({
       onPasswordChange={setCloudPassword}
       onPrepareDependencies={() => { void prepareCloudDependencies(); }}
       onRetry={() => { void retryCloudConnection(); }}
+      onRefreshContext={() => { void queryCloudContext(); }}
+      onConfirmDevice={() => { void queryCloudContext(true); }}
       onSelect={() => { void selectCloudEnrollment(); }}
       onSwitchBinding={openCloudBindingDialog}
       password={cloudPassword}

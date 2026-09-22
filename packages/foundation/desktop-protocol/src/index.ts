@@ -363,7 +363,27 @@ export type DesktopCloudDependencyState =
   | "installing_wireguard_tools"
   | "error";
 
+export interface DesktopObservedDevice {
+  server_url: string;
+  id: string;
+  kind: "managed_device" | "system_administrator";
+  display_name: string;
+  wireguard_ip: string;
+}
+
+export interface DesktopDeviceContextState {
+  server_url: string;
+  device: DesktopObservedDevice | null;
+  pending_device: DesktopObservedDevice | null;
+  skill_types: string[];
+  server_capabilities: string[] | null;
+  erp_actions: string[] | null;
+}
+
 export interface DesktopCloudPermissionSnapshot {
+  observed_device?: DesktopObservedDevice;
+  server_capabilities?: string[];
+  erp_actions?: string[];
   device_id: string;
   permission_schema: 1 | 2;
   permission_profile: DesktopPermissionProfile | null;
@@ -376,6 +396,7 @@ export interface DesktopCloudPermissionSnapshot {
 }
 
 export interface DesktopCloudState {
+  device_context?: DesktopDeviceContextState;
   configured: boolean;
   is_admin: boolean;
   device_name: string;
@@ -619,6 +640,8 @@ export interface LxeDesktopBridge {
     prepareCloudDependencies(): Promise<DesktopCloudState>;
     getCloudState(): Promise<DesktopCloudState>;
     retryCloudConnection(): Promise<DesktopCloudState>;
+    refreshCloudContext(): Promise<DesktopCloudState>;
+    confirmCloudDevice(): Promise<DesktopCloudState>;
     openCloudDestination(destination: DesktopCloudDestination): Promise<void>;
     openLogsDirectory(): Promise<void>;
     /** Hand the resolved theme to the window chrome the renderer cannot paint. */

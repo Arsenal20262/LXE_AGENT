@@ -11515,3 +11515,14 @@ pre {
 .image-view-group { min-width: 0; padding: 6px 0; }
 .image-view-summary { display: flex; align-items: center; gap: 8px; color: var(--muted); background: none; border: 0; cursor: pointer; padding: 6px 0 10px; font: inherit; font-size: .75rem; }
 .image-view-note { margin: 0; padding: 8px 16px; opacity: .7; font-size: .75rem; }
+
+.desktop-device-context { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; }
+.desktop-device-context > dl, .desktop-device-context > p, .desktop-device-context > [role="alert"] { grid-column: 1 / -1; }
+.desktop-device-context dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 24px; }
+.desktop-device-context dd { overflow-wrap: anywhere; line-height: 1.65; }
+.desktop-device-context > button { align-self: start; }
+@media (max-width: 640px) {
+  .desktop-device-context { grid-template-columns: minmax(0, 1fr); }
+  .desktop-device-context dl { grid-template-columns: minmax(0, 1fr); }
+  .desktop-device-context > button { justify-self: start; }
+}

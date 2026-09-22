@@ -87,7 +87,9 @@ export function RuntimeStatusPopover({
   const channelState = summarizeChannelState(channelsQuery.data, channelUnavailable);
   const componentStates = t.home.componentStates;
   const channelStates = t.home.channelStates;
-  const cloudRuntimeTone = cloudAggregateTone(desktopCloud.connection);
+  const cloudRuntimeTone = desktopCloud.device_context
+    ? (["verified", "unassigned"].includes(desktopCloud.permission_status) ? "healthy" : "warning") as RuntimeTone
+    : cloudAggregateTone(desktopCloud.connection);
   const runtimeTone = aggregateRuntimeTone([
     modelTone,
     componentTone(desktopHealth.gateway),
@@ -95,8 +97,9 @@ export function RuntimeStatusPopover({
     channelTone(channelState),
     ...(cloudRuntimeTone ? [cloudRuntimeTone] : []),
   ]);
-  const cloudChecked = desktopCloud.last_checked_at
-    ? t.home.lastChecked(formatDate(desktopCloud.last_checked_at))
+  const cloudCheckedAt = desktopCloud.device_context ? desktopCloud.permission_verified_at : desktopCloud.last_checked_at;
+  const cloudChecked = cloudCheckedAt
+    ? t.home.lastChecked(formatDate(cloudCheckedAt))
     : undefined;
   const triggerLabel = `${open ? t.home.closeRuntimeStatus : t.home.openRuntimeStatus}：${
     t.home.runtimeTones[runtimeTone]
@@ -184,8 +187,8 @@ export function RuntimeStatusPopover({
               label={t.home.companyCloud}
               meta={cloudChecked}
               onClick={() => closeAndRun(() => onOpenSettings("cloud"))}
-              tone={cloudTone(desktopCloud.connection)}
-              value={t.home.cloudStates[desktopCloud.connection]}
+              tone={desktopCloud.device_context ? (["verified", "unassigned"].includes(desktopCloud.permission_status) ? "healthy" : "warning") : cloudTone(desktopCloud.connection)}
+              value={desktopCloud.device_context ? t.desktop.cloud.permission.status[desktopCloud.permission_status] : t.home.cloudStates[desktopCloud.connection]}
             />
           </div>
         </section>
