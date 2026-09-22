@@ -92,3 +92,18 @@ def test_structured_cli_accepts_ai_intent_without_raw_request_text() -> None:
     assert result["success"] is False
     assert result["overall_status"] == "needs_clarification"
     assert result["questions"][0]["code"] == "DATA_TYPE_REQUIRED"
+
+
+def test_structured_cli_rejects_singular_value_shape_before_execution() -> None:
+    result = run_workflow({
+        "data_type_intent": {"state": "resolved", "value": "inventory-sales"},
+        "warehouse_intent": {"state": "omitted"},
+        "created_date_filter": {"state": "omitted"},
+        "inventory_snapshot_intent": {"state": "omitted"},
+    })
+
+    assert result["success"] is False
+    assert result["overall_status"] == "failed"
+    assert result["diagnostics"][0]["code"] == "VALUEERROR"
+    assert "不允许字段 value" in result["diagnostics"][0]["message"]
+    assert "缺少字段 values" in result["diagnostics"][0]["message"]

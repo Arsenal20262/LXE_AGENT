@@ -76,6 +76,13 @@ def test_yacang_has_one_discoverable_skill_and_one_natural_language_command() ->
     assert data_type_values[0] == "inventory-sales"
     assert {"sales-monthly", "sales-90d"}.issubset(data_type_values)
     assert workflow["input_schema"]["properties"]["warehouse_intent"]["oneOf"]
+    data_type_resolved = workflow["input_schema"]["properties"]["data_type_intent"]["oneOf"][2]
+    warehouse_resolved = workflow["input_schema"]["properties"]["warehouse_intent"]["oneOf"][2]
+    assert set(data_type_resolved["properties"]) == {"state", "values"}
+    assert set(warehouse_resolved["properties"]) == {"state", "values"}
+    assert "即使只选一种" in data_type_resolved["properties"]["values"]["description"]
+    assert "单仓也必须是单元素数组" in warehouse_resolved["properties"]["values"]["description"]
+    assert "global/all" in warehouse_resolved["properties"]["values"]["description"]
     assert workflow["input_schema"]["properties"]["created_date_filter"]["oneOf"]
     explicit_range = workflow["input_schema"]["properties"]["created_date_filter"]["oneOf"][4]
     assert explicit_range["required"] == ["state", "mode", "start_date", "end_date"]
@@ -95,6 +102,10 @@ def test_yacang_has_one_discoverable_skill_and_one_natural_language_command() ->
     assert "不得改走其他雅仓命令冒充成功" in router
     assert "当前轮" in router
     assert "历史 Context" in router
+    assert '严禁传单数字段 `value`' in router
+    assert '{"state":"resolved","values":["VN8806"]}' in router
+    assert '{"state":"resolved","values":["MY8801","VN8806"]}' in router
+    assert "覆盖四仓的 global/all 文件" in router
 
     compatibility_entries = [
         catalog["yacang_export_inventory_sales"],

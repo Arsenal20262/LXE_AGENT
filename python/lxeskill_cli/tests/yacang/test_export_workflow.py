@@ -14,7 +14,7 @@ from services.agent_cli.yacang.preview_workflow import run as run_preview_workfl
 from services.yacang.auth import login_from_environment
 from services.yacang.errors import YacangError
 from services.yacang.export_executor import execute_export_plan
-from services.yacang.export_intent import normalize_export_intent
+from services.yacang.export_intent import normalize_export_intent, normalize_structured_intent
 from services.yacang.export_workflow import (
     ALL_DATA_TYPES as WORKFLOW_DATA_TYPES,
     EXPORT_PLAN_SCHEMA_VERSION,
@@ -33,6 +33,24 @@ FIXED_TODAY = lambda: date(2026, 9, 14)
 
 def normalized(text: str) -> dict:
     return normalize_export_intent(text, today=FIXED_TODAY)
+
+
+def structured(
+    *,
+    data_types: list[str],
+    warehouses: list[str] | None,
+) -> dict:
+    return normalize_structured_intent(
+        data_type_intent={"state": "resolved", "values": data_types},
+        warehouse_intent=(
+            {"state": "resolved", "values": warehouses}
+            if warehouses is not None
+            else {"state": "omitted"}
+        ),
+        created_date_filter={"state": "omitted"},
+        inventory_snapshot_intent={"state": "omitted"},
+        today=FIXED_TODAY,
+    )
 
 
 def test_preview_command_returns_plan_without_executing(monkeypatch) -> None:
@@ -160,6 +178,78 @@ def test_default_plan_splits_inventory_sales_and_inventory_across_all_four_wareh
         if task["data_type"] == "inventory-current-snapshot"
     ] == ["MY8801", "PH8805", "TH8802", "VN8806"]
     assert len(plan["source_fetches"]) == 4
+
+
+@pytest.mark.parametrize(
+    ("warehouses", "expected"),
+    [
+        (["VN8806"], ["VN8806"]),
+        (["MY8801", "VN8806"], ["MY8801", "VN8806"]),
+        (["VN8806", "MY8801"], ["MY8801", "VN8806"]),
+        (None, ["MY8801", "PH8805", "TH8802", "VN8806"]),
+    ],
+)
+def test_structured_inventory_and_sales_plan_selected_warehouses_in_fixed_order(
+    warehouses: list[str] | None,
+    expected: list[str],
+) -> None:
+    for data_type in ("inventory-sales", "inventory-current-snapshot"):
+        plan = plan_export_workflow(
+            structured(data_types=[data_type], warehouses=warehouses),
+            execution_date="2026-09-14",
+        )
+
+        assert [task["warehouse"] for task in plan["logical_tasks"]] == expected
+
+
+@pytest.mark.parametrize(
+    "warehouses",
+    [
+        None,
+        ["VN8806"],
+        ["MY8801", "VN8806"],
+        ["MY8801", "PH8805", "TH8802", "VN8806"],
+    ],
+)
+def test_structured_inbound_always_plans_one_global_all_warehouse_task(
+    warehouses: list[str] | None,
+) -> None:
+    plan = plan_export_workflow(
+        structured(data_types=["inbound-listing-time"], warehouses=warehouses),
+        execution_date="2026-09-14",
+    )
+
+    assert plan["logical_tasks"] == [
+        {
+            "task_id": "inbound-listing-time:global",
+            "data_type": "inbound-listing-time",
+            "scope": "global",
+            "warehouse_scope": "all",
+            "status": "not_run",
+            "effective_parameters": {},
+        }
+    ]
+    assert plan["source_fetches"] == []
+
+
+def test_mixed_structured_request_scopes_warehouses_only_to_inventory_and_sales() -> None:
+    plan = plan_export_workflow(
+        structured(
+            data_types=["inventory-sales", "inventory-current-snapshot", "inbound-listing-time"],
+            warehouses=["VN8806", "MY8801"],
+        ),
+        execution_date="2026-09-14",
+    )
+
+    assert [(task["data_type"], task.get("warehouse")) for task in plan["logical_tasks"]] == [
+        ("inventory-sales", "MY8801"),
+        ("inventory-sales", "VN8806"),
+        ("inventory-current-snapshot", "MY8801"),
+        ("inventory-current-snapshot", "VN8806"),
+        ("inbound-listing-time", None),
+    ]
+    assert plan["logical_tasks"][-1]["warehouse_scope"] == "all"
+    assert plan["logical_tasks"][-1]["effective_parameters"] == {}
 
 
 def test_unsupported_sales_window_keeps_diagnostic_without_creating_sales_task() -> None:

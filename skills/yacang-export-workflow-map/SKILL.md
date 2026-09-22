@@ -25,10 +25,14 @@ lxeskill yacang export run --data-type-intent '<JSON>' --warehouse-intent '<JSON
 
 - 正常调用必须传 `data_type_intent`、`warehouse_intent`、`created_date_filter` 和 `inventory_snapshot_intent` 四个结构化对象；不要传 `request_text`。
 - 每个意图必须是 `omitted`、`resolved` 或 `ambiguous`。无法确定时传 `ambiguous`，等待命令返回 `needs_clarification` 后把 `questions` 交给用户。
+- `data_type_intent` 和 `warehouse_intent` 只要是 `resolved`，必须使用复数字段 `values`；即使只选一项也必须传数组，严禁传单数字段 `value`。
 - `resolved` 的数据类型只能使用 `inventory-sales`、`inventory-current-snapshot`、`inbound-listing-time` 及兼容 alias；仓库只能使用 `MY8801`、`PH8805`、`TH8802`、`VN8806`。
 - `created_date_filter` 的 `explicit_range` 必须由模型提供 `start_date` 和 `end_date`，格式为 `YYYY-MM-DD`；`relative_days` 只传正整数天数，代码负责换算实际日期。
 - 用户没提商品创建日期时传 `{"state":"omitted"}`，命令复用统一默认：开始日和结束日都取执行当天。
 - 用户没提仓库时传 `{"state":"omitted"}`，命令默认四仓 `MY8801`、`PH8805`、`TH8802`、`VN8806`；完全没提数据类型时默认三类。
+- 单仓库库存/销量示例：`{"state":"resolved","values":["VN8806"]}`；多仓示例：`{"state":"resolved","values":["MY8801","VN8806"]}`。执行会按固定四仓顺序规范化选中项。
+- 单独查入库/上架时，即使用户说了一仓或多仓，`warehouse_intent` 也传 `{"state":"omitted"}`；结果始终是只跑一次、覆盖四仓的全局文件。
+- 同一请求混合库存/销量与入库/上架时，所选 `values` 只限制库存/销量；入库/上架仍只产生一份覆盖四仓的 global/all 文件。
 - 禁止传 URL、headers、Token、Cookie、`task_type`、`param_where`、OSS 地址等底层参数。
 - 兼容旧调用时可以传 `request_text`，但新 Skill 路径不得依赖它。
 - 仓库中文名和简称必须先由模型归一化为标准代码：马来西亚仓/马来西亚/马来仓/马来/MY → `MY8801`，菲律宾仓/菲律宾/菲仓/PH → `PH8805`，泰国仓/泰国/泰仓/TH → `TH8802`，越南仓/越南/越仓/VN → `VN8806`。

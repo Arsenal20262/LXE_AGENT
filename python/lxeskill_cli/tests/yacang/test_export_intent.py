@@ -44,6 +44,41 @@ def test_structured_intent_never_needs_raw_user_text() -> None:
     assert result["effective_request"]["warehouses"] == ["MY8801"]
 
 
+@pytest.mark.parametrize(
+    ("values", "expected"),
+    [
+        (["VN8806"], ["VN8806"]),
+        (["MY8801", "VN8806"], ["MY8801", "VN8806"]),
+        (["VN8806", "MY8801"], ["MY8801", "VN8806"]),
+    ],
+)
+def test_structured_inventory_and_sales_use_fixed_warehouse_order(
+    values: list[str],
+    expected: list[str],
+) -> None:
+    for data_type in ("inventory-sales", "inventory-current-snapshot"):
+        result = structured(
+            data_type_intent={"state": "resolved", "values": [data_type]},
+            warehouse_intent={"state": "resolved", "values": values},
+            created_date_filter={"state": "omitted"},
+            inventory_snapshot_intent={"state": "omitted"},
+        )
+
+        assert result["effective_request"]["warehouses"] == expected
+
+
+def test_structured_inventory_and_sales_default_to_all_four_warehouses() -> None:
+    for data_type in ("inventory-sales", "inventory-current-snapshot"):
+        result = structured(
+            data_type_intent={"state": "resolved", "values": [data_type]},
+            warehouse_intent={"state": "omitted"},
+            created_date_filter={"state": "omitted"},
+            inventory_snapshot_intent={"state": "omitted"},
+        )
+
+        assert result["effective_request"]["warehouses"] == list(WAREHOUSE_CODES)
+
+
 def test_structured_explicit_dates_are_validated_and_preserved() -> None:
     result = structured(created_date_filter={
         "state": "resolved",
@@ -629,13 +664,39 @@ def test_unrecognized_warehouse_phrases_remain_ambiguous(text: str) -> None:
     assert result["intent"]["warehouse_intent"] == {"state": "ambiguous"}
 
 
-def test_inbound_warehouse_alias_is_non_failing_request_context() -> None:
+def test_inbound_warehouse_alias_canonicalizes_to_global_all_scope() -> None:
     result = normalized("导出马来仓入库时间")
 
     assert result["requires_clarification"] is False
     assert result["effective_request"]["data_types"] == ["inbound-listing-time"]
-    assert result["effective_request"]["warehouses"] == ["MY8801"]
+    assert result["intent"]["warehouse_intent"] == {"state": "omitted"}
+    assert result["effective_request"]["warehouses"] == list(WAREHOUSE_CODES)
     assert result["preflight_issues"] == []
+
+
+@pytest.mark.parametrize(
+    "warehouses",
+    [
+        ["VN8806"],
+        ["MY8801", "VN8806"],
+        ["MY8801", "PH8805", "TH8802", "VN8806"],
+    ],
+)
+def test_structured_inbound_warehouse_selection_canonicalizes_to_global_all_scope(
+    warehouses: list[str],
+) -> None:
+    result = structured(
+        data_type_intent={"state": "resolved", "values": ["inbound-listing-time"]},
+        warehouse_intent={"state": "resolved", "values": warehouses},
+        created_date_filter={"state": "omitted"},
+        inventory_snapshot_intent={"state": "omitted"},
+    )
+
+    assert result["intent"]["warehouse_intent"] == {"state": "omitted"}
+    assert result["effective_request"] == {
+        "data_types": ["inbound-listing-time"],
+        "warehouses": list(WAREHOUSE_CODES),
+    }
 
 
 def test_legacy_agent_candidate_aligns_with_canonical_raw_sales_signal() -> None:

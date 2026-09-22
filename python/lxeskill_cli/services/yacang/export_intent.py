@@ -206,6 +206,9 @@ def normalize_structured_intent(
         intent["data_type_intent"]["values"]
     )
     warehouses = _effective_selection(intent["warehouse_intent"], WAREHOUSE_CODES)
+    if data_types == ["inbound-listing-time"]:
+        intent["warehouse_intent"] = {"state": "omitted"}
+        warehouses = list(WAREHOUSE_CODES)
     sales_selected = "inventory-sales" in data_types
     inventory_selected = "inventory-current-snapshot" in data_types
     created_intent = intent["created_date_filter"]
@@ -850,6 +853,9 @@ def merge_and_resolve_intent(
 
     data_types = _effective_data_types(data_intent, parsed)
     warehouses = _effective_selection(warehouse_intent, WAREHOUSE_CODES)
+    if data_types == ["inbound-listing-time"]:
+        intent["warehouse_intent"] = {"state": "omitted"}
+        warehouses = list(WAREHOUSE_CODES)
     sales_selected = "inventory-sales" in data_types
     inventory_selected = "inventory-current-snapshot" in data_types
     inbound_only = data_types == ["inbound-listing-time"]

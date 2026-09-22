@@ -153,7 +153,7 @@
     "text": "马来仓入库时间",
     "expected_state": "resolved",
     "data_types": ["inbound-listing-time"],
-    "warehouses": ["MY8801"]
+    "warehouses": ["MY8801", "PH8805", "TH8802", "VN8806"]
   },
   {
     "id": "warehouse_alias_philippines_stock_spoken",
@@ -188,7 +188,7 @@
     "text": "VN仓库产品",
     "expected_state": "resolved",
     "data_types": ["inbound-listing-time"],
-    "warehouses": ["VN8806"]
+    "warehouses": ["MY8801", "PH8805", "TH8802", "VN8806"]
   },
   {
     "id": "monthly_recent_30_sales",
