@@ -60,3 +60,14 @@ bun scripts/device-context-acceptance.ts
 缓存卡片使用中性边框，并说明本次未更新、仍使用上次验证结果。实际错误保留在默认收起的“查看错误详情”中，不推测失败原因；身份变化、确认操作和拒绝后清权提示始终可见。两个折叠控件使用原生 `details/summary`，支持键盘，不发送请求或保存浏览器状态。设备接入、身份凭据及快捷入口保持原行为。
 
 隔离 Electron 验收覆盖默认折叠、Tab 焦点、Enter 展开、Space 收起、刷新与身份确认、错误原文、地址字段缺席、中英文和 430px 窄窗口。测试只请求本地模拟设备 API，共 6 次；没有公司服务器或业务请求。截图为独立权限组件的实际 Electron 渲染，不代表完整桌面业务验收。
+
+#### 权限展示验证记录
+
+- 功能提交：`52b9f5ed`；最终 rebase 到 `e49a9a36`，基线无变化。
+- 定向验证：30 项通过；独立 dashboard 类型检查通过。
+- 最终 `bun run verify:source` 退出码 0：协议、生产边界、全部工作区类型检查通过；Bun 1746 通过、5 跳过、0 失败；Python 1858 通过、54 子测试通过、2 跳过。
+- 跳过项：Bun 的 Windows 运行时复制 2 项、PowerShell 发布器 2 项、Windows 技能回收 1 项；Python 的 Windows 文件共享语义、未配置真实 ExifTool。没有计作通过。
+- `bun run desktop:build` 与最终隔离 Electron 验收均退出码 0。保留 30 条 aiohttp 弃用告警和 Vite 大于 500 kB 的 chunk 提示；未修改依赖。
+- 本地日志：`/tmp/permission-layout-full.log`、`/tmp/permission-layout-build.log`、`/tmp/permission-layout-page.log`。
+- 截图归档：`/Users/llxx/.codex/visualizations/2026/09/18/01a0b333-005a-7f61-b72b-bd3cd7f0ceac/permission-panel/`，包含中文摘要、展开详情、缓存、身份变化及英文窄窗口的收起／展开状态。
+- 本轮仅修改前端展示和验收脚本，没有修改查询、缓存、身份或鉴权逻辑；未推送、部署、修改 Mac mini 或生成安装包。
