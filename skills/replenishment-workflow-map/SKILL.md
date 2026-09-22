@@ -1,7 +1,7 @@
 ---
 name: replenishment-workflow-map
 description: 备货流程介绍与完整任务编排入口。用户要求为某店铺完成备货、生成完整补货建议，或询问备货步骤与缺失数据时使用；按业务 Skill 自动完成本轮采集、核验、计算和交付。单步请求路由到对应技能。
-type: amazon_replenish
+type: replenishment
 ---
 
 # 备货流程介绍与完整任务编排

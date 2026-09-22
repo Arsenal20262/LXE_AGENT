@@ -148,7 +148,7 @@ describe("WorkspaceInstanceManager", () => {
     mkdirSync(join(resourceRoot, "skills", "replenishment"));
     writeFileSync(
       join(resourceRoot, "skills", "replenishment", "SKILL.md"),
-      "---\nname: replenishment\ntype: amazon_replenish\ndescription: Replenishment workflow\n---\n# Replenishment\n",
+      "---\nname: replenishment\ntype: replenishment\ndescription: Replenishment workflow\n---\n# Replenishment\n",
       "utf8",
     );
     mkdirSync(join(resourceRoot, "skills", "shopee"));

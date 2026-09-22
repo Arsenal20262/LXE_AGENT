@@ -1,7 +1,7 @@
 ---
 name: lark-base
 version: 1.2.2
-description: 飞书多维表格（Base）操作：建表、字段、记录、视图、统计、公式/lookup、表单、仪表盘、workflow、角色权限；遇到 Base/多维表格/bitable 或 /base/ 链接时使用。文件导入转 lark-drive，认证/授权转 lark-shared。 Use only when the user explicitly requests Feishu, Lark, or LarkSuite workspace operations. Do not use as a replacement for FBA shipment, invoice, customs, logistics, export-tax, MSKU, inventory, sales-analysis, replenishment calculation, or replenishment workflow requests that match a dedicated amazon_fba or amazon_replenish skill.
+description: 飞书多维表格（Base）操作：建表、字段、记录、视图、统计、公式/lookup、表单、仪表盘、workflow、角色权限；遇到 Base/多维表格/bitable 或 /base/ 链接时使用。文件导入转 lark-drive，认证/授权转 lark-shared。 Use only when the user explicitly requests Feishu, Lark, or LarkSuite workspace operations. Do not use as a replacement for FBA shipment, invoice, customs, logistics, export-tax, MSKU, inventory, sales-analysis, replenishment calculation, or replenishment workflow requests that match a dedicated amazon_fba or replenishment skill.
 metadata:
   requires:
     bins:

@@ -578,7 +578,7 @@ export const ZH_TEXT = {
   skillTypes: {
     default: "默认",
     amazon_fba: "Amazon FBA",
-    amazon_replenish: "Amazon Replenish",
+    replenishment: "备货",
     amazon_operations: "Amazon Operations",
     uncategorized: "未分类"
   },
@@ -1417,7 +1417,7 @@ export const UI_TEXT: Record<Language, UiText> = {
     skillTypes: {
       default: "Default",
       amazon_fba: "Amazon FBA",
-      amazon_replenish: "Amazon Replenish",
+      replenishment: "Replenishment",
       amazon_operations: "Amazon Operations",
       uncategorized: "Uncategorized"
     },

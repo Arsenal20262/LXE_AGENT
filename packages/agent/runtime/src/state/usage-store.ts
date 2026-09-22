@@ -4,6 +4,9 @@ import type { JsonObject } from "@lxe/protocol";
 import type { RuntimeTurnUsageRecord } from "../engine/types";
 import { allPrepared, clippedText, getPrepared, parseObject, text } from "./sql";
 
+// Read-only statistics normalization. Uploads and stored events retain their original values.
+const statisticsModule = "CASE WHEN module = 'amazon_replenish' THEN 'replenishment' ELSE module END";
+
 /**
  * Owns the turn_usage* tables: per-turn telemetry, tool/skill counters and the
  * cloud export cursor. Deliberately independent of session lifecycle — usage
@@ -253,11 +256,11 @@ export class UsageStore {
       FROM turn_usage_items WHERE kind = 'skill_execution' AND started_at >= ?
     `, cutoff);
     const modules = this.all<Record<string, unknown>>(`
-      SELECT module, COUNT(DISTINCT name) AS skills, COUNT(DISTINCT turn_id) AS turns,
+      SELECT ${statisticsModule} AS module, COUNT(DISTINCT name) AS skills, COUNT(DISTINCT turn_id) AS turns,
              COALESCE(SUM(calls), 0) AS executions, COALESCE(SUM(errors), 0) AS failures,
              COALESCE(SUM(duration_ms), 0) AS duration_ms
       FROM turn_usage_items WHERE kind = 'skill_execution' AND started_at >= ?
-      GROUP BY module ORDER BY executions DESC, module ASC
+      GROUP BY ${statisticsModule} ORDER BY executions DESC, module ASC
     `, cutoff);
     // The hour the operator actually works in, in their own timezone: the busiest
     // one wins, and the earliest breaks a tie so the answer is stable.
@@ -313,7 +316,7 @@ export class UsageStore {
     const cutoff = Date.now() / 1_000 - Math.max(1, Math.min(Math.trunc(days), 365)) * 86_400;
     const skillName = text(name);
     const rows = this.all<Record<string, unknown>>(`
-      SELECT name, MAX(module) AS module,
+      SELECT name, MAX(${statisticsModule}) AS module,
              COALESCE(SUM(CASE WHEN kind = 'skill_activation' THEN calls ELSE 0 END), 0) AS activations,
              COALESCE(SUM(CASE WHEN kind = 'skill_execution' THEN calls ELSE 0 END), 0) AS executions,
              COALESCE(SUM(CASE WHEN kind = 'skill_execution' THEN errors ELSE 0 END), 0) AS failures,

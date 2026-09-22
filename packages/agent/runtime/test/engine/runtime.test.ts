@@ -828,7 +828,7 @@ describe("TypeScriptAgentRuntime", () => {
         return {
           names: ["replenishment-store-resolve"],
           prompt: "skills: replenishment-store-resolve",
-          modules: { "replenishment-store-resolve": "amazon_replenish" },
+          modules: { "replenishment-store-resolve": "replenishment" },
         };
       },
     });
@@ -849,7 +849,7 @@ describe("TypeScriptAgentRuntime", () => {
     ]);
     expect(store.metrics[0]?.activations).toEqual([{
       skill: "replenishment-store-resolve",
-      module: "amazon_replenish",
+      module: "replenishment",
     }]);
     expect(store.metrics[0]?.executions).toEqual([]);
     expect(store.metrics[1]?.tools).toContainEqual(expect.objectContaining({
@@ -861,13 +861,13 @@ describe("TypeScriptAgentRuntime", () => {
     expect(store.metrics[1]?.executions).toEqual([
       expect.objectContaining({
         skill: "replenishment-store-resolve",
-        module: "amazon_replenish",
+        module: "replenishment",
         command: "replenish store resolve",
         success: true,
       }),
       expect.objectContaining({
         skill: "replenishment-store-resolve",
-        module: "amazon_replenish",
+        module: "replenishment",
         command: "replenish store resolve",
         success: false,
       }),

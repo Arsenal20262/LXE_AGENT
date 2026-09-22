@@ -23,7 +23,7 @@ function skillGroupIcon(type: string) {
   switch (type) {
     case "amazon_fba":
       return Warehouse;
-    case "amazon_replenish":
+    case "replenishment":
       return PackagePlus;
     case "amazon_operations":
       return Store;

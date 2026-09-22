@@ -1,7 +1,7 @@
 ---
 name: lark-workflow-meeting-summary
 version: 1.0.0
-description: 会议纪要整理工作流：汇总指定时间范围内的会议纪要并生成结构化报告。当用户需要整理会议纪要、生成会议周报、回顾一段时间内的会议内容时使用。 Use only when the user explicitly requests Feishu, Lark, or LarkSuite workspace operations. Do not use as a replacement for FBA shipment, invoice, customs, logistics, export-tax, MSKU, inventory, sales-analysis, replenishment calculation, or replenishment workflow requests that match a dedicated amazon_fba or amazon_replenish skill.
+description: 会议纪要整理工作流：汇总指定时间范围内的会议纪要并生成结构化报告。当用户需要整理会议纪要、生成会议周报、回顾一段时间内的会议内容时使用。 Use only when the user explicitly requests Feishu, Lark, or LarkSuite workspace operations. Do not use as a replacement for FBA shipment, invoice, customs, logistics, export-tax, MSKU, inventory, sales-analysis, replenishment calculation, or replenishment workflow requests that match a dedicated amazon_fba or replenishment skill.
 metadata:
   requires:
     bins:

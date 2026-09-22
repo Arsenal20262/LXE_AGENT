@@ -1,7 +1,7 @@
 ---
 name: lark-whiteboard
 version: 1.0.0
-description: 飞书画板：查询和编辑飞书云文档中的画板。支持导出画板为预览图片、导出原始节点结构、使用多种格式更新画板内容。 当用户需要查看画板内容、导出画板图片、编辑画板时使用此 skill。不负责：飞书云文档内容编辑（lark-doc）、文档内嵌电子表格/Base（lark-sheets / lark-base）。 Use only when the user explicitly requests Feishu, Lark, or LarkSuite workspace operations. Do not use as a replacement for FBA shipment, invoice, customs, logistics, export-tax, MSKU, inventory, sales-analysis, replenishment calculation, or replenishment workflow requests that match a dedicated amazon_fba or amazon_replenish skill.
+description: 飞书画板：查询和编辑飞书云文档中的画板。支持导出画板为预览图片、导出原始节点结构、使用多种格式更新画板内容。 当用户需要查看画板内容、导出画板图片、编辑画板时使用此 skill。不负责：飞书云文档内容编辑（lark-doc）、文档内嵌电子表格/Base（lark-sheets / lark-base）。 Use only when the user explicitly requests Feishu, Lark, or LarkSuite workspace operations. Do not use as a replacement for FBA shipment, invoice, customs, logistics, export-tax, MSKU, inventory, sales-analysis, replenishment calculation, or replenishment workflow requests that match a dedicated amazon_fba or replenishment skill.
 metadata:
   requires:
     bins:

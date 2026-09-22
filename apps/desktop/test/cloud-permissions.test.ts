@@ -22,6 +22,26 @@ const v2Permission = (patch: Record<string, unknown> = {}) => ({
 });
 
 describe("device permission snapshots", () => {
+  test("renames validated persisted grants only and preserves verification metadata", () => {
+    for (const permission_schema of [1, 2]) {
+      const old = { device_id: "device-1", permission_schema, permission_profile: "replenishment",
+        permission_version: 3, profile_revision: permission_schema === 1 ? 1 : 9,
+        profile_labels: { "zh-CN": "备货", "en-US": "Replenishment" },
+        allowed_skill_types: ["amazon_replenish", "default"], desktop_features: [], verified_at: 123 };
+      const next = parseStoredDevicePermission(old)!;
+      expect(next).toEqual({ ...old, allowed_skill_types: ["replenishment", "default"] });
+      expect(parseStoredDevicePermission(next)).toEqual(next);
+      expect(parseStoredDevicePermission({ ...old, allowed_skill_types: ["amazon_replenish", "amazon_replenish"] })).toBeNull();
+      expect(parseStoredDevicePermission({ ...old, allowed_skill_types: ["amazon_replenish", "*"] })).toBeNull();
+      expect(parseStoredDevicePermission({ ...old, allowed_skill_types: ["amazon_replenish", "bad-name!"] })).toBeNull();
+    }
+    expect(parseServerDevicePermissionV2(v2Permission({ grants: { skill_types: ["amazon_replenish"], desktop_features: [] } }), "device-1", 456).allowed_skill_types)
+      .toEqual(["amazon_replenish"]); // No online alias can authorize the renamed bundled skills.
+    expect(parseStoredDevicePermission({ device_id: "device-1", permission_schema: 2, permission_profile: null,
+      permission_version: 3, profile_revision: 0, profile_labels: {}, allowed_skill_types: [], desktop_features: [], verified_at: 123 }))
+      .toMatchObject({ allowed_skill_types: [], permission_profile: null });
+  });
+
   test("keeps the frozen v1 profile projection for legacy servers", () => {
     expect(parseServerDevicePermission({
       permission_profile: "fba",

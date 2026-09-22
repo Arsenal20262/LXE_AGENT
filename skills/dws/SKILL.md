@@ -1,6 +1,6 @@
 ---
 name: dws
-description: "DingTalk Workspace CLI skill for DingTalk messages, groups, contacts, calendar, todo, approvals, attendance, reports, DING, AI tables, docs, drive, minutes, mail, online sheets, wiki, and developer docs through the external dws CLI. Use only when the user explicitly wants DingTalk workspace operations. Do not use as a replacement for FBA shipment, invoice, customs, logistics, export-tax, MSKU, inventory, sales-analysis, replenishment calculation, or replenishment workflow requests that match a dedicated amazon_fba or amazon_replenish skill."
+description: "DingTalk Workspace CLI skill for DingTalk messages, groups, contacts, calendar, todo, approvals, attendance, reports, DING, AI tables, docs, drive, minutes, mail, online sheets, wiki, and developer docs through the external dws CLI. Use only when the user explicitly wants DingTalk workspace operations. Do not use as a replacement for FBA shipment, invoice, customs, logistics, export-tax, MSKU, inventory, sales-analysis, replenishment calculation, or replenishment workflow requests that match a dedicated amazon_fba or replenishment skill."
 type: default
 cli_version: ">=1.0.15"
 upstream:
@@ -177,7 +177,7 @@ This LXE skill vendors the official DingTalk Workspace CLI mono skill from `Ding
 - Put transient work directories under `artifacts/dws_work/<unique-task-name>/`, not `/tmp`, so workspace-scoped tools can inspect them.
 - All `dws` commands must include `--format json` unless the command only checks help, version, auth status, or dry-run behavior.
 - For create, update, delete, approval, permission, message-send, recall, or other high-impact actions, show the operation summary and get explicit user confirmation before adding `--yes`.
-- Do not use this skill for FBA shipment, invoice, customs, logistics, export-tax, MSKU, inventory, sales-analysis, replenishment calculation, or replenishment workflow requests when a dedicated `amazon_fba` or `amazon_replenish` skill applies.
+- Do not use this skill for FBA shipment, invoice, customs, logistics, export-tax, MSKU, inventory, sales-analysis, replenishment calculation, or replenishment workflow requests when a dedicated `amazon_fba` or `replenishment` skill applies.
 
 > ⚠️ **命令可用性可能因企业服务发现配置而异**。本文档列出的命令基于 dws envelope schema 与本仓库 v1.0.30 实测，但部分命令的 cobra 子命令暴露与否还取决于你的企业 MCP gateway 是否注册了对应 tool。如果跑某条命令报 `unknown command` 或 fall back 到父级 help，说明当前账号企业未开通该能力。实际调用前可用 `dws <cmd> --help` 或 `--dry-run` 验证。
 

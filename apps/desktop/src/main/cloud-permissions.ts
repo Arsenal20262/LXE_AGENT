@@ -12,7 +12,7 @@ const LEGACY_PERMISSION_PROFILES = {
     desktopFeatures: ["erp_dashboard"],
   },
   replenishment: {
-    skillTypes: ["amazon_replenish", "default"],
+    skillTypes: ["replenishment", "default"],
     labels: { "zh-CN": "备货", "en-US": "Replenishment" },
     desktopFeatures: [],
   },
@@ -50,6 +50,7 @@ const legacyProfile = (value: unknown): keyof typeof LEGACY_PERMISSION_PROFILES 
 const exactLegacySkillTypes = (
   value: unknown,
   profile: keyof typeof LEGACY_PERMISSION_PROFILES | null,
+  storedLegacyType = false,
 ): string[] => {
   if (!Array.isArray(value) || value.some((item) => typeof item !== "string" || !item.trim())) {
     throw new Error("allowed_skill_types must be a string array");
@@ -58,7 +59,9 @@ const exactLegacySkillTypes = (
   if (new Set(actual).size !== actual.length) {
     throw new Error("allowed_skill_types contains duplicates");
   }
-  const expected = profile === null ? [] : [...LEGACY_PERMISSION_PROFILES[profile].skillTypes];
+  const expected = profile === null ? [] : LEGACY_PERMISSION_PROFILES[profile].skillTypes.map(
+    (type) => storedLegacyType && type === "replenishment" ? "amazon_replenish" : type,
+  );
   if (actual.length !== expected.length || expected.some((item) => !actual.includes(item))) {
     throw new Error("allowed_skill_types does not match legacy permission profile");
   }
@@ -98,10 +101,11 @@ const profileLabels = (value: unknown): Record<string, string> => {
   return result;
 };
 
-export function parseServerDevicePermission(
+function parseLegacyPermission(
   value: unknown,
   deviceId: string,
   verifiedAt: number,
+  storedLegacyType = false,
 ): DesktopCloudPermissionSnapshot {
   const object = objectValue(value);
   if (!object) throw new Error("device permission response must be an object");
@@ -121,10 +125,14 @@ export function parseServerDevicePermission(
     permission_version: permissionVersion,
     profile_revision: permissionProfile === null ? 0 : 1,
     profile_labels: legacy ? { ...legacy.labels } : {},
-    allowed_skill_types: exactLegacySkillTypes(object.allowed_skill_types, permissionProfile),
+    allowed_skill_types: exactLegacySkillTypes(object.allowed_skill_types, permissionProfile, storedLegacyType),
     desktop_features: legacy ? [...legacy.desktopFeatures] : [],
     verified_at: verifiedAt,
   };
+}
+
+export function parseServerDevicePermission(value: unknown, deviceId: string, verifiedAt: number): DesktopCloudPermissionSnapshot {
+  return parseLegacyPermission(value, deviceId, verifiedAt);
 }
 
 export function parseServerDevicePermissionV2(
@@ -176,6 +184,13 @@ export function parseServerDevicePermissionV2(
   };
 }
 
+// Only validated persisted snapshots receive the historical name conversion.
+function renamedStoredSnapshot(snapshot: DesktopCloudPermissionSnapshot): DesktopCloudPermissionSnapshot {
+  const types = snapshot.allowed_skill_types.map(type => type === "amazon_replenish" ? "replenishment" : type);
+  if (new Set(types).size !== types.length) throw new Error("stored skill types collide after rename");
+  return { ...snapshot, allowed_skill_types: types };
+}
+
 export function parseStoredDevicePermission(value: unknown): DesktopCloudPermissionSnapshot | null {
   if (value === null || value === undefined) return null;
   try {
@@ -197,13 +212,13 @@ export function parseStoredDevicePermission(value: unknown): DesktopCloudPermiss
           desktop_features: object.desktop_features,
         },
       }, object.device_id.trim(), verifiedAt);
-      return snapshot;
+      return renamedStoredSnapshot(snapshot);
     }
-    return parseServerDevicePermission({
+    return renamedStoredSnapshot(parseLegacyPermission({
       permission_profile: object.permission_profile,
       permission_version: object.permission_version,
       allowed_skill_types: object.allowed_skill_types,
-    }, object.device_id.trim(), verifiedAt);
+    }, object.device_id.trim(), verifiedAt, Array.isArray(object.allowed_skill_types) && object.allowed_skill_types.includes("amazon_replenish")));
   } catch {
     return null;
   }

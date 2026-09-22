@@ -117,7 +117,7 @@ const devicePermission = (
   allowed_skill_types: permissionProfile === "fba"
     ? ["amazon_fba", "ziniao_browser", "default"]
     : permissionProfile === "replenishment"
-      ? ["amazon_replenish", "default"]
+      ? ["replenishment", "default"]
       : permissionProfile === "full_access" ? ["*"] : [],
   desktop_features: permissionProfile === "fba" || permissionProfile === "full_access"
     ? ["erp_dashboard"]
@@ -589,7 +589,7 @@ describe("DesktopCloudService", () => {
       device_id: replacementEnrollmentPayload.device.id,
       permission_profile: "replenishment",
     });
-    expect(permissionChanges).toEqual([[], ["amazon_replenish", "default"]]);
+    expect(permissionChanges).toEqual([[], ["replenishment", "default"]]);
     expect(managedCredentialChanges).toEqual(["revoked", "e".repeat(64)]);
     expect(config.managedLlmCredential()).toMatchObject({
       api_key: "replacement-managed-key",
@@ -1258,7 +1258,7 @@ describe("DesktopCloudService", () => {
       permission_profile: "replenishment",
       permission_version: 3,
     });
-    expect(updates).toEqual([["amazon_replenish", "default"]]);
+    expect(updates).toEqual([["replenishment", "default"]]);
 
     expect(await service.check()).toMatchObject({
       connection: "connected",
@@ -1547,7 +1547,7 @@ describe("independent CLI skill permissions", () => {
     f.setQuery(async () => f.context([], 2));
     await service.check();
     expect(service.allowedSkillTypes()).toEqual([]);
-    f.setQuery(async () => f.context(["amazon_replenish"], 3));
+    f.setQuery(async () => f.context(["replenishment"], 3));
     await service.check();
     f.setQuery(async () => { throw new CloudContextError("device is disabled", "business_device_denied", 403); });
     expect(await service.check()).toMatchObject({ permission_status: "denied", permission_error: "device is disabled" });
@@ -1558,7 +1558,7 @@ describe("independent CLI skill permissions", () => {
     const restarted = f.make();
     await restarted.check();
     expect(restarted.allowedSkillTypes()).toEqual([]);
-    expect(f.updates).toEqual([["amazon_fba"], [], ["amazon_replenish"], []]);
+    expect(f.updates).toEqual([["amazon_fba"], [], ["replenishment"], []]);
     await restarted.stop();
   });
   test("identity mismatch clears grants, unassigned versions remain monotonic", async () => {

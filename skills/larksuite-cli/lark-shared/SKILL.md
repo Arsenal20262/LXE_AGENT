@@ -1,7 +1,7 @@
 ---
 name: lark-shared
 version: 1.0.0
-description: Use when first setting up lark-cli, running auth login, switching user/bot identity (--as), handling permission denied or scope errors, needing to update lark-cli, or seeing _notice in JSON output. This shared skill is for lark-cli setup, authentication, identity selection, permission recovery, and CLI update handling for Feishu/Lark workspace operations only. Use only when the user explicitly requests Feishu, Lark, or LarkSuite workspace operations. Do not use as a replacement for FBA shipment, invoice, customs, logistics, export-tax, MSKU, inventory, sales-analysis, replenishment calculation, or replenishment workflow requests that match a dedicated amazon_fba or amazon_replenish skill.
+description: Use when first setting up lark-cli, running auth login, switching user/bot identity (--as), handling permission denied or scope errors, needing to update lark-cli, or seeing _notice in JSON output. This shared skill is for lark-cli setup, authentication, identity selection, permission recovery, and CLI update handling for Feishu/Lark workspace operations only. Use only when the user explicitly requests Feishu, Lark, or LarkSuite workspace operations. Do not use as a replacement for FBA shipment, invoice, customs, logistics, export-tax, MSKU, inventory, sales-analysis, replenishment calculation, or replenishment workflow requests that match a dedicated amazon_fba or replenishment skill.
 type: default
 references:
 - path: references/lark-wiki-token-routing.md

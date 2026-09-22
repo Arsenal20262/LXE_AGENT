@@ -22,8 +22,12 @@ describe("skill context", () => {
     const names = readdirSync(source).filter((name) => name.startsWith("replenishment-"));
     expect(names).toHaveLength(9);
     for (const name of names) cpSync(join(source, name), join(root, "skills", name), { recursive: true });
-    const skills = new SkillCatalog(root, join(root, "missing-user"), { sharedSkillsRoot: false }).list();
+    const catalog = new SkillCatalog(root, join(root, "missing-user"), { sharedSkillsRoot: false });
+    const skills = catalog.list({ allowedTypes: new Set(["replenishment"]) });
     expect(skills).toHaveLength(9);
+    expect(skills.every(skill => skill.type === "replenishment")).toBe(true);
+    expect(catalog.list({ allowedTypes: new Set(["amazon_replenish"]) })).toHaveLength(0);
+    expect(catalog.list({ allowedTypes: new Set() })).toHaveLength(0);
     const references = skills.flatMap((skill) => skill.references.map((reference) => {
       expect(readFileSync(join(skill.root, reference.path), "utf8").length).toBeGreaterThan(100);
       return reference;

@@ -28,7 +28,7 @@ function setup() {
     activation_required: false, registration_status: "active", management_role: "administrator", management_version: 1,
     permission_v2: { response_schema: "lxe.device-permission.v2", assignment_version: 1,
       profile: { id: "replenishment", revision: 2, labels: { "zh-CN": "备货", "en-US": "Replenishment" } },
-      grants: { skill_types: ["amazon_replenish", "default"], desktop_features: [] as string[] } } };
+      grants: { skill_types: ["replenishment", "default"], desktop_features: [] as string[] } } };
   return { root, config, identity };
 }
 const contextPort = (identity: ReturnType<typeof setup>["identity"]) => ({ query: async () => ({
@@ -60,7 +60,7 @@ test("server role controls management while runtime credentials remain scoped in
   });
   try {
     expect(await service.start()).toMatchObject({ connection: "connected", is_admin: true, permission_profile: "replenishment" });
-    expect(service.allowedSkillTypes()).toEqual(["amazon_replenish", "default"]);
+    expect(service.allowedSkillTypes()).toEqual(["replenishment", "default"]);
     expect(await service.adminDashboardUrl()).toBe(`http://10.88.0.1:8000/admin?auth=identity-v1#handoff=${code}`);
     for (const packaged of [false, true]) {
       const environment = resolveDataServerRuntimeEnvironment({ packaged, sourceEnvironment: { LXE_DATA_SERVER_API_KEY: rootToken },

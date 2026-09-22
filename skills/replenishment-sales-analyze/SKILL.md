@@ -1,7 +1,7 @@
 ---
 name: replenishment-sales-analyze
 description: 基于本地已下载的马帮 Amazon 店铺 MSKU 数据生成销量分析报告。用户要求分析某个店铺的链接销量、ASIN销量、MSKU销量趋势、补货前销量趋势报告或“xxx店铺销量分析报告”时使用；如果用户只给模糊店铺名，先使用 replenishment-store-resolve 获取规范 store_name。
-type: amazon_replenish
+type: replenishment
 commands:
   - lxeskill replenish sales analyze
 references:

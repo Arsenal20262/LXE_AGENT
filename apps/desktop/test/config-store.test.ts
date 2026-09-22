@@ -36,7 +36,7 @@ const legacyPermission = (
     : { "zh-CN": "备货", "en-US": "Replenishment" },
   allowed_skill_types: profile === "fba"
     ? ["amazon_fba", "ziniao_browser", "default"]
-    : ["amazon_replenish", "default"],
+    : ["replenishment", "default"],
   desktop_features: profile === "fba" ? ["erp_dashboard"] : [],
 });
 
