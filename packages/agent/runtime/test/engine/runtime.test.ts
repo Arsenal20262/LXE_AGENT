@@ -2804,7 +2804,7 @@ test.each(["read", "text", "mcp", "failed", "storage-failed", "cancelled"] as co
   if (scenario === "storage-failed") store.appendImageView = async () => { throw new Error("disk failure fixture"); };
   const controller = new AbortController();
   const tools = new ToolRegistry();
-  const payload = { type: "image", source: { type: "base64", media_type: "image/png", data: "AQIDBA==" } };
+  const payload = { type: "image", source: { type: "base64", media_type: "image/png", data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aWZkAAAAASUVORK5CYII=" } };
   tools.register({ name: "read", source: scenario === "mcp" ? "mcp" : "native",
     description: "read fixture", input_schema: { type: "object", properties: { path: { type: "string" } } },
     execute: async () => {
@@ -2823,7 +2823,7 @@ test.each(["read", "text", "mcp", "failed", "storage-failed", "cancelled"] as co
       })) });
       const results = request.messages.filter(message => message.role === "tool");
       expect(JSON.stringify(results)).not.toContain("image_view");
-      if (scenario === "read" || scenario === "storage-failed") expect(JSON.stringify(results)).toContain("AQIDBA==");
+      if (scenario === "read" || scenario === "storage-failed") expect(JSON.stringify(results)).toContain("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aWZkAAAAASUVORK5CYII=");
       return messageFixture({ content: [{ type: "text", text: "done" }] });
     } },
     emitter: { emit: async () => {}, typing: async () => {}, desktopStream: async batch => { batches.push(batch); } },
@@ -2832,7 +2832,7 @@ test.each(["read", "text", "mcp", "failed", "storage-failed", "cancelled"] as co
   try {
     await runtime.runTurn(job({ source: { platform: "desktop" } }), { ...handle(), signal: controller.signal });
     expect(store.imageViews).toHaveLength(scenario === "read" ? 2 : 0);
-    expect(JSON.stringify(batches)).not.toContain("AQIDBA==");
+    expect(JSON.stringify(batches)).not.toContain("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aWZkAAAAASUVORK5CYII=");
     const seen = new Set(batches.flatMap(batch => batch.mutations.flatMap(mutation =>
       mutation.kind === "part_updated" && mutation.part.type === "tool" && mutation.part.tool_step.image_view
         ? [mutation.part.tool_step.image_view.view_id] : [])));

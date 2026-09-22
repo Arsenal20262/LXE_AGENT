@@ -68,13 +68,13 @@ const userContent = (content: RuntimeMessageContent, supportsVision: boolean): s
   return parts.map((part) => text(part.text)).join("\n").trim();
 };
 
-const toolResultText = (content: unknown): string => {
+const toolResultText = (content: unknown, supportsVision: boolean): string => {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return content === undefined ? "" : JSON.stringify(content);
   return content.map((raw) => {
     const block = record(raw);
     if (block.type === "text") return text(block.text);
-    if (block.type === "image") return "(see attached image)";
+    if (block.type === "image") return supportsVision ? "(see attached image)" : IMAGE_PLACEHOLDER;
     return JSON.stringify(raw);
   }).filter(Boolean).join("\n");
 };
@@ -136,7 +136,7 @@ export function adaptMessagesForCompletions(
       result.push({
         role: "tool",
         tool_call_id: text(block.tool_call_id),
-        content: toolResultText(block.content),
+        content: toolResultText(block.content, supportsVision),
       });
       if (!Array.isArray(block.content)) continue;
       for (const rawContent of block.content) {
