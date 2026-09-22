@@ -31,7 +31,7 @@
 可重复执行的隔离页面验收：
 
 ```bash
-bun apps/desktop/scripts/device-context-acceptance.ts
+bun scripts/device-context-acceptance.ts
 ```
 
 该脚本使用临时配置、实际桌面服务、实际受管 CLI、本地模拟上游和真实 Electron 渲染组件；不启动完整 Agent，也不调用公司服务器。覆盖识别、503 缓存、身份变化确认、403 清权、中英文及窄窗口。截图默认保存在系统临时目录 `lxe-device-context-acceptance`，可用 `LXE_ACCEPTANCE_ARTIFACTS` 指定。
