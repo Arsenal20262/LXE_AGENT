@@ -55,7 +55,7 @@ class AuthStore:
             settings = read_json(state_root() / "config" / "settings.json")
             current = settings.get("integrations", {}).get("shangman", {})
             if current.get("revision") != self.credentials.revision:
-                raise AuthError("credentials_changed", "智慧配置已变更，请重新开始登录")
+                raise AuthError("credentials_changed", "上马 ERP 配置已变更，请重新开始登录")
 
     def _delete_challenge(self, path: Path) -> None:
         path.unlink(missing_ok=True)
@@ -100,7 +100,7 @@ class AuthStore:
             self._delete_challenge(path)
             self.cleanup()
             if payload.get("fingerprint") != self.credentials.fingerprint:
-                raise AuthError("credentials_changed", "智慧凭据已变更，请重新获取验证码")
+                raise AuthError("credentials_changed", "上马 ERP 凭据已变更，请重新获取验证码")
             if payload.get("expires_at", 0) <= time.time():
                 raise AuthError("challenge_expired", "本地验证码已过期，请重新获取")
             epoch_path = self.root / "epoch.json"
@@ -141,7 +141,7 @@ class AuthStore:
         with self.lock():
             payload = self._load()
             if not payload or not payload.get("access_token") or payload.get("expires_at", 0) <= time.time():
-                raise AuthError("login_required", "智慧登录态缺失或过期，请运行智慧登录 Skill")
+                raise AuthError("login_required", "上马 ERP 登录态缺失或过期，请运行上马登录 Skill")
             return payload["access_token"]
 
     def invalidate(self, rejected_token: str) -> None:

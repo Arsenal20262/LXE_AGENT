@@ -184,7 +184,7 @@ export class DesktopSetupService {
       const username = text(input.shangman.username);
       const accountChanged = tenant_id !== previous.tenant_id || username !== previous.username;
       const password = text(input.shangman.password) || (accountChanged ? "" : effectiveSecrets.shangman_processed_password);
-      if (!tenant_id || !username || !password) throw new Error("智慧配置需要 ID、账号和密码；更换账号时请重新填写密码");
+      if (!tenant_id || !username || !password) throw new Error("上马 ERP 配置需要 ID、账号和密码；更换账号时请重新填写密码");
       const changed = accountChanged || password !== effectiveSecrets.shangman_processed_password;
       config.integrations.shangman = { managed: true, tenant_id, username,
         revision: changed || !previous.revision ? randomUUID() : previous.revision };

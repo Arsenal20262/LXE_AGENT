@@ -1,6 +1,6 @@
 ---
 name: shangman-login
-description: 登录智慧（Shangman／智慧印尼），读取真实验证码并提交登录，保存供后续脚本复用的登录态；也支持查看或清除本地登录态。用于智慧登录请求或商品导出的登录前置步骤，本 Skill 不执行导出。
+description: 登录上马 ERP（Shangman ERP），读取真实验证码并提交登录，保存供后续脚本复用的登录态；也支持查看或清除本地登录态。用于上马登录请求或商品导出的登录前置步骤，本 Skill 不执行导出。
 type: replenishment
 commands:
   - lxeskill shangman login prepare
@@ -9,9 +9,9 @@ commands:
   - lxeskill shangman login clear
 ---
 
-# 智慧登录
+# 上马登录
 
-使用普通 Agent Loop，通过 `exec` 调用下列 CLI。ID、账号和密码在桌面“智慧”设置中配置；缺字段时，告诉用户实际缺项，不读取密码文件或自行配置凭据。
+使用普通 Agent Loop，通过 `exec` 调用下列 CLI。ID、账号和密码在桌面“上马”设置中配置；缺字段时，告诉用户实际缺项，不读取密码文件或自行配置凭据。
 
 ## 登录
 

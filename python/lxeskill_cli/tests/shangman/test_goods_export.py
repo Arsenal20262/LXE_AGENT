@@ -106,7 +106,7 @@ def test_real_http_chain_preserves_source_bytes_and_does_not_leak_auth(context, 
     assert result["success"], result
     path = Path(result["artifact_path"])
     assert path.read_bytes() == server["xlsx"]
-    assert path.name.startswith("智慧-商品-")
+    assert path.name.startswith("上马-商品-")
     assert path.parent.parent == context[2] / "artifacts/shangman/indonesia"
     assert result["row_count"] == (0 if options.get("empty") else 1)
     assert bool(result["notice"]) == bool(options.get("empty"))

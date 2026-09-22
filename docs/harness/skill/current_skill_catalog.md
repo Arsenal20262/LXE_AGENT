@@ -9,7 +9,7 @@ The repository currently contains 31 top-level workflow and default runtime skil
 | Type | Count | Purpose |
 | --- | ---: | --- |
 | `amazon_fba` | 14 | shipment, customs, purchase, contract, and export-tax workflows |
-| `replenishment` | 11 | inventory snapshots, sales analysis, parameters, replenishment calculation, and Wisdom login/export |
+| `replenishment` | 11 | inventory snapshots, sales analysis, parameters, replenishment calculation, and Shangman ERP login/export |
 | `amazon_operations` | 2 | listing, keyword, competitor, and public-review analysis |
 | `default` | 3 | general connector, workbook and custom Skill creation capabilities |
 | `ziniao_browser` | 1 | controlled Ziniao browser lifecycle and page operations |
@@ -51,12 +51,12 @@ Start with `fba-workflow-map` for routing. The individual skills own exact input
 
 Start with `replenishment-workflow-map`. Snapshot and analysis skills prepare explicit artifacts; calculation consumes those artifacts and the selected algorithm configuration.
 
-## 智慧登录与商品导出
+## 上马登录与商品导出
 
-- `shangman-login`（`replenishment` 权限）：通过真实验证码登录智慧，保存本地登录态，并支持状态查询与清除。由普通 Agent Loop 使用 `exec`、`read` 和已有问答工具编排，不执行商品导出。
-- 在桌面“智慧”设置填写 ID、账号和密码。密码加密保存；Token 按马帮方式保存在应用状态目录，过期或凭据变更后重新登录。
+- `shangman-login`（`replenishment` 权限）：通过真实验证码登录上马 ERP，保存本地登录态，并支持状态查询与清除。由普通 Agent Loop 使用 `exec`、`read` 和已有问答工具编排，不执行商品导出。
+- 在桌面“上马”设置填写 ID、账号和密码。密码加密保存；Token 按马帮方式保存在应用状态目录，过期或凭据变更后重新登录。
 - `status` 只检查本地状态，`clear` 只清除本地状态；两者都不代表平台在线验证或远程注销。
-- `shangman-goods-export`（`replenishment` 权限）：调用 `lxeskill shangman export run`，复用现有登录态下载一份智慧印尼商品原始 XLSX；没有登录态时先完成登录再继续。库存和销量共用同一份原始商品报表，不新增筛选、历史数据或补货计算。
+- `shangman-goods-export`（`replenishment` 权限）：调用 `lxeskill shangman export run`，复用现有登录态下载一份上马 ERP 当前配置账号可见的商品全量原始 XLSX；没有登录态时先完成登录再继续。库存和销量共用同一份原始商品报表，不新增筛选、历史数据或补货计算。
 - 成功结果只交付校验后的原始文件；失败保留实际脱敏诊断，不自动重复提交导出。文件保存在注册的 `shangman/indonesia` 产物目录下，每次执行独立子目录。
 
 ## Amazon Operations

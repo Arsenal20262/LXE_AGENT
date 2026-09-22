@@ -167,7 +167,7 @@ function DesktopSettingsNavigation({
         {item("base", t.desktop.sectionTitles.base, desktopSettingsSectionStatus(t.desktop, "base", setup), Settings2)}
         <p className="desktop-settings-nav-group">{t.desktop.integrationsGroup}</p>
         {item("ziniao", t.desktop.sectionTitles.ziniao, desktopSettingsSectionStatus(t.desktop, "ziniao", setup), Globe)}
-        {item("shangman", t.desktop.sectionTitles.shangman, desktopSettingsSectionStatus(t.desktop, "shangman", setup), Store)}
+        {item("shangman", t.desktop.integrationNames.shangman, desktopSettingsSectionStatus(t.desktop, "shangman", setup), Store)}
         {item("mabang", t.desktop.sectionTitles.mabang, desktopSettingsSectionStatus(t.desktop, "mabang", setup), Store)}
         {item("feishu", t.desktop.sectionTitles.feishu, desktopSettingsSectionStatus(t.desktop, "feishu", setup), Feather)}
         {item("logging", t.desktop.sectionTitles.logging, desktopSettingsSectionStatus(t.desktop, "logging", setup), ScrollText)}

@@ -1,4 +1,4 @@
-"""Export one original Wisdom workbook using the existing persisted login."""
+"""Export one original Shangman ERP workbook using the existing persisted login."""
 from __future__ import annotations
 
 import asyncio
@@ -151,7 +151,7 @@ class GoodsExporter:
                         raise AuthError("download_failed", detail)
                     directory = dataset_dir("shangman_goods_export", uuid4().hex)
                     directory.mkdir(parents=True, exist_ok=False)
-                    filename = f"智慧-商品-{datetime.now(ZoneInfo('Asia/Shanghai')):%Y%m%d-%H%M%S}.xlsx"
+                    filename = f"上马-商品-{datetime.now(ZoneInfo('Asia/Shanghai')):%Y%m%d-%H%M%S}.xlsx"
                     target = directory / filename
                     temporary = directory / ".download.xlsx"
                     with temporary.open("wb") as output:
@@ -176,7 +176,7 @@ def run(arguments: dict[str, Any]) -> dict[str, Any]:
     credentials = None
     try:
         if arguments:
-            raise AuthError("invalid_arguments", "智慧商品全量导出不接受筛选或凭据参数")
+            raise AuthError("invalid_arguments", "上马 ERP 商品全量导出不接受筛选或凭据参数")
         credentials = Credentials.from_environment()
         return asyncio.run(GoodsExporter(credentials, AuthStore(credentials)).export())
     except Exception as exc:

@@ -1,16 +1,16 @@
 ---
 name: shangman-goods-export
-description: 导出智慧（Shangman／智慧印尼）商品原始 Excel。用户要求下载智慧商品表、库存或销量报表时使用；复用智慧登录态，最终交付一份 XLSX。不用于智汇 TMS、雅仓、马帮或补货计算。
+description: 导出上马 ERP（Shangman ERP）商品原始 Excel。用户要求下载上马商品表、库存或销量报表时使用；复用上马登录态，最终交付一份 XLSX。不用于智汇 TMS、雅仓、马帮或补货计算。
 type: replenishment
 commands:
   - lxeskill shangman export run
 ---
 
-# 智慧商品导出
+# 上马商品导出
 
 ## 范围
 
-- 用户明确要求智慧商品、库存或销量导出时，执行当前配置账号可见的商品全量导出；当前唯一支持的平台是智慧印尼。
+- 用户明确要求上马商品、库存或销量导出时，执行上马 ERP 当前配置账号可见的商品全量导出。
 - 库存和销量共用同一份商品原始报表，不分别生成文件。销量字段为 7、15、30 天累计量；只解释文件实际提供的字段，不承诺逐日明细、历史库存、独立入库／上架报表或补货建议。
 - 用户明确指定日期、仓库或本接口不支持的数据范围时，先说明只能导出全量原始表并确认是否接受，不静默忽略筛选要求。
 
@@ -31,6 +31,6 @@ lxeskill shangman export run
 
 - 只认最后一条 `type="result"`，先看顶层 `ok`，再读取 `data` 和 terminal `files`。
 - 成功且 terminal `files` 包含真实文件时，一次调用 `send_files(paths=<terminal.files>)`。只发送这一份平台原始 XLSX，不修改内容、补列或生成新报表。
-- 文件名为 `智慧-商品-YYYYMMDD-HHMMSS.xlsx`；报告文件名和 `row_count`，零行时明确说明没有商品数据。
+- 文件名为 `上马-商品-YYYYMMDD-HHMMSS.xlsx`；报告文件名和 `row_count`，零行时明确说明没有商品数据。
 - 文件生成与附件交付分开说明，发送成功才称已交付。发送失败只重试文件交付，不重新执行导出。
 - 失败转述 `data.error` 与顶层 `error.message` 的实际脱敏诊断，不猜失败原因，不读取或展示本地 Token。
