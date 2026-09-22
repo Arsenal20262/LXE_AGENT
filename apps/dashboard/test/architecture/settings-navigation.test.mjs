@@ -55,6 +55,6 @@ test("company cloud shows the server-verified device Skill permission state", ()
   assert.match(contextPanel, /cloud\.permission_profile/);
   assert.match(contextPanel, /cloud\.permission_version/);
   assert.match(i18n, /pending_verification/);
-  assert.match(styles, /\.desktop-cloud-permission\.cached/);
-  assert.match(styles, /\.desktop-cloud-permission\.unassigned/);
+  assert.match(styles, /\.device-permission-status\.cached/);
+  assert.match(contextPanel, /device-permission-details/);
 });

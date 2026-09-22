@@ -23,7 +23,7 @@ const mock = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch(req) {
   const id = scenario === "changed" ? "B" : "A";
   return Response.json({ response_schema: "lxe.device-context.v1", device: { id, kind: "managed_device", display_name: `验收设备 ${id}`, wireguard_ip: id === "A" ? "10.88.0.8" : "10.88.0.9" }, permission: {
     assignment_version: 1, profile: { id: "replenishment", revision: 4, labels: { "zh-CN": "备货", "en-US": "Replenishment" } },
-    grants: { skill_types: ["replenishment", "default"], desktop_features: [], server_capabilities: ["mabang_read"], erp_actions: [] },
+    grants: { skill_types: ["amazon_fba", "replenishment", "amazon_operations", "shopee_operations", "ziniao_browser", "default"], desktop_features: ["erp_dashboard"], server_capabilities: ["mabang_read", "erp", "saihu"], erp_actions: ["purchase_import", "packing_confirm"] },
   } });
 } });
 const config = new DesktopConfigStore(temporary, join(temporary, "workspace"), {
@@ -56,6 +56,7 @@ const css = readFileSync(join(root, "apps/dashboard/src/styles.css"), "utf8");
 const page = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(req) {
   const url = new URL(req.url);
   if (url.pathname === "/scenario") { scenario = url.searchParams.get("value") || "success"; return new Response("ok"); }
+  if (url.pathname === "/calls") return Response.json(upstreamCalls.length);
   if (url.pathname === "/refresh") return Response.json(await cloud.check());
   if (url.pathname === "/confirm") return Response.json(await cloud.confirmDevice());
   if (url.pathname === "/app.js") return new Response(js, { headers: { "content-type": "text/javascript" } });
@@ -72,21 +73,49 @@ const wait=async(w,text)=>{const until=Date.now()+15000;while(Date.now()<until){
 const click=async(w,text)=>w.webContents.executeJavaScript('Array.from(document.querySelectorAll("button")).find(b=>b.textContent.includes('+JSON.stringify(text)+')).click()');
 app.whenReady().then(async()=>{try {
  session.defaultSession.webRequest.onBeforeRequest((d,cb)=>cb({cancel: !d.url.startsWith(base+'/')}));
- const w=new BrowserWindow({show:false,width:1100,height:850,webPreferences:{contextIsolation:true,nodeIntegration:false}});
- await w.loadURL(base); await wait(w,'mabang_read');
+ const w=new BrowserWindow({show:true,width:1100,height:850,webPreferences:{contextIsolation:true,nodeIntegration:false}});
+ await w.loadURL(base); await wait(w,'已验证');
+ const initialCalls=await w.webContents.executeJavaScript("fetch('/calls').then(r=>r.json())");
+ const initialStorage=await w.webContents.executeJavaScript('JSON.stringify(localStorage)');
+ if(await w.webContents.executeJavaScript('!!document.querySelector("details[open]")'))throw Error('Details initially open');
+ if(await w.webContents.executeJavaScript('document.body.textContent.includes("10.88.0.1:8000")'))throw Error('Server address rendered');
  fs.writeFileSync(${JSON.stringify(join(artifacts, "permissions-zh.png"))},(await w.webContents.capturePage()).toPNG());
- await w.webContents.executeJavaScript("fetch('/scenario?value=offline')"); await click(w,'重新查询'); await wait(w,'最近一次');
- await w.webContents.executeJavaScript("fetch('/scenario?value=changed')"); await click(w,'重新查询'); await wait(w,'确认使用当前设备');
+ w.focus(); w.webContents.focus();
+ await w.webContents.executeJavaScript('document.querySelector(".device-permission-refresh").focus()');
+ w.webContents.sendInputEvent({type:'keyDown',keyCode:'Tab'}); w.webContents.sendInputEvent({type:'keyUp',keyCode:'Tab'});
+ await new Promise(r=>setTimeout(r,150));
+ if(!await w.webContents.executeJavaScript('document.activeElement === document.querySelector(".device-permission-details summary")'))throw Error('Details not reachable by Tab');
+ w.webContents.sendInputEvent({type:'keyDown',keyCode:'Return'}); w.webContents.sendInputEvent({type:'char',keyCode:'\\r'}); w.webContents.sendInputEvent({type:'keyUp',keyCode:'Return'});
+ await wait(w,'马帮查询'); await new Promise(r=>setTimeout(r,200));
+ if(!await w.webContents.executeJavaScript('document.querySelector(".device-permission-details").open'))throw Error('Keyboard did not open details');
+ fs.writeFileSync(${JSON.stringify(join(artifacts, "permissions-zh-expanded.png"))},(await w.webContents.capturePage()).toPNG());
+ if(await w.webContents.executeJavaScript('document.body.textContent.includes("10.88.0.1:8000")'))throw Error('Expanded details exposed server');
+ w.webContents.sendInputEvent({type:'keyDown',keyCode:'Space'}); w.webContents.sendInputEvent({type:'keyUp',keyCode:'Space'});
+ await new Promise(r=>setTimeout(r,100));
+ if(await w.webContents.executeJavaScript('document.querySelector(".device-permission-details").open'))throw Error('Keyboard did not close details');
+ if(await w.webContents.executeJavaScript("fetch('/calls').then(r=>r.json())")!==initialCalls)throw Error('Disclosure sent a context request');
+ if(await w.webContents.executeJavaScript('JSON.stringify(localStorage)')!==initialStorage)throw Error('Disclosure persisted browser state');
+ await w.webContents.executeJavaScript("fetch('/scenario?value=offline')"); await click(w,'刷新权限'); await wait(w,'使用缓存');
+ if(await w.webContents.executeJavaScript('document.querySelector(".device-permission-error").open'))throw Error('Error initially open');
+ fs.writeFileSync(${JSON.stringify(join(artifacts, "permissions-cache.png"))},(await w.webContents.capturePage()).toPNG());
+ await w.webContents.executeJavaScript('document.querySelector(".device-permission-error summary").click()'); await wait(w,'test server unavailable');
+ await w.webContents.executeJavaScript('document.querySelector(".device-permission-error summary").click()');
+ await w.webContents.executeJavaScript("fetch('/scenario?value=changed')"); await click(w,'刷新权限'); await wait(w,'确认使用当前设备');
  fs.writeFileSync(${JSON.stringify(join(artifacts, "identity-change.png"))},(await w.webContents.capturePage()).toPNG());
- await click(w,'确认使用当前设备'); await wait(w,'mabang_read');
+ await click(w,'确认使用当前设备'); await wait(w,'已验证');
  if(await w.webContents.executeJavaScript('!!Array.from(document.querySelectorAll("button")).find(b=>b.textContent.includes("确认使用当前设备"))'))throw Error('Confirmation did not clear');
- await w.webContents.executeJavaScript("fetch('/scenario?value=denied')"); await click(w,'重新查询'); await wait(w,'test device suspended');
- if(await w.webContents.executeJavaScript('document.body.innerText.includes("mabang_read")'))throw Error('Denied grants remain');
- await w.webContents.executeJavaScript("fetch('/scenario?value=changed')"); await w.loadURL(base+'/?lang=en'); await wait(w,'mabang_read');
+ await w.webContents.executeJavaScript("fetch('/scenario?value=denied')"); await click(w,'刷新权限'); await wait(w,'查询被拒绝');
+ if(!await w.webContents.executeJavaScript('document.body.innerText.includes("已清空本地授权")'))throw Error('Denial is hidden');
+ await w.webContents.executeJavaScript('document.querySelector(".device-permission-error summary").click()'); await wait(w,'test device suspended');
+ if(await w.webContents.executeJavaScript('document.body.innerText.includes("马帮查询")'))throw Error('Denied grants remain');
+ await w.webContents.executeJavaScript("fetch('/scenario?value=changed')"); await w.loadURL(base+'/?lang=en'); await wait(w,'Verified');
  w.setSize(430,900); await new Promise(r=>setTimeout(r,150));
  if(await w.webContents.executeJavaScript('document.documentElement.scrollWidth > innerWidth'))throw Error('Horizontal overflow');
  fs.writeFileSync(${JSON.stringify(join(artifacts, "permissions-en-mobile.png"))},(await w.webContents.capturePage()).toPNG());
- console.log('PASS: discovery, offline cache, identity confirmation, denial and English narrow layout'); w.destroy(); app.exit(0);
+ await w.webContents.executeJavaScript('document.querySelector(".device-permission-details summary").click()'); await wait(w,'Mabang queries'); await new Promise(r=>setTimeout(r,200));
+ if(await w.webContents.executeJavaScript('document.documentElement.scrollWidth > innerWidth'))throw Error('Expanded horizontal overflow');
+ fs.writeFileSync(${JSON.stringify(join(artifacts, "permissions-en-mobile-expanded.png"))},(await w.webContents.capturePage()).toPNG());
+ console.log('PASS: summary, keyboard disclosures, address omission, no toggle requests/storage, cache, identity confirmation, denial, English narrow layout'); w.destroy(); app.exit(0);
  }catch(e){console.error(e);app.exit(1);}});`);
 try {
   const require = createRequire(join(root, "apps/desktop/package.json"));
