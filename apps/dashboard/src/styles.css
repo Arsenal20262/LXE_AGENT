@@ -11500,8 +11500,9 @@ pre {
 .device-permission-icon { display: grid; place-items: center; flex-shrink: 0; width: 38px; height: 38px; border-radius: 10px; background: var(--surface-soft, var(--surface)); color: var(--muted); border: 1px solid var(--border); }
 .device-permission-identity { flex: 1; min-width: 0; }
 .device-permission-eyebrow, .device-permission-label, .device-permission-profile > span:first-child { color: var(--muted); font-size: .6875rem; }
-.device-permission-title { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
-.device-permission-title h3 { margin: 0; font-size: .875rem; font-weight: 650; overflow-wrap: anywhere; }
+.device-permission-title { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.device-permission-eyebrow + .device-permission-title { margin-top: 4px; }
+.device-permission-title h4 { margin: 0; font-size: .875rem; font-weight: 650; overflow-wrap: anywhere; }
 .device-permission-status { display: inline-flex; padding: 3px 7px; border-radius: 5px; font-size: .625rem; color: var(--muted); background: color-mix(in srgb, var(--muted) 8%, transparent); }
 .device-permission-status.verified { color: #437b50; background: color-mix(in srgb, #437b50 10%, transparent); }
 .device-permission-status.cached { color: #a27324; background: color-mix(in srgb, #a27324 10%, transparent); }

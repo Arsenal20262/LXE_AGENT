@@ -27,9 +27,9 @@ export function DeviceContextPanel({ cloud, busy, onRefresh, onConfirm }: {
     <header className="device-permission-header">
       <span className="device-permission-icon"><Monitor size={20} aria-hidden /></span>
       <div className="device-permission-identity">
-        <span className="device-permission-eyebrow">{pending ? t.previousDevice : t.contextTitle}</span>
+        {pending ? <span className="device-permission-eyebrow">{t.previousDevice}</span> : null}
         <div className="device-permission-title">
-          <h3>{device?.display_name || cloud.device_name || t.unknown}</h3>
+          <h4>{device?.display_name || cloud.device_name || t.unknown}</h4>
           <span className={`device-permission-status ${cloud.permission_status}`}>{t.status[cloud.permission_status]}</span>
         </div>
       </div>

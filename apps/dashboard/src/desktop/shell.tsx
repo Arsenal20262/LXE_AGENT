@@ -410,6 +410,7 @@ function DesktopCloudPanel({
           </div>
         </div>
       ) : null}
+      <h3>{t.desktop.cloud.permission.contextTitle}</h3>
       <DeviceContextPanel cloud={cloud} busy={activating} onRefresh={onRefreshContext} onConfirm={onConfirmDevice} />
     </section>
   );
