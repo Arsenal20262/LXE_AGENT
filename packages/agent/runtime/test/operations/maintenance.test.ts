@@ -473,7 +473,8 @@ describe("MaintenanceScheduler", () => {
 
   test("caps batches at 200 turns and 1 MiB", async () => {
     const store = await createStore("lxe-maintenance-batches-");
-    for (let index = 0; index < 205; index += 1) await recordTurn(store, `turn-${index}`);
+    // Batch boundaries do not depend on recording 205 turns through individual disk writes.
+    seedTurnUsage(store, 205);
     const uploads: UploadedBatch[] = [];
     const scheduler = schedulerFor(store, ackingFetch(uploads));
 
