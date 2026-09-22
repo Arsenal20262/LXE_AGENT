@@ -87,6 +87,8 @@ def load_catalog() -> dict[str, dict[str, Any]]:
             expected = (
                 f"mabang_{module.rsplit('.', 1)[-1]}"
                 if module.startswith("services.agent_cli.mabang.")
+                else f"shangman_{module.rsplit('.', 1)[-1]}"
+                if module.startswith("services.agent_cli.shangman.")
                 else f"amazon_fba_{module.rsplit('.', 1)[-1]}"
                 if module.startswith("services.agent_cli.browser.amazon_fba.")
                 else f"amazon_operations_{module.rsplit('.', 1)[-1]}"
@@ -236,7 +238,9 @@ def _finalize_payload(
     content = [{"type": "text", "text": json.dumps(payload, ensure_ascii=False, separators=(",", ":"))}]
     if success:
         return True, content, files, None
-    message = str(payload.get("exception") or payload.get("message") or payload.get("notice") or f"{module_name} failed").strip()
+    error = payload.get("error")
+    detail = error.get("message") if isinstance(error, dict) else None
+    message = str(payload.get("exception") or payload.get("message") or detail or payload.get("notice") or f"{module_name} failed").strip()
     return False, content, files, {"code": "business_cli_failed", "message": message}
 
 

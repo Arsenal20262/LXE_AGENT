@@ -60,7 +60,7 @@ import {
 } from "./settings-model";
 
 type Provider = DesktopModelProvider;
-type IntegrationName = "ziniao" | "mabang" | "feishu";
+type IntegrationName = "ziniao" | "mabang" | "shangman" | "feishu";
 type SetupForm = DesktopSettingsFormValue;
 type DesktopConfirmation =
   | { kind: "diagnostic" }
@@ -167,6 +167,7 @@ function DesktopSettingsNavigation({
         {item("base", t.desktop.sectionTitles.base, desktopSettingsSectionStatus(t.desktop, "base", setup), Settings2)}
         <p className="desktop-settings-nav-group">{t.desktop.integrationsGroup}</p>
         {item("ziniao", t.desktop.sectionTitles.ziniao, desktopSettingsSectionStatus(t.desktop, "ziniao", setup), Globe)}
+        {item("shangman", t.desktop.sectionTitles.shangman, desktopSettingsSectionStatus(t.desktop, "shangman", setup), Store)}
         {item("mabang", t.desktop.sectionTitles.mabang, desktopSettingsSectionStatus(t.desktop, "mabang", setup), Store)}
         {item("feishu", t.desktop.sectionTitles.feishu, desktopSettingsSectionStatus(t.desktop, "feishu", setup), Feather)}
         {item("logging", t.desktop.sectionTitles.logging, desktopSettingsSectionStatus(t.desktop, "logging", setup), ScrollText)}
@@ -788,6 +789,35 @@ function DesktopSettingsForm({
     );
   }
 
+  if (activeSection === "shangman") {
+    const labels = t.desktop.shangman;
+    return (
+      <section className="desktop-settings-section">
+        <DesktopSectionHeading badge={desktopSettingsSectionStatus(t.desktop, "shangman", setup)}
+          badgeClassName={integrationStatusClass(setup.shangman.managed, setup.shangman.configured)}
+          description={labels.description} headingRef={headingRef} title={t.desktop.sectionTitles.shangman} />
+        <div className="desktop-integration-fields">
+          <IntegrationIssues issues={setup.shangman.issues} />
+          <div className="desktop-field-grid">
+            <label><span>{labels.tenantId}</span><input value={form.shangmanTenantId} onChange={event => onChange({ shangmanTenantId: event.target.value })} /></label>
+            <label><span>{labels.username}</span><input autoComplete="username" value={form.shangmanUsername} onChange={event => onChange({ shangmanUsername: event.target.value })} /></label>
+            <label><span>{labels.password}{setup.shangman.password_configured ? t.desktop.keepBlankSuffix : ""}</span>
+              <input type="password" autoComplete="new-password" value={form.shangmanPassword}
+                placeholder={setup.shangman.password_configured ? t.desktop.storedPlaceholder : ""}
+                onChange={event => onChange({ shangmanPassword: event.target.value })} /></label>
+            <label><span>{labels.basicAuth}{setup.shangman.basic_auth_configured ? t.desktop.keepBlankSuffix : ""}</span>
+              <input type="password" autoComplete="new-password" value={form.shangmanBasicAuth}
+                placeholder={setup.shangman.basic_auth_configured ? t.desktop.storedPlaceholder : ""}
+                onChange={event => onChange({ shangmanBasicAuth: event.target.value })} /></label>
+          </div>
+          <label><input type="checkbox" checked={form.shangmanProductionEnabled} onChange={event => onChange({ shangmanProductionEnabled: event.target.checked })} /> {labels.productionEnabled}</label>
+          <p>{labels.productionHint}</p>
+          {setup.shangman.managed ? <button className="desktop-clear-integration" onClick={() => onClearIntegration("shangman")} type="button"><Trash2 size={14} />{t.desktop.clearIntegration}</button> : null}
+        </div>
+      </section>
+    );
+  }
+
   if (activeSection === "mabang") {
     const status = desktopSettingsSectionStatus(t.desktop, "mabang", setup);
     return (
@@ -1340,6 +1370,7 @@ export function DesktopShell({
       form.ziniaoAppPath,
       form.ziniaoWebDriverPath,
     ) || setup.ziniao.configured;
+    const shangmanTouched = hasText(form.shangmanTenantId, form.shangmanUsername, form.shangmanPassword, form.shangmanBasicAuth) || setup.shangman.configured;
     const mabangTouched = hasText(form.mabangAccount, form.mabangPassword) || setup.mabang.configured;
     const feishuTouched = hasText(form.feishuAppId, form.feishuAppSecret) || setup.feishu.configured;
     return {
@@ -1353,6 +1384,13 @@ export function DesktopShell({
           app_version: desktop.platform === "darwin" ? "v6" : form.ziniaoVersion,
           app_path: form.ziniaoAppPath,
           webdriver_path: form.ziniaoWebDriverPath,
+        },
+      } : {}),
+      ...(shangmanTouched ? {
+        shangman: { action: "save" as const, tenant_id: form.shangmanTenantId, username: form.shangmanUsername,
+          production_enabled: form.shangmanProductionEnabled,
+          ...(form.shangmanPassword ? { password: form.shangmanPassword } : {}),
+          ...(form.shangmanBasicAuth ? { basic_auth: form.shangmanBasicAuth } : {}),
         },
       } : {}),
       ...(mabangTouched ? {

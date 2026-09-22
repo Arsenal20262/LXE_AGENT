@@ -382,7 +382,7 @@ describe("DesktopConfigStore", () => {
     });
     expect(existsSync(join(root, ".env.local"))).toBeFalse();
     expect(JSON.parse(readFileSync(join(root, "config", "settings.json"), "utf8"))).toMatchObject({
-      schema_version: 8,
+      schema_version: 9,
       llm: {
         provider: "kimi_coding",
         profiles: { kimi_coding: { model: "k3", thinking_level: "max" } },
@@ -807,4 +807,54 @@ describe("DesktopConfigStore", () => {
       ]),
     });
   });
+});
+
+test("Shangman saves encrypted credentials, preserves revisions and invalidates changed configuration", () => {
+  const root = createRoot();
+  const workspace = join(root, "workspace");
+  const store = new DesktopConfigStore(root, workspace, safeStorage);
+  expect(store.state().shangman.production_enabled).toBe(false);
+  const input = { workspace_root: workspace, shangman: { action: "save" as const, tenant_id: "tenant", username: "user", password: "shangman-password", basic_auth: "Basic shangman-secret", production_enabled: true } };
+  const state = store.save(input);
+  expect(state.shangman).toMatchObject({ configured: true, password_configured: true, basic_auth_configured: true, production_enabled: true });
+  expect(JSON.stringify(state)).not.toContain("shangman-password");
+  expect(JSON.stringify(state)).not.toContain("shangman-secret");
+  const settings = readFileSync(join(root, "config", "settings.json"), "utf8");
+  expect(settings).not.toContain("shangman-password");
+  expect(settings).not.toContain("shangman-secret");
+  const env = store.environment();
+  expect(env.LXE_SHANGMAN_PROCESSED_PASSWORD).toBe("shangman-password");
+  expect(env.LXE_SHANGMAN_BASIC_AUTH).toBe("Basic shangman-secret");
+  expect(env.LXE_SHANGMAN_PROD_ENABLED).toBe("true");
+  const revision = env.LXE_SHANGMAN_CONFIG_REVISION;
+  expect(revision).toBeTruthy();
+  store.save({ ...input, shangman: { ...input.shangman, password: "", basic_auth: "" } });
+  expect(store.environment().LXE_SHANGMAN_CONFIG_REVISION).toBe(revision);
+  const restarted = new DesktopConfigStore(root, workspace, safeStorage);
+  expect(restarted.environment().LXE_SHANGMAN_CONFIG_REVISION).toBe(revision);
+  expect(restarted.environment().LXE_SHANGMAN_PROCESSED_PASSWORD).toBe("shangman-password");
+  restarted.save({ ...input, shangman: { ...input.shangman, password: "new-password" } });
+  expect(restarted.environment().LXE_SHANGMAN_CONFIG_REVISION).not.toBe(revision);
+  expect(() => restarted.save({ ...input, shangman: { ...input.shangman, username: "other", password: "" } })).toThrow("更换账号");
+  const changedRevision = restarted.environment().LXE_SHANGMAN_CONFIG_REVISION;
+  restarted.save({ workspace_root: workspace, shangman: { action: "clear" } });
+  expect(restarted.environment().LXE_SHANGMAN_PROD_ENABLED).toBe("false");
+  expect(restarted.environment().LXE_SHANGMAN_PROCESSED_PASSWORD).toBe("");
+  expect(restarted.environment().LXE_SHANGMAN_CONFIG_REVISION).not.toBe(changedRevision);
+  expect(restarted.state().shangman.password_configured).toBe(false);
+});
+
+test("schema 8 migration retains dynamic model profiles and defaults Shangman off", () => {
+  const root = createRoot();
+  const old = JSON.parse(JSON.stringify(cloneConfig()));
+  old.schema_version = 8;
+  old.llm.profiles.openrouter = { model: "openai/gpt-5", thinking_level: "high" };
+  delete old.integrations.shangman;
+  mkdirSync(join(root, "config"), { recursive: true });
+  writeFileSync(join(root, "config", "settings.json"), JSON.stringify(old));
+  const store = new DesktopConfigStore(root, join(root, "workspace"), safeStorage);
+  expect(store.state().shangman).toMatchObject({ managed: false, configured: false, production_enabled: false });
+  const migrated = JSON.parse(readFileSync(join(root, "config", "settings.json"), "utf8"));
+  expect(migrated.schema_version).toBe(9);
+  expect(migrated.llm.profiles.openrouter).toEqual(old.llm.profiles.openrouter);
 });

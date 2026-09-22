@@ -644,6 +644,7 @@ export const ZH_TEXT = {
     integrationNames: {
       ziniao: "紫鸟",
       mabang: "马帮",
+      shangman: "智慧",
       feishu: "飞书"
     },
     sectionTitles: {
@@ -653,6 +654,7 @@ export const ZH_TEXT = {
       base: "模型设置",
       ziniao: "紫鸟自动化",
       mabang: "马帮",
+      shangman: "智慧",
       feishu: "飞书",
       logging: "日志与排障"
     },
@@ -782,6 +784,11 @@ export const ZH_TEXT = {
       webdriverPath: "浏览器驱动安装目录",
       webdriverPlaceholder: "驱动可以在首次运行时自动下载",
       selectWebdriver: "选择驱动目录"
+    },
+    shangman: {
+      description: "配置智慧登录。验证码由 AI 读取；登录态保存在本机，供后续任务复用。",
+      tenantId: "租户 ID", username: "智慧账号", password: "智慧密码", basicAuth: "Basic Authorization",
+      productionEnabled: "启用真实接口", productionHint: "开启后，登录请求将发送到智慧平台。",
     },
     mabang: {
       description: "账号与密码必须成对填写；整组留空即可跳过。",
@@ -1483,6 +1490,7 @@ export const UI_TEXT: Record<Language, UiText> = {
       integrationNames: {
         ziniao: "ZiNiao",
         mabang: "Mabang",
+        shangman: "Shangman",
         feishu: "Feishu"
       },
       sectionTitles: {
@@ -1492,6 +1500,7 @@ export const UI_TEXT: Record<Language, UiText> = {
         base: "Model settings",
         ziniao: "ZiNiao automation",
         mabang: "Mabang",
+        shangman: "Shangman",
         feishu: "Feishu",
         logging: "Logs & diagnostics"
       },
@@ -1621,6 +1630,11 @@ export const UI_TEXT: Record<Language, UiText> = {
         webdriverPath: "Browser driver install directory",
         webdriverPlaceholder: "The driver can be downloaded automatically on first run",
         selectWebdriver: "Choose the driver directory"
+      },
+      shangman: {
+        description: "Configure Shangman login. AI reads the captcha; login state is saved locally for later tasks.",
+        tenantId: "Tenant ID", username: "Shangman account", password: "Shangman password", basicAuth: "Basic Authorization",
+        productionEnabled: "Enable live requests", productionHint: "Login requests will be sent to Shangman when enabled.",
       },
       mabang: {
         description: "Account and password must be filled in together; leave the whole group blank to skip.",

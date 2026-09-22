@@ -99,3 +99,11 @@ describe("lxeskill command recognition", () => {
       });
   });
 });
+
+test("Shangman login commands belong to the login skill and expose only the captcha as model input", () => {
+  const entries = loadLxeSkillCommandCatalog(join(process.cwd(), "python/lxeskill_cli/lxeskill/catalog.json"));
+  const commands = entries.filter(entry => entry.name.startsWith("shangman_login_"));
+  expect(commands).toHaveLength(4);
+  for (const entry of commands) expect(entry.ownerSkills).toEqual(["shangman-login"]);
+  expect(commands.find(entry => entry.name === "shangman_login_prepare")?.artifactPaths).toEqual([{ field: "image_path", role: "model_input" }]);
+});

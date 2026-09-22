@@ -1,4 +1,5 @@
 import { withManagedModels, managedTargetKey, managedCredentialFor, parseManagedState, singleManagedState, type ManagedLlmState } from "@lxe/core";
+import { randomUUID } from "node:crypto";
 import { rmSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type {
@@ -70,6 +71,9 @@ export class DesktopSetupService {
     const workspaceRoot = config.workspace_root || this.defaultWorkspaceRoot;
     const workspaceAvailable = this.validation.workspaceAvailable(workspaceRoot);
     const ziniao = config.integrations.ziniao;
+    const shangman = config.integrations.shangman;
+    const shangmanIssues = this.validation.shangmanIssues(shangman, secrets);
+    const shangmanConfigured = shangman.managed && shangmanIssues.length === 0;
     const mabang = config.integrations.mabang;
     const feishu = config.integrations.feishu;
     const ziniaoIssues = ziniao.managed ? this.validation.ziniaoIssues(ziniao, secrets) : [];
@@ -105,6 +109,12 @@ export class DesktopSetupService {
         app_version: ziniao.app_version,
         app_path: ziniao.app_path,
         webdriver_path: ziniao.webdriver_path,
+      },
+      shangman: {
+        managed: shangman.managed, configured: shangmanConfigured,
+        issues: shangman.managed ? shangmanIssues : [], tenant_id: shangman.tenant_id,
+        username: shangman.username, production_enabled: shangman.production_enabled,
+        password_configured: Boolean(secrets.shangman_processed_password), basic_auth_configured: Boolean(secrets.shangman_basic_auth),
       },
       mabang: {
         managed: mabang.managed,
@@ -163,6 +173,25 @@ export class DesktopSetupService {
         webdriver_path: resolve(webdriverPath),
       };
       if (inputPassword) secrets.ziniao_password = inputPassword;
+    }
+
+    if (input.shangman?.action === "clear") {
+      config.integrations.shangman = { managed: true, tenant_id: "", username: "", production_enabled: false, revision: randomUUID() };
+      secrets.shangman_processed_password = "";
+      secrets.shangman_basic_auth = "";
+    } else if (input.shangman?.action === "save") {
+      const previous = config.integrations.shangman;
+      const tenant_id = text(input.shangman.tenant_id);
+      const username = text(input.shangman.username);
+      const accountChanged = tenant_id !== previous.tenant_id || username !== previous.username;
+      const password = text(input.shangman.password) || (accountChanged ? "" : effectiveSecrets.shangman_processed_password);
+      const basic_auth = text(input.shangman.basic_auth) || effectiveSecrets.shangman_basic_auth;
+      if (!tenant_id || !username || !password || !basic_auth) throw new Error("智慧配置需要租户 ID、账号、密码和 Basic Authorization；更换账号时请重新填写密码");
+      const changed = accountChanged || password !== effectiveSecrets.shangman_processed_password || basic_auth !== effectiveSecrets.shangman_basic_auth;
+      config.integrations.shangman = { managed: true, tenant_id, username, production_enabled: input.shangman.production_enabled,
+        revision: changed || !previous.revision ? randomUUID() : previous.revision };
+      secrets.shangman_processed_password = password;
+      secrets.shangman_basic_auth = basic_auth;
     }
 
     if (input.mabang?.action === "clear") {
@@ -481,6 +510,9 @@ export class DesktopSetupService {
     const activePreference = config.llm.profiles[provider];
     const activeThinkingLevel = activePreference?.thinking_level ?? "off";
     const ziniao = config.integrations.ziniao;
+    const shangman = config.integrations.shangman;
+    const shangmanIssues = this.validation.shangmanIssues(shangman, secrets);
+    const shangmanConfigured = shangman.managed && shangmanIssues.length === 0;
     const mabang = config.integrations.mabang;
     const feishu = config.integrations.feishu;
     const ziniaoConfigured = ziniao.managed && this.validation.ziniaoIssues(ziniao, secrets).length === 0;
@@ -508,6 +540,12 @@ export class DesktopSetupService {
       ZINIAO_BROWSER_VERSION: ziniao.app_version,
       ZINIAO_CLIENT_PATH: ziniaoConfigured ? ziniao.app_path : "",
       ZINIAO_WEBDRIVER_PATH: ziniaoConfigured ? ziniao.webdriver_path : "",
+      LXE_SHANGMAN_TENANT_ID: shangmanConfigured ? shangman.tenant_id : "",
+      LXE_SHANGMAN_USERNAME: shangmanConfigured ? shangman.username : "",
+      LXE_SHANGMAN_PROCESSED_PASSWORD: shangmanConfigured ? secrets.shangman_processed_password : "",
+      LXE_SHANGMAN_BASIC_AUTH: shangmanConfigured ? secrets.shangman_basic_auth : "",
+      LXE_SHANGMAN_PROD_ENABLED: shangmanConfigured && shangman.production_enabled ? "true" : "false",
+      LXE_SHANGMAN_CONFIG_REVISION: shangman.revision,
       MABANG_ACCOUNT: mabangConfigured ? mabang.account : "",
       MABANG_PASSWORD: mabangConfigured ? secrets.mabang_password : "",
       LXE_FEISHU_GATEWAY_ENABLED: feishuConfigured ? "1" : "0",
@@ -528,6 +566,11 @@ export class DesktopSetupService {
   }
 
   private effectiveSecrets(persisted = this.repository.readSecrets()) {
-    return effectiveDesktopSecrets(persisted, this.secretEnvironment);
+    const effective = effectiveDesktopSecrets(persisted, this.secretEnvironment);
+    if (this.repository.readConfig().integrations.shangman.managed) {
+      effective.shangman_processed_password = persisted.shangman_processed_password;
+      effective.shangman_basic_auth = persisted.shangman_basic_auth;
+    }
+    return effective;
   }
 }

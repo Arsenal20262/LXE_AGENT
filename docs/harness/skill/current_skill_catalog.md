@@ -4,19 +4,19 @@ This page is a navigation inventory, not a second source of runtime prompt truth
 
 ## Inventory
 
-The repository currently contains 29 top-level workflow and default runtime skills:
+The repository currently contains 30 top-level workflow and default runtime skills:
 
 | Type | Count | Purpose |
 | --- | ---: | --- |
 | `amazon_fba` | 14 | shipment, customs, purchase, contract, and export-tax workflows |
-| `replenishment` | 9 | inventory snapshots, sales analysis, parameters, and replenishment calculation |
+| `replenishment` | 10 | inventory snapshots, sales analysis, parameters, and replenishment calculation |
 | `amazon_operations` | 2 | listing, keyword, competitor, and public-review analysis |
 | `default` | 3 | general connector, workbook and custom Skill creation capabilities |
 | `ziniao_browser` | 1 | controlled Ziniao browser lifecycle and page operations |
 
 Counts describe top-level repository skills before per-agent permission and connector filtering. The
 bundled Lark CLI contributes another 27 nested connector-specific Skill manifests, so recursive runtime
-discovery sees 56 repository manifests in total.
+discovery sees 57 repository manifests in total.
 
 ## Amazon FBA
 
@@ -50,6 +50,12 @@ Start with `fba-workflow-map` for routing. The individual skills own exact input
 - `replenishment-calculate`
 
 Start with `replenishment-workflow-map`. Snapshot and analysis skills prepare explicit artifacts; calculation consumes those artifacts and the selected algorithm configuration.
+
+## 智慧登录
+
+- `shangman-login`（`replenishment` 权限）：通过真实验证码登录智慧，保存本地登录态，并支持状态查询与清除。由普通 Agent Loop 使用 `exec`、`read` 和已有问答工具编排，不执行商品导出。
+- 在桌面“智慧”设置填写租户、账号、密码和 Basic Authorization，并开启真实接口。密码与 Basic Authorization 加密保存；Token 按马帮方式保存在应用状态目录，过期或凭据变更后重新登录。
+- `status` 只检查本地状态，`clear` 只清除本地状态；两者都不代表平台在线验证或远程注销。
 
 ## Amazon Operations
 

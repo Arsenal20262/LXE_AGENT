@@ -51,6 +51,12 @@ export class DesktopConfigValidation {
     return issues;
   }
 
+  shangmanIssues(shangman: DesktopConfig["integrations"]["shangman"], secrets: DesktopSecrets): string[] {
+    return [!shangman.tenant_id && "缺少租户 ID", !shangman.username && "缺少账号",
+      !secrets.shangman_processed_password && "缺少密码", !secrets.shangman_basic_auth && "缺少 Basic Authorization",
+    ].filter((value): value is string => Boolean(value));
+  }
+
   mabangIssues(
     mabang: DesktopConfig["integrations"]["mabang"],
     secrets: DesktopSecrets,

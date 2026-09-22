@@ -41,7 +41,7 @@ export const OUTPUT_DIRECTORY_ENV_NAMES = [
 export type OutputDirectoryEnvironmentName = typeof OUTPUT_DIRECTORY_ENV_NAMES[number];
 
 export interface DesktopConfig {
-  schema_version: 8;
+  schema_version: 9;
   migration_version: number;
   llm: {
     provider: DesktopModelProvider;
@@ -64,6 +64,7 @@ export interface DesktopConfig {
       app_path: string;
       webdriver_path: string;
     };
+    shangman: { managed: boolean; tenant_id: string; username: string; production_enabled: boolean; revision: string };
     mabang: { managed: boolean; account: string };
     feishu: { managed: boolean; app_id: string };
   };
@@ -84,6 +85,8 @@ export interface DesktopConfig {
 
 export interface DesktopSecrets {
   ziniao_password: string;
+  shangman_processed_password: string;
+  shangman_basic_auth: string;
   mabang_password: string;
   feishu_app_secret: string;
   data_server_api_key: string;
@@ -97,7 +100,7 @@ export interface DesktopSecrets {
 export const LOG_RETENTION_DAYS = new Set<DesktopLogRetentionDays>([3, 7, 14, 30]);
 export const MODEL_AUTH_MIGRATION_VERSION = 5;
 
-export const SETTINGS_SCHEMA_VERSION = 8 as const;
+export const SETTINGS_SCHEMA_VERSION = 9 as const;
 
 const developmentCatalog = (): LlmProviderCatalog => loadLlmProviderCatalog(
   join(repositoryRoot(dirname(fileURLToPath(import.meta.url))), "config", "llm"),
@@ -131,6 +134,7 @@ const defaultConfig = (catalog: LlmProviderCatalog): DesktopConfig => {
         app_path: "",
         webdriver_path: "",
       },
+      shangman: { managed: false, tenant_id: "", username: "", production_enabled: false, revision: "" },
       mabang: { managed: false, account: "" },
       feishu: { managed: false, app_id: "" },
     },
@@ -149,6 +153,8 @@ const defaultConfig = (catalog: LlmProviderCatalog): DesktopConfig => {
 
 const DEFAULT_SECRETS: DesktopSecrets = {
   ziniao_password: "",
+  shangman_processed_password: "",
+  shangman_basic_auth: "",
   mabang_password: "",
   feishu_app_secret: "",
   data_server_api_key: "",
@@ -230,7 +236,7 @@ export const parseSettings = (
 ): DesktopConfig => {
   const value = objectValue(raw);
   if (value.schema_version !== 4 && value.schema_version !== 5
-    && value.schema_version !== 6 && value.schema_version !== 7
+    && value.schema_version !== 6 && value.schema_version !== 7 && value.schema_version !== 8
     && value.schema_version !== SETTINGS_SCHEMA_VERSION) {
     throw new Error(`unsupported settings schema_version: ${String(value.schema_version ?? "missing")}`);
   }
@@ -256,7 +262,7 @@ export const parseSettings = (
   if (value.schema_version !== 4) {
     assertFieldTypes(llm, { credential_source: "string", last_local_provider: "string" }, "settings.llm");
   }
-  if (value.schema_version === 7 || value.schema_version === SETTINGS_SCHEMA_VERSION) {
+  if (Number(value.schema_version) >= 7) {
     const managedTarget = objectValue(llm.managed_target);
     assertOnlyFields(managedTarget, ["provider", "model"], "settings.llm.managed_target");
     assertFieldTypes(managedTarget, { provider: "string", model: "string" }, "settings.llm.managed_target");
@@ -269,8 +275,8 @@ export const parseSettings = (
       ? ["kimi_coding", "deepseek"]
       : ["kimi_coding", "deepseek", "glm"];
     const validProviderName = /^[A-Za-z0-9_-]{1,128}$/u.test(name);
-    if ((value.schema_version === SETTINGS_SCHEMA_VERSION && !validProviderName)
-      || (value.schema_version !== SETTINGS_SCHEMA_VERSION && !acceptedLegacyProviders.includes(name))) {
+    if ((Number(value.schema_version) >= 8 && !validProviderName)
+      || (Number(value.schema_version) < 8 && !acceptedLegacyProviders.includes(name))) {
       throw new Error(`settings.llm.profiles.${name} is not a supported setting`);
     }
     const profileValue = objectValue(profile);
@@ -286,9 +292,14 @@ export const parseSettings = (
   }
   const integrations = objectValue(value.integrations);
   const ziniao = objectValue(integrations.ziniao);
+  const shangman = objectValue(integrations.shangman);
+  assertOnlyFields(shangman, ["managed", "tenant_id", "username", "production_enabled", "revision"], "settings.integrations.shangman");
+  if (Number(value.schema_version) >= 9 || Object.keys(shangman).length > 0) {
+    assertFieldTypes(shangman, { managed: "boolean", tenant_id: "string", username: "string", production_enabled: "boolean", revision: "string" }, "settings.integrations.shangman");
+  }
   const mabang = objectValue(integrations.mabang);
   const feishu = objectValue(integrations.feishu);
-  assertOnlyFields(integrations, ["ziniao", "mabang", "feishu"], "settings.integrations");
+  assertOnlyFields(integrations, ["ziniao", "mabang", "feishu", "shangman"], "settings.integrations");
   assertOnlyFields(ziniao, [
     "managed", "company", "username", "app_version", "app_path", "webdriver_path",
   ], "settings.integrations.ziniao");
@@ -330,6 +341,7 @@ export const parseConfig = (
   const rawProfiles = objectValue(rawLlm.profiles);
   const integrations = objectValue(value.integrations);
   const rawZiniao = objectValue(integrations.ziniao);
+  const rawShangman = objectValue(integrations.shangman);
   const rawMabang = objectValue(integrations.mabang);
   const rawFeishu = objectValue(integrations.feishu);
   const rawLogging = objectValue(value.logging);
@@ -404,6 +416,11 @@ export const parseConfig = (
         app_path: text(rawZiniao.app_path),
         webdriver_path: text(rawZiniao.webdriver_path),
       },
+      shangman: {
+        managed: Boolean(rawShangman.managed), tenant_id: text(rawShangman.tenant_id),
+        username: text(rawShangman.username), production_enabled: rawShangman.production_enabled === true,
+        revision: text(rawShangman.revision),
+      },
       mabang: {
         managed: Boolean(rawMabang.managed),
         account: text(rawMabang.account),
@@ -454,6 +471,8 @@ export const parseSecrets = (raw: unknown): DesktopSecrets => {
       : null;
   return {
     ziniao_password: text(value.ziniao_password),
+    shangman_processed_password: text(value.shangman_processed_password),
+    shangman_basic_auth: text(value.shangman_basic_auth),
     mabang_password: text(value.mabang_password),
     feishu_app_secret: text(value.feishu_app_secret),
     data_server_api_key: text(value.data_server_api_key),

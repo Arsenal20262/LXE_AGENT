@@ -5,6 +5,8 @@ export type Environment = Record<string, string>;
 export const DEVELOPMENT_SECRET_ENV_NAMES = new Set([
   "FEISHU_APP_SECRET",
   "MABANG_PASSWORD",
+  "LXE_SHANGMAN_PROCESSED_PASSWORD",
+  "LXE_SHANGMAN_BASIC_AUTH",
   "ZINIAO_PASSWORD",
 ]);
 

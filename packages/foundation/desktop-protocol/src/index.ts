@@ -453,6 +453,11 @@ export interface DesktopSetupState {
     app_path: string;
     webdriver_path: string;
   };
+  shangman: {
+    managed: boolean; configured: boolean; issues: string[];
+    tenant_id: string; username: string; production_enabled: boolean;
+    password_configured: boolean; basic_auth_configured: boolean;
+  };
   mabang: {
     managed: boolean;
     configured: boolean;
@@ -486,6 +491,10 @@ export type DesktopZiniaoSetupInput =
       webdriver_path: string;
     };
 
+export type DesktopShangmanSetupInput =
+  | { action: "clear" }
+  | { action: "save"; tenant_id: string; username: string; password?: string; basic_auth?: string; production_enabled: boolean };
+
 export type DesktopMabangSetupInput =
   | { action: "clear" }
   | { action: "save"; account: string; password?: string };
@@ -497,6 +506,7 @@ export type DesktopFeishuSetupInput =
 export interface DesktopSetupInput {
   workspace_root: string;
   ziniao?: DesktopZiniaoSetupInput;
+  shangman?: DesktopShangmanSetupInput;
   mabang?: DesktopMabangSetupInput;
   feishu?: DesktopFeishuSetupInput;
   logging?: {

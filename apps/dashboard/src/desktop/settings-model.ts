@@ -49,6 +49,7 @@ export type DesktopSettingsSection =
   | "cloud"
   | "base"
   | "ziniao"
+  | "shangman"
   | "mabang"
   | "feishu"
   | "logging";
@@ -65,6 +66,11 @@ export interface DesktopSettingsFormValue {
   ziniaoVersion: DesktopZiniaoVersion;
   ziniaoAppPath: string;
   ziniaoWebDriverPath: string;
+  shangmanTenantId: string;
+  shangmanUsername: string;
+  shangmanPassword: string;
+  shangmanBasicAuth: string;
+  shangmanProductionEnabled: boolean;
   mabangAccount: string;
   mabangPassword: string;
   feishuAppId: string;
@@ -83,6 +89,11 @@ export const desktopSettingsForm = (state: DesktopSetupState): DesktopSettingsFo
   ziniaoVersion: state.ziniao.app_version,
   ziniaoAppPath: state.ziniao.app_path,
   ziniaoWebDriverPath: state.ziniao.webdriver_path,
+  shangmanTenantId: state.shangman.tenant_id,
+  shangmanUsername: state.shangman.username,
+  shangmanPassword: "",
+  shangmanBasicAuth: "",
+  shangmanProductionEnabled: state.shangman.production_enabled,
   mabangAccount: state.mabang.account,
   mabangPassword: "",
   feishuAppId: state.feishu.app_id,
@@ -101,6 +112,7 @@ const SECTION_FIELDS: Record<EditableDesktopSettingsSection, readonly (keyof Des
     "ziniaoAppPath",
     "ziniaoWebDriverPath",
   ],
+  shangman: ["shangmanTenantId", "shangmanUsername", "shangmanPassword", "shangmanBasicAuth", "shangmanProductionEnabled"],
   mabang: ["mabangAccount", "mabangPassword"],
   feishu: ["feishuAppId", "feishuAppSecret"],
   logging: ["logProfile", "logRetentionDays"],

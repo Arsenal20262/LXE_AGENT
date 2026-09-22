@@ -1,6 +1,10 @@
 {
   "protocol_version": "1",
   "entries": [
+    {"name": "shangman_login_prepare", "command_path": ["shangman", "login", "prepare"], "visibility": "business", "session_mode": "none", "module": "services.agent_cli.shangman.login_prepare", "owner_skills": ["shangman-login"], "timeout_ms": 60000, "exposed": true, "input_schema": {"type": "object", "properties": {}, "additionalProperties": false}, "artifact_paths": [{"field": "image_path", "role": "model_input"}]},
+    {"name": "shangman_login_submit", "command_path": ["shangman", "login", "submit"], "visibility": "business", "session_mode": "none", "module": "services.agent_cli.shangman.login_submit", "owner_skills": ["shangman-login"], "timeout_ms": 60000, "exposed": true, "input_schema": {"type": "object", "properties": {"challenge_id": {"type": "string", "minLength": 1}, "captcha_code": {"type": "string", "minLength": 1, "maxLength": 128}}, "additionalProperties": false, "required": ["challenge_id", "captcha_code"]}},
+    {"name": "shangman_login_status", "command_path": ["shangman", "login", "status"], "visibility": "business", "session_mode": "none", "module": "services.agent_cli.shangman.login_status", "owner_skills": ["shangman-login"], "timeout_ms": 60000, "exposed": true, "input_schema": {"type": "object", "properties": {}, "additionalProperties": false}},
+    {"name": "shangman_login_clear", "command_path": ["shangman", "login", "clear"], "visibility": "business", "session_mode": "none", "module": "services.agent_cli.shangman.login_clear", "owner_skills": ["shangman-login"], "timeout_ms": 60000, "exposed": true, "input_schema": {"type": "object", "properties": {}, "additionalProperties": false}},
     {
       "name": "ziniao_browser",
       "command_path": ["browser", "store"],
