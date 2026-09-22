@@ -87,7 +87,7 @@ export class MaintenanceScheduler {
   private readonly initialTimers: unknown[] = [];
   private backlogTimer: unknown | undefined;
   private stopped = true;
-  private ownershipBlocked = "";
+  private uploadFailures = 0;
 
   constructor(private readonly options: MaintenanceSchedulerOptions) {
     this.fetch = options.fetch ?? ((input, init) => nativeCloudFetch(String(input))(input, init));
@@ -168,10 +168,17 @@ export class MaintenanceScheduler {
   async syncDataServer(): Promise<JsonObject> {
     const serverUrl = envText(this.options.environment, "LXE_DATA_SERVER_URL").replace(/\/+$/, "");
     if (!serverUrl) return { uploaded: false, skipped_reason: "missing_config" };
-    if (this.ownershipBlocked) throw new Error(this.ownershipBlocked);
-    try { return await this.syncTurnUsageTarget({ name: "cloud", serverUrl }); }
+    if (this.backlogTimer !== undefined) this.clock.clearTimeout(this.backlogTimer);
+    this.backlogTimer = undefined;
+    try {
+      const result = await this.syncTurnUsageTarget({ name: "cloud", serverUrl });
+      this.uploadFailures = 0;
+      return result;
+    }
     catch (error) {
-      if (error instanceof DataServerUploadError && error.status === 409) this.ownershipBlocked = error.message;
+      // The server checks each attempt; a previous refusal must not latch locally.
+      const delayMs = Math.min(300_000, 30_000 * 2 ** Math.min(this.uploadFailures++, 4));
+      this.scheduleBacklogSync(delayMs);
       throw error;
     }
   }
@@ -310,12 +317,12 @@ export class MaintenanceScheduler {
     }
   }
 
-  private scheduleBacklogSync(): void {
+  private scheduleBacklogSync(delayMs = TURN_USAGE_BACKLOG_DELAY_MS): void {
     if (this.stopped || this.backlogTimer !== undefined) return;
     this.backlogTimer = this.clock.setTimeout(() => {
       this.backlogTimer = undefined;
       if (!this.stopped) void this.requestSingleFlight("data", () => this.syncDataServer());
-    }, TURN_USAGE_BACKLOG_DELAY_MS);
+    }, delayMs);
   }
 
   private async refreshAuth(): Promise<void> {

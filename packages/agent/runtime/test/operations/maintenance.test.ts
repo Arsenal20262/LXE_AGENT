@@ -393,20 +393,45 @@ describe("MaintenanceScheduler", () => {
     } finally { await scheduler.stop(); await server.stop(true); await store.stop(); }
   });
 
-  test("ownership conflicts pause repeated uploads until repaired and restarted", async () => {
+  test("ownership conflicts retry on a bounded timer and recover without restarting", async () => {
     const store = await createStore("lxe-maintenance-conflict-");
     await recordTurn(store, "pending");
-    let calls = 0;
-    const scheduler = schedulerFor(store, async () => {
-      calls++;
-      return Response.json({ detail: { code: "upload_instance_conflict" } }, { status: 409 });
-    });
+    const clock = new ManualMaintenanceClock();
+    const bodies: string[] = [];
+    let refused = true;
+    const scheduler = schedulerFor(store, async (_input, init) => {
+      bodies.push(String(init?.body));
+      if (refused) return Response.json({ detail: { code: "upload_instance_conflict" } }, { status: 409 });
+      const batch = JSON.parse(String(init?.body));
+      return Response.json({ accepted_count: batch.turns.length, accepted_through_sequence: batch.turns.at(-1).sequence });
+    }, { clock });
     try {
-      await expect(scheduler.syncDataServer()).rejects.toThrow("upload_instance_conflict");
-      await expect(scheduler.syncDataServer()).rejects.toThrow("upload_instance_conflict");
-      expect(calls).toBe(1);
-      expect(store.turnUsageAcknowledgedSequence("https://cloud.example")).toBe(0);
-    } finally { await store.stop(); }
+      await scheduler.start();
+      await clock.fireTimeout();
+      for (const [index, delayMs] of [30_000, 60_000, 120_000, 240_000, 300_000, 300_000].entries()) {
+        await waitFor(() => bodies.length === index + 1 && clock.timeouts.length === 1, "scheduled conflict retry");
+        expect(clock.timeouts[0]?.delayMs).toBe(delayMs);
+        expect(store.turnUsageAcknowledgedSequence("https://cloud.example")).toBe(0);
+        if (index < 5) await clock.fireTimeout();
+      }
+      refused = false;
+      await clock.fireTimeout();
+      await waitFor(() => store.turnUsageAcknowledgedSequence("https://cloud.example") === 1, "recovered ACK");
+      expect(bodies).toHaveLength(7);
+      expect(new Set(bodies).size).toBe(1);
+      expect(clock.timeouts).toHaveLength(0);
+
+      await recordTurn(store, "pending-again");
+      refused = true;
+      await clock.fireInterval();
+      await waitFor(() => clock.timeouts.length === 1, "reset backoff");
+      expect(clock.timeouts[0]?.delayMs).toBe(30_000);
+      expect(store.turnUsageAcknowledgedSequence("https://cloud.example")).toBe(1);
+      await scheduler.stop();
+      expect(clock.timeouts).toHaveLength(0);
+      expect(clock.intervals).toHaveLength(0);
+      expect(bodies).toHaveLength(8);
+    } finally { await scheduler.stop(); await store.stop(); }
   });
 
   test("skips records older than 365 days on first sync", async () => {
