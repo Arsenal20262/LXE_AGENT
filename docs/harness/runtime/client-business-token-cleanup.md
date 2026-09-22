@@ -29,3 +29,5 @@ Python 有 30 条 aiohttp 参数弃用警告，退出清理还记录一条未关
 删除 `DesktopCloudConfigService` 未使用的 `secretEnvironment` 构造参数及调用方传递。该类仅需配置仓库；其他模块仍使用的环境配置、加密设备身份、模型和飞书凭据保持原样。身份、迁移、配置存储与模型相关定向测试 52 项通过。
 
 飞书网关的 MCP 启动检查改为诊断，由下一轮任务重新连接；这一恢复改动位于独立网关仓库。本次桌面只清理上述空参数，不修改 MCP 运行时。
+
+最终 rebase 后，`bun run verify:source` 与 `bun run desktop:build` 均退出 0：协议检查、TS 边界、工作区类型检查与桌面源码构建通过；Bun 1685 通过、3 个 Windows 专属测试跳过；Python 1756 通过、2 跳过、54 个子测试通过。Python 跳过项为 Windows 文件共享语义和未配置真实 ExifTool 的场景，均不计为通过。仍有 30 条 aiohttp 弃用警告、退出清理时未关闭 ClientSession 的日志告警及前端 chunk 体积提示，本轮未改动这些部分。未生成安装包。
