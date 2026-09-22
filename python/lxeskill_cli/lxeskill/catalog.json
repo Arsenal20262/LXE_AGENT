@@ -394,7 +394,7 @@
       "visibility": "business", "session_mode": "none",
       "owner_skills": ["shangman-goods-export-workflow-map"],
       "timeout_ms": 30000, "exposed": true,
-      "input_schema": {"type": "object", "properties": {"params": {"type": "object", "properties": {"platform": {"type": "string", "enum": ["智慧"]}, "country": {"type": "string", "enum": ["印尼"]}, "operation": {"type": "string", "enum": ["goods_export"]}, "requested_metrics": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "enum": ["sales", "inventory", "inbound_time", "listing_time"]}}, "sales_windows_days": {"type": "array", "uniqueItems": true, "items": {"type": "integer", "enum": [7, 14, 30, 90]}}}, "required": ["platform", "country", "operation", "requested_metrics"], "additionalProperties": false}}, "required": ["params"], "additionalProperties": false}
+      "input_schema": {"type": "object", "properties": {"params": {"type": "object", "properties": {"platform": {"const": "智慧"}, "country": {"const": "印尼"}, "operation": {"const": "goods_export"}}, "required": ["platform", "country", "operation"], "additionalProperties": false}}, "required": ["params"], "additionalProperties": false}
     },
     {
       "name": "shangman_goods_export_run", "module": "services.agent_cli.shangman.goods_export_run",
@@ -404,7 +404,7 @@
       "owner_skills": ["shangman-goods-export-workflow-map"],
       "artifact_paths": [{"field": "artifact_path", "role": "deliverable"}],
       "timeout_ms": 300000, "exposed": true,
-      "input_schema": {"type": "object", "properties": {"params": {"type": "object", "properties": {"platform": {"type": "string", "enum": ["智慧"]}, "country": {"type": "string", "enum": ["印尼"]}, "operation": {"type": "string", "enum": ["goods_export"]}, "requested_metrics": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "enum": ["sales", "inventory", "inbound_time", "listing_time"]}}, "sales_windows_days": {"type": "array", "uniqueItems": true, "items": {"type": "integer", "enum": [7, 14, 30, 90]}}}, "required": ["platform", "country", "operation", "requested_metrics"], "additionalProperties": false}}, "required": ["params"], "additionalProperties": false}
+      "input_schema": {"type": "object", "properties": {"params": {"type": "object", "properties": {"platform": {"const": "智慧"}, "country": {"const": "印尼"}, "operation": {"const": "goods_export"}}, "required": ["platform", "country", "operation"], "additionalProperties": false}}, "required": ["params"], "additionalProperties": false}
     },
     {
       "name": "yacang_export_workflow", "module": "services.agent_cli.yacang.export_workflow",

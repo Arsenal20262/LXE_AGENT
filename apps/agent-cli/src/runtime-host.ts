@@ -32,7 +32,6 @@ import {
   OfficialMcpConnector,
   OneShotCliRunner,
   registerCodingTools,
-  registerShangmanCaptchaTool,
   registerToolSearch,
   registerUserQuestionTool,
   UserQuestionService,
@@ -139,7 +138,6 @@ export function createAgentRuntimeHost(
       .catch(error => logger.warn("captcha_notification_failed", { session_id: sessionId, error }));
   });
   registerUserQuestionTool(tools, questions);
-  registerShangmanCaptchaTool(tools, shangmanCaptcha);
   const skillCatalog = new SkillCatalog(options.dataRoot, options.userSkillsRoot, {
     ...(environment.LXE_FD_PATH ? { fdPath: environment.LXE_FD_PATH } : {}),
     repositorySkillsRoot: options.skillsRoot,

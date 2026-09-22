@@ -2,12 +2,8 @@ import { afterEach, describe, expect, test } from "bun:test";
 import {
   SHANGMAN_CAPTCHA_CHANNEL_TOKEN,
   SHANGMAN_CAPTCHA_CHANNEL_URL,
-  SHANGMAN_CAPTCHA_SKILL,
   ShangmanCaptchaBroker,
-  registerShangmanCaptchaTool,
 } from "../../src/tooling/shangman-captcha";
-import { ToolRegistry } from "../../src/tooling/registry";
-import { testWorkspace } from "../workspace";
 
 const image = "data:image/png;base64,Y2FwdGNoYQ==";
 
@@ -58,37 +54,5 @@ describe("Shangman captcha broker", () => {
     const challenge = broker.createChallenge({ sessionId: "session-2", turnId: "turn-2", captchaKey: "key-2", imageDataUrl: image });
     broker.answer("session-2", challenge.challenge_id, "secret-code");
     expect(broker.snapshot("session-2")).not.toHaveProperty("answer");
-  });
-
-  test("exposes a desktop-only native tool after skill activation and never returns the code", async () => {
-    const broker = new ShangmanCaptchaBroker();
-    brokers.push(broker);
-    const challenge = broker.createChallenge({
-      sessionId: "session-3", turnId: "turn-3", captchaKey: "key-3", imageDataUrl: image,
-    });
-    const registry = new ToolRegistry();
-    registerShangmanCaptchaTool(registry, broker);
-    const exposure = registry.createExposureState({
-      platform: "desktop",
-      allowedSkills: new Set([SHANGMAN_CAPTCHA_SKILL]),
-    });
-    expect(exposure.schemas()).toEqual([]);
-    await exposure.activateSkill(SHANGMAN_CAPTCHA_SKILL);
-    expect(exposure.schemas().map(item => item.name)).toEqual(["shangman_captcha"]);
-    const controller = new AbortController();
-    const resultPromise = registry.execute("shangman_captcha", { challenge_id: challenge.challenge_id }, {
-      exposureState: exposure,
-      platform: "desktop",
-      session_id: "session-3",
-      turn_id: "turn-3",
-      tool_call_id: "call-3",
-      workspace: testWorkspace,
-      handle: { signal: controller.signal } as never,
-    });
-    broker.answer("session-3", challenge.challenge_id, "secret-code");
-    const result = await resultPromise;
-    const content = JSON.stringify(result);
-    expect(content).toContain(challenge.challenge_id);
-    expect(content).not.toContain("secret-code");
   });
 });

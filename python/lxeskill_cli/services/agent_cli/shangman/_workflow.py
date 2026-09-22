@@ -8,8 +8,6 @@ from typing import Any
 from services.shangman.goods_export import (
     CaptchaChannelUnavailable,
     CaptchaInputExpired,
-    CaptchaInputPending,
-    CaptchaInputRequired,
     ShangmanClient,
     ShangmanCredentials,
     ShangmanAuthError,
@@ -19,7 +17,7 @@ from services.shangman.captcha_channel import (
     CHANNEL_URL_ENV,
     RuntimeCaptchaCodeProvider,
 )
-from services.shangman.intent import build_goods_export_plan
+from services.shangman.intent import COUNTRY, OPERATION, PLATFORM, build_goods_export_plan
 
 
 _CREDENTIAL_ENV = (
@@ -57,16 +55,40 @@ def preview(arguments: dict[str, Any]) -> dict[str, Any]:
     return {"success": plan["status"] == "ready", **plan}
 
 
+def _terminal_data(*, recoverable: bool | None = None, row_count: Any = None) -> dict[str, Any]:
+    data: dict[str, Any] = {
+        "platform": PLATFORM,
+        "country": COUNTRY,
+        "business_type": OPERATION,
+    }
+    if recoverable is not None:
+        data["recoverable"] = recoverable
+    if isinstance(row_count, int) and not isinstance(row_count, bool):
+        data["row_count"] = row_count
+    return data
+
+
+def _terminal_projection(
+    *,
+    recoverable: bool | None = None,
+    row_count: Any = None,
+    code: str | None = None,
+    message: str | None = None,
+) -> dict[str, Any]:
+    projection: dict[str, Any] = {
+        "data": _terminal_data(recoverable=recoverable, row_count=row_count),
+    }
+    if code is not None and message is not None:
+        projection["error"] = {"code": code, "message": message}
+    return {"terminal_projection": projection}
+
+
 def _blocked(
     plan: dict[str, Any],
     code: str,
     message: str,
-    *,
-    challenge_id: str | None = None,
 ) -> dict[str, Any]:
     error: dict[str, Any] = {"code": code, "message": message, "recoverable": True}
-    if challenge_id:
-        error["challenge_id"] = challenge_id
     return {
         "success": False,
         "status": "blocked",
@@ -74,13 +96,46 @@ def _blocked(
         "intent": plan.get("intent"),
         "plan": plan.get("plan"),
         "error": error,
+        **_terminal_projection(recoverable=True, code=code, message=message),
+    }
+
+
+def _failed(plan: dict[str, Any], code: str, message: str, *, recoverable: bool) -> dict[str, Any]:
+    return {
+        "success": False,
+        "status": "failed",
+        "params": plan["params"],
+        "intent": plan["intent"],
+        "plan": plan["plan"],
+        "error": {
+            "code": code,
+            "message": message,
+            "recoverable": recoverable,
+        },
+        **_terminal_projection(
+            recoverable=recoverable,
+            code=code,
+            message=message,
+        ),
     }
 
 
 def run(arguments: dict[str, Any]) -> dict[str, Any]:
     plan = build_goods_export_plan(arguments.get("params"))
     if plan["status"] != "ready":
-        return {"success": False, **plan}
+        error = dict(plan.get("error") or {})
+        code = str(error.get("code") or "params_invalid")
+        message = str(error.get("message") or "invalid Shangman export parameters")
+        recoverable = bool(error.get("recoverable", True))
+        return {
+            "success": False,
+            **plan,
+            **_terminal_projection(
+                recoverable=recoverable,
+                code=code,
+                message=message,
+            ),
+        }
 
     if str(os.environ.get("LXE_SHANGMAN_PROD_ENABLED") or "").strip().lower() != "true":
         return _blocked(
@@ -118,26 +173,17 @@ def run(arguments: dict[str, Any]) -> dict[str, Any]:
                 captcha_provider=RuntimeCaptchaCodeProvider(),
             ).export_goods()
         )
-    except CaptchaInputRequired as exc:
+    except asyncio.CancelledError:
         return _blocked(
             plan,
-            "captcha_input_required",
-            "Captcha input is required in the Desktop panel",
-            challenge_id=exc.challenge_id,
+            "captcha_cancelled",
+            "Captcha input was cancelled",
         )
-    except CaptchaInputPending as exc:
-        return _blocked(
-            plan,
-            "captcha_input_pending",
-            "Captcha input is still pending in the Desktop panel",
-            challenge_id=exc.challenge_id,
-        )
-    except CaptchaInputExpired as exc:
+    except CaptchaInputExpired:
         return _blocked(
             plan,
             "captcha_expired",
-            "Captcha input expired; rerun the export to request a new challenge",
-            challenge_id=exc.challenge_id,
+            "Captcha input timed out or the challenge expired",
         )
     except CaptchaChannelUnavailable:
         return _blocked(
@@ -146,39 +192,29 @@ def run(arguments: dict[str, Any]) -> dict[str, Any]:
             "Desktop captcha input channel is unavailable",
         )
     except ShangmanAuthError as exc:
-        return {
-            "success": False,
-            "status": "failed",
-            "params": plan["params"],
-            "intent": plan["intent"],
-            "plan": plan["plan"],
-            "error": {
-                "code": "shangman_auth_failed",
-                "message": _safe_error_message(exc),
-                "recoverable": False,
-            },
-        }
+        return _failed(
+            plan,
+            "shangman_auth_failed",
+            _safe_error_message(exc),
+            recoverable=False,
+        )
     except Exception as exc:  # noqa: BLE001 — preserve the client diagnostic in the CLI envelope.
-        return {
-            "success": False,
-            "status": "failed",
-            "params": plan["params"],
-            "intent": plan["intent"],
-            "plan": plan["plan"],
-            "error": {
-                "code": "erp_execution_failed",
-                "message": _safe_error_message(exc),
-                "recoverable": True,
-            },
-        }
+        return _failed(
+            plan,
+            "erp_execution_failed",
+            _safe_error_message(exc),
+            recoverable=True,
+        )
 
+    payload = result.to_payload()
     return {
         "success": True,
         "status": "completed",
         "params": plan["params"],
         "intent": plan["intent"],
         "plan": plan["plan"],
-        **result.to_payload(),
+        **payload,
+        **_terminal_projection(row_count=payload.get("row_count")),
     }
 
 

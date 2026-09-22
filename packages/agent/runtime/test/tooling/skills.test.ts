@@ -25,6 +25,22 @@ describe("skill context", () => {
       "lxeskill shangman export preview",
       "lxeskill shangman export run",
     ]);
+    const description = skill?.description ?? "";
+    for (const phrase of [
+      "智慧印尼",
+      "库存",
+      "销量",
+      "入库时间",
+      "上架时间",
+      "月末快照",
+      "7/14/30/90 天销量",
+      "90 天日度销量",
+      "最近一个月销量",
+    ]) {
+      expect(description).toContain(phrase);
+    }
+    expect(description).toContain("一次 goods_export");
+    expect(description).toContain("一个原始 XLSX");
   });
 
   test("discovers the Yacang skill only with the replenishment permission type", () => {

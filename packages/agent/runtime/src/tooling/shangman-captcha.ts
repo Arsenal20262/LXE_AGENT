@@ -1,11 +1,9 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import type { JsonObject } from "@lxe/protocol";
-import { ToolExecutionError, type ToolRegistry } from "./registry";
 
 export const SHANGMAN_CAPTCHA_SKILL = "shangman-goods-export-workflow-map";
 export const SHANGMAN_CAPTCHA_CHANNEL_URL = "LXE_SHANGMAN_CAPTCHA_CHANNEL_URL";
 export const SHANGMAN_CAPTCHA_CHANNEL_TOKEN = "LXE_SHANGMAN_CAPTCHA_CHANNEL_TOKEN";
-export const SHANGMAN_CAPTCHA_CHALLENGE_ID = "LXE_SHANGMAN_CAPTCHA_CHALLENGE_ID";
 const CAPTCHA_TTL_MS = 5 * 60_000;
 const MAX_IMAGE_BYTES = 2_000_000;
 const MAX_CODE_LENGTH = 128;
@@ -20,7 +18,6 @@ export interface PendingShangmanCaptcha {
 export interface ShangmanCaptchaEnvironment {
   [SHANGMAN_CAPTCHA_CHANNEL_URL]: string;
   [SHANGMAN_CAPTCHA_CHANNEL_TOKEN]: string;
-  [SHANGMAN_CAPTCHA_CHALLENGE_ID]: string;
 }
 
 export type ShangmanCaptchaState = "expired" | "not_found" | "invalid_answer";
@@ -107,7 +104,6 @@ export class ShangmanCaptchaBroker {
     return {
       [SHANGMAN_CAPTCHA_CHANNEL_URL]: `http://127.0.0.1:${server.port}`,
       [SHANGMAN_CAPTCHA_CHANNEL_TOKEN]: this.token,
-      [SHANGMAN_CAPTCHA_CHALLENGE_ID]: this.challenges.get(sessionId)?.id ?? "",
     };
   }
 
@@ -303,48 +299,4 @@ export class ShangmanCaptchaBroker {
       return json({ error: "invalid_request" }, 400);
     }
   }
-}
-
-export function registerShangmanCaptchaTool(
-  registry: ToolRegistry,
-  broker: ShangmanCaptchaBroker,
-): void {
-  registry.register({
-    name: "shangman_captcha",
-    platforms: ["desktop"],
-    exposure: "deferred",
-    ownerSkills: [SHANGMAN_CAPTCHA_SKILL],
-    description: "Wait for the Desktop operator to enter the displayed Shangman captcha. Pass only the opaque challenge_id from the latest shangman export result; never ask for or echo the captcha image or code.",
-    input_schema: {
-      type: "object",
-      required: ["challenge_id"],
-      additionalProperties: false,
-      properties: {
-        challenge_id: { type: "string", minLength: 1, maxLength: 200 },
-      },
-    },
-    execute: async (input, context) => {
-      const challengeId = text(input.challenge_id);
-      if (!challengeId || challengeId.length > 200) {
-        throw new ToolExecutionError("invalid_argument", "challenge_id must be bounded non-empty text");
-      }
-      try {
-        await broker.waitForAnswer(context.session_id, challengeId, context.handle.signal);
-      } catch (error) {
-        const state = error instanceof ShangmanCaptchaStateError ? error.state : "not_found";
-        throw new ToolExecutionError(
-          state === "expired" ? "failed_precondition" : "unavailable",
-          state === "expired" ? "Shangman captcha input expired" : "Shangman captcha challenge is unavailable",
-          {
-            type: "shangman_captcha",
-            challenge_id: challengeId,
-            state,
-            next_action: "rerun the canonical Shangman export command to request a new captcha",
-          },
-          "shangman_captcha",
-        );
-      }
-      return { content: [{ type: "text", text: JSON.stringify({ accepted: true, challenge_id: challengeId }) }] };
-    },
-  });
 }
