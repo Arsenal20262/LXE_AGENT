@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 const testDir = path.dirname(fileURLToPath(import.meta.url));
 const sourceDir = path.resolve(testDir, "../../src");
 const shell = readFileSync(path.join(sourceDir, "desktop/shell.tsx"), "utf8");
+const contextPanel = readFileSync(path.join(sourceDir, "desktop/device-context-panel.tsx"), "utf8");
 const styles = readFileSync(path.join(sourceDir, "styles.css"), "utf8");
 const i18n = readFileSync(path.join(sourceDir, "shared/i18n.tsx"), "utf8");
 
@@ -51,8 +52,8 @@ test("company cloud shows the server-verified device Skill permission state", ()
   assert.doesNotMatch(shell, /desktop-cloud-identity/);
   assert.doesNotMatch(shell, /desktop-cloud-status/);
   assert.match(shell, /cloud\.permission_status/);
-  assert.match(shell, /cloud\.permission_profile/);
-  assert.match(shell, /cloud\.permission_version/);
+  assert.match(contextPanel, /cloud\.permission_profile/);
+  assert.match(contextPanel, /cloud\.permission_version/);
   assert.match(i18n, /pending_verification/);
   assert.match(styles, /\.desktop-cloud-permission\.cached/);
   assert.match(styles, /\.desktop-cloud-permission\.unassigned/);

@@ -708,7 +708,8 @@ button {
   gap: 7px;
 }
 
-.desktop-cloud-overview button {
+.desktop-cloud-overview button,
+.desktop-device-context button {
   display: inline-flex;
   min-height: 30px;
   flex: 0 0 auto;
@@ -11526,3 +11527,5 @@ pre {
   .desktop-device-context dl { grid-template-columns: minmax(0, 1fr); }
   .desktop-device-context > button { justify-self: start; }
 }
+
+.desktop-device-context [role="alert"] button { justify-self: start; }

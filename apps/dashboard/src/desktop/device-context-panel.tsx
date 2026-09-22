@@ -17,12 +17,12 @@ export function DeviceContextPanel({ cloud, busy, onRefresh, onConfirm }: {
     {cloud.permission_error ? <p role="alert">{cloud.permission_error}</p> : null}
     <dl>
       <div><dt>{t.server}</dt><dd>{context?.server_url || t.unknown}</dd></div>
-      <div><dt>{t.device}</dt><dd>{device ? `${device.display_name} · ${device.wireguard_ip}` : cloud.device_name || t.unknown}</dd></div>
-      <div><dt>{t.profile}</dt><dd>{cloud.permission_profile ? cloud.profile_labels[t.labelLocale] ?? cloud.permission_profile : t.unassigned}</dd></div>
+      <div><dt>{context?.pending_device ? t.previousDevice : t.device}</dt><dd>{device ? `${device.display_name} · ${device.wireguard_ip}` : cloud.device_name || t.unknown}</dd></div>
+      <div><dt>{t.profile}</dt><dd>{cloud.permission_profile ? cloud.profile_labels[t.labelLocale] ?? cloud.permission_profile : cloud.permission_verified_at ? t.unassigned : t.unknown}</dd></div>
       <div><dt>{t.version}</dt><dd>{cloud.permission_version > 0 ? `v${cloud.permission_version} / r${cloud.profile_revision}` : "—"}</dd></div>
       <div><dt>{t.checked}</dt><dd>{cloud.permission_verified_at ? new Date(cloud.permission_verified_at * 1000).toLocaleString(t.labelLocale) : t.unknown}</dd></div>
-      <div><dt>{t.skills}</dt><dd>{list(context?.skill_types)}</dd></div>
-      <div><dt>{t.features}</dt><dd>{list(cloud.desktop_features)}</dd></div>
+      <div><dt>{t.skills}</dt><dd>{list(cloud.permission_verified_at ? context?.skill_types : null)}</dd></div>
+      <div><dt>{t.features}</dt><dd>{list(cloud.permission_verified_at ? cloud.desktop_features : null)}</dd></div>
       <div><dt>{t.services}</dt><dd>{list(context?.server_capabilities)}</dd></div>
       <div><dt>{t.actions}</dt><dd>{list(context?.erp_actions)}</dd></div>
     </dl>
