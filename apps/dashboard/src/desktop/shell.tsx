@@ -346,7 +346,6 @@ function DesktopCloudPanel({
           </dl>
         </div>
       ) : null}
-      {cloud.business_credential_error ? <p className="desktop-form-error" role="alert">{t.desktop.cloud.businessCredentialError}: {cloud.business_credential_error}</p> : null}
       {!supported ? (
         <p className="desktop-form-hint">{t.desktop.cloud.unsupportedHint}</p>
       ) : !cloud.configured && dependenciesReady ? (

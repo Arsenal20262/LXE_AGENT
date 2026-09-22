@@ -65,8 +65,9 @@ test("server role controls management while runtime credentials remain scoped in
     for (const packaged of [false, true]) {
       const environment = resolveDataServerRuntimeEnvironment({ packaged, sourceEnvironment: { LXE_DATA_SERVER_API_KEY: rootToken },
         managedEnvironment: config.environment(), machineIdentityPath: join(root, "db", "machine_identity.json") });
-      expect(environment.LXE_DATA_SERVER_API_KEY).toBe(business.token);
-      expect(environment.LXE_ERP_API_KEY).toBe(business.erp_token);
+      expect(environment.LXE_DATA_SERVER_API_KEY).toBeUndefined();
+      expect(environment.LXE_ERP_API_KEY).toBeUndefined();
+      expect(environment.LXE_SAIHU_MCP_API_KEY).toBeUndefined();
       expect(JSON.stringify(environment)).not.toContain(rootToken);
       expect(JSON.stringify(environment)).not.toContain("inherited-admin-secret");
     }
@@ -74,6 +75,7 @@ test("server role controls management while runtime credentials remain scoped in
     expect(await service.check()).toMatchObject({ is_admin: false, permission_profile: "replenishment" });
     await expect(service.adminDashboardUrl()).rejects.toThrow("管理员身份");
     expect(requests.some((url) => url.includes("/admin/status"))).toBe(false);
+    expect(requests.some((url) => url.includes("/business-credential"))).toBe(false);
   } finally { await service.stop(); }
 });
 
@@ -84,7 +86,7 @@ test("an inherited administrator key never configures a desktop identity", async
     onConfigured: async () => {}, fetch: async () => { throw new Error("must not connect"); } });
   try {
     expect(await service.start()).toMatchObject({ configured: false, is_admin: false, connection: "not_configured" });
-    expect(config.environment().LXE_DATA_SERVER_API_KEY).toBe("");
+    expect(config.environment().LXE_DATA_SERVER_API_KEY).toBeUndefined();
   } finally { await service.stop(); }
 });
 

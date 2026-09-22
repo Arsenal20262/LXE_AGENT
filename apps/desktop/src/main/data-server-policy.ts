@@ -3,9 +3,6 @@ type Environment = Readonly<Record<string, string | undefined>>;
 const DATA_SERVER_RUNTIME_KEYS = [
   "LXE_DATA_SERVER_ENABLED",
   "LXE_DATA_SERVER_URL",
-  "LXE_DATA_SERVER_API_KEY",
-  "LXE_ERP_API_KEY",
-  "LXE_SAIHU_MCP_API_KEY",
 ] as const;
 
 export interface DataServerRuntimeEnvironmentOptions {

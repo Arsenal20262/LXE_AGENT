@@ -19,7 +19,6 @@ export interface DesktopCloudEnrollmentConfig {
   dataServerUrl: string;
   tunnelName: string;
   apiKey: string;
-  erpApiKey?: string;
   wireGuard?: WireGuardTunnelConfiguration;
 }
 

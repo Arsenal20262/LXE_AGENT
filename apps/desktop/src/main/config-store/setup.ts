@@ -488,10 +488,6 @@ export class DesktopSetupService {
     const feishuConfigured = feishu.managed && this.validation.feishuIssues(feishu, secrets).length === 0;
     const diagnostic = config.logging.profile === "diagnostic";
     const logsEnabled = config.logging.profile !== "off";
-    const cloudEnabled = config.cloud.managed
-      && !config.cloud.switch_in_progress
-      && Boolean(text(secrets.cloud_business_token))
-      && secrets.cloud_business_expires_at > Date.now() / 1_000;
     return {
       AGENT_LLM_PROVIDER: provider,
       AGENT_LLM_CREDENTIAL_SOURCE: config.llm.credential_source,
@@ -527,9 +523,6 @@ export class DesktopSetupService {
       FEISHU_RAW_EVENT_DUMP_ENABLED: diagnostic ? "1" : "0",
       LXE_DATA_SERVER_ENABLED: config.cloud.managed && !config.cloud.switch_in_progress && Boolean(config.cloud.data_server_url) ? "1" : "0",
       LXE_DATA_SERVER_URL: config.cloud.managed && !config.cloud.switch_in_progress ? config.cloud.data_server_url : "",
-      LXE_DATA_SERVER_API_KEY: cloudEnabled ? secrets.cloud_business_token : "",
-      LXE_ERP_API_KEY: cloudEnabled ? secrets.cloud_business_erp_token : "",
-      LXE_SAIHU_MCP_API_KEY: cloudEnabled ? secrets.cloud_business_token : "",
       BROWSER_AUTH_HEADLESS: "1",
     };
   }

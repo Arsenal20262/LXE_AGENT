@@ -56,7 +56,6 @@ describe("project environment", () => {
       LXE_SAIHU_MCP_API_KEY: "saihu-mcp-secret",
     })).toEqual({
       FEISHU_APP_SECRET: "feishu-secret",
-      LXE_SAIHU_MCP_API_KEY: "saihu-mcp-secret",
     });
   });
 });

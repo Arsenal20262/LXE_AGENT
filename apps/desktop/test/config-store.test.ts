@@ -127,6 +127,7 @@ describe("DesktopConfigStore", () => {
 
     expect(store.state()).toMatchObject({ complete: false, managed_model_configured: false });
     expect(store.environment()).not.toHaveProperty("KIMI_CODE_API_KEY");
+    expect(store.environment()).not.toHaveProperty("LXE_SAIHU_MCP_API_KEY");
     expect(store.environment()).not.toHaveProperty("DEEPSEEK_API");
     store.saveLocalModelCredential({ provider: "kimi_coding", api_key: "local-model-secret" });
     expect(store.environment()).toMatchObject({
@@ -146,9 +147,9 @@ describe("DesktopConfigStore", () => {
     expect(store.environment()).toMatchObject({
       MABANG_PASSWORD: "source-mabang-secret",
       FEISHU_APP_SECRET: "source-feishu-secret",
-      LXE_SAIHU_MCP_API_KEY: "",
     });
     expect(store.environment()).not.toHaveProperty("KIMI_CODE_API_KEY");
+    expect(store.environment()).not.toHaveProperty("LXE_SAIHU_MCP_API_KEY");
     store.saveRuntimePreference("kimi_coding", "k3", "high");
     const persistedSecrets = readFileSync(join(root, "config", "secrets.bin"), "utf8");
     expect(readFileSync(join(root, "config", "auth.json"), "utf8")).toContain("local-model-secret");
@@ -389,7 +390,7 @@ describe("DesktopConfigStore", () => {
     });
   });
 
-  test("stores cloud metadata separately from the encrypted upload token", () => {
+  test("stores cloud metadata separately from the encrypted device identity", () => {
     const root = createRoot();
     const opaqueStorage = {
       isEncryptionAvailable: () => true,
@@ -405,7 +406,6 @@ describe("DesktopConfigStore", () => {
       dataServerUrl: "http://10.88.0.1:8000",
       tunnelName: "lxe-agent",
       apiKey: "lxe_client_0123456789abcdef0123456789abcdef.secret-value",
-      erpApiKey: "erp-dedicated-secret",
       wireGuard: {
         tunnel_name: "lxe-agent",
         private_key: wireGuardPrivateKey,
@@ -434,8 +434,6 @@ describe("DesktopConfigStore", () => {
     expect(store.environment()).toMatchObject({
       LXE_DATA_SERVER_ENABLED: "1",
       LXE_DATA_SERVER_URL: "http://10.88.0.1:8000",
-      LXE_DATA_SERVER_API_KEY: "",
-      LXE_ERP_API_KEY: "",
     });
 
     store.saveCloudPermissionSnapshot({
@@ -478,7 +476,6 @@ describe("DesktopConfigStore", () => {
       dataServerUrl: "http://10.88.0.1:8000",
       tunnelName: "lxe-agent",
       apiKey: "old-data-token",
-      erpApiKey: "old-erp-token",
     });
     store.saveCloudPermissionSnapshot({
       device_id: "0123456789abcdef0123456789abcdef",
@@ -501,8 +498,6 @@ describe("DesktopConfigStore", () => {
     });
     expect(store.environment()).toMatchObject({
       LXE_DATA_SERVER_ENABLED: "0",
-      LXE_DATA_SERVER_API_KEY: "",
-      LXE_ERP_API_KEY: "",
       LXE_MANAGED_LLM_API_KEY: "",
     });
     expect(store.state()).toMatchObject({ complete: false, managed_model_configured: false });
@@ -513,8 +508,6 @@ describe("DesktopConfigStore", () => {
     });
     expect(store.environment()).toMatchObject({
       LXE_DATA_SERVER_ENABLED: "1",
-      LXE_DATA_SERVER_API_KEY: "",
-      LXE_ERP_API_KEY: "",
       LXE_MANAGED_LLM_API_KEY: "old-managed-model-token",
     });
     expect(store.cloudPermissionSnapshot()).toMatchObject({ permission_profile: "fba" });
@@ -527,7 +520,6 @@ describe("DesktopConfigStore", () => {
       dataServerUrl: "http://10.88.0.2:8000",
       tunnelName: "lxe-agent",
       apiKey: "new-data-token",
-      erpApiKey: "new-erp-token",
     })).toMatchObject({
       device_name: "New device",
       switch_in_progress: false,
@@ -573,8 +565,6 @@ describe("DesktopConfigStore", () => {
     });
     expect(store.environment()).toMatchObject({
       LXE_DATA_SERVER_ENABLED: "0",
-      LXE_DATA_SERVER_API_KEY: "",
-      LXE_ERP_API_KEY: "",
       LXE_MANAGED_LLM_API_KEY: "",
     });
     encryptedSecrets = readFileSync(join(root, "config", "secrets.bin"), "utf8");

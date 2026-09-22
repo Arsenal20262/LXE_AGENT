@@ -168,7 +168,6 @@ const encryptedEnrollment = (
   }));
 };
 
-const businessFixture = { token: "lxe_run_" + "r".repeat(43), erp_token: "lxe_erp_run_" + "e".repeat(43), expires_at: 4_000_000_000 };
 const identityJson = (value: any, init?: ResponseInit): Response => Response.json({
   ...(value.device_id ? { principal_id: value.device_id, principal_kind: "managed_device", registration_status: "active",
     management_role: "member", management_version: 1 } : {}), ...value,
@@ -193,7 +192,7 @@ const cloudService = (options: ConstructorParameters<typeof DesktopCloudService>
       permission: permission ? { ...permission, grants: { server_capabilities: [], erp_actions: [], ...permission.grants } } : null };
   } };
   return new DesktopCloudService({ ...options, contextClient, ...(fetcher ? { fetch: (input, init) => {
-    if (String(input).endsWith("/identity/business-credential")) return Promise.resolve(Response.json(businessFixture));
+    if (String(input).endsWith("/identity/business-credential")) throw new Error("Business credentials must not be requested");
     const response = Promise.resolve(fetcher(input, init));
     if (/\/identity(?:\/activate)?$/u.test(String(input))) {
       identityResponse = response.then((r) => r.clone());
@@ -467,7 +466,7 @@ describe("DesktopCloudService", () => {
     expect(provisioned).toBe(1);
     expect(restarted).toBe(1);
     expect(config.cloudIdentityCredential()).toBe(enrollmentPayload.data_server.api_token);
-    expect(config.environment().LXE_ERP_API_KEY).toBe("");
+    expect(config.environment().LXE_ERP_API_KEY).toBeUndefined();
     online = true;
     expect(await service.retry()).toMatchObject({
       configured: true,
@@ -509,7 +508,6 @@ describe("DesktopCloudService", () => {
       dataServerUrl: enrollmentPayload.data_server.url,
       tunnelName: "lxe-agent",
       apiKey: enrollmentPayload.data_server.api_token,
-      erpApiKey: enrollmentPayload.erp?.api_token,
     });
     config.saveCloudPermissionSnapshot({
       device_id: enrollmentPayload.device.id,
@@ -579,10 +577,9 @@ describe("DesktopCloudService", () => {
       permission_profile: "replenishment",
       permission_status: "verified",
     });
-    expect(config.environment()).toMatchObject({
-      LXE_DATA_SERVER_API_KEY: businessFixture.token,
-      LXE_ERP_API_KEY: businessFixture.erp_token,
-    });
+    expect(config.environment()).not.toHaveProperty("LXE_DATA_SERVER_API_KEY");
+    expect(config.environment()).not.toHaveProperty("LXE_ERP_API_KEY");
+    expect(config.environment()).not.toHaveProperty("LXE_SAIHU_MCP_API_KEY");
     expect(config.cloudWireGuardConfiguration()).toMatchObject({
       tunnel_name: "lxe-agent",
       private_key: replacementEnrollmentPayload.wireguard.private_key,
@@ -616,7 +613,6 @@ describe("DesktopCloudService", () => {
       dataServerUrl: enrollmentPayload.data_server.url,
       tunnelName: "lxe-agent",
       apiKey: enrollmentPayload.data_server.api_token,
-      erpApiKey: enrollmentPayload.erp?.api_token,
     });
     config.saveCloudPermissionSnapshot({
       device_id: enrollmentPayload.device.id,
@@ -657,10 +653,9 @@ describe("DesktopCloudService", () => {
       permission_profile: "fba",
       permission_status: "cached",
     });
-    expect(config.environment()).toMatchObject({
-      LXE_DATA_SERVER_API_KEY: "",
-      LXE_ERP_API_KEY: "",
-    });
+    expect(config.environment()).not.toHaveProperty("LXE_DATA_SERVER_API_KEY");
+    expect(config.environment()).not.toHaveProperty("LXE_ERP_API_KEY");
+    expect(config.environment()).not.toHaveProperty("LXE_SAIHU_MCP_API_KEY");
     expect(config.cloudPermissionSnapshot()).toMatchObject({ device_id: enrollmentPayload.device.id });
   });
 
@@ -675,7 +670,6 @@ describe("DesktopCloudService", () => {
       dataServerUrl: enrollmentPayload.data_server.url,
       tunnelName: "lxe-agent",
       apiKey: enrollmentPayload.data_server.api_token,
-      erpApiKey: enrollmentPayload.erp?.api_token,
     });
     config.saveCloudPermissionSnapshot({
       device_id: enrollmentPayload.device.id,
@@ -740,8 +734,6 @@ describe("DesktopCloudService", () => {
     });
     expect(config.environment()).toMatchObject({
       LXE_DATA_SERVER_ENABLED: "0",
-      LXE_DATA_SERVER_API_KEY: "",
-      LXE_ERP_API_KEY: "",
       LXE_MANAGED_LLM_API_KEY: "",
     });
     expect(config.cloudPermissionSnapshot()).toBeNull();
@@ -767,7 +759,6 @@ describe("DesktopCloudService", () => {
       dataServerUrl: enrollmentPayload.data_server.url,
       tunnelName: "lxe-agent",
       apiKey: enrollmentPayload.data_server.api_token,
-      erpApiKey: enrollmentPayload.erp?.api_token,
     });
     config.saveCloudPermissionSnapshot({
       device_id: enrollmentPayload.device.id,
@@ -801,8 +792,6 @@ describe("DesktopCloudService", () => {
     expect(config.cloudPermissionSnapshot()).toBeNull();
     expect(config.environment()).toMatchObject({
       LXE_DATA_SERVER_ENABLED: "0",
-      LXE_DATA_SERVER_API_KEY: "",
-      LXE_ERP_API_KEY: "",
     });
     await service.stop();
   });
@@ -888,7 +877,6 @@ describe("DesktopCloudService", () => {
       dataServerUrl: enrollmentPayload.data_server.url,
       tunnelName: "lxe-agent",
       apiKey: enrollmentPayload.data_server.api_token,
-      erpApiKey: enrollmentPayload.erp?.api_token,
     });
     config.saveCloudPermissionSnapshot({
       device_id: enrollmentPayload.device.id,
@@ -929,10 +917,9 @@ describe("DesktopCloudService", () => {
       permission_profile: "fba",
     });
     expect(config.cloudConfiguration()).toMatchObject({ switch_in_progress: false });
-    expect(config.environment()).toMatchObject({
-      LXE_DATA_SERVER_API_KEY: "",
-      LXE_ERP_API_KEY: "",
-    });
+    expect(config.environment()).not.toHaveProperty("LXE_DATA_SERVER_API_KEY");
+    expect(config.environment()).not.toHaveProperty("LXE_ERP_API_KEY");
+    expect(config.environment()).not.toHaveProperty("LXE_SAIHU_MCP_API_KEY");
     expect(events.filter(({ message }) => message !== "cloud_skill_permission_failed").map(({ message }) => message)).toEqual([
       "cloud_enrollment_activation_started",
       "cloud_device_activation_failed",
@@ -1524,7 +1511,7 @@ describe("independent CLI skill permissions", () => {
     const f = fixture(), service = f.make();
     expect(await service.check()).toMatchObject({ connection: "error", permission_status: "verified", permission_profile: "custom", is_admin: false });
     expect(service.allowedSkillTypes()).toEqual(["amazon_fba"]);
-    expect(f.config.environment()).toMatchObject({ LXE_DATA_SERVER_URL: enrollmentPayload.data_server.url, LXE_DATA_SERVER_ENABLED: "1", LXE_DATA_SERVER_API_KEY: "" });
+    expect(f.config.environment()).toMatchObject({ LXE_DATA_SERVER_URL: enrollmentPayload.data_server.url, LXE_DATA_SERVER_ENABLED: "1" });
     f.config.cloudIdentityCredential = () => "";
     expect(await service.check()).toMatchObject({ permission_status: "verified", permission_profile: "custom" });
     await service.stop();
@@ -1537,18 +1524,18 @@ describe("independent CLI skill permissions", () => {
     expect(service.allowedSkillTypes()).toEqual([]);
     await service.stop();
   });
-  test("native grants override identity permissions and business refresh errors stay separate", async () => {
+  test("native grants override identity permissions without requesting business credentials", async () => {
     const f = fixture();
-    f.setIdentity(async (input) => String(input).endsWith("/business-credential")
-      ? Response.json({ detail: "actual business refresh failure" }, { status: 503 })
-      : identityJson({ status: "ok", activation_required: false, device_id: enrollmentPayload.device.id,
+    const identityRequests: string[] = [];
+    f.setIdentity(async (input) => { identityRequests.push(String(input)); return identityJson({ status: "ok", activation_required: false, device_id: enrollmentPayload.device.id,
         display_name: enrollmentPayload.device.name, wireguard_ip: "10.88.0.8",
         machine_id: resolveMachineIdentity(join(f.root, "db", "machine_identity.json")).machine_id,
-        permission_v2: devicePermissionV2("full_access", 99, 1, ["*"]), managed_llm: { available: false } }));
+        permission_v2: devicePermissionV2("full_access", 99, 1, ["*"]), managed_llm: { available: false } }); });
     const service = f.make();
-    expect(await service.check()).toMatchObject({ connection: "connected", permission_status: "verified", permission_profile: "custom", business_credential_error: expect.stringContaining("actual business refresh failure") });
+    expect(await service.check()).toMatchObject({ connection: "connected", permission_status: "verified", permission_profile: "custom" });
     expect(service.allowedSkillTypes()).toEqual(["amazon_fba"]);
     expect(f.config.environment().LXE_DATA_SERVER_URL).toBe(enrollmentPayload.data_server.url);
+    expect(identityRequests.some(url => url.includes("business-credential"))).toBe(false);
     await service.stop();
   });
   test("retains offline cache, applies revocation, persists denial and never restores it on restart", async () => {

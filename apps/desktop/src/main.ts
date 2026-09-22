@@ -342,9 +342,6 @@ async function bootstrap(): Promise<void> {
     logger: cloudLogger,
     provisioner: cloudProvisioner,
     contextClient: new DesktopCloudContextClient({ pythonPath: paths.managedPythonPath, cwd: paths.dataRoot }),
-    onRuntimeCredentialChanged: async () => {
-      if (gateway.health().gateway !== "stopped") await gateway.restart();
-    },
     onConfigured: async () => {
       await gateway.restart();
       invalidations.push(ALL_DASHBOARD_DATA_DOMAINS);

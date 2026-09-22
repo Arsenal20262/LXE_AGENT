@@ -229,10 +229,15 @@ export class OfficialMcpConnector implements McpConnector {
   ) {}
 
   async connect(server: McpServerConfig, signal?: AbortSignal): Promise<McpConnection> {
+    const nativeSaihu = server.transport === "streamable-http" && server.name === "lxe-saihu";
+    const configurationError = "Company Saihu MCP requires X-LXE-Client: cli without credentials; update its configuration";
+    if (nativeSaihu && (server.bearerTokenEnvVar
+      || [...Object.keys(server.headers), ...Object.keys(server.envHeaders)].some(key => /^(authorization|cookie|proxy-authorization)$/iu.test(key)))) {
+      throw new Error(configurationError);
+    }
     const headers = server.transport === "streamable-http" ? resolveMcpHttpHeaders(server, this.environment) : {};
-    const nativeSaihu = server.transport === "streamable-http" && server.name === "lxe-saihu" && Object.entries(headers).some(([key, value]) => key.toLowerCase() === "x-lxe-client" && value === "cli");
-    if (nativeSaihu && (server.bearerTokenEnvVar || Object.keys(headers).some(key => /^(authorization|cookie|proxy-authorization)$/iu.test(key)))) {
-      throw new Error("Native Saihu MCP configuration must not include credentials; review its custom authentication settings");
+    if (nativeSaihu && !Object.entries(headers).some(([key, value]) => key.toLowerCase() === "x-lxe-client" && value === "cli")) {
+      throw new Error(configurationError);
     }
     const client = this.clientFactory();
     const closeOnAbort = (): void => { void client.close(); };

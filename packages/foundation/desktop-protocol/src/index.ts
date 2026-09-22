@@ -382,7 +382,6 @@ export interface DesktopCloudState {
   dependency_error: string;
   permission_status: DesktopCloudPermissionStatus;
   permission_error?: string;
-  business_credential_error?: string;
   permission_profile: DesktopPermissionProfile | null;
   permission_version: number;
   profile_revision: number;

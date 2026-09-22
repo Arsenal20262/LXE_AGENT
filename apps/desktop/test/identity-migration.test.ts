@@ -96,7 +96,7 @@ for (const platform of ["win32", "darwin"] as const) {
       expect(result).toMatchObject({ configured: true, connection: "connected", is_admin: false });
       expect(f.config().cloudIdentityCredential()).toBe(f.candidate());
       expect(f.config().cloudConfiguration()).toMatchObject({ device_id: before.device_id, vpn_ip: before.vpn_ip, tunnel_name: before.tunnel_name });
-      expect(f.config().environment().LXE_ERP_API_KEY).toBe(f.business.erp_token);
+      expect(f.config().environment().LXE_ERP_API_KEY).toBeUndefined();
       const environment = JSON.stringify(f.config().environment());
       expect(environment).not.toContain(f.candidate()); expect(environment).not.toContain(legacy);
       const migrationRequests = f.requests.filter((url) => url.includes("/migration/"));
@@ -113,7 +113,7 @@ for (const action of ["prepare", "confirm"] as const) {
       expect((await service.start()).connection).toBe("error");
       const candidate = f.candidate();
       expect(f.config().cloudLegacyIdentityCredential()).toBe(legacy);
-      expect(f.config().environment().LXE_ERP_API_KEY).toBe("");
+      expect(f.config().environment().LXE_ERP_API_KEY).toBeUndefined();
       await service.stop(); f.reopen(); service = f.serviceFactory();
       expect((await service.start()).connection).toBe("connected");
       expect(f.config().cloudIdentityCredential()).toBe(candidate);

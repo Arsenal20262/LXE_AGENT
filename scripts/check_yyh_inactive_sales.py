@@ -27,7 +27,7 @@ from services.mabang.amazon.fba import store_msku, store_resolver
 from services.mabang.amazon.fba.combo_sku import normalize_sku_key
 from services.mabang.auth import MabangAuthContext
 from shared.infra.net import close_all_network_clients
-from saihu_msku_compare import load_env, redact
+from source_comparison_helpers import load_env, redact
 
 STORE = 'Amazon-YYH-US'
 SID = '2021143528'

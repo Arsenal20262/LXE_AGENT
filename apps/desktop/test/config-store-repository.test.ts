@@ -154,9 +154,7 @@ describe("DesktopConfigRepository", () => {
     secrets.ziniao_password = "ziniao-secret";
     secrets.mabang_password = "mabang-secret";
     secrets.feishu_app_secret = "feishu-secret";
-    secrets.data_server_api_key = "upload-secret";
-    secrets.erp_api_key = "erp-secret";
-    secrets.saihu_mcp_api_key = "saihu-mcp-secret";
+    secrets.data_server_api_key = "device-identity-secret";
     repository.commit(config, secrets);
 
     const publicConfig = readFileSync(join(root, "config", "settings.json"), "utf8");
@@ -166,9 +164,7 @@ describe("DesktopConfigRepository", () => {
       "ziniao-secret",
       "mabang-secret",
       "feishu-secret",
-      "upload-secret",
-      "erp-secret",
-      "saihu-mcp-secret",
+      "device-identity-secret",
     ]) {
       expect(publicConfig).not.toContain(secret);
       expect(encryptedSecrets).not.toContain(`\"${secret}\"`);
@@ -286,3 +282,27 @@ describe("DesktopConfigRepository", () => {
       .toBe("");
   });
 });
+
+for (const expiresAt of [1, 4_000_000_000]) {
+  test(`discards obsolete business secrets without reenrollment (expiry ${expiresAt})`, () => {
+    const root = createRoot();
+    const repository = new DesktopConfigRepository(root, safeStorage, "darwin");
+    const config = cloneConfig();
+    config.cloud.managed = true;
+    config.cloud.device_id = "existing-device";
+    repository.commit(config, cloneSecrets());
+    const path = join(root, "config/secrets.bin");
+    const legacy = { ...cloneSecrets(), data_server_api_key: "device-identity",
+      cloud_business_token: "obsolete-business", cloud_business_erp_token: "obsolete-erp",
+      cloud_business_expires_at: expiresAt, erp_api_key: "obsolete-erp-key", saihu_mcp_api_key: "obsolete-mcp-key" };
+    writeFileSync(path, safeStorage.encryptString(JSON.stringify(legacy)));
+    const current = repository.readSecrets();
+    expect(current.data_server_api_key).toBe("device-identity");
+    expect(JSON.stringify(current)).not.toContain("obsolete-");
+    repository.commit(repository.readConfig(), current);
+    expect(safeStorage.decryptString(readFileSync(path))).not.toContain("cloud_business_");
+    expect(safeStorage.decryptString(readFileSync(path))).not.toContain("obsolete-");
+    expect(repository.readConfig().cloud.device_id).toBe("existing-device");
+    expect(repository.readConfig().schema_version).toBe(8);
+  });
+}

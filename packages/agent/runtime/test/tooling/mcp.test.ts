@@ -270,3 +270,20 @@ describe("MCP manager", () => {
     await manager.stop();
   });
 });
+
+test("company MCP rejects legacy authentication before creating a client", async () => {
+  const defaults = loadMcpConfig("config/mcp_servers.default.yaml", {}).servers.find(server => server.name === "lxe-saihu")!;
+  let clients = 0;
+  const connector = new OfficialMcpConnector({ OLD_KEY: "expired-key" }, () => { clients++; throw new Error("must not create client"); });
+  for (const override of [
+    { bearerTokenEnvVar: "OLD_KEY" },
+    { bearerTokenEnvVar: "MISSING_OLD_KEY" },
+    { headers: { Authorization: "Bearer expired-key" } },
+    { headers: { "X-LXE-Client": "cli", Cookie: "session=old" } },
+    { envHeaders: { Authorization: "OLD_KEY" } },
+    { headers: {} },
+  ]) {
+    await expect(connector.connect({ ...defaults, enabled: true, ...override })).rejects.toThrow("Company Saihu MCP requires");
+  }
+  expect(clients).toBe(0);
+});

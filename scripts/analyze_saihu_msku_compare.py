@@ -9,7 +9,7 @@ from dataclasses import asdict
 from decimal import Decimal
 from pathlib import Path
 
-from saihu_msku_compare import keyed, quantity, save
+from source_comparison_helpers import keyed, quantity, save
 
 SALES = [('7天销量','sevenSaleNum','day7SaleNum'), ('14天销量','fourteenSaleNum','day14SaleNum'), ('30天销量','thirtySaleNum','day30SaleNum'), ('90天销量','ninetySaleNum',None)]
 FBA = [('可售','available'), ('待调仓','reservedTransfer'), ('调仓中','reservedProcessing'), ('预留','reservedCustomerorders')]

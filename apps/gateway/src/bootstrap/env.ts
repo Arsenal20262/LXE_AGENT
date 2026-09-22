@@ -6,9 +6,6 @@ export const DEVELOPMENT_SECRET_ENV_NAMES = new Set([
   "FEISHU_APP_SECRET",
   "MABANG_PASSWORD",
   "ZINIAO_PASSWORD",
-  "LXE_DATA_SERVER_API_KEY",
-  "LXE_ERP_API_KEY",
-  "LXE_SAIHU_MCP_API_KEY",
 ]);
 
 export interface EnvironmentFilesOptions {

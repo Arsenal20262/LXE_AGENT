@@ -62,7 +62,6 @@ interface DesktopCloudServiceOptions {
   llmConfigRoot?: string;
   supported: boolean;
   unsupportedMessage?: string;
-  onRuntimeCredentialChanged?(): Promise<void>;
   config: DesktopConfigStore;
   enrollments: DesktopCloudEnrollmentManager;
   provisioner: WireGuardProvisionerPort;
@@ -112,7 +111,6 @@ export class DesktopCloudService {
   private permissionFresh = false;
   private permissionError = "";
   private permissionFailure: "denied" | "error" | undefined;
-  private businessCredentialError = "";
   private contextController: AbortController | undefined;
   private contextGeneration = 0;
   private round: Promise<DesktopCloudState> | undefined;
@@ -174,7 +172,6 @@ export class DesktopCloudService {
       dependency_error: this.dependencyError,
       ...permission,
       permission_error: this.permissionError,
-      business_credential_error: this.businessCredentialError,
     };
   }
 
@@ -223,38 +220,6 @@ export class DesktopCloudService {
       || (payload.management_role !== "member" && payload.management_role !== "administrator")
       || !Number.isSafeInteger(payload.management_version) || Number(payload.management_version) < 1) {
       throw new Error("Invalid server principal identity or management role");
-    }
-  }
-
-  private async syncBusinessCredential(target: ManagedCloudProbeTarget): Promise<void> {
-    try {
-      await this.refreshBusinessCredential(target);
-      this.businessCredentialError = "";
-    } catch (error) {
-      this.businessCredentialError = contextDiagnostic(error instanceof Error ? error.message : String(error));
-      this.options.logger.warn("cloud_business_credential_refresh_failed", { observed_error: this.businessCredentialError });
-    }
-  }
-
-  private async refreshBusinessCredential(target: ManagedCloudProbeTarget): Promise<void> {
-    const previous = this.options.config.cloudBusinessCredential();
-    if (previous.token && previous.erp_token && previous.expires_at > this.now() / 1_000 + 3_600) return;
-    const response = await this.request(`${target.dataServerUrl}/api/v1/agent-data/identity/business-credential`, {
-      method: "POST", headers: { authorization: `Bearer ${target.apiToken}`, "content-type": "application/json" },
-      body: JSON.stringify({ token: previous.token, erp_token: previous.erp_token }), cache: "no-store",
-    });
-    if (!response.ok) {
-      throw new Error(this.diagnosticError(new Error(`Business credential HTTP ${response.status}: ${await response.text()}`), target));
-    }
-    const payload = objectValue(await response.json());
-    if (typeof payload?.token !== "string" || !/^lxe_run_[A-Za-z0-9_-]{32,}$/u.test(payload.token)
-      || typeof payload.erp_token !== "string" || !/^lxe_erp_run_[A-Za-z0-9_-]{32,}$/u.test(payload.erp_token)
-      || !Number.isFinite(payload.expires_at) || Number(payload.expires_at) <= this.now() / 1_000) {
-      throw new Error("Invalid business credential response");
-    }
-    this.options.config.saveCloudBusinessCredential({ token: payload.token, erp_token: payload.erp_token, expires_at: Number(payload.expires_at) });
-    if (payload.token !== previous.token || payload.erp_token !== previous.erp_token) {
-      if (!this.activation) await this.options.onRuntimeCredentialChanged?.();
     }
   }
 
@@ -532,7 +497,6 @@ export class DesktopCloudService {
         tunnelName: "lxe-agent",
         apiKey: payload.data_server.api_token,
         wireGuard: wireGuardTunnelFromEnrollment(payload),
-        ...(payload.erp ? { erpApiKey: payload.erp.api_token } : {}),
       });
       const wasDestructiveSwitch = switchStarted;
       switchStarted = false;
@@ -620,7 +584,6 @@ export class DesktopCloudService {
       vpnIp: target.vpnIp, dataServerUrl: target.dataServerUrl, apiKey: target.apiToken,
       tunnelName: tunnel?.tunnel_name ?? "", ...(tunnel ? { wireGuard: tunnel } : {}) });
     this.permissionSnapshot = null;
-    await this.syncBusinessCredential(target);
     await this.syncManagedLlmCredential(result.managed_llm, target, this.options.logger, result.managed_llm_v3 ?? result.managed_llm_v2);
     return this.setConnection("connected", "", true, result.management_role === "administrator");
   }
@@ -687,7 +650,6 @@ export class DesktopCloudService {
     }
     try {
       this.validatePrincipal(payload, target);
-      await this.syncBusinessCredential(target);
     } catch (error) {
       return this.invalidCloudResponse(
         logger,
@@ -756,7 +718,6 @@ export class DesktopCloudService {
     }
     try {
       this.validatePrincipal(payload, target);
-      await this.syncBusinessCredential(target);
     } catch (error) {
       return this.invalidCloudResponse(
         logger,

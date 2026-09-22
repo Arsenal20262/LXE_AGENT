@@ -28,8 +28,7 @@ describe("desktop data server policy", () => {
     });
 
     expect(environment).toMatchObject({
-      LXE_DATA_SERVER_ENABLED: "0", LXE_DATA_SERVER_URL: "", LXE_DATA_SERVER_API_KEY: "managed-secret",
-      LXE_ERP_API_KEY: "managed-erp-secret",
+      LXE_DATA_SERVER_ENABLED: "0", LXE_DATA_SERVER_URL: "",
       LXE_DATA_SERVER_MACHINE_ID_PATH: "/worktree/var/db/machine_identity.json",
     });
     expect(JSON.stringify(environment)).not.toContain("source-secret");
@@ -60,8 +59,6 @@ describe("desktop data server policy", () => {
     expect(environment).toEqual({
       LXE_DATA_SERVER_ENABLED: "1",
       LXE_DATA_SERVER_URL: "http://10.88.0.1:8000",
-      LXE_DATA_SERVER_API_KEY: "managed-secret",
-      LXE_ERP_API_KEY: "managed-erp-secret",
       LXE_DATA_SERVER_MACHINE_ID_PATH: "C:\\LXE Agent\\var\\db\\machine_identity.json",
     });
     expect(JSON.stringify(environment)).not.toContain("source-secret");

@@ -88,11 +88,6 @@ export interface DesktopSecrets {
   feishu_app_secret: string;
   data_server_api_key: string;
   cloud_identity_candidate: string;
-  cloud_business_token: string;
-  cloud_business_erp_token: string;
-  cloud_business_expires_at: number;
-  erp_api_key: string;
-  saihu_mcp_api_key: string;
   cloud_permission_snapshot: DesktopCloudPermissionSnapshot | null;
   cloud_wireguard: WireGuardTunnelConfiguration | null;
   managed_llm_credential: ManagedLlmCredential | null;
@@ -158,11 +153,6 @@ const DEFAULT_SECRETS: DesktopSecrets = {
   feishu_app_secret: "",
   data_server_api_key: "",
   cloud_identity_candidate: "",
-  cloud_business_token: "",
-  cloud_business_erp_token: "",
-  cloud_business_expires_at: 0,
-  erp_api_key: "",
-  saihu_mcp_api_key: "",
   cloud_permission_snapshot: null,
   cloud_wireguard: null,
   managed_llm_credential: null,
@@ -468,11 +458,6 @@ export const parseSecrets = (raw: unknown): DesktopSecrets => {
     feishu_app_secret: text(value.feishu_app_secret),
     data_server_api_key: text(value.data_server_api_key),
     cloud_identity_candidate: text(value.cloud_identity_candidate),
-    cloud_business_token: text(value.cloud_business_token),
-    cloud_business_erp_token: text(value.cloud_business_erp_token),
-    cloud_business_expires_at: Number(value.cloud_business_expires_at) || 0,
-    erp_api_key: text(value.erp_api_key),
-    saihu_mcp_api_key: text(value.saihu_mcp_api_key),
     cloud_permission_snapshot: parseStoredDevicePermission(
       value.cloud_permission_snapshot,
     ),

@@ -1,110 +1,31 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { afterEach, expect, test } from "bun:test";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { bootstrapDesktopState } from "../src/main/migration";
-import { migrateSaihuMcpDefault } from "@lxe/gateway/desktop";
-
 const roots: string[] = [];
-afterEach(() => {
-  for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
+afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
+function fixture() {
+  const root = mkdtempSync(join(tmpdir(), "lxe-bootstrap-")); roots.push(root);
+  const source = join(root, "default.yaml"), data = join(root, "data");
+  const defaults = readFileSync("config/mcp_servers.default.yaml", "utf8");
+  writeFileSync(source, defaults);
+  return { source, data, defaults, target: join(data, "config/mcp_servers.local.yaml") };
+}
+test("initializes the native disabled default and connector state only when missing", () => {
+  const f = fixture(); bootstrapDesktopState(f.source, f.data);
+  expect(readFileSync(f.target, "utf8")).toBe(f.defaults);
+  expect(f.defaults).toContain("X-LXE-Client: cli");
+  expect(f.defaults).toContain("enabled: false");
+  expect(readFileSync(join(f.data, "config/connector-states.local.json"), "utf8")).toBe("{}\n");
 });
-
-const fixture = (localSource: string) => {
-  const root = mkdtempSync(join(tmpdir(), "lxe-mcp-default-migration-"));
-  roots.push(root);
-  const dataRoot = join(root, "data");
-  const defaultPath = join(root, "mcp_servers.default.yaml");
-  mkdirSync(join(dataRoot, "config"), { recursive: true });
-  writeFileSync(defaultPath, "mcpServers: {}\n", "utf8");
-  const localPath = join(dataRoot, "config", "mcp_servers.local.yaml");
-  writeFileSync(localPath, localSource, "utf8");
-  return { dataRoot, defaultPath, localPath };
-};
-
-describe("desktop MCP default migration", () => {
-  test("migrates the current cloud template once without enabling it or changing tool settings", () => {
-    const source = "mcpServers:\n  lxe-saihu:\n    enabled: false\n    type: streamable-http\n    url: http://10.88.0.1:8000/mcp/\n    bearer_token_env_var: LXE_SAIHU_MCP_API_KEY\n    startup_timeout_s: 17\n    disabled_tools: [write]\n";
-    const migrated = migrateSaihuMcpDefault(source)!;
-    expect(migrated).toContain("enabled: false");
-    expect(migrated).toContain("startup_timeout_s: 17");
-    expect(migrated).toContain("disabled_tools: [ write ]");
-    expect(migrated).not.toContain("bearer_token_env_var");
-    expect(migrated).toContain("X-LXE-Client: cli");
-    expect(migrateSaihuMcpDefault(migrated)).toBeUndefined();
-  });
-
-  test("custom auth gets an explicit credential-free warning and no rewrite", () => {
-    const warnings: string[] = [];
-    const source = "mcpServers:\n  lxe-saihu:\n    url: http://10.88.0.1:8000/mcp/\n    headers: {Authorization: Bearer private-secret}\n";
-    expect(migrateSaihuMcpDefault(source, message => warnings.push(message))).toBeUndefined();
-    expect(warnings).toHaveLength(1);
-    expect(warnings[0]).toContain("原配置已保留");
-    expect(warnings[0]).not.toContain("private-secret");
-  });
-  test("updates only the old localhost and Data Server bearer defaults", () => {
-    const { dataRoot, defaultPath, localPath } = fixture([
-      "mcpServers:",
-      "  lxe-saihu:",
-      "    enabled: true",
-      "    type: streamable-http",
-      "    url: http://127.0.0.1:8000/mcp/",
-      "    bearer_token_env_var: LXE_DATA_SERVER_API_KEY",
-      "    exposure: direct",
-      "    enabled_tools: [get_shop_page_list]",
-      "    disabled_tools: [dangerous_tool]",
-      "    connector_id: custom-saihu",
-      "",
-    ].join("\n"));
-
-    bootstrapDesktopState(defaultPath, dataRoot);
-
-    const migrated = readFileSync(localPath, "utf8");
-    expect(migrated).toContain("url: http://10.88.0.1:8000/mcp/");
-    expect(migrated).not.toContain("bearer_token_env_var");
-    expect(migrated).toContain("X-LXE-Client: cli");
-    expect(migrated).toContain("enabled: true");
-    expect(migrated).toContain("exposure: direct");
-    expect(migrated).toContain("enabled_tools: [ get_shop_page_list ]");
-    expect(migrated).toContain("disabled_tools: [ dangerous_tool ]");
-    expect(migrated).toContain("connector_id: custom-saihu");
-  });
-
-  test("converts the historical Authorization header and preserves other headers", () => {
-    const { dataRoot, defaultPath, localPath } = fixture([
-      "mcpServers:",
-      "  lxe-saihu:",
-      "    enabled: false",
-      "    type: streamable-http",
-      "    url: http://localhost:8000/mcp/",
-      "    headers:",
-      "      Authorization: 'Bearer ${LXE_DATA_SERVER_API_KEY}'",
-      "      X-Environment: development",
-      "",
-    ].join("\n"));
-
-    bootstrapDesktopState(defaultPath, dataRoot);
-
-    const migrated = readFileSync(localPath, "utf8");
-    expect(migrated).toContain("url: http://10.88.0.1:8000/mcp/");
-    expect(migrated).not.toContain("bearer_token_env_var");
-    expect(migrated).toContain("X-LXE-Client: cli");
-    expect(migrated).toContain("X-Environment: development");
-    expect(migrated).not.toContain("Authorization:");
-    expect(migrated).not.toContain("LXE_DATA_SERVER_API_KEY");
-  });
-
-  test("leaves custom endpoints or credentials byte-for-byte unchanged", () => {
-    const customSources = [
-      "mcpServers:\n  lxe-saihu:\n    url: https://custom.example/mcp\n    bearer_token_env_var: LXE_DATA_SERVER_API_KEY\n",
-      "mcpServers:\n  lxe-saihu:\n    url: http://127.0.0.1:8000/mcp/\n    bearer_token_env_var: CUSTOM_TOKEN\n",
-      "mcpServers:\n  lxe-saihu:\n    url: http://127.0.0.1:8000/mcp/\n    headers: {Authorization: Bearer custom-token}\n",
-      "mcpServers: [invalid-shape]\n",
-    ];
-    for (const source of customSources) {
-      const { dataRoot, defaultPath, localPath } = fixture(source);
-      bootstrapDesktopState(defaultPath, dataRoot);
-      expect(readFileSync(localPath, "utf8")).toBe(source);
-    }
-  });
+test("does not convert old company credentials or overwrite local settings", () => {
+  const f = fixture(); mkdirSync(join(f.data, "config"), { recursive: true });
+  const old = "mcpServers:\n  lxe-saihu:\n    enabled: false\n    url: http://10.88.0.1:8000/mcp/\n    bearer_token_env_var: LXE_SAIHU_MCP_API_KEY\n    startup_timeout_s: 17\n    disabled_tools: [write]\n";
+  writeFileSync(f.target, old);
+  const state = join(f.data, "config/connector-states.local.json");
+  writeFileSync(state, '{"other":true}');
+  bootstrapDesktopState(f.source, f.data); bootstrapDesktopState(f.source, f.data);
+  expect(readFileSync(f.target, "utf8")).toBe(old);
+  expect(readFileSync(state, "utf8")).toBe('{"other":true}');
 });
