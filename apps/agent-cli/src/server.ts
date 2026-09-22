@@ -207,6 +207,10 @@ export class AgentProtocolServer {
         );
         return artifact ? { found: true, path: artifact.path } : { found: false };
       }
+      case "resolve_image_preview": {
+        const preview = await this.readyHost().resolveImagePreview(request.params.session_id, request.params.kind, request.params.id);
+        return preview ? { found: true, preview } : { found: false };
+      }
       case "resolve_image_view": {
         const view = await this.readyHost().resolveImageView(request.params.session_id, request.params.view_id);
         return view ? { found: true, path: view.path } : { found: false };

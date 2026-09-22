@@ -42,6 +42,7 @@ class MemoryStore implements RuntimeStore {
   async appendTurnError(): Promise<void> {}
   async resolveArtifact(): Promise<undefined> { return undefined; }
   async appendImageView(): Promise<void> {}
+  clearPendingImageViews(): void {}
   async resolveImageView(): Promise<undefined> { return undefined; }
   async resolveAttachment(): Promise<undefined> { return undefined; }
   async attachmentPaths(): Promise<string[]> { return []; }

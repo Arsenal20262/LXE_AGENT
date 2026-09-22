@@ -173,3 +173,19 @@ describe("JSON-RPC server semantics", () => {
     expect(responses().find((r) => r.id === "stop")).toMatchObject({ result: { stopped: true } });
   });
 });
+
+test("image preview RPC preserves source and routes session-scoped identity through the runtime host", async () => {
+  const calls: unknown[] = [];
+  const preview = { source: "history", image: { type: "image", source: { type: "base64", data: "YWJj", media_type: "image/png" } } };
+  const { call, responses } = setup({ resolveImagePreview: async (session: string, kind: string, id: string) => {
+    calls.push([session, kind, id]); return session === "s" ? preview : undefined;
+  } });
+  await call("initialize", initialize);
+  await call("resolve_image_preview", { session_id: "s", kind: "attachment", id: "a" }, "image");
+  await call("resolve_image_preview", { session_id: "other", kind: "image_view", id: "v" }, "other");
+  await call("resolve_image_preview", { session_id: "s", kind: "path", id: "/tmp/file" }, "invalid");
+  expect(calls).toEqual([["s", "attachment", "a"], ["other", "image_view", "v"]]);
+  expect(responses().find(r => r.id === "image")).toMatchObject({ result: { found: true, preview } });
+  expect(responses().find(r => r.id === "other")).toMatchObject({ result: { found: false } });
+  expect(responses().find(r => r.id === "invalid")).toMatchObject({ error: { code: -32602 } });
+});

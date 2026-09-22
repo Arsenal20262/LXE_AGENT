@@ -16,6 +16,7 @@ const workspace = resolveWorkspaceContext(out);
 const registry = new ToolRegistry(), processes = registerCodingTools(registry, {});
 const store = new SqliteRuntimeStore(join(out, "agent.sqlite3"));
 const steps = new Map<string, ToolStep>();
+let pendingPreviewCount = 0;
 const paths: string[] = [];
 for (const [i, width, height, color] of [[0, 600, 300, "#45b6bb"], [1, 300, 600, "#ac8be9"]] as const) {
   const path = join(out, `image-${i}.png`);
@@ -41,26 +42,41 @@ const runtime = new TypeScriptAgentRuntime({ store, tools: registry, systemPromp
   },
 }, emitter: { emit: async () => {}, typing: async () => {}, desktopStream: async batch => {
   for (const mutation of batch.mutations) if (mutation.kind === "part_updated" && mutation.part.type === "tool") {
-    const step = mutation.part.tool_step; if (step.image_view) steps.set(step.id, step);
+    const step = mutation.part.tool_step; if (step.image_view) {
+      steps.set(step.id, step);
+      const preview = await store.resolveImagePreview("image-fixture", "image_view", step.image_view.view_id);
+      if (preview?.source !== "history") throw new Error("Live image view did not resolve the pending historical image");
+      pendingPreviewCount++;
+    }
   }
 } } });
 await runtime.start();
 const job: AgentJob = { job_id: "image-turn", session_id: "image-fixture", session_key: "image-fixture", response_route_id: "route",
   user_id: "test", conversation_id: "test", is_group: false, message_id: "message", user_input: "Read two pictures", job_kind: "turn",
-  sender_nick: "Tester", source: { platform: "desktop" }, raw_data: {}, user_content_blocks: [], diagnostics: [], workspace };
+  sender_nick: "Tester", source: { platform: "desktop" }, raw_data: {}, user_content_blocks: [{ type: "local_file", attachment_id: "image-one", turn_id: "image-turn", path: paths[0]!,
+    name: "image-0.png", size_bytes: 1, media_type: "image/png", ts: 1 },
+    { type: "image", source: { type: "base64", media_type: "image/png", data: Buffer.from(await Bun.file(paths[0]!).arrayBuffer()).toString("base64") } }], diagnostics: [], workspace };
 try {
   await store.ensureSession({ session_id: job.session_id, source: job.source, workspace });
   await runtime.runTurn(job, { signal: new AbortController().signal, cancelled: false, drainSteering: () => [], registerProcess: () => () => {} });
 } finally { await runtime.stop(); await processes.stop(); }
 const cold = new SqliteRuntimeStore(join(out, "agent.sqlite3")); await cold.start();
 const resolved: Record<string, string> = {};
+const previews: Record<string, unknown> = {};
+let attachmentPreview: unknown;
 let messages: unknown;
 try {
-  messages = (await cold.sessionDetail(job.session_id, { limit: 10 }))!.messages;
-  for (const step of steps.values()) resolved[step.image_view!.view_id] = (await cold.resolveImageView(job.session_id, step.image_view!.view_id))!.path;
+  messages = (await cold.sessionDetail(job.session_id, { limit: 10 }))!.messages.filter(message => message.role !== "user");
+  for (const step of steps.values()) {
+    const id = step.image_view!.view_id;
+    resolved[id] = (await cold.resolveImageView(job.session_id, id))!.path;
+    previews[id] = await cold.resolveImagePreview(job.session_id, "image_view", id);
+  }
+  attachmentPreview = await cold.resolveImagePreview(job.session_id, "attachment", "image-one");
 } finally { await cold.stop(); }
+if (pendingPreviewCount < 2) throw new Error("Pending preview coverage did not run");
 if (steps.size !== 2) throw new Error(`Expected two real read events, received ${steps.size}`);
-await writeFile(join(out, "data.json"), JSON.stringify({ messages, steps: [...steps.values()], paths: resolved }));
+await writeFile(join(out, "data.json"), JSON.stringify({ messages, steps: [...steps.values()], paths: resolved, previews, attachmentPreview }));
 for (const [entry, name, target] of [
   ["apps/desktop/src/preload.ts", "preload.cjs", "node"],
   ["apps/desktop/test/fixtures/image-views.electron.ts", "main.cjs", "node"],
@@ -71,8 +87,23 @@ for (const [entry, name, target] of [
   if (!result.success) throw new AggregateError(result.logs, `Build failed: ${entry}`);
 }
 await writeFile(join(out, "index.html"), '<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="renderer.css"></head><body><div id="root"></div><script type="module" src="renderer.js"></script></body></html>');
+const sentOut = join(out, "sent");
+for (const [entry, name, target] of [
+  ["apps/desktop/test/fixtures/sent-attachments.electron.ts", "main.cjs", "node"],
+  ["apps/dashboard/test/features/sessions/sent-attachments-fixture.tsx", "renderer.js", "browser"],
+] as const) {
+  const result = await Bun.build({ entrypoints: [join(root, entry)], outdir: sentOut, naming: { entry: target === "browser" ? "renderer.[ext]" : name, asset: "[name]-[hash].[ext]", chunk: "[name]-[hash].[ext]" }, target,
+    format: target === "node" ? "cjs" : "esm", external: ["electron"], define: { "process.env.NODE_ENV": JSON.stringify("development") } });
+  if (!result.success) throw new AggregateError(result.logs, `Build failed: ${entry}`);
+}
+await writeFile(join(sentOut, "index.html"), '<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="renderer.css"></head><body><div id="root"></div><script type="module" src="renderer.js"></script></body></html>');
 const electron = createRequire(join(root, "apps/desktop/package.json"))("electron") as string;
 const child = Bun.spawn([electron, join(out, "main.cjs"), join(out, "preload.cjs"), join(out, "index.html"), join(out, "data.json")],
   { cwd: root, stdout: "inherit", stderr: "inherit", env: { ...process.env, ELECTRON_RUN_AS_NODE: undefined } });
 const code = await child.exited;
 if (code !== 0) throw new Error(`Electron smoke failed with exit code ${code}. Artifacts: ${out}`);
+
+const sentChild = Bun.spawn([electron, join(sentOut, "main.cjs"), join(out, "preload.cjs"), join(sentOut, "index.html"), join(out, "data.json")],
+  { cwd: root, stdout: "inherit", stderr: "inherit", env: { ...process.env, ELECTRON_RUN_AS_NODE: undefined } });
+const sentCode = await sentChild.exited;
+if (sentCode !== 0) throw new Error(`Sent attachment smoke failed with exit code ${sentCode}. Artifacts: ${out}`);

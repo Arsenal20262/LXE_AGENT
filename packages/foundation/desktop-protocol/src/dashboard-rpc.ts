@@ -517,11 +517,11 @@ export interface DashboardRpcSpec {
   };
   "sessions.image_view.preview": {
     input: { session_id: string; view_id: string; variant?: "thumbnail" | "expanded" };
-    result: { data_url: string };
+    result: { data_url: string; source: "history" | "current_file" };
   };
   "sessions.attachment.preview": {
     input: { session_id: string; attachment_id: string; variant?: "thumbnail" | "expanded" };
-    result: { data_url: string };
+    result: { data_url: string; source: "history" | "current_file" };
   };
   "sessions.workspace.reload": {
     input: { session_id: string };

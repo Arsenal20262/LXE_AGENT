@@ -6,7 +6,7 @@ import { resolve, dirname, join } from "node:path";
 import { IPC_CHANNELS } from "../../src/ipc-channels";
 import { parseDashboardRpcCall } from "@lxe/desktop-protocol";
 import { previewConversationImageView } from "../../src/main/conversation-artifacts";
-import { attachmentThumbnail } from "../../src/main/attachment-thumbnail";
+import { imageBytesThumbnail, attachmentThumbnail } from "../../src/main/attachment-thumbnail";
 
 app.whenReady().then(async () => {
   const data = JSON.parse(readFileSync(process.argv[4]!, "utf8"));
@@ -17,7 +17,8 @@ app.whenReady().then(async () => {
       const call = parseDashboardRpcCall(input);
       if (call.operation !== "sessions.image_view.preview") throw new Error("Unexpected operation");
       return previewConversationImageView({
-        resolveImageView: async (session, id) => session === "image-fixture" ? data.paths[id] : undefined,
+        resolvePreview: async (session, id) => session === "image-fixture" ? data.previews[id] : undefined,
+        imageThumbnail: imageBytesThumbnail,
         thumbnail: attachmentThumbnail,
       }, call.input.session_id, call.input.view_id, call.input.variant);
     });
@@ -49,7 +50,7 @@ app.whenReady().then(async () => {
     assert((await js("document.querySelector('.image-view-summary').textContent")).includes("2"));
     await js("document.querySelector('.sent-image-tile').click()");
     await wait("document.querySelector('[role=dialog] img')?.naturalWidth>320");
-    assert((await js("document.querySelector('[role=dialog]').textContent")).includes("预览当前文件"));
+    assert((await js("document.querySelector('[role=dialog]').textContent")).includes("预览历史图片"));
     await js("document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))");
     await wait("!document.querySelector('[role=dialog]')");
     await js("document.querySelector('.image-view-summary').click()");
@@ -66,18 +67,24 @@ app.whenReady().then(async () => {
     })`), [[96,96,"10px","cover","50% 50%"],[96,96,"10px","cover","50% 50%"]]);
     const screenshot = join(dirname(process.argv[4]!), "image-views.png");
     writeFileSync(screenshot, (await window.webContents.capturePage()).toPNG());
-    // Expanded queries remount: replacing the source must show the current file.
+    // Expanded queries remount: the saved image must survive source replacement.
     const paths = Object.values(data.paths) as string[];
     writeFileSync(paths[0]!, readFileSync(paths[1]!));
     await js("document.querySelector('.sent-image-tile').click()");
-    await wait("document.querySelector('[role=dialog] img')?.naturalHeight>document.querySelector('[role=dialog] img')?.naturalWidth");
+    await wait("document.querySelector('[role=dialog] img')?.naturalWidth>document.querySelector('[role=dialog] img')?.naturalHeight");
     await js("document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))");
     await wait("!document.querySelector('[role=dialog]')");
     await js("window.fixtureSession('other')");
     await wait("document.querySelectorAll('.sent-attachment-error').length===2");
     rmSync(paths[0]!);
     await js("window.fixtureSession('image-fixture')");
-    await wait("document.querySelector('.sent-attachment-error')?.textContent.includes('ENOENT')");
+    await wait("document.querySelectorAll('.sent-image-tile img').length===2");
+    await js("document.querySelector('.sent-image-tile').click()");
+    await wait("document.querySelector('[role=dialog] img')?.naturalWidth>320");
+    assert((await js("document.querySelector('[role=dialog]').textContent")).includes("预览历史图片"));
+    writeFileSync(join(dirname(process.argv[4]!), "history-after-delete.png"), (await window.webContents.capturePage()).toPNG());
+    await js("document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))");
+    await wait("!document.querySelector('[role=dialog]')");
     assert((await js("document.querySelector('.image-view-summary').textContent")).includes("2"));
     assert.deepEqual(errors, []);
     console.log(`PASS: sequential reads, grouping, thumbnails, expand/Escape, collapse, cold history, replaced/deleted source, session isolation. Screenshot: ${screenshot}`);

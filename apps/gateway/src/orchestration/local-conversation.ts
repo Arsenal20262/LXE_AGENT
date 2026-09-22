@@ -63,6 +63,7 @@ export type LocalConversationAttachment = DesktopInputAttachmentPayload & {
 interface InternalTurn {
   payload: DesktopConversationTurnPayload;
   attachmentPaths: Map<string, string>;
+  attachmentImages: Map<string, JsonObject>;
   sessionId: string;
   responseRouteId: string;
   streamEmitId?: string;
@@ -115,6 +116,16 @@ export class LocalConversationController {
     for (const turn of this.turns.values()) {
       if (turn.sessionId === sessionId && turn.attachmentPaths.has(attachmentId)) {
         return turn.attachmentPaths.get(attachmentId);
+      }
+    }
+    return undefined;
+  }
+
+  resolveAttachmentPreviewImage(sessionId: string, attachmentId: string): JsonObject | undefined {
+    for (const turn of this.turns.values()) {
+      if (turn.sessionId === sessionId) {
+        const image = turn.attachmentImages.get(attachmentId);
+        if (image) return image;
       }
     }
     return undefined;
@@ -207,6 +218,7 @@ export class LocalConversationController {
       sessionId,
       responseRouteId,
       attachmentPaths: new Map(attachments.map((attachment) => [attachment.attachment_id, attachment.path])),
+      attachmentImages: new Map(attachments.flatMap(attachment => attachment.image_block ? [[attachment.attachment_id, attachment.image_block] as const] : [])),
       payload: {
         turn_id: turnId,
         message_id: messageId,
@@ -318,6 +330,7 @@ export class LocalConversationController {
       if (activity.activeTurnId === turnId) activity.activeTurnId = undefined;
       turn.payload.state = event.state === "cleared" ? "cancelled" : event.state;
       turn.payload.settled_at = this.now();
+      turn.attachmentImages.clear();
       if (activity.latestTurnId && activity.latestTurnId !== turnId) {
         const previous = this.turns.get(activity.latestTurnId);
         this.turns.delete(activity.latestTurnId);

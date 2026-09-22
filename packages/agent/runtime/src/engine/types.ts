@@ -228,7 +228,8 @@ export interface RuntimeStore {
   popPendingEvents(sessionId: string): Promise<JsonObject[]>;
   loadMessages(sessionId: string): Promise<RuntimeMessage[]>;
   appendTurnContext(sessionId: string, context: RuntimeTurnContextRecord): Promise<void>;
-  appendImageView(sessionId: string, view: RuntimeImageViewRecord): Promise<void>;
+  appendImageView(sessionId: string, view: RuntimeImageViewRecord, image?: JsonObject): Promise<void>;
+  clearPendingImageViews(sessionId: string, turnId?: string): void;
   resolveImageView(sessionId: string, viewId: string): Promise<RuntimeImageViewRecord | undefined>;
   appendArtifact(sessionId: string, artifact: RuntimeArtifactRecord): Promise<void>;
   appendTurnError(sessionId: string, turnId: string, message: string): Promise<void>;

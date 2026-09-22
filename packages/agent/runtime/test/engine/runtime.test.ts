@@ -92,6 +92,7 @@ class MemoryStore implements RuntimeStore {
   }
   imageViews: RuntimeImageViewRecord[] = [];
   async appendImageView(_sessionId: string, view: RuntimeImageViewRecord): Promise<void> { this.imageViews.push(view); }
+  clearPendingImageViews(): void {}
   async resolveImageView(): Promise<undefined> { return undefined; }
   async resolveAttachment(): Promise<undefined> { return undefined; }
   async attachmentPaths(): Promise<string[]> { return []; }

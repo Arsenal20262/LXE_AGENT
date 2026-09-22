@@ -125,11 +125,16 @@ export type AgentCommandPayloads = {
   has_pending_events: { session_id: string };
   resolve_artifact: { session_id: string; artifact_id: string };
   resolve_image_view: { session_id: string; view_id: string };
+  resolve_image_preview: { session_id: string; kind: "attachment" | "image_view"; id: string };
   resolve_attachment: { session_id: string; attachment_id: string };
   dashboard_call: AgentDashboardRpcCall;
   session_status: SessionStatusRequest;
   shutdown: Record<string, never>;
 };
+
+export type ConversationImagePreviewSource =
+  | { source: "history"; image: JsonObject }
+  | { source: "current_file"; path: string };
 
 export type AgentCommand = keyof AgentCommandPayloads;
 
@@ -670,6 +675,7 @@ const agentCommands = new Set<AgentCommand>([
   "has_pending_events",
   "resolve_artifact",
   "resolve_image_view",
+  "resolve_image_preview",
   "resolve_attachment",
   "dashboard_call",
   "session_status",
@@ -799,6 +805,11 @@ const validateRequestPayload = (command: AgentCommand, payload: Record<string, u
     case "resolve_artifact":
       requireText("session_id");
       requireText("artifact_id");
+      break;
+    case "resolve_image_preview":
+      requireText("session_id");
+      requireText("id");
+      if (payload.kind !== "attachment" && payload.kind !== "image_view") throw new Error("resolve_image_preview.kind must be attachment or image_view");
       break;
     case "resolve_image_view":
       requireText("session_id");

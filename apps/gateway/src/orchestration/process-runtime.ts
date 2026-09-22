@@ -19,6 +19,7 @@ import {
   type AgentDashboardRpcCall,
   type AgentDashboardRpcOperation,
   type AgentCommand,
+  type ConversationImagePreviewSource,
   type AgentCommandPayloads,
   type AgentEvent,
   type AgentNotification,
@@ -365,6 +366,19 @@ export class ProcessAgentRuntime implements DirectAgentRuntime {
       throw new AgentProcessError("agent-cli returned a malformed artifact resolution", "AgentProtocolError");
     }
     return path;
+  }
+
+  async resolveImagePreview(sessionId: string, kind: "attachment" | "image_view", id: string): Promise<ConversationImagePreviewSource | undefined> {
+    const result = objectValue(await this.request("resolve_image_preview", { session_id: sessionId, kind, id }));
+    if (result.found === false) return undefined;
+    const preview = objectValue(result.preview ?? null);
+    if (result.found === true && preview.source === "history" && objectValue(preview.image ?? null).type === "image") {
+      return { source: "history", image: objectValue(preview.image ?? null) as JsonObject };
+    }
+    if (result.found === true && preview.source === "current_file" && typeof preview.path === "string" && preview.path) {
+      return { source: "current_file", path: preview.path };
+    }
+    throw new AgentProcessError("agent-cli returned a malformed image preview source", "AgentProtocolError");
   }
 
   async resolveImageView(sessionId: string, viewId: string): Promise<string | undefined> {

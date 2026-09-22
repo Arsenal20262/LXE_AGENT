@@ -817,7 +817,7 @@ export class TypeScriptAgentRuntime implements AgentRuntime {
                 turn_id: job.job_id, tool_call_id: call.id, ts: Date.now() / 1_000,
               };
               try {
-                await this.options.store.appendImageView(job.session_id, view);
+                await this.options.store.appendImageView(job.session_id, view, result.content.find(block => block.type === "image"));
                 toolDisplayOutput.image_view = { view_id: view.view_id, name: view.name, media_type: view.media_type };
               } catch (error) {
                 this.logger.warn("image_view_persistence_failed", { session_id: job.session_id, tool_call_id: call.id, error });
@@ -972,6 +972,7 @@ export class TypeScriptAgentRuntime implements AgentRuntime {
       }
       return this.outcome("error", reply, inputTokens, outputTokens, toolCalls);
     } finally {
+      this.options.store.clearPendingImageViews(job.session_id, job.job_id);
       if (typingStarted) {
         await this.typingBestEffort({
           session_id: job.session_id,

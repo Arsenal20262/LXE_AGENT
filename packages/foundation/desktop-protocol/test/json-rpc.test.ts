@@ -25,6 +25,7 @@ const methods = {
   has_pending_events: { session_id: "session" },
   resolve_artifact: { session_id: "session", artifact_id: "file" },
   resolve_image_view: { session_id: "session", view_id: "view" },
+  resolve_image_preview: { session_id: "session", kind: "attachment", id: "image" },
   resolve_attachment: { session_id: "session", attachment_id: "file" },
   dashboard_call: { operation: "models.list", input: {} },
   session_status: {action:"list",session_ids:["session"]},
@@ -34,7 +35,7 @@ const methods = {
 describe("JSON-RPC boundary", () => {
   test("all command names remain reachable with their business payloads", () => {
     const names: Array<keyof AgentCommandPayloads> = Object.keys(methods) as Array<keyof AgentCommandPayloads>;
-    expect(names).toHaveLength(15);
+    expect(names).toHaveLength(16);
     for (const method of names) {
       const request = { jsonrpc: "2.0", id: method, method, params: methods[method] };
       expect(parseAgentCall(request)).toEqual(expect.objectContaining(request));

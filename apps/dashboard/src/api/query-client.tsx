@@ -67,6 +67,13 @@ export async function applyDashboardInvalidation(
   const tasks: Array<Promise<unknown>> = [];
   for (const domain of new Set(invalidation.domains)) {
     if (domain === "sessions") {
+      tasks.push(queryClient.invalidateQueries({ predicate: query => {
+        const [domainKey, kind, sessionId] = query.queryKey;
+        const data = query.state.data as { source?: string } | undefined;
+        return domainKey === "sessions" && (kind === "attachment-preview" || kind === "image-view-preview")
+          && (!invalidation.session_ids.length || invalidation.session_ids.includes(String(sessionId)))
+          && (data?.source !== "history" || query.state.status === "error");
+      } }));
       tasks.push(queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.sessions.questions }));
       tasks.push(queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.sessions.lists }));
       if (invalidation.session_ids.length) {

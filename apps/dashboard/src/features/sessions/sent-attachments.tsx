@@ -15,14 +15,15 @@ export function partitionSentAttachments(items: readonly DesktopInputAttachmentP
 
 function usePreview(sessionId: string | undefined, id: string, variant: "thumbnail" | "expanded", enabled: boolean) {
   const query = useAttachmentPreviewQuery(sessionId, id, variant, enabled);
-  return { url: query.data?.data_url ?? "", error: queryError(query.error) };
+  return { url: query.data?.data_url ?? "", source: query.data?.source, error: queryError(query.error) };
 }
 
 function ImagePreview({ attachment, sessionId, thumbnail, onClose }: {
   attachment: DesktopInputAttachmentPayload; sessionId?: string; thumbnail: string; onClose(): void;
 }) {
   const preview = usePreview(sessionId, attachment.attachment_id, "expanded", true);
-  return <ImagePreviewDialog attachment={attachment} url={preview.url || thumbnail} error={preview.error} onClose={onClose} />;
+  const t = useUiText();
+  return <ImagePreviewDialog note={preview.source === "history" ? t.conversation.historicalImage : preview.source === "current_file" ? t.conversation.currentImageFile : undefined} attachment={attachment} url={preview.url || thumbnail} error={preview.error} onClose={onClose} />;
 }
 
 export function DraftImagePreview({ attachment, onClose }: { attachment: DesktopDraftAttachmentPayload; onClose(): void }) {
@@ -50,8 +51,8 @@ export function ImagePreviewDialog({ attachment, url, error, loading = false, no
   </div>, document.body);
 }
 
-function ImageAttachment({ attachment, sessionId, ready, onOpen }: {
-  attachment: DesktopInputAttachmentPayload; sessionId?: string; ready: boolean; onOpen(): void;
+function ImageAttachment({ attachment, sessionId, ready }: {
+  attachment: DesktopInputAttachmentPayload; sessionId?: string; ready: boolean;
 }) {
   const t = useUiText();
   const ref = useRef<HTMLDivElement>(null);
@@ -70,7 +71,7 @@ function ImageAttachment({ attachment, sessionId, ready, onOpen }: {
   return <div className="sent-image-item" ref={ref}>
     <button className="sent-image-tile" type="button" title={attachment.name} aria-label={t.conversation.openFile(attachment.name)}
       disabled={!ready || (!preview.url && !preview.error)}
-      onClick={() => preview.url ? setExpanded(true) : onOpen()}>
+      onClick={() => setExpanded(true)}>
       {preview.url ? <img src={preview.url} alt={attachment.name} /> : <>
         {ready && !preview.error ? <LoaderCircle className="conversation-spinner" size={20} /> : <ImageIcon size={24} />}
         <span>{attachment.name}</span>
@@ -95,7 +96,7 @@ export function SentAttachmentList({ attachments, sessionId, ready = true, onOpe
   return <div className="sent-attachments">
     {images.length ? <div className="sent-image-list">{images.map((attachment) =>
       <ImageAttachment key={attachment.attachment_id} attachment={attachment} sessionId={sessionId}
-        ready={ready && !!sessionId} onOpen={() => void open(attachment.attachment_id)} />)}</div> : null}
+        ready={ready && !!sessionId} />)}</div> : null}
     {files.length ? <div className="sent-file-list">{files.map((attachment) => {
       const dot = attachment.name.lastIndexOf(".");
       const suffix = dot > 0 ? attachment.name.slice(dot + 1).toUpperCase() : "";

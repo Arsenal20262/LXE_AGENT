@@ -138,6 +138,13 @@ for await (const line of input) {
     });
     continue;
   }
+  if (request.method === "resolve_image_preview") {
+    const preview = request.params.id === "file" ? { source: "current_file", path: "/tmp/source.png" }
+      : request.params.id === "malformed" ? { source: "history" }
+      : { source: "history", image: { type: "image", source: { type: "base64", media_type: "image/png", data: "YWJj" } } };
+    write({ jsonrpc: "2.0", id: request.id, result: request.params.session_id === "session-1" ? { found: true, preview } : { found: false } });
+    continue;
+  }
   if (request.method === "resolve_attachment") {
     write({ jsonrpc: "2.0", id: request.id, result: { found: false } });
     continue;

@@ -11,7 +11,7 @@ function ExpandedImage({ row, sessionId, onClose }: { row: ConversationRow; sess
   const preview = useImageViewPreviewQuery(sessionId, view.view_id, "expanded", true);
   const t = useUiText();
   return <ImagePreviewDialog attachment={view} url={preview.data?.data_url ?? ""} error={queryError(preview.error)}
-    loading={preview.isLoading} note={t.conversation.currentImageFile} onClose={onClose} />;
+    loading={preview.isLoading} note={preview.data?.source === "history" ? t.conversation.historicalImage : preview.data?.source === "current_file" ? t.conversation.currentImageFile : undefined} onClose={onClose} />;
 }
 
 function ImageTile({ row, sessionId }: { row: ConversationRow; sessionId?: string }) {

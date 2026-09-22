@@ -1,17 +1,18 @@
 // Opt-in native preview/layout smoke: Electron <bundle> <preload> <fixture.html>.
 import { app, BrowserWindow, ipcMain, nativeImage } from "electron";
 import { strict as assert } from "node:assert";
-import { mkdtempSync, writeFileSync, rmSync, truncateSync, symlinkSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync, rmSync, truncateSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { IPC_CHANNELS } from "../../src/ipc-channels";
 import { parseDashboardRpcCall } from "@lxe/desktop-protocol";
 import { previewConversationAttachment } from "../../src/main/conversation-artifacts";
-import { attachmentThumbnail } from "../../src/main/attachment-thumbnail";
+import { imageBytesThumbnail, attachmentThumbnail } from "../../src/main/attachment-thumbnail";
 
 app.whenReady().then(async () => {
   const root = mkdtempSync(join(tmpdir(), "lxe-sent-preview-"));
   const paths = new Map<string, string>();
+  const historical = process.argv[4] ? JSON.parse(readFileSync(process.argv[4], "utf8")).attachmentPreview : undefined;
   const errors: string[] = [];
   let window: BrowserWindow | undefined;
   try {
@@ -38,7 +39,12 @@ app.whenReady().then(async () => {
       assert.equal(call.operation, "sessions.attachment.preview");
       if (call.operation !== "sessions.attachment.preview") throw new Error("Unexpected operation");
       return previewConversationAttachment({
-        resolveAttachment: async (session, id) => session === "fixture" ? paths.get(id) : undefined,
+        resolvePreview: async (session, id) => {
+          if (session !== "fixture") return undefined;
+          if (id === "image-one" && historical) return historical;
+          const path = paths.get(id); return path ? { source: "current_file", path } : undefined;
+        },
+        imageThumbnail: imageBytesThumbnail,
         thumbnail: attachmentThumbnail,
       }, call.input.session_id, call.input.attachment_id, call.input.variant);
     });
@@ -71,7 +77,13 @@ app.whenReady().then(async () => {
     await js("document.documentElement.dataset.theme='dark'; document.querySelector('.sent-image-tile').click()");
     await waitFor("document.querySelector('[role=dialog] img')?.naturalWidth > 320");
     assert.equal(await js("document.querySelector('[role=dialog] img').naturalWidth/document.querySelector('[role=dialog] img').naturalHeight"), 2);
+    assert((await js("document.querySelector('[role=dialog]').textContent")).includes(historical ? "预览历史图片" : "预览当前文件"));
     writeFileSync("/tmp/lxe-sent-attachments-expanded.png", (await window.webContents.capturePage()).toPNG());
+    await js("document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))");
+    await waitFor("!document.querySelector('[role=dialog]')");
+    await js("document.querySelectorAll('.sent-image-tile')[1].click()");
+    await waitFor("document.querySelector('[role=dialog] img')?.naturalHeight>320");
+    assert((await js("document.querySelector('[role=dialog]').textContent")).includes("预览当前文件"));
     await js("document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))");
     await waitFor("!document.querySelector('[role=dialog]')");
     await js("document.querySelector('.sent-file-card').click()");
@@ -91,6 +103,18 @@ app.whenReady().then(async () => {
     assert((await js("document.body.innerText")).includes("attachment is not part of this conversation"));
     rmSync(paths.get("image-one")!);
     await js("window.fixtureSession('fixture')");
+    if (historical) {
+      await waitFor("document.querySelectorAll('.sent-image-tile img').length===2");
+      await js("document.querySelector('.sent-image-tile').click()");
+      await waitFor("document.querySelector('[role=dialog] img')?.naturalWidth>320");
+      writeFileSync("/tmp/lxe-sent-history-after-delete.png", (await window.webContents.capturePage()).toPNG());
+      await js("document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))");
+      await waitFor("!document.querySelector('[role=dialog]')");
+      rmSync(paths.get("image-two")!);
+      await js("window.fixtureSession('other')");
+      await waitFor("document.querySelectorAll('.sent-attachment-error').length===2");
+      await js("window.fixtureSession('fixture')");
+    }
     await waitFor("document.querySelector('.sent-attachment-error')?.textContent.includes('ENOENT')");
     assert.deepEqual(errors, []);
     console.log("PASS: native thumbnails, image/file/text ordering, horizontal scrolling, dark/light, expand/Escape, file opening, attachment-only, session isolation, missing-file errors");

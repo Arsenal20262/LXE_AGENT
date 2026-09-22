@@ -1,3 +1,4 @@
+import { imageBytesThumbnail } from "./attachment-thumbnail";
 import { UpdateBusyError } from "./update-service";
 import { prepareConversationAttachments } from "./conversation-submission";
 import { existsSync, mkdirSync } from "node:fs";
@@ -484,16 +485,23 @@ export class DesktopGateway {
     }
     if (call.operation === "sessions.image_view.preview") {
       return await previewConversationImageView({
-        resolveImageView: (sessionId, viewId) => this.runtime!.resolveImageView(sessionId, viewId),
-        thumbnail: attachmentThumbnail,
+        resolvePreview: (sessionId, viewId) => this.runtime!.resolveImagePreview(sessionId, "image_view", viewId),
+        thumbnail: attachmentThumbnail, imageThumbnail: imageBytesThumbnail,
       }, call.input.session_id, call.input.view_id, call.input.variant) as DashboardRpcResult<O>;
     }
     if (call.operation === "sessions.attachment.preview") {
       return await previewConversationAttachment({
-        resolveAttachment: async (sessionId, attachmentId) =>
-          this.composition!.parts.conversations.resolveAttachmentPreview(sessionId, attachmentId)
-          ?? await this.runtime!.resolveAttachment(sessionId, attachmentId),
-        thumbnail: attachmentThumbnail,
+        resolvePreview: async (sessionId, attachmentId) => {
+          const stored = await this.runtime!.resolveImagePreview(sessionId, "attachment", attachmentId);
+          if (stored?.source === "history") return stored;
+          const conversations = this.composition!.parts.conversations;
+          const image = conversations.resolveAttachmentPreviewImage(sessionId, attachmentId);
+          if (image) return { source: "history", image };
+          if (stored) return stored;
+          const path = conversations.resolveAttachmentPreview(sessionId, attachmentId);
+          return path ? { source: "current_file", path } : undefined;
+        },
+        thumbnail: attachmentThumbnail, imageThumbnail: imageBytesThumbnail,
       }, call.input.session_id, call.input.attachment_id, call.input.variant) as DashboardRpcResult<O>;
     }
     if (call.operation === "sessions.attachment.open") {
