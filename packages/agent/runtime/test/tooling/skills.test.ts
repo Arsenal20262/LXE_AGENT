@@ -58,6 +58,20 @@ describe("skill context", () => {
       .toEqual(["lxeskill replenish brazil-overseas export"]);
   });
 
+  test("keeps Brazil Overseas aliases and entry phrases visible for skill selection", () => {
+    const source = repositoryRoot(import.meta.dir);
+    const catalog = new SkillCatalog(source, join(source, "missing-user"), { sharedSkillsRoot: false });
+    const skill = catalog.get("replenishment-workflow-map");
+    const description = skill?.description ?? "";
+
+    expect(description).toContain("巴西海外仓");
+    expect(description).toContain("马帮巴西海外仓");
+    expect(description).toContain("不需要额外补充“马帮”");
+    for (const phrase of ["查巴西海外仓库存", "导出巴西海外仓待签收", "巴西海外仓单据"]) {
+      expect(description).toContain(phrase);
+    }
+  });
+
   test("indexes allowed skill manifests and points the agent to their source", () => {
     const root = mkdtempSync(join(tmpdir(), "lxe-skills-"));
     roots.push(root);
