@@ -10,9 +10,18 @@ export function UpdateControl({manual=false}:{manual?:boolean}){
  const [state,setState]=useState<DesktopUpdateState>({phase:"unsupported"});
  const [open,setOpen]=useState(false);
  const [busy,setBusy]=useState(false);
+ const [installPending,setInstallPending]=useState(false);
  const actionPending=useRef(false);
  const revision=useRef(0);
- const close=()=>{if(!busy)setOpen(false);};
+ const installLocked=installPending||state.phase==="installing";
+ const focusSettings=()=>requestAnimationFrame(()=>document.querySelector<HTMLElement>(
+  manual?".desktop-settings-modal .desktop-close-button":".sidebar-settings-button",
+ )?.focus());
+ const close=()=>{
+  if(installLocked)return;
+  setOpen(false);
+  if(!manual&&["idle","paused"].includes(state.phase))focusSettings();
+ };
  const dialog=useDialogFocus<HTMLDivElement>(open,close);
  useEffect(()=>{
   const api=window.lxe?.desktop;
@@ -33,13 +42,14 @@ export function UpdateControl({manual=false}:{manual?:boolean}){
   actionPending.current=true;
   revision.current++;
   setBusy(true);
+  setInstallPending(install);
+  if(!install&&open){setOpen(false);focusSettings();}
   setState(previous=>({...previous,phase:install?"installing":"checking",message:undefined}));
   try{const next=install?await api.installUpdate?.():await api.checkForUpdate?.();if(next)setState(next);}
   catch(error){setState({phase:"error",message:String(error)});}
-  finally{revision.current++;actionPending.current=false;setBusy(false);}
+  finally{revision.current++;actionPending.current=false;setBusy(false);setInstallPending(false);}
  };
  if(state.phase==="unsupported")return null;
- if(!manual&&["idle","paused"].includes(state.phase))return null;
  const ring=working;
  const percent=state.phase==="downloading"&&Number.isFinite(state.percent)?Math.min(100,Math.max(0,state.percent!)):undefined;
  const noUpdate=state.phase==="idle"&&Boolean(state.message);
@@ -56,7 +66,7 @@ export function UpdateControl({manual=false}:{manual?:boolean}){
     </svg>:state.phase==="error"?<AlertCircle size={14}/>:noUpdate?<Check size={14}/>:<RefreshCw size={14}/>}
     <span>{manualLabel}</span>
    </button>
-  </span>:
+  </span>:!["idle","paused"].includes(state.phase)?
    <span className="lxe-update-slot">
     <button type="button" className={"lxe-update-button"+(ready?" is-ready":"")+(ring?" is-working":"")}
      title={label} aria-label={label} onClick={()=>setOpen(true)}>
@@ -68,8 +78,8 @@ export function UpdateControl({manual=false}:{manual?:boolean}){
      {state.phase==="error"?<AlertCircle size={16}/>:<Download size={16}/>}
      {ready?<span className="lxe-update-label">{t.update}</span>:null}
     </button>
-   </span>}
-  {open?createPortal(<div className="modal-backdrop lxe-update-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)close();}}>
+   </span>:null}
+  {open?createPortal(<div className="modal-backdrop lxe-update-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget){event.preventDefault();close();}}}>
    <div ref={dialog} role="dialog" aria-modal="true" aria-label={t.title} tabIndex={-1} className="lxe-update-dialog">
     <h2>{t.title}{state.release?" · "+state.release.version:""}</h2>
     {state.release?<p className="lxe-update-notes">{state.release.notes}</p>:null}
@@ -78,10 +88,10 @@ export function UpdateControl({manual=false}:{manual?:boolean}){
     {state.message?<p role={state.phase==="error"?"alert":"status"}>{state.message}</p>:null}
     {ready?<p>{t.confirm}</p>:null}
     <div className="lxe-update-actions">
-     <button type="button" onClick={close} disabled={busy}>{t.close}</button>
-     <button type="button" disabled={busy||working} onClick={()=>void action(ready)}>
-      {ready?t.restart:state.phase==="error"?t.retry:t.check}
-     </button>
+     <button type="button" onClick={close} disabled={installLocked}>{ready?t.later:t.close}</button>
+     {ready||state.phase==="error"?<button type="button" className="lxe-update-primary" disabled={busy||working||installLocked} onClick={()=>void action(ready)}>
+      {ready?t.restart:t.retry}
+     </button>:null}
     </div>
    </div>
   </div>,document.body):null}

@@ -34,6 +34,6 @@
 .lxe-update-notes { white-space:pre-wrap; max-height:40vh; overflow:auto; }
 .lxe-update-actions { display:flex; gap:12px; justify-content:flex-end; margin-top:20px; }
 .lxe-update-actions button { border:1px solid var(--border); border-radius:8px; background:var(--surface); color:inherit; padding:8px 14px; cursor:pointer; }
-.lxe-update-actions button:last-child { background:#347ce5; color:white; border-color:#347ce5; }
+.lxe-update-actions .lxe-update-primary { background:#347ce5; color:white; border-color:#347ce5; }
 .lxe-update-actions button:disabled { opacity:.5; cursor:default; }
 @media (prefers-reduced-motion:reduce) { .lxe-update-button,.ring-progress { transition:none; } .lxe-update-ring.is-spinning { animation:none; } }
