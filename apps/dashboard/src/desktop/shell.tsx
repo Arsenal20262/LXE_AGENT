@@ -470,7 +470,6 @@ function DesktopStatusPanel({
     : false;
   return (
     <section className="desktop-settings-section desktop-status-panel">
-      <UpdateControl manual />
       <DesktopSectionHeading
         description={t.desktop.status.description}
         headingRef={headingRef}
@@ -1704,7 +1703,10 @@ export function DesktopShell({
               </div>
             </div>
             <footer>
-              <span className="desktop-version">{health?.version ? `v${health.version}` : "—"}</span>
+              <div className="desktop-version-updates">
+                <span className="desktop-version">{health?.version ? `v${health.version}` : "—"}</span>
+                <UpdateControl manual />
+              </div>
               {activeSettingsSection !== "status"
                 && activeSettingsSection !== "appearance"
                 && activeSettingsSection !== "cloud" ? (
