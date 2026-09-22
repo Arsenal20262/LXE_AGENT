@@ -132,7 +132,6 @@ export function validateSetupInput(value: unknown): DesktopSetupInput {
     action: "save" as const, tenant_id: boundedText(shangman.tenant_id, "Shangman tenant ID", 1024),
     username: boundedText(shangman.username, "Shangman username", 1024),
     password: boundedText(shangman.password, "Shangman password", 16384),
-    basic_auth: boundedText(shangman.basic_auth, "Shangman Basic Authorization", 16384),
   } : shangman?.action === "clear" ? { action: "clear" as const } : undefined;
   const mabangPassword = mabang?.action === "save"
     ? boundedText(mabang.password, "Mabang password", 16_384)

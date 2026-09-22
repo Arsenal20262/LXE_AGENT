@@ -456,7 +456,7 @@ export interface DesktopSetupState {
   shangman: {
     managed: boolean; configured: boolean; issues: string[];
     tenant_id: string; username: string;
-    password_configured: boolean; basic_auth_configured: boolean;
+    password_configured: boolean;
   };
   mabang: {
     managed: boolean;
@@ -493,7 +493,7 @@ export type DesktopZiniaoSetupInput =
 
 export type DesktopShangmanSetupInput =
   | { action: "clear" }
-  | { action: "save"; tenant_id: string; username: string; password?: string; basic_auth?: string };
+  | { action: "save"; tenant_id: string; username: string; password?: string };
 
 export type DesktopMabangSetupInput =
   | { action: "clear" }

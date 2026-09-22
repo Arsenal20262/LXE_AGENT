@@ -86,7 +86,6 @@ export interface DesktopConfig {
 export interface DesktopSecrets {
   ziniao_password: string;
   shangman_processed_password: string;
-  shangman_basic_auth: string;
   mabang_password: string;
   feishu_app_secret: string;
   data_server_api_key: string;
@@ -154,7 +153,6 @@ const defaultConfig = (catalog: LlmProviderCatalog): DesktopConfig => {
 const DEFAULT_SECRETS: DesktopSecrets = {
   ziniao_password: "",
   shangman_processed_password: "",
-  shangman_basic_auth: "",
   mabang_password: "",
   feishu_app_secret: "",
   data_server_api_key: "",
@@ -473,7 +471,6 @@ export const parseSecrets = (raw: unknown): DesktopSecrets => {
   return {
     ziniao_password: text(value.ziniao_password),
     shangman_processed_password: text(value.shangman_processed_password),
-    shangman_basic_auth: text(value.shangman_basic_auth),
     mabang_password: text(value.mabang_password),
     feishu_app_secret: text(value.feishu_app_secret),
     data_server_api_key: text(value.data_server_api_key),

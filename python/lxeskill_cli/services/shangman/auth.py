@@ -15,7 +15,9 @@ import aiohttp
 from PIL import Image
 
 BASE_URL = "https://erp.shangmanet.com"
-ENV_FIELDS = ("TENANT_ID", "USERNAME", "PROCESSED_PASSWORD", "BASIC_AUTH")
+# Public browser client identity from Shangman's login bundle, not an account secret.
+CLIENT_AUTHORIZATION = "Basic " + base64.b64encode(b"saber:saber_secret").decode("ascii")
+ENV_FIELDS = ("TENANT_ID", "USERNAME", "PROCESSED_PASSWORD")
 
 
 class AuthError(RuntimeError):
@@ -29,7 +31,7 @@ class Credentials:
     tenant_id: str
     username: str
     password: str
-    basic_auth: str
+    basic_auth: str = field(default=CLIENT_AUTHORIZATION, init=False)
     revision: str = ""
 
     @classmethod
@@ -62,7 +64,7 @@ class Credentials:
             if value:
                 for form in (value, quote(value, safe=""), quote_plus(value)):
                     message = message.replace(form, "<redacted>")
-        message = re.sub(r'''(?i)([\w-]*(?:token|password|authorization|blade-auth|captcha[-_](?:key|code))[\w-]*["']?\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\s,;&}]+)''', r'\1<redacted>', message)
+        message = re.sub(r'''(?i)(?<![\w/:-])([\w-]*(?:token|password|authorization|blade-auth|captcha[-_](?:key|code))[\w-]*["']?\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\s,;&}]+)''', r'\1<redacted>', message)
         return message if len(message) <= 2000 else message[:2000] + " … [truncated]"
 
 
@@ -101,7 +103,7 @@ class AuthClient:
                         raise AuthError("invalid_response", f"{path}: expected object, received {body}")
                     return payload
         except Exception as exc:
-            raise AuthError(getattr(exc, "code", "network_error"), c.diagnostic(f"{type(exc).__name__}: {exc}", *sensitive)) from None
+            raise AuthError(getattr(exc, "code", "network_error"), c.diagnostic(str(exc) if isinstance(exc, AuthError) else f"{type(exc).__name__}: {exc}", *sensitive)) from None
 
     async def captcha(self) -> tuple[str, bytes]:
         payload = await self._request("GET", "/api/blade-auth/oauth/captcha")

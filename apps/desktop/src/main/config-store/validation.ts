@@ -53,7 +53,7 @@ export class DesktopConfigValidation {
 
   shangmanIssues(shangman: DesktopConfig["integrations"]["shangman"], secrets: DesktopSecrets): string[] {
     return [!shangman.tenant_id && "缺少租户 ID", !shangman.username && "缺少账号",
-      !secrets.shangman_processed_password && "缺少密码", !secrets.shangman_basic_auth && "缺少 Basic Authorization",
+      !secrets.shangman_processed_password && "缺少密码",
     ].filter((value): value is string => Boolean(value));
   }
 

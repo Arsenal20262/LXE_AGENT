@@ -805,10 +805,6 @@ function DesktopSettingsForm({
               <input type="password" autoComplete="new-password" value={form.shangmanPassword}
                 placeholder={setup.shangman.password_configured ? t.desktop.storedPlaceholder : ""}
                 onChange={event => onChange({ shangmanPassword: event.target.value })} /></label>
-            <label><span>{labels.basicAuth}{setup.shangman.basic_auth_configured ? t.desktop.keepBlankSuffix : ""}</span>
-              <input type="password" autoComplete="new-password" value={form.shangmanBasicAuth}
-                placeholder={setup.shangman.basic_auth_configured ? t.desktop.storedPlaceholder : ""}
-                onChange={event => onChange({ shangmanBasicAuth: event.target.value })} /></label>
           </div>
           {setup.shangman.managed ? <button className="desktop-clear-integration" onClick={() => onClearIntegration("shangman")} type="button"><Trash2 size={14} />{t.desktop.clearIntegration}</button> : null}
         </div>
@@ -1368,7 +1364,7 @@ export function DesktopShell({
       form.ziniaoAppPath,
       form.ziniaoWebDriverPath,
     ) || setup.ziniao.configured;
-    const shangmanTouched = hasText(form.shangmanTenantId, form.shangmanUsername, form.shangmanPassword, form.shangmanBasicAuth) || setup.shangman.configured;
+    const shangmanTouched = hasText(form.shangmanTenantId, form.shangmanUsername, form.shangmanPassword) || setup.shangman.configured;
     const mabangTouched = hasText(form.mabangAccount, form.mabangPassword) || setup.mabang.configured;
     const feishuTouched = hasText(form.feishuAppId, form.feishuAppSecret) || setup.feishu.configured;
     return {
@@ -1387,7 +1383,6 @@ export function DesktopShell({
       ...(shangmanTouched ? {
         shangman: { action: "save" as const, tenant_id: form.shangmanTenantId, username: form.shangmanUsername,
           ...(form.shangmanPassword ? { password: form.shangmanPassword } : {}),
-          ...(form.shangmanBasicAuth ? { basic_auth: form.shangmanBasicAuth } : {}),
         },
       } : {}),
       ...(mabangTouched ? {

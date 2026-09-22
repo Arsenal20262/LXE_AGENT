@@ -787,7 +787,7 @@ export const ZH_TEXT = {
     },
     shangman: {
       description: "配置智慧登录。验证码由 AI 读取；登录态保存在本机，供后续任务复用。",
-      tenantId: "租户 ID", username: "智慧账号", password: "智慧密码", basicAuth: "Basic Authorization",
+      tenantId: "ID", username: "智慧账号", password: "智慧密码",
     },
     mabang: {
       description: "账号与密码必须成对填写；整组留空即可跳过。",
@@ -1632,7 +1632,7 @@ export const UI_TEXT: Record<Language, UiText> = {
       },
       shangman: {
         description: "Configure Shangman login. AI reads the captcha; login state is saved locally for later tasks.",
-        tenantId: "Tenant ID", username: "Shangman account", password: "Shangman password", basicAuth: "Basic Authorization",
+        tenantId: "Tenant ID", username: "Shangman account", password: "Shangman password",
       },
       mabang: {
         description: "Account and password must be filled in together; leave the whole group blank to skip.",

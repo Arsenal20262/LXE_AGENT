@@ -814,9 +814,9 @@ test("Shangman saves encrypted credentials, preserves revisions and invalidates 
   const workspace = join(root, "workspace");
   const store = new DesktopConfigStore(root, workspace, safeStorage);
   expect(store.state().shangman).not.toHaveProperty("production_enabled");
-  const input = { workspace_root: workspace, shangman: { action: "save" as const, tenant_id: "tenant", username: "user", password: "shangman-password", basic_auth: "Basic shangman-secret" } };
+  const input = { workspace_root: workspace, shangman: { action: "save" as const, tenant_id: "tenant", username: "user", password: "shangman-password" } };
   const state = store.save(input);
-  expect(state.shangman).toMatchObject({ configured: true, password_configured: true, basic_auth_configured: true });
+  expect(state.shangman).toMatchObject({ configured: true, password_configured: true });
   expect(JSON.stringify(state)).not.toContain("shangman-password");
   expect(JSON.stringify(state)).not.toContain("shangman-secret");
   const settings = readFileSync(join(root, "config", "settings.json"), "utf8");
@@ -824,11 +824,11 @@ test("Shangman saves encrypted credentials, preserves revisions and invalidates 
   expect(settings).not.toContain("shangman-secret");
   const env = store.environment();
   expect(env.LXE_SHANGMAN_PROCESSED_PASSWORD).toBe("shangman-password");
-  expect(env.LXE_SHANGMAN_BASIC_AUTH).toBe("Basic shangman-secret");
+  expect(env).not.toHaveProperty("LXE_SHANGMAN_BASIC_AUTH");
   expect(env).not.toHaveProperty("LXE_SHANGMAN_PROD_ENABLED");
   const revision = env.LXE_SHANGMAN_CONFIG_REVISION;
   expect(revision).toBeTruthy();
-  store.save({ ...input, shangman: { ...input.shangman, password: "", basic_auth: "" } });
+  store.save({ ...input, shangman: { ...input.shangman, password: "" } });
   expect(store.environment().LXE_SHANGMAN_CONFIG_REVISION).toBe(revision);
   const restarted = new DesktopConfigStore(root, workspace, safeStorage);
   expect(restarted.environment().LXE_SHANGMAN_CONFIG_REVISION).toBe(revision);
@@ -863,7 +863,7 @@ test("legacy Shangman switch is ignored and removed when settings are saved", ()
   const root = createRoot();
   const workspace = join(root, "workspace");
   const store = new DesktopConfigStore(root, workspace, safeStorage);
-  store.save({ workspace_root: workspace, shangman: { action: "save", tenant_id: "tenant", username: "user", password: "password", basic_auth: "Basic test" } });
+  store.save({ workspace_root: workspace, shangman: { action: "save", tenant_id: "tenant", username: "user", password: "password" } });
   const settingsPath = join(root, "config", "settings.json");
   const legacy = JSON.parse(readFileSync(settingsPath, "utf8"));
   legacy.integrations.shangman.production_enabled = false;
@@ -876,4 +876,24 @@ test("legacy Shangman switch is ignored and removed when settings are saved", ()
   const saved = JSON.parse(readFileSync(settingsPath, "utf8"));
   expect(saved.integrations.shangman).not.toHaveProperty("production_enabled");
   expect(saved.integrations.shangman.revision).toBe(legacy.integrations.shangman.revision);
+});
+
+
+test("retired Shangman Basic credential is dropped without losing the account password", () => {
+  const root = createRoot();
+  const workspace = join(root, "workspace");
+  const store = new DesktopConfigStore(root, workspace, safeStorage);
+  store.save({ workspace_root: workspace, shangman: { action: "save", tenant_id: "tenant", username: "user", password: "kept-password" } });
+  const secretsPath = join(root, "config", "secrets.bin");
+  const legacy = JSON.parse(safeStorage.decryptString(readFileSync(secretsPath)));
+  legacy.shangman_basic_auth = "Basic obsolete-client";
+  writeFileSync(secretsPath, safeStorage.encryptString(JSON.stringify(legacy)));
+  const restarted = new DesktopConfigStore(root, workspace, safeStorage);
+  expect(restarted.state().shangman.configured).toBe(true);
+  expect(restarted.state().shangman).not.toHaveProperty("basic_auth_configured");
+  restarted.save({ workspace_root: workspace });
+  const saved = JSON.parse(safeStorage.decryptString(readFileSync(secretsPath)));
+  expect(saved).not.toHaveProperty("shangman_basic_auth");
+  expect(saved.shangman_processed_password).toBe("kept-password");
+  expect(restarted.environment()).not.toHaveProperty("LXE_SHANGMAN_BASIC_AUTH");
 });

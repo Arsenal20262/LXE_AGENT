@@ -23,7 +23,7 @@ def context(tmp_path, monkeypatch):
     monkeypatch.delenv("LXE_SHANGMAN_CONFIG_REVISION", raising=False)
     from shared import workspace
     monkeypatch.setattr(workspace, "_artifact_root", tmp_path / "artifacts")
-    for key, value in zip(("TENANT_ID", "USERNAME", "PROCESSED_PASSWORD", "BASIC_AUTH"), ("tenant-123", "operator-456", "password-789", "Basic fixture-auth")):
+    for key, value in zip(("TENANT_ID", "USERNAME", "PROCESSED_PASSWORD"), ("tenant-123", "operator-456", "password-789")):
         monkeypatch.setenv("LXE_SHANGMAN_" + key, value)
     monkeypatch.delenv("LXE_SHANGMAN_PROD_ENABLED", raising=False)
     credentials = Credentials.from_environment()
@@ -36,7 +36,8 @@ def png():
     return target.getvalue()
 
 
-def test_fresh_login_pairs_image_and_key_and_persists(context, monkeypatch):
+@pytest.mark.parametrize("captcha_code,ttl", [("Ab9X", 900), ("wr", 21600)])
+def test_fresh_login_pairs_image_and_key_and_persists(context, monkeypatch, captcha_code, ttl):
     c, store = context
     calls = []
     async def request(self, method, path, **kwargs):
@@ -44,24 +45,25 @@ def test_fresh_login_pairs_image_and_key_and_persists(context, monkeypatch):
         if path.endswith("captcha"):
             return {"key": "actual-platform-key", "image": "data:image/png;base64," + base64.b64encode(png()).decode()}
         assert kwargs["headers"]["Captcha-Key"] == "actual-platform-key"
-        assert kwargs["headers"]["Captcha-Code"] == "Ab9X"
+        assert kwargs["headers"]["Captcha-Code"] == captcha_code
         assert kwargs["params"]["password"] == c.effective_password
         assert kwargs["params"]["grant_type"] == "captcha"
-        return {"access_token": "private-token", "expires_in": 900}
+        assert kwargs["headers"]["Authorization"] == "Basic " + base64.b64encode(b"saber:saber_secret").decode()
+        return {"access_token": "private-token", "expires_in": ttl}
     monkeypatch.setattr(AuthClient, "_request", request)
     store.save(LoginToken("old-token", 300))
     prepared = workflow.run_action("prepare", {})
     assert prepared["success"]
     assert "actual-platform-key" not in json.dumps(prepared)
-    result = workflow.run_action("submit", {"challenge_id": prepared["challenge_id"], "captcha_code": "Ab9X"})
+    result = workflow.run_action("submit", {"challenge_id": prepared["challenge_id"], "captcha_code": captcha_code})
     assert result["persisted"] and result["login_succeeded"]
-    assert result["expires_at"] - result["logged_in_at"] == 900
+    assert result["expires_at"] - result["logged_in_at"] == ttl
     assert len(calls) == 2
     assert store.read_token() == "private-token"
     assert not os.path.exists(prepared["image_path"])
     assert "private-token" not in json.dumps(result)
     assert store.status()["online_verified"] is False
-    again = workflow.run_action("submit", {"challenge_id": prepared["challenge_id"], "captcha_code": "Ab9X"})
+    again = workflow.run_action("submit", {"challenge_id": prepared["challenge_id"], "captcha_code": captcha_code})
     assert again["error"]["code"] == "challenge_unavailable"
     assert len(calls) == 2
 
@@ -103,7 +105,7 @@ def test_expiry_and_credential_change(context):
     with pytest.raises(AuthError, match="过期"):
         store.consume(challenge["challenge_id"])
     challenge = store.prepare("key", png())
-    changed = AuthStore(Credentials(c.tenant_id, c.username, "new-password", c.basic_auth))
+    changed = AuthStore(Credentials(c.tenant_id, c.username, "new-password"))
     with pytest.raises(AuthError, match="凭据已变更"):
         changed.consume(challenge["challenge_id"])
     store.save(LoginToken("private", 300))
@@ -115,7 +117,7 @@ def test_state_cross_process_and_account_isolation(context):
     store.save(LoginToken("cross-process-token", 600))
     result = subprocess.run([sys.executable, "-c", "from services.shangman.auth import Credentials; from services.shangman.state import AuthStore; assert AuthStore(Credentials.from_environment()).read_token() == 'cross-process-token'"], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
-    other = AuthStore(Credentials(c.tenant_id, "different-account", c.password, c.basic_auth))
+    other = AuthStore(Credentials(c.tenant_id, "different-account", c.password))
     assert other.status()["status"] == "missing"
     store.invalidate("older-token")
     assert store.read_token() == "cross-process-token"
@@ -258,11 +260,13 @@ def test_cli_contract_exposes_image_only_as_model_input(context, monkeypatch, ca
     assert cli.main(args) != 0
     failed = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
     assert not failed["ok"]
+    assert "recovery" not in failed
     assert "platform says captcha expired" in failed["error"]["message"]
     assert failed["data"]["error"]["code"] == "login_failed"
 
 
 @pytest.mark.parametrize("status,body,expected", [
+    (400, '{"code":400,"success":false,"msg":"验证码不正确"}', "HTTP 400"),
     (401, '{"error_description":"actual denial","access_token":"do-not-log"}', "HTTP 401"),
     (200, 'not JSON: upstream failure', 'upstream failure'),
     (200, '[1,2,3]', 'expected object'),
@@ -288,11 +292,22 @@ def test_http_boundary_preserves_response_and_never_retries(context, monkeypatch
     monkeypatch.setattr(auth, "BASE_URL", f"http://127.0.0.1:{server.server_port}")
     try:
         with pytest.raises(AuthError) as error:
-            asyncio.run(AuthClient(context[0])._request("GET", "/test"))
+            asyncio.run(AuthClient(context[0])._request("GET", "/api/blade-auth/oauth/token"))
         assert expected in str(error.value)
         assert "do-not-log" not in str(error.value)
-        assert calls == ["/test"]
+        assert calls == ["/api/blade-auth/oauth/token"]
     finally:
         server.shutdown()
         server.server_close()
         thread.join()
+
+
+@pytest.mark.parametrize("legacy", [None, "Basic obsolete-value"])
+def test_client_identity_needs_no_account_configuration(context, monkeypatch, legacy):
+    if legacy is None:
+        monkeypatch.delenv("LXE_SHANGMAN_BASIC_AUTH", raising=False)
+    else:
+        monkeypatch.setenv("LXE_SHANGMAN_BASIC_AUTH", legacy)
+    c = Credentials.from_environment()
+    assert c.basic_auth == "Basic " + base64.b64encode(b"saber:saber_secret").decode()
+    assert c.fingerprint == context[0].fingerprint

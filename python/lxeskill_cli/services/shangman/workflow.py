@@ -32,9 +32,9 @@ def run_action(action: str, arguments: dict[str, Any]) -> dict:
         try:
             saved = store.save(token, epoch=epoch)
         except Exception as exc:
-            return {"success": False, "status": "save_failed", "login_succeeded": True, "persisted": False,
+            return {"success": False, "status": "save_failed", "auth_refresh_required": False, "login_succeeded": True, "persisted": False,
                     "error": {"code": "state_save_failed", "message": credentials.diagnostic(f"{type(exc).__name__}: {exc}", token.value, key, code)}}
         return {"success": True, "status": "authenticated", "login_succeeded": True, "persisted": True, **saved}
     except Exception as exc:
-        message = f"{type(exc).__name__}: {exc}"
-        return {"success": False, "status": "failed", "error": {"code": getattr(exc, "code", "login_execution_failed"), "message": credentials.diagnostic(message, key, code) if credentials else message}}
+        message = str(exc) if isinstance(exc, AuthError) else f"{type(exc).__name__}: {exc}"
+        return {"success": False, "status": "failed", "auth_refresh_required": False, "error": {"code": getattr(exc, "code", "login_execution_failed"), "message": credentials.diagnostic(message, key, code) if credentials else message}}

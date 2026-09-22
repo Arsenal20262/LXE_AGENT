@@ -69,7 +69,6 @@ export interface DesktopSettingsFormValue {
   shangmanTenantId: string;
   shangmanUsername: string;
   shangmanPassword: string;
-  shangmanBasicAuth: string;
   mabangAccount: string;
   mabangPassword: string;
   feishuAppId: string;
@@ -91,7 +90,6 @@ export const desktopSettingsForm = (state: DesktopSetupState): DesktopSettingsFo
   shangmanTenantId: state.shangman.tenant_id,
   shangmanUsername: state.shangman.username,
   shangmanPassword: "",
-  shangmanBasicAuth: "",
   mabangAccount: state.mabang.account,
   mabangPassword: "",
   feishuAppId: state.feishu.app_id,
@@ -110,7 +108,7 @@ const SECTION_FIELDS: Record<EditableDesktopSettingsSection, readonly (keyof Des
     "ziniaoAppPath",
     "ziniaoWebDriverPath",
   ],
-  shangman: ["shangmanTenantId", "shangmanUsername", "shangmanPassword", "shangmanBasicAuth"],
+  shangman: ["shangmanTenantId", "shangmanUsername", "shangmanPassword"],
   mabang: ["mabangAccount", "mabangPassword"],
   feishu: ["feishuAppId", "feishuAppSecret"],
   logging: ["logProfile", "logRetentionDays"],
