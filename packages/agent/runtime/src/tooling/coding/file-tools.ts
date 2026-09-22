@@ -6,7 +6,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { open, readFile, stat } from "node:fs/promises";
-import { basename, dirname, extname, relative } from "node:path";
+import { dirname, extname, relative } from "node:path";
 import type { JsonObject } from "@lxe/protocol";
 import { detectReadImageMime, type ModelImageProcessor } from "../../providers/model-image";
 import { scanNumberedTextChunks, type NumberedTextRangeResult } from "../text-range";
@@ -26,9 +26,8 @@ const BINARY_EXTENSIONS = new Set([
   ".doc", ".pptx", ".pptm", ".potx", ".potm", ".ppsx", ".ppsm", ".ppt", ".odt", ".ods", ".odp",
 ]);
 
-const SMALL_READ_BYTES = 512 * 1_024;
 const READ_CHUNK_BYTES = 256 * 1_024;
-const DEFAULT_LARGE_READ_LINES = 2_000;
+const DEFAULT_READ_LINES = 2_000;
 const READ_HINT_CHAR_RESERVE = 160;
 
 const textBlock = (text: string): JsonObject[] => [{ type: "text", text }];
@@ -37,14 +36,6 @@ const isMissingPathError = (cause: unknown): boolean =>
   cause instanceof Error
   && "code" in cause
   && (cause.code === "ENOENT" || cause.code === "ENOTDIR");
-
-const truncateHeadTail = (value: string, limit: number): { value: string; truncated: boolean } => {
-  if (value.length <= limit) return { value, truncated: false };
-  const marker = `\n... (truncated, ${value.length} chars total) ...\n`;
-  const available = Math.max(2, limit - marker.length);
-  const head = Math.floor(available / 2);
-  return { value: `${value.slice(0, head)}${marker}${value.slice(-(available - head))}`, truncated: true };
-};
 
 const abortReason = (signal: AbortSignal | undefined): unknown =>
   signal?.reason ?? new DOMException("Aborted", "AbortError");
@@ -122,7 +113,7 @@ export function createFileTools(dependencies: FileToolDependencies): ToolDefinit
         properties: {
           path: { type: "string", description: "Path to the file to read (absolute or relative to the session working directory)." },
           offset: { type: "integer", description: "Line number to start reading from (1-indexed; defaults to 1). Applies only to text files; ignored for images." },
-          limit: { type: "integer", description: "Maximum number of lines to read. Applies only to text files; ignored for images. Output may be truncated by the tool's output limit." },
+          limit: { type: "integer", description: "Maximum number of lines to read (defaults to 2000). Applies only to text files; ignored for images. Output may be truncated by the tool's output limit; use the returned offset to continue." },
         },
         required: ["path"],
         additionalProperties: false,
@@ -161,24 +152,13 @@ export function createFileTools(dependencies: FileToolDependencies): ToolDefinit
         if (BINARY_EXTENSIONS.has(extension)) throw new Error(`binary file cannot be read as text: ${input.path}`);
         if (isProbablyBinary(head)) throw new Error(`binary file cannot be read as text: ${input.path}`);
         const start = Math.max(1, Number(input.offset ?? 1));
-        if (info.size <= BigInt(SMALL_READ_BYTES)) {
-          const data = await readFile(path, { signal: context.handle.signal });
-          await assertFileVersionUnchanged(path, version);
-          assertActive(context.handle.signal);
-          const lines = data.toString("utf8").split(/\r?\n/);
-          const count = Math.max(1, Number(input.limit ?? lines.length));
-          const body = lines.slice(start - 1, start - 1 + count)
-            .map((line, index) => `${String(start + index).padStart(6, " ")}\t${line}`).join("\n");
-          ledger.recordVersion(context.session_id, path, version);
-          await context.exposureState?.activateSkillPath(path);
-          return { content: textBlock(truncateHeadTail(body, toolOutputLimit).value) };
-        }
-        const count = Math.max(1, Number(input.limit ?? DEFAULT_LARGE_READ_LINES));
+        const count = Math.max(1, Number(input.limit ?? DEFAULT_READ_LINES));
+        const charBudget = Math.max(1, toolOutputLimit - READ_HINT_CHAR_RESERVE);
         const range = await readNumberedRange(
           path,
           start,
           count,
-          Math.max(1, toolOutputLimit - READ_HINT_CHAR_RESERVE),
+          charBudget,
           context.handle.signal,
         );
         await assertFileVersionUnchanged(path, version);
@@ -188,7 +168,7 @@ export function createFileTools(dependencies: FileToolDependencies): ToolDefinit
           ? range.hasMore && range.nextOffset !== undefined
             ? `... (更多内容，使用 offset=${range.nextOffset} 继续)`
             : ""
-          : `... (第 ${range.truncatedLine} 行超过 ${toolOutputLimit} 字符读取上限；请使用 exec 的字节工具读取该超长行)`;
+          : `... (第 ${range.truncatedLine} 行超过本次 ${charBudget} 字符正文预算（含行号）；请使用 exec 的字节工具读取该超长行)`;
         await context.exposureState?.activateSkillPath(path);
         if (!hint) return { content: textBlock(range.body) };
         const separator = range.body ? "\n" : "";
