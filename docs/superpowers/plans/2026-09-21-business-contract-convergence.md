@@ -138,7 +138,7 @@ uv run pytest -q \
 
 Expected: PASS; no production network calls.
 
-- [ ] **Step 8: Review the diff, update the handoff, and request approval for the Task 1 commit**
+- [x] **Step 8: Review the diff, update the handoff, and request approval for the Task 1 commit**
 
 Proposed commit after approval:
 
@@ -169,7 +169,7 @@ git commit -m "fix: converge yacang warehouse intent contract"
 - Consumes: model-resolved `warehouse` and `export_kind`.
 - Produces: one validated `BrazilExportKind`; complete Skill/catalog synonym documentation without a Runtime keyword filter.
 
-- [ ] **Step 1: Add failing table-driven contract tests for every required phrase**
+- [x] **Step 1: Add failing table-driven contract tests for every required phrase**
 
 Add a fixture table in the test module:
 
@@ -182,7 +182,7 @@ EXPECTED_STATUS_PHRASES = {
 
 Assert every phrase and its canonical enum occur together in the Skill contract and catalog description. Assert `allocation_both` is reserved for document requests with no status.
 
-- [ ] **Step 2: Run the Mabang intent and Skill documentation tests and confirm missing phrases fail**
+- [x] **Step 2: Run the Mabang intent and Skill documentation tests and confirm missing phrases fail**
 
 Run:
 
@@ -194,15 +194,15 @@ uv run pytest -q \
 
 Expected: FAIL on the missing `未签收`, `还没签收`, `尚未签收`, or `已经签收` contract text.
 
-- [ ] **Step 3: Align Skill and catalog descriptions without adding a prose parser**
+- [x] **Step 3: Align Skill and catalog descriptions without adding a prose parser**
 
 Update both contract surfaces to contain the same phrase table. Keep `validate_brazil_export_parameters(...)` limited to the four canonical enum values; document in its docstring that natural-language translation belongs to the selected Skill, not a global Runtime filter.
 
-- [ ] **Step 4: Add ambiguous-boundary assertions**
+- [x] **Step 4: Add ambiguous-boundary assertions**
 
 Assert the Skill explicitly requires clarification for bare `签收`, `调拨`, and platform-ambiguous `单据`, while plain Brazil-overseas `单据/调拨单据` maps to `allocation_both` only when warehouse context is already explicit.
 
-- [ ] **Step 5: Run the complete Brazil-overseas test slice**
+- [x] **Step 5: Run the complete Brazil-overseas test slice**
 
 Run:
 

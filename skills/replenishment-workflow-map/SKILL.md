@@ -37,8 +37,9 @@ lxeskill replenish brazil-overseas export --warehouse brazil_overseas --export-k
 
 - 库存、库存快照或任意销量表述 → `inventory_sales_snapshot` → 一个马帮原始库存 XLSX。
 - 只说单据、调拨单据，未指定签收状态 → `allocation_both` → 三个月内待签收和三个月前已签收两个 XLS。
-- 未签、待签、待签收 → `allocation_pending_default_3m` → 三个月内待签收 XLS。
-- 已签、已签收、签收完成 → `allocation_signed_before_3m` → 三个月前已签收 XLS。
+- 未签、未签收、待签、待签收、还没签收、尚未签收 → `allocation_pending_default_3m` → 三个月内待签收 XLS。
+- 已签、已签收、已经签收、签收完成 → `allocation_signed_before_3m` → 三个月前已签收 XLS。
+- 裸词“签收”、裸词“调拨”、裸词“单据”必须返回澄清，不得猜测为已签或待签。只有仓库上下文已明确为巴西海外仓时，巴西海外仓的“单据/调拨单据”才映射为 `allocation_both`。
 - 参数只允许 `warehouse=brazil_overseas` 和上述 `export_kind`，不手工拼接仓库 ID、Cookie、Token 或下载地址。
 - 成功后只交付 terminal `files`。不改名、合并或加工原始文件；认证、403、429、风控或导出不确定时保留真实脱敏错误并停止，不重试。
 

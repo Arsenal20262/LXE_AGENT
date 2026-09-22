@@ -14,7 +14,7 @@ class BrazilIntentClarification:
 def validate_brazil_export_parameters(
     *, warehouse: str, export_kind: str,
 ) -> BrazilExportPlan | BrazilIntentClarification:
-    """Validate parameters already resolved by the model; do not parse prose here."""
+    """Validate canonical parameters; prose translation belongs to the selected Skill, not a global Runtime filter."""
     normalized_warehouse = str(warehouse or "").strip().lower()
     if normalized_warehouse != "brazil_overseas":
         return BrazilIntentClarification(
