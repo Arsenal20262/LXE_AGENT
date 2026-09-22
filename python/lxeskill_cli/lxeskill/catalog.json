@@ -358,7 +358,7 @@
       "legacy_aliases": ["mabang_brazil_overseas_export"],
       "visibility": "business", "session_mode": "none",
       "owner_skills": ["replenishment-workflow-map"], "artifact_paths": [{"field": "xlsx_path", "role": "deliverable"}, {"field": "xlsx_paths[]", "role": "deliverable"}], "timeout_ms": 300000, "exposed": true,
-      "input_schema": {"type": "object", "properties": {"warehouse": {"type": "string", "enum": ["brazil_overseas"], "description": "模型解析后的仓库参数，必须是巴西海外仓。"}, "export_kind": {"type": "string", "enum": ["inventory_sales_snapshot", "allocation_both", "allocation_signed_before_3m", "allocation_pending_default_3m"], "description": "模型解析后的导出类型：inventory_sales_snapshot=库存/销量原始快照（对应库存、库存动销、销量）；allocation_both=未指定签收状态的单据/调拨单据，一次返回三个月内待签收和三个月前已签收两个文件；allocation_pending_default_3m=未签、未签收、待签、待签收、还没签收、尚未签收的三个月内待签收调拨单；allocation_signed_before_3m=已签、已签收、已经签收、签收完成的三个月前已签收调拨单。"}}, "required": ["warehouse", "export_kind"], "additionalProperties": false}
+      "input_schema": {"type": "object", "properties": {"warehouse": {"type": "string", "enum": ["brazil_overseas"], "description": "模型解析后的仓库参数，必须是巴西海外仓。"}, "export_kind": {"type": "string", "enum": ["inventory_sales_snapshot", "allocation_both", "allocation_signed_before_3m", "allocation_pending_default_3m"], "description": "模型解析后的导出类型：inventory_sales_snapshot=库存/库存列表/库存动销/销量原始快照；allocation_both=Brazil Overseas 上下文明确时，单据/调拨单据，一次返回三个月内待签收和三个月前已签收两个文件；allocation_pending_default_3m=待签、未签、待签收、未签收、还没签收、尚未签收的三个月内待签收调拨单；allocation_signed_before_3m=已签、已签收、已经签收、签收完成的三个月前已签收调拨单。"}}, "required": ["warehouse", "export_kind"], "additionalProperties": false}
     },
     {
       "name": "mabang_analyze_store_msku_sales", "module": "services.agent_cli.mabang.analyze_store_msku_sales",

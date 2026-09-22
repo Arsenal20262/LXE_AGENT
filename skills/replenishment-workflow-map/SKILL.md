@@ -29,19 +29,20 @@ commands:
 
 ## Brazil Overseas 子工作流
 
-本子工作流属于现有 Mabang Skill，不是与马帮并列的全局平台 Skill。只有当前轮明确提到“马帮巴西海外仓”或“巴西海外仓”时才使用；当前轮明确平台、业务对象和状态优先于历史 Context。只有用户说“刚才”“同上”“还是那个”时才继承缺失参数。
+本子工作流属于现有 Mabang Skill，不是与马帮并列的全局平台 Skill。“巴西海外仓”天然就是马帮巴西海外仓，不再要求补充马帮名称。当前轮明确给出的 platform、warehouse、intent 或 status 永远优先；历史 transcript/context 只在用户明确说“刚才”“同上”“还是那个”等指代词时补齐当前轮缺失参数，绝不覆盖当前轮已有参数。Runtime 不得翻旧 transcript/context 来决定 Brazil 参数。
 
 ```text
 lxeskill replenish brazil-overseas export --warehouse brazil_overseas --export-kind <枚举值>
 ```
 
-- 库存、库存快照或任意销量表述 → `inventory_sales_snapshot` → 一个马帮原始库存 XLSX。
-- 只说单据、调拨单据，未指定签收状态 → `allocation_both` → 三个月内待签收和三个月前已签收两个 XLS。
-- 未签、未签收、待签、待签收、还没签收、尚未签收 → `allocation_pending_default_3m` → 三个月内待签收 XLS。
+- 库存、库存列表、库存快照、库存动销或任意销量类表述 → `inventory_sales_snapshot` → 一个马帮原始库存 XLSX。
+- Brazil Overseas 上下文明确时，单据/调拨单据 → `allocation_both` → 固定导出三个月内待签收和三个月前已签收两个 XLS。
+- 待签、未签、待签收、未签收、还没签收、尚未签收 → `allocation_pending_default_3m` → 三个月内待签收 XLS。
 - 已签、已签收、已经签收、签收完成 → `allocation_signed_before_3m` → 三个月前已签收 XLS。
-- 裸词“签收”、裸词“调拨”、裸词“单据”必须返回澄清，不得猜测为已签或待签。只有仓库上下文已明确为巴西海外仓时，巴西海外仓的“单据/调拨单据”才映射为 `allocation_both`。
-- 参数只允许 `warehouse=brazil_overseas` 和上述 `export_kind`，不手工拼接仓库 ID、Cookie、Token 或下载地址。
-- 成功后只交付 terminal `files`。不改名、合并或加工原始文件；认证、403、429、风控或导出不确定时保留真实脱敏错误并停止，不重试。
+- 仅“签收”或仅“调拨”且无法判断具体业务对象或状态时，必须返回 `clarification_required`；不得把澄清优先级留给模型猜测。
+- 唯一 command 是 `lxeskill replenish brazil-overseas export`；唯一参数形状是 `warehouse=brazil_overseas` 加一个 `export_kind`：`inventory_sales_snapshot`、`allocation_both`、`allocation_pending_default_3m` 或 `allocation_signed_before_3m`。不手工拼接仓库 ID、Cookie、Token 或下载地址。
+- 成功 terminal 必须是最后一条 `type="result"`，满足 `ok=true` 且 `files` 非空时立刻 `send_files` 并结束：不再读取其他 Skill、fixture、parser 或 transcript，不再启动额外 Provider Turn。成功 terminal 不得同时带 `pending`、`processing`、`next_action=continue` 或 `retry_required=true`。
+- 失败 terminal 必须 `ok=false`，不伪造 files；保留真实、脱敏错误并只说明允许的 recovery。只有 terminal 明确返回 `data.auth_refresh_required=true` 时，才允许 `lxeskill auth refresh` 刷新一次，并仅重试当前失败步骤一次。为 false 或缺失时不得根据 401、403 或错误文本猜认证失效；403、429、风控或导出状态不确定时一律停止，不得重复创建导出任务或重新启动下载。
 
 ## 完整任务
 

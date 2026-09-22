@@ -18,7 +18,9 @@ def test_cli_returns_one_deliverable_path(monkeypatch) -> None:
 
     monkeypatch.setattr(cli, "export_brazil_overseas", fake_workflow)
 
-    assert cli.run({"warehouse": "brazil_overseas", "export_kind": "inventory_sales_snapshot"}) == {
+    result = cli.run({"warehouse": "brazil_overseas", "export_kind": "inventory_sales_snapshot"})
+
+    assert result == {
         "success": True,
         "kind": "inventory_sales_snapshot",
         "xlsx_path": "/artifacts/replenish/brazil_overseas/inventory.xlsx",
@@ -26,6 +28,7 @@ def test_cli_returns_one_deliverable_path(monkeypatch) -> None:
         "warehouse_label": "巴西海外仓",
         "source_data_note": "平台原始库存文件仅含7/28/42天累计销量",
     }
+    assert not ({"pending", "processing", "next_action", "retry_required"} & result.keys())
 
 
 def test_cli_returns_both_document_paths(monkeypatch) -> None:
@@ -43,7 +46,9 @@ def test_cli_returns_both_document_paths(monkeypatch) -> None:
 
     monkeypatch.setattr(cli, "export_brazil_overseas", fake_workflow)
 
-    assert cli.run({"warehouse": "brazil_overseas", "export_kind": "allocation_both"}) == {
+    result = cli.run({"warehouse": "brazil_overseas", "export_kind": "allocation_both"})
+
+    assert result == {
         "success": True,
         "kind": "allocation_both",
         "xlsx_paths": [
@@ -54,6 +59,7 @@ def test_cli_returns_both_document_paths(monkeypatch) -> None:
         "warehouse_label": "巴西海外仓",
         "source_data_note": "马帮分仓调拨原始导出",
     }
+    assert not ({"pending", "processing", "next_action", "retry_required"} & result.keys())
 
 
 def test_cli_preserves_auth_failure_without_requesting_a_retry(monkeypatch) -> None:
@@ -62,13 +68,16 @@ def test_cli_preserves_auth_failure_without_requesting_a_retry(monkeypatch) -> N
 
     monkeypatch.setattr(cli, "export_brazil_overseas", fail_workflow)
 
-    assert cli.run({"warehouse": "brazil_overseas", "export_kind": "inventory_sales_snapshot"}) == {
+    result = cli.run({"warehouse": "brazil_overseas", "export_kind": "inventory_sales_snapshot"})
+
+    assert result == {
         "success": False,
         "warehouse": "brazil_overseas",
         "export_kind": "inventory_sales_snapshot",
         "exception": "实际认证错误",
         "auth_refresh_required": False,
     }
+    assert not ({"xlsx_path", "xlsx_paths", "pending", "processing", "next_action", "retry_required"} & result.keys())
 
 
 def test_cli_rejects_missing_structured_parameters() -> None:

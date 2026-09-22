@@ -183,6 +183,37 @@ def _input_arguments(entry: dict[str, Any], argv: list[str]) -> tuple[dict[str, 
     return dict(payload), str(session_id or os.environ.get("LXE_AGENT_SESSION_ID") or "").strip()
 
 
+def _validate_schema_arguments(entry: dict[str, Any], arguments: dict[str, Any]) -> None:
+    """Enforce the closed top-level catalog contract before a business module runs."""
+    schema = dict(entry.get("input_schema") or {})
+    if schema.get("type") != "object":
+        return
+    properties = dict(schema.get("properties") or {})
+    if schema.get("additionalProperties") is False:
+        extras = sorted(set(arguments) - set(properties))
+        if extras:
+            raise LxeSkillError(
+                "invalid_arguments",
+                f"unexpected arguments: {', '.join(extras)}",
+                exit_code=EXIT_USAGE,
+            )
+    for name, value in arguments.items():
+        field_schema = dict(properties.get(name) or {})
+        if "const" in field_schema and value != field_schema["const"]:
+            raise LxeSkillError(
+                "invalid_arguments",
+                f"{name} must be {field_schema['const']!r}",
+                exit_code=EXIT_USAGE,
+            )
+        allowed = field_schema.get("enum")
+        if isinstance(allowed, list) and value not in allowed:
+            raise LxeSkillError(
+                "invalid_arguments",
+                f"{name} must be one of: {', '.join(repr(item) for item in allowed)}",
+                exit_code=EXIT_USAGE,
+            )
+
+
 def _is_missing(value: Any) -> bool:
     return value is None or (isinstance(value, str) and not value.strip()) or (
         isinstance(value, list) and not value
@@ -366,6 +397,7 @@ def _run_entry(entry: dict[str, Any], argv: list[str]) -> int:
     command = _command_text(entry)
     _require_in_scope(entry)
     arguments, session_id = _input_arguments(entry, argv)
+    _validate_schema_arguments(entry, arguments)
     asset_sources = _apply_stored_assets(entry, arguments)
     _require_uploaded_file_inputs(entry, arguments)
     if str(entry.get("session_mode") or "none") == "lxe_session" and not session_id:

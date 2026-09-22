@@ -130,7 +130,7 @@ def test_four_platform_skill_boundaries_are_explicit_and_brazil_documents_suppor
     assert not (PROJECT_ROOT / "skills" / "replenishment-brazil-overseas-export" / "SKILL.md").exists()
     assert "name: replenishment-workflow-map" in brazil.split("---", 2)[1]
     assert "lxeskill replenish brazil-overseas export" in brazil.split("---", 2)[1]
-    assert "只说单据" in brazil
+    assert "Brazil Overseas 上下文明确时，单据/调拨单据" in brazil
     assert "allocation_both" in brazil
     assert "当前轮" in brazil
 
