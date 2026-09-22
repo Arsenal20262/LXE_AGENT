@@ -1,6 +1,6 @@
 ---
 name: yacang-export-workflow-map
-description: 用户当前轮明确提到“雅仓/Yacang”，并查询销量、库存、入库或上架时使用的唯一雅仓导出入口。当前轮的雅仓平台词优先于历史 Context；不用于智慧印尼、智汇/TMS、马帮巴西或 Amazon 补货。
+description: 用户当前轮明确提到“雅仓/Yacang”，并查询销量、库存、入库或上架时使用的唯一雅仓导出入口。当前轮的雅仓平台词优先于历史 Context；不用于上马印尼、智汇/TMS、马帮巴西或 Amazon 补货。
 type: amazon_replenish
 commands:
   - lxeskill yacang export run
@@ -24,10 +24,10 @@ commands:
 lxeskill yacang export run --data-type-intent '<JSON>' --warehouse-intent '<JSON>' --created-date-filter '<JSON>' --inventory-snapshot-intent '<JSON>'
 ```
 
-- 正常调用必须传 `data_type_intent`、`warehouse_intent`、`created_date_filter` 和 `inventory_snapshot_intent` 四个结构化对象；不要传 `request_text`。
+- 正常调用必须传 `data_type_intent`、`warehouse_intent`、`created_date_filter` 和 `inventory_snapshot_intent` 四个结构化对象；只使用下方的 canonical 结构化参数。
 - 每个意图必须是 `omitted`、`resolved` 或 `ambiguous`。无法确定时传 `ambiguous`，等待命令返回 `needs_clarification` 后把 `questions` 交给用户。
 - `data_type_intent` 和 `warehouse_intent` 只要是 `resolved`，必须使用复数字段 `values`；即使只选一项也必须传数组，严禁传单数字段 `value`。
-- `resolved` 的数据类型只能使用 `inventory-sales`、`inventory-current-snapshot`、`inbound-listing-time` 及兼容 alias；仓库只能使用 `MY8801`、`PH8805`、`TH8802`、`VN8806`。
+- `resolved` 的数据类型只能使用 `inventory-sales`、`inventory-current-snapshot`、`inbound-listing-time`；仓库只能使用 `MY8801`、`PH8805`、`TH8802`、`VN8806`。
 - `created_date_filter` 的 `explicit_range` 必须由模型提供 `start_date` 和 `end_date`，格式为 `YYYY-MM-DD`；`relative_days` 只传正整数天数，代码负责换算实际日期。
 - 用户没提商品创建日期时传 `{"state":"omitted"}`，命令复用统一默认：开始日和结束日都取执行当天。
 - 用户没提仓库时传 `{"state":"omitted"}`，命令默认四仓 `MY8801`、`PH8805`、`TH8802`、`VN8806`；完全没提数据类型时默认三类。
@@ -35,7 +35,7 @@ lxeskill yacang export run --data-type-intent '<JSON>' --warehouse-intent '<JSON
 - 单独查入库/上架时，即使用户说了一仓或多仓，`warehouse_intent` 也传 `{"state":"omitted"}`；结果始终是只跑一次、覆盖四仓的全局文件。
 - 同一请求混合库存/销量与入库/上架时，所选 `values` 只限制库存/销量；入库/上架仍只产生一份覆盖四仓的 global/all 文件。
 - 禁止传 URL、headers、Token、Cookie、`task_type`、`param_where`、OSS 地址等底层参数。
-- 兼容旧调用时可以传 `request_text`，但新 Skill 路径不得依赖它。
+- 旧调用兼容由内部适配层处理；新 Skill 路径不得依赖旧入口。
 - 模型负责理解用户仓库语义，也可以直接输出 canonical warehouse code；parser/normalizer 必须具备相同的确定性 alias 归一能力和最终校验能力。归一映射固定为：马来西亚仓/马来西亚/马来仓/马来/MY → `MY8801`，菲律宾仓/菲律宾/菲仓/PH → `PH8805`，泰国仓/泰国/泰仓/TH → `TH8802`，越南仓/越南/越仓/VN → `VN8806`。职责边界是：模型负责理解，Schema 限制参数空间，normalizer 负责确定性归一，CLI 做最终校验；模型不得为了确认参数去查 fixture、parser 或 transcript。
 - 分仓 XLSX 的最终文件名使用中文展示名（马来西亚仓、菲律宾仓、泰国仓、越南仓）；入库/上架时间是全局文件，不添加仓库名。
 - 只要当前请求出现“四仓”“四个仓”“全部仓库”“所有仓库”或“全仓”，就按全部四个标准仓库处理；即使同时出现具体仓库，也由全部仓库优先，不返回范围冲突澄清。
@@ -58,7 +58,7 @@ lxeskill yacang export run --data-type-intent '<JSON>' --warehouse-intent '<JSON
 
 - “销量”“最近一个月销量”“90 天销量”“库存动销”“动销数据” → `inventory-sales`，都返回同一份完整原始结构，不按窗口裁字段。
 - “库存和销量”“库存与销量”“销量和库存” → 同时选择 `inventory-sales` 与 `inventory-current-snapshot`，分别交付完整库存动销文件和当前库存文件。
-- 旧调用中的 `sales-monthly` / `sales-90d` 只作为兼容输入 alias，规范化后统一为 `inventory-sales`；不能向用户描述为逐日数据。
+- 历史销量输入由内部适配层统一归一为 `inventory-sales`；不能向用户描述为逐日数据。
 - “56 天销量”“120 天销量”等非固定窗口 → 不支持，不生成新报表类型。
 - “90 天逐日销量”“90 天每天销量”“日销量明细”“逐日销量”等明确要求逐日明细 → 不支持，不生成累计报表冒充逐日数据；90 天销量只是累计字段。
 - “最近卖得怎么样”“最近销售情况”等不能确定业务对象的表达 → 追问是否需要完整库存动销报表。

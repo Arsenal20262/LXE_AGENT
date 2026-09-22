@@ -62,7 +62,6 @@ def test_yacang_has_one_discoverable_skill_and_one_natural_language_command() ->
         "inventory_snapshot_intent",
     ]
     assert set(workflow["input_schema"]["properties"]) == {
-        "request_text",
         "data_type_intent",
         "warehouse_intent",
         "created_date_filter",
@@ -74,7 +73,11 @@ def test_yacang_has_one_discoverable_skill_and_one_natural_language_command() ->
         "properties"
     ]["values"]["items"]["enum"]
     assert data_type_values[0] == "inventory-sales"
-    assert {"sales-monthly", "sales-90d"}.issubset(data_type_values)
+    assert data_type_values == [
+        "inventory-sales",
+        "inventory-current-snapshot",
+        "inbound-listing-time",
+    ]
     assert workflow["input_schema"]["properties"]["warehouse_intent"]["oneOf"]
     data_type_resolved = workflow["input_schema"]["properties"]["data_type_intent"]["oneOf"][2]
     warehouse_resolved = workflow["input_schema"]["properties"]["warehouse_intent"]["oneOf"][2]
@@ -103,6 +106,9 @@ def test_yacang_has_one_discoverable_skill_and_one_natural_language_command() ->
     assert "当前轮" in router
     assert "历史 Context" in router
     assert '严禁传单数字段 `value`' in router
+    assert "request_text" not in router
+    assert "sales-monthly" not in router
+    assert "sales-90d" not in router
     assert '{"state":"resolved","values":["VN8806"]}' in router
     assert '{"state":"resolved","values":["MY8801","VN8806"]}' in router
     assert "覆盖四仓的 global/all 文件" in router

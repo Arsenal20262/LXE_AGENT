@@ -154,67 +154,51 @@ def test_yacang_unified_cli_returns_canonical_clarification_envelope(capsys) -> 
         "yacang",
         "export",
         "run",
-        "--request-text",
-        "最近卖得怎么样",
+        "--data-type-intent",
+        '{"state":"ambiguous"}',
+        "--warehouse-intent",
+        '{"state":"omitted"}',
+        "--created-date-filter",
+        '{"state":"omitted"}',
+        "--inventory-snapshot-intent",
+        '{"state":"omitted"}',
     ]) == lxeskill.EXIT_BUSINESS
 
     (record,) = _records(capsys)
     assert record["ok"] is False
     assert record["files"] == []
-    assert set(record["data"]).issuperset({
-        "success",
-        "schema_version",
-        "overall_status",
-        "tasks",
-        "artifacts",
-        "questions",
-        "diagnostics",
-    })
-    assert record["data"]["success"] is False
-    assert record["data"]["overall_status"] == "needs_clarification"
-    assert record["data"]["tasks"] == []
-    assert record["data"]["artifacts"] == []
-    assert record["data"]["questions"]
+    assert record["data"] == {
+        "platform": "yacang",
+        "business_type": "export",
+        "status": "needs_clarification",
+        "partial": False,
+        "file_count": 0,
+        "questions": [{
+            "code": "DATA_TYPE_REQUIRED",
+            "dimension": "data_type",
+            "message": "请确认需要导出哪类雅仓数据。",
+        }],
+    }
+    assert record["error"] == {
+        "code": "yacang_needs_clarification",
+        "message": "雅仓导出需要澄清业务意图",
+    }
 
 
-def test_yacang_success_with_files_emits_one_terminal_and_stops(capsys, monkeypatch, tmp_path) -> None:
-    try:
-        activate_external_workspace(tmp_path)
-        output = artifact_root() / "yacang" / "inventory.xlsx"
-        output.parent.mkdir(parents=True)
-        output.write_bytes(b"fixture")
-        calls = []
+def test_yacang_public_schema_rejects_request_text(capsys) -> None:
+    assert lxeskill.main([
+        "yacang", "export", "run", "--request-text", "导出当前库存",
+    ]) == lxeskill.EXIT_USAGE
 
-        def fake_execute(entry, arguments, session, *, on_event, on_text):
-            calls.append(entry["command_path"])
-            return (
-                True,
-                [{
-                    "type": "text",
-                    "text": json.dumps({
-                        "success": True,
-                        "overall_status": "success",
-                        "artifacts": [{"path": str(output)}],
-                    }),
-                }],
-                [str(output.resolve())],
-                None,
-            )
-
-        monkeypatch.setattr(lxeskill, "execute_module_json", fake_execute)
-
-        assert lxeskill.main([
-            "yacang", "export", "run", "--request-text", "导出当前库存",
-        ]) == 0
-
-        records = _records(capsys)
-        assert len(records) == 1
-        assert records[0]["type"] == "result"
-        assert records[0]["ok"] is True
-        assert records[0]["files"] == [str(output.resolve())]
-        assert calls == [["yacang", "export", "run"]]
-    finally:
-        activate_project_workspace()
+    records = _records(capsys)
+    assert records[0]["command"] == "yacang export run --request-text 导出当前库存"
+    assert records[0]["ok"] is False
+    assert records[0]["data"] == {}
+    assert records[0]["files"] == []
+    assert records[0]["error"] == {
+        "code": "invalid_arguments",
+        "message": "unknown option: --request-text",
+    }
 
 
 def test_yacang_unified_cli_forwards_only_approved_high_level_candidates(monkeypatch) -> None:
