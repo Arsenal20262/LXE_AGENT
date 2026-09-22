@@ -937,6 +937,39 @@ describe("native coding tools", () => {
     await processes.stop();
   });
 
+  test("returns a decodable PNG with a bounded Base64 payload and accurate coordinates after resizing", async () => {
+    const root = mkdtempSync(join(tmpdir(), "lxe-coding-image-resize-"));
+    roots.push(root);
+    const fixture = readFileSync(join(projectRoot,
+      "skills/replenishment-amazon-restock-inventory-snapshot/assets/amazon_restock_inventory_download_step_1_menu.jpg"));
+    const oversized = await new Bun.Image(fixture).resize(2_600, 2_600, { fit: "inside" }).jpeg({ quality: 95 }).bytes();
+    const original = await new Bun.Image(oversized).metadata();
+    writeFileSync(join(root, "screenshot.data"), oversized);
+    const registry = new ToolRegistry();
+    const processes = registerCodingTools(registry, {});
+    try {
+      const result = await registry.execute("read", { path: "screenshot.data" }, context(root));
+      const image = result.content[1]!;
+      expect(image.type).toBe("image");
+      const source = image.source as JsonObject;
+      expect(source.type).toBe("base64");
+      expect(source.media_type).toBe("image/png");
+      expect(typeof source.data).toBe("string");
+      const data = String(source.data);
+      expect(data.length).toBeLessThan(4.5 * 1024 * 1024);
+      const decoded = await new Bun.Image(Buffer.from(data, "base64")).png().bytes();
+      const output = await new Bun.Image(decoded).metadata();
+      expect(Math.max(output.width, output.height)).toBeLessThanOrEqual(2_000);
+      expect(Math.max(output.width, output.height)).toBeGreaterThan(1_900);
+      expect(result.content[0]).toEqual({
+        type: "text",
+        text: `Read image file [image/png]\n[Image: original ${original.width}x${original.height}, displayed at ${output.width}x${output.height}. Multiply coordinates by ${(original.width / output.width).toFixed(2)} to map to original image.]`,
+      });
+    } finally {
+      await processes.stop();
+    }
+  });
+
   test("rejects unknown-extension binary files by content", async () => {
     const root = mkdtempSync(join(tmpdir(), "lxe-coding-binary-"));
     roots.push(root);
