@@ -39,3 +39,14 @@ bun scripts/device-context-acceptance.ts
 本轮仅交付本地代码和验证，不推送、不部署、不修改 Mac mini、不生成安装包。真实服务器若尚未完成备货类型迁移，仍返回 `amazon_replenish`；新 Skill 类型加载的真实验收等待服务器迁移，不通过客户端在线别名掩盖升级差异。
 
 完整验证结果见本任务交付记录；页面验收验证了独立权限面板与真实服务链路，未冒充完整桌面所有页面或真实业务操作的验收。
+
+### 本地验证记录（2026-09-22）
+
+- 最终基线：`15cb2719`；功能提交 `643b6c5a`，验收脚本调整 `f37adcd2`，页面语义及检查修正 `6676c257`。
+- 定向测试：105 项通过；后续页面语义和架构检查 8 项通过。
+- 最终 `bun run verify:source` 退出码 0：协议校验、生产边界、全部工作区类型检查通过；Bun 1737 通过、5 跳过、0 失败；Python 1858 通过、54 子测试通过、2 跳过。
+- Bun 跳过：Windows 运行时复制 2 项、PowerShell 发布器 2 项、Windows 技能回收 1 项。Python 跳过：Windows 文件共享语义、未配置真实 ExifTool。跳过项没有记作通过。
+- Python 有 30 条 aiohttp `enable_cleanup_closed` 弃用告警；Vite 提示部分 chunk 超过 500 kB，均未阻断验证。未调整依赖或锁文件。
+- 最终 `bun run desktop:build` 退出码 0；仅构建代码，不生成安装包。
+- 最终隔离 Electron 验收退出码 0；实际 CLI 只请求模拟 `/api/v1/device-context`，共 6 次，无凭据及业务请求；确认未生成 Enrollment、身份凭据或启用统计上传。中文正常页、身份变化页及英文窄窗口截图均已检查。
+- 临时日志：`/tmp/auto-context-full-final.log`、`/tmp/auto-context-build-final.log`、`/tmp/auto-context-page-final.log`。真实服务器的新备货类型加载及 Mac mini 升级验收未执行，按本轮边界留待同步发布。
