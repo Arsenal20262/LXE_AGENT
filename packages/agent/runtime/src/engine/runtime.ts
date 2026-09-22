@@ -744,7 +744,7 @@ export class TypeScriptAgentRuntime implements AgentRuntime {
           await finalAnswerStreamer?.pushToolStart(call);
           let toolStatus: "success" | "error" = "success";
           let toolDisplayStatus: import("@lxe/protocol").ToolStepStatus = "success";
-          let toolDisplayOutput: { result?: unknown; error?: unknown } | undefined;
+          let toolDisplayOutput: { result?: unknown; error?: unknown; image_view?: import("@lxe/protocol").ToolStep["image_view"] } | undefined;
           try {
             const result = await this.options.tools.execute(call.name, call.arguments, {
               handle,
@@ -803,6 +803,20 @@ export class TypeScriptAgentRuntime implements AgentRuntime {
             };
             toolDisplayStatus = result.display_status ?? toolStatus;
             toolDisplayOutput = { result: result.content };
+            if (call.name === "read" && definition?.source !== "mcp" && result.image_view
+              && !isCancelled(handle) && toolDisplayStatus === "success"
+              && result.content.some((block) => block.type === "image")) {
+              const view = { ...result.image_view,
+                view_id: `iv_${Buffer.from(JSON.stringify([job.job_id, call.id])).toString("base64url")}`,
+                turn_id: job.job_id, tool_call_id: call.id, ts: Date.now() / 1_000,
+              };
+              try {
+                await this.options.store.appendImageView(job.session_id, view);
+                toolDisplayOutput.image_view = { view_id: view.view_id, name: view.name, media_type: view.media_type };
+              } catch (error) {
+                this.logger.warn("image_view_persistence_failed", { session_id: job.session_id, tool_call_id: call.id, error });
+              }
+            }
           } catch (cause) {
             usage.errors += 1;
             toolStatus = "error";

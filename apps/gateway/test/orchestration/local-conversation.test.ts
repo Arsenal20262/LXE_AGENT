@@ -685,3 +685,28 @@ test("client message identity follows acknowledgement, activity and runtime inpu
   expect(h.runtime.started[0]?.raw_data.client_message_id).toBe("client");
   expect(JSON.stringify(h.activities)).toContain('"client_message_id":"client"');
 });
+
+
+test("retains image view metadata through stream sanitization and state copies", async () => {
+  const h = harness(["turn-1", "message-1", "route-1"]);
+  h.storage.sessions.set("session-1", { session_id: "session-1", source: {}, workspace: testWorkspace });
+  await h.controller.send({ session_id: "session-1", text: "read image" });
+  const image_view = { view_id: "v1", name: "image.png", media_type: "image/png" };
+  const tool = { id: "read-1", name: "read", title: "Read", detail: "image.png",
+    icon_token: "file", status: "success", duration_ms: 1, image_view };
+  h.controller.handleOutbound({ action: "stream_message", platform: "desktop", session_id: "session-1",
+    turn_id: "turn-1", response_route_id: "route-1", event_id: "event-1", payload: {
+      state: "delta", seq: 1, content: "", thinking: "", tool_pending: false,
+      display_metrics: { status: "running", phase: "running_tool", elapsed_ms: 1, model: "test",
+        input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0,
+        context_tokens: 1, context_window_tokens: 100 },
+      tool_steps: [tool], process_parts: [{ type: "tool", part_id: "p1", sequence: 1, tool_step: tool }],
+    },
+  });
+  const stream = h.controller.activity("session-1").active?.stream;
+  expect(stream?.tool_steps[0]?.image_view).toEqual(image_view);
+  expect(stream?.process_parts[0]).toMatchObject({ tool_step: { image_view } });
+  stream!.tool_steps[0]!.image_view!.name = "modified";
+  expect(h.controller.activity("session-1").active?.stream?.tool_steps[0]?.image_view).toEqual(image_view);
+  h.controller.dispose();
+});

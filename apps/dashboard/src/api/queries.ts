@@ -73,6 +73,21 @@ export function useUserQuestionActions() {
   return { answer: answer.mutateAsync, stop: stop.mutateAsync };
 }
 
+export function useImageViewPreviewQuery(
+  sessionId: string | undefined, viewId: string, variant: "thumbnail" | "expanded", enabled: boolean,
+) {
+  return useQuery({
+    queryKey: ["sessions", "image-view-preview", sessionId, viewId, variant],
+    queryFn: async ({ signal }) => {
+      const result = await callDashboard({ operation: "sessions.image_view.preview",
+        input: { session_id: sessionId!, view_id: viewId, variant } });
+      signal.throwIfAborted();
+      return result;
+    },
+    enabled: enabled && !!sessionId, retry: false, staleTime: Infinity, gcTime: 0, refetchOnWindowFocus: false,
+  });
+}
+
 export function useAttachmentPreviewQuery(
   sessionId: string | undefined, id: string, variant: "thumbnail" | "expanded", enabled: boolean,
 ) {

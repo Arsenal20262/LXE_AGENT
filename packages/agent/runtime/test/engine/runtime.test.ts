@@ -16,6 +16,7 @@ import { WorkspaceSearchService } from "../../src/tooling/workspace-search";
 import type {
   RuntimeHandle,
   RuntimeArtifactRecord,
+  RuntimeImageViewRecord,
   RuntimeMessage,
   RuntimeProviderRequest,
   RuntimeStore,
@@ -89,6 +90,9 @@ class MemoryStore implements RuntimeStore {
   async resolveArtifact(_sessionId: string, artifactId: string): Promise<RuntimeArtifactRecord | undefined> {
     return this.artifacts.find((artifact) => artifact.artifact_id === artifactId);
   }
+  imageViews: RuntimeImageViewRecord[] = [];
+  async appendImageView(_sessionId: string, view: RuntimeImageViewRecord): Promise<void> { this.imageViews.push(view); }
+  async resolveImageView(): Promise<undefined> { return undefined; }
   async resolveAttachment(): Promise<undefined> { return undefined; }
   async attachmentPaths(): Promise<string[]> { return []; }
   async appendMessage(
@@ -2818,4 +2822,45 @@ test.each(["error","cancelled"] as const)("saves final consumption on %s without
   await runtime.stop();
   expect(snapshots.at(-1)).toMatchObject({input_tokens:100,output_tokens:3,context_source:"estimated"});
   expect(snapshots.at(-1)!.context_tokens).toBe(snapshots.at(-2)!.context_tokens);
+});
+
+test.each(["read", "text", "mcp", "failed", "storage-failed", "cancelled"] as const)("image view runtime delivery: %s", async scenario => {
+  const store = new MemoryStore();
+  if (scenario === "storage-failed") store.appendImageView = async () => { throw new Error("disk failure fixture"); };
+  const controller = new AbortController();
+  const tools = new ToolRegistry();
+  const payload = { type: "image", source: { type: "base64", media_type: "image/png", data: "AQIDBA==" } };
+  tools.register({ name: "read", source: scenario === "mcp" ? "mcp" : "native",
+    description: "read fixture", input_schema: { type: "object", properties: { path: { type: "string" } } },
+    execute: async () => {
+      if (scenario === "failed") throw new Error("decode failure fixture");
+      if (scenario === "cancelled") controller.abort();
+      return { content: scenario === "text" ? [{ type: "text", text: "plain text" }] : [payload],
+        image_view: { path: "/tmp/example.png", name: "example.png", media_type: "image/png" } };
+    },
+  });
+  const batches: DesktopStreamBatchRequest[] = [];
+  let round = 0;
+  const runtime = new TypeScriptAgentRuntime({ store, tools, systemPrompt: "test",
+    provider: { summarize, turn: async request => {
+      if (round++ === 0) return messageFixture({ stopReason: "toolUse", content: ["a", "b"].map(id => ({
+        type: "tool_call", name: "read", id, arguments: { path: "/tmp/example.png" },
+      })) });
+      const results = request.messages.filter(message => message.role === "tool");
+      expect(JSON.stringify(results)).not.toContain("image_view");
+      if (scenario === "read" || scenario === "storage-failed") expect(JSON.stringify(results)).toContain("AQIDBA==");
+      return messageFixture({ content: [{ type: "text", text: "done" }] });
+    } },
+    emitter: { emit: async () => {}, typing: async () => {}, desktopStream: async batch => { batches.push(batch); } },
+  });
+  await runtime.start();
+  try {
+    await runtime.runTurn(job({ source: { platform: "desktop" } }), { ...handle(), signal: controller.signal });
+    expect(store.imageViews).toHaveLength(scenario === "read" ? 2 : 0);
+    expect(JSON.stringify(batches)).not.toContain("AQIDBA==");
+    const seen = new Set(batches.flatMap(batch => batch.mutations.flatMap(mutation =>
+      mutation.kind === "part_updated" && mutation.part.type === "tool" && mutation.part.tool_step.image_view
+        ? [mutation.part.tool_step.image_view.view_id] : [])));
+    expect(seen.size).toBe(scenario === "read" ? 2 : 0);
+  } finally { await runtime.stop(); }
 });

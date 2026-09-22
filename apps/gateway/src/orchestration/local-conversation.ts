@@ -700,6 +700,9 @@ function sanitizeToolStep(value: unknown): ToolStep | undefined {
   if (!name || !title || !iconToken || (status !== "running" && status !== "success" && status !== "error")) {
     return undefined;
   }
+  const image = record(step.image_view);
+  const imageView = status === "success" && image && clean(image.view_id) && clean(image.name) && clean(image.media_type)
+    ? { view_id: clean(image.view_id), name: clean(image.name), media_type: clean(image.media_type) } : undefined;
   const resultBlock = sanitizeToolDisplayBlock(step.result_block);
   const errorBlock = sanitizeToolDisplayBlock(step.error_block);
   return {
@@ -713,6 +716,7 @@ function sanitizeToolStep(value: unknown): ToolStep | undefined {
     icon_token: iconToken,
     status,
     duration_ms: integer(step.duration_ms),
+    ...(imageView ? { image_view: imageView } : {}),
     ...(resultBlock ? { result_block: resultBlock } : {}),
     ...(errorBlock ? { error_block: errorBlock } : {}),
   };
@@ -729,6 +733,7 @@ function sanitizeToolDisplayBlock(value: unknown): ToolDisplayBlock | undefined 
 function cloneToolStep(step: ToolStep): ToolStep {
   return {
     ...step,
+    ...(step.image_view ? { image_view: { ...step.image_view } } : {}),
     ...(step.result_block ? { result_block: { ...step.result_block } } : {}),
     ...(step.error_block ? { error_block: { ...step.error_block } } : {}),
   };

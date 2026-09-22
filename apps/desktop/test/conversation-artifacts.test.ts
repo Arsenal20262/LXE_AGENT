@@ -4,6 +4,7 @@ import {
   openConversationArtifact,
   openConversationAttachment,
   previewConversationAttachment,
+  previewConversationImageView,
   revealConversationArtifact,
 } from "../src/main/conversation-artifacts";
 
@@ -118,4 +119,17 @@ describe("conversation artifact opening", () => {
     await expect(action).rejects.toBeInstanceOf(DashboardRpcError);
     expect(opened).toBe(false);
   });
+});
+
+test("image previews resolve session-owned views and preserve real file errors", async () => {
+  const calls: unknown[] = [];
+  const dependencies = {
+    resolveImageView: async (session: string, id: string) => session === "s" && id === "v" ? "/file.png" : undefined,
+    thumbnail: async (path: string, edge: number) => { calls.push([path, edge]); return "data:image/png;base64,AQID"; },
+  };
+  await previewConversationImageView(dependencies, "s", "v");
+  await previewConversationImageView(dependencies, "s", "v", "expanded");
+  expect(calls).toEqual([["/file.png", 320], ["/file.png", 1600]]);
+  await expect(previewConversationImageView(dependencies, "other", "v")).rejects.toMatchObject({ code: "not_found" });
+  await expect(previewConversationImageView({ ...dependencies, thumbnail: async () => { throw new Error("ENOENT fixture"); } }, "s", "v")).rejects.toThrow("ENOENT fixture");
 });

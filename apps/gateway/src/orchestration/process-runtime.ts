@@ -367,6 +367,14 @@ export class ProcessAgentRuntime implements DirectAgentRuntime {
     return path;
   }
 
+  async resolveImageView(sessionId: string, viewId: string): Promise<string | undefined> {
+    const result = objectValue(await this.request("resolve_image_view", { session_id: sessionId, view_id: viewId }));
+    if (result.found === false) return undefined;
+    const path = String(result.path ?? "").trim();
+    if (result.found !== true || !path) throw new AgentProcessError("agent-cli returned a malformed image view resolution", "AgentProtocolError");
+    return path;
+  }
+
   async resolveAttachment(sessionId: string, attachmentId: string): Promise<string | undefined> {
     const result = objectValue(await this.request("resolve_attachment", {
       session_id: sessionId,

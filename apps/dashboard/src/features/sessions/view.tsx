@@ -89,6 +89,8 @@ import type { ConversationDisplaySnapshot } from "./display-controller";
 import { ConversationWindow } from "./virtual-window";
 import { thinkingParagraphs, formatConversationDuration } from "./typography";
 import { useProcessRows } from "./process";
+import { ImageViewGroup } from "./image-views";
+import { groupImageViewRows } from "./image-view-groups";
 import { conversationRows, type ConversationRow, type PendingMessage } from "./presentation";
 import { ConversationWelcome } from "./welcome";
 
@@ -1460,6 +1462,11 @@ export const UnifiedConversationRow = React.memo(function UnifiedConversationRow
     <ConversationStatus row={row} /><ChevronRight size={14} style={{transform: expanded ? "rotate(90deg)" : undefined}} />
   </button>;
   if (row.kind === "artifacts") return <TurnFileList files={row.artifacts ?? []} onOpenFile={onOpenFile} onRevealFile={onRevealFile} />;
+  if (row.kind === "image_views") return <ImageViewGroup rows={row.imageRows ?? []} sessionId={attachmentSessionId}
+    renderDetails={(child) => {
+      const operation = child.operation ?? (child.liveTool ? liveToolOperations([child.liveTool])[0] : undefined);
+      return operation ? <div className="tool-op-body">{child.operation ? defaultToolOperationBody(operation) : <LiveToolOperationBody operation={operation} />}</div> : null;
+    }} />;
   if (row.kind === "tool") {
     const operation = row.operation ?? (row.liveTool ? liveToolOperations([row.liveTool])[0] : undefined);
     if (!operation) return null;
@@ -1586,7 +1593,7 @@ export function SessionDetailView({
   const sessionKey = display?.viewKey ?? session?.session_id ?? "new";
   const rows = display?.rows ?? conversationRows(messages,
     [activity?.latest, activity?.active, ...(activity?.queued ?? [])].filter((turn): turn is DesktopConversationTurnPayload => Boolean(turn)), pendingMessages);
-  const process = useProcessRows(rows, sessionKey);
+  const process = useProcessRows(groupImageViewRows(rows), sessionKey);
   const [expandedRows, setExpandedRows] = useState<Map<string, boolean>>(() => new Map());
   useEffect(() => { setExpandedRows(new Map()); setSessionInfoOpen(false); }, [sessionKey]);
   const toggleRow = useCallback((id: string) => setExpandedRows((current) => new Map(current).set(id, !current.get(id))), []);

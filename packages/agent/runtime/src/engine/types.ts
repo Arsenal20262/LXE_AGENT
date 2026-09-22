@@ -193,6 +193,16 @@ export interface RuntimeArtifactRecord extends JsonObject {
   ts: number;
 }
 
+export interface RuntimeImageViewRecord extends JsonObject {
+  view_id: string;
+  turn_id: string;
+  tool_call_id: string;
+  path: string;
+  name: string;
+  media_type: string;
+  ts: number;
+}
+
 export interface RuntimeAttachmentRecord extends JsonObject {
   attachment_id: string;
   turn_id: string;
@@ -218,6 +228,8 @@ export interface RuntimeStore {
   popPendingEvents(sessionId: string): Promise<JsonObject[]>;
   loadMessages(sessionId: string): Promise<RuntimeMessage[]>;
   appendTurnContext(sessionId: string, context: RuntimeTurnContextRecord): Promise<void>;
+  appendImageView(sessionId: string, view: RuntimeImageViewRecord): Promise<void>;
+  resolveImageView(sessionId: string, viewId: string): Promise<RuntimeImageViewRecord | undefined>;
   appendArtifact(sessionId: string, artifact: RuntimeArtifactRecord): Promise<void>;
   appendTurnError(sessionId: string, turnId: string, message: string): Promise<void>;
   resolveArtifact(sessionId: string, artifactId: string): Promise<RuntimeArtifactRecord | undefined>;
@@ -257,6 +269,8 @@ export interface ToolSchema {
 }
 
 export interface ToolExecutionResult {
+  /** Display-only metadata; never included in model content. */
+  image_view?: { path: string; name: string; media_type: string };
   content: JsonObject[];
   state_patch?: JsonObject;
   files?: string[];

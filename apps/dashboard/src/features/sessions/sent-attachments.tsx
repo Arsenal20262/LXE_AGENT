@@ -46,8 +46,8 @@ export function DraftImagePreview({ attachment, onClose }: { attachment: Desktop
     error={preview.error} loading={!preview.url && !preview.error} onClose={onClose} />;
 }
 
-function ImagePreviewDialog({ attachment, url, error, loading = false, onClose }: {
-  attachment: DesktopInputAttachmentPayload; url: string; error: string; loading?: boolean; onClose(): void;
+export function ImagePreviewDialog({ attachment, url, error, loading = false, note, onClose }: {
+  attachment: Pick<DesktopInputAttachmentPayload, "name">; url: string; error: string; loading?: boolean; note?: string; onClose(): void;
 }) {
   const t = useUiText();
   const ref = useDialogFocus<HTMLDivElement>(true, onClose);
@@ -56,7 +56,8 @@ function ImagePreviewDialog({ attachment, url, error, loading = false, onClose }
   }}>
     <div className="sent-image-dialog" role="dialog" aria-modal="true" aria-label={attachment.name} ref={ref} tabIndex={-1}>
       <header><span>{attachment.name}</span><button type="button" aria-label={t.detailModal.close} onClick={onClose}><X size={20} /></button></header>
-      <img src={url} alt={attachment.name} aria-busy={loading} />
+      {note ? <p className="image-view-note">{note}</p> : null}
+      {url ? <img src={url} alt={attachment.name} aria-busy={loading} /> : null}
       {loading ? <LoaderCircle className="conversation-spinner" aria-label={t.sessionDetail.loading} size={20} /> : null}
       {error ? <p role="alert">{error}</p> : null}
     </div>

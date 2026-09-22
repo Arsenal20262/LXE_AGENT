@@ -931,6 +931,7 @@ describe("native coding tools", () => {
     const registry = new ToolRegistry();
     const processes = registerCodingTools(registry, {});
     const result = await registry.execute("read", { path: "screenshot.data" }, context(root));
+    expect(result.image_view).toEqual({ path: join(root, "screenshot.data"), name: "screenshot.data", media_type: "image/png" });
     expect(result.content[0]?.text).toContain("Read image file [image/png]");
     expect(result.content[0]?.text).toContain("Multiply coordinates");
     expect(result.content[1]).toMatchObject({ type: "image", source: { media_type: "image/png" } });

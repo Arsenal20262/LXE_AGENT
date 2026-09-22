@@ -53,3 +53,17 @@ describe("tool display", () => {
     expect(step.detail).toBe("artifacts/legacy.xlsx");
   });
 });
+
+test("image details retain text and metadata without serializing model image bytes", () => {
+  const content = [
+    { type: "text", text: "Read image file [image/png]" },
+    { type: "image", source: { type: "base64", media_type: "image/png", data: "image-bytes-fixture" } },
+  ];
+  const image_view = { view_id: "view-1", name: "image.png", media_type: "image/png" };
+  const step = buildToolDisplayStep("call-1", "read", { path: "image.png" }, "success", 1,
+    { showResultDetails: true, result: content, image_view });
+  expect(step.image_view).toEqual(image_view);
+  expect(step.result_block?.content).toContain("Read image file");
+  expect(step.result_block?.content).not.toContain("image-bytes-fixture");
+  expect(content[1]?.source?.data).toBe("image-bytes-fixture");
+});

@@ -79,3 +79,14 @@ export async function previewConversationAttachment(
   if (!path) throw new DashboardRpcError("not_found", "attachment is not part of this conversation");
   return { data_url: await dependencies.thumbnail(path, variant === "expanded" ? 1600 : 320) };
 }
+
+/** Image views resolve through runtime-owned records, not paths supplied by the renderer. */
+export async function previewConversationImageView(
+  dependencies: { resolveImageView(sessionId: string, viewId: string): Promise<string | undefined>;
+    thumbnail(path: string, edge: number): Promise<string> },
+  sessionId: string, viewId: string, variant: "thumbnail" | "expanded" = "thumbnail",
+): Promise<{ data_url: string }> {
+  const path = await dependencies.resolveImageView(sessionId, viewId);
+  if (!path) throw new DashboardRpcError("not_found", "image view is not part of this conversation");
+  return { data_url: await dependencies.thumbnail(path, variant === "expanded" ? 1600 : 320) };
+}

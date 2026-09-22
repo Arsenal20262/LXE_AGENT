@@ -11511,3 +11511,9 @@ pre {
 }
 
 .skill-add-menu-popup button:disabled { opacity: .5; cursor: default; }
+
+.image-view-group { min-width: 0; padding: 6px 0; }
+.image-view-summary { display: flex; align-items: center; gap: 8px; color: inherit; opacity: .8; background: none; border: 0; cursor: pointer; padding: 6px 0 10px; font: inherit; }
+.image-view-details { margin-top: 8px; font-size: .75rem; }
+.image-view-details > summary { cursor: pointer; opacity: .7; }
+.image-view-note { margin: 0; padding: 8px 16px; opacity: .7; font-size: .75rem; }

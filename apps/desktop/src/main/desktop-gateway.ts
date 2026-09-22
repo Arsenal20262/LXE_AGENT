@@ -46,6 +46,7 @@ import {
   openConversationArtifact,
   openConversationAttachment,
   previewConversationAttachment,
+  previewConversationImageView,
   revealConversationArtifact,
 } from "./conversation-artifacts";
 import { attachmentThumbnail } from "./attachment-thumbnail";
@@ -480,6 +481,12 @@ export class DesktopGateway {
         assertExists: (path) => access(path),
         revealPath: (path) => shell.showItemInFolder(path),
       }, sessionId, artifactId) as DashboardRpcResult<O>;
+    }
+    if (call.operation === "sessions.image_view.preview") {
+      return await previewConversationImageView({
+        resolveImageView: (sessionId, viewId) => this.runtime!.resolveImageView(sessionId, viewId),
+        thumbnail: attachmentThumbnail,
+      }, call.input.session_id, call.input.view_id, call.input.variant) as DashboardRpcResult<O>;
     }
     if (call.operation === "sessions.attachment.preview") {
       return await previewConversationAttachment({

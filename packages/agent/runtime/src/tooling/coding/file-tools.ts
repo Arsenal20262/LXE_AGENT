@@ -6,7 +6,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { open, readFile, stat } from "node:fs/promises";
-import { dirname, extname, relative } from "node:path";
+import { basename, dirname, extname, relative } from "node:path";
 import type { JsonObject } from "@lxe/protocol";
 import { detectReadImageMime, type ModelImageProcessor } from "../../providers/model-image";
 import { scanNumberedTextChunks, type NumberedTextRangeResult } from "../text-range";
@@ -139,6 +139,7 @@ export function createFileTools(dependencies: FileToolDependencies): ToolDefinit
           ledger.recordVersion(context.session_id, path, version);
           const scale = prepared.processed.width > 0 ? prepared.original.width / prepared.processed.width : 1;
           return {
+            image_view: { path, name: basename(path), media_type: prepared.mediaType },
             content: [
               {
                 type: "text",

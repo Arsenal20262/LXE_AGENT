@@ -56,6 +56,18 @@ const descriptors: Record<string, { title: string; icon: string; keys: string[] 
   ziniao_page: { title: "Ziniao page", icon: "browser-mac_outlined", keys: ["action", "store_id"] },
 };
 
+const withoutImageData = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(withoutImageData);
+  if (value && typeof value === "object") {
+    const block = value as Record<string, unknown>;
+    if (block.type === "image" || block.type === "image_url" || block.type === "input_image") {
+      return { type: "text", text: "[Image data omitted from tool details]" };
+    }
+    return Object.fromEntries(Object.entries(block).map(([key, item]) => [key, withoutImageData(item)]));
+  }
+  return typeof value === "string" && /^data:image\//iu.test(value) ? "[Image data omitted from tool details]" : value;
+};
+
 const stringifyDisplay = (value: unknown, limit: number, showFullPaths: boolean): ToolDisplayBlock | undefined => {
   if (value === undefined || value === null) return undefined;
   let language: ToolDisplayBlock["language"] = "text";
@@ -87,6 +99,7 @@ export function buildToolDisplayStep(
   status: ToolStep["status"],
   durationMs: number,
   options: {
+    image_view?: ToolStep["image_view"];
     showFullPaths?: boolean;
     result?: unknown;
     error?: unknown;
@@ -124,7 +137,7 @@ export function buildToolDisplayStep(
       ? `.../${basename(detail) || "path"}`
       : sanitize(detail, showFullPaths);
   const resultBlock = status === "success" && options.showResultDetails
-    ? stringifyDisplay(options.result, RESULT_LIMIT, showFullPaths)
+    ? stringifyDisplay(withoutImageData(options.result), RESULT_LIMIT, showFullPaths)
     : undefined;
   const errorBlock = status === "error"
     ? stringifyDisplay(options.error, ERROR_LIMIT, showFullPaths)
@@ -137,6 +150,7 @@ export function buildToolDisplayStep(
     icon_token: descriptor.icon,
     status,
     duration_ms: Math.max(0, Math.trunc(durationMs)),
+    ...(status === "success" && options.image_view ? { image_view: { ...options.image_view } } : {}),
     ...(resultBlock ? { result_block: resultBlock } : {}),
     ...(errorBlock ? { error_block: errorBlock } : {}),
   };

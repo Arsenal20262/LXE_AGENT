@@ -9,10 +9,11 @@ export interface PendingMessage {
   turnId?: string; messageId?: string; error?: string; draftKey?: string;
 }
 export interface ConversationRow {
-  id: string; groupId: string; turnId: string; kind: "message" | "tool" | "status" | "artifacts" | "process" | "answer_meta";
+  id: string; groupId: string; turnId: string; kind: "image_views" | "message" | "tool" | "status" | "artifacts" | "process" | "answer_meta";
   presentation?: "process" | "final";
   answerMeta?: { text: string; createdAt: number };
   message?: SessionMessage; operation?: ToolOperation;
+  imageRows?: ConversationRow[];
   liveTool?: NonNullable<DesktopConversationTurnPayload["stream"]>["tool_steps"][number];
   phase?: string; startedAt?: number; elapsedMs?: number;
   status?: string; error?: string; createdAt: number; artifacts?: SessionArtifactPayload[];
@@ -134,7 +135,7 @@ export function composeConversationRows(projection: ConversationHistoryProjectio
   const activeIds = new Set(turns.filter(turn => ["running", "queued"].includes(turn.state)).map(turn => turn.turn_id));
   const changedAnswers = new Set(turns.map(turn => `answer-meta:turn:${turn.turn_id}`));
   const rows = projection.baseRows.filter(row => row.kind !== "status" || !turnIds.has(row.turnId)).map(row => {
-    if (row.kind === "tool" && row.operation?.result === undefined && row.operation && activeIds.has(row.turnId) && row.operation.status !== "pending") {
+    if (row.kind === "tool" && row.operation?.result === undefined && row.operation && !row.operation.image_view && activeIds.has(row.turnId) && row.operation.status !== "pending") {
       return { ...row, operation: { ...row.operation, status: "pending" as const } };
     }
     return row;

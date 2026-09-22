@@ -307,6 +307,9 @@ export const ZH_TEXT = {
     retryEarlier: "重试加载"
   },
   conversation: {
+    viewedImages: (count: number) => `查看了 ${count} 张图片`,
+    currentImageFile: "预览当前文件",
+    imageCallDetails: "调用详情",
     newTitle: "新对话",
     newHint: "输入消息或添加文件，开始与 Agent 对话。",
     placeholder: "给 Agent 发送消息…",
@@ -1144,6 +1147,9 @@ export const UI_TEXT: Record<Language, UiText> = {
       retryEarlier: "Retry loading"
     },
     conversation: {
+      viewedImages: (count: number) => `Viewed ${count} image${count === 1 ? "" : "s"}`,
+      currentImageFile: "Preview of current file",
+      imageCallDetails: "Call details",
       newTitle: "New chat",
       newHint: "Send a message or add files to start a conversation with the Agent.",
       placeholder: "Message the Agent…",

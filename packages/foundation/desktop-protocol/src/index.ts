@@ -38,7 +38,7 @@ export type DesktopDraftAttachmentPayload = DesktopInputAttachmentPayload & {
   reference_key?: string;
 };
 
-export const AGENT_PROTOCOL_VERSION = 22 as const;
+export const AGENT_PROTOCOL_VERSION = 23 as const;
 
 /** Session-owned exec snapshot used only for completion events and card refresh. */
 export type ExecTaskSnapshotPayload = {
@@ -124,6 +124,7 @@ export type AgentCommandPayloads = {
   append_pending_event: { session_id: string; event: JsonObject };
   has_pending_events: { session_id: string };
   resolve_artifact: { session_id: string; artifact_id: string };
+  resolve_image_view: { session_id: string; view_id: string };
   resolve_attachment: { session_id: string; attachment_id: string };
   dashboard_call: AgentDashboardRpcCall;
   session_status: SessionStatusRequest;
@@ -658,6 +659,7 @@ const agentCommands = new Set<AgentCommand>([
   "append_pending_event",
   "has_pending_events",
   "resolve_artifact",
+  "resolve_image_view",
   "resolve_attachment",
   "dashboard_call",
   "session_status",
@@ -787,6 +789,10 @@ const validateRequestPayload = (command: AgentCommand, payload: Record<string, u
     case "resolve_artifact":
       requireText("session_id");
       requireText("artifact_id");
+      break;
+    case "resolve_image_view":
+      requireText("session_id");
+      requireText("view_id");
       break;
     case "resolve_attachment":
       requireText("session_id");

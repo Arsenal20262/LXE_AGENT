@@ -1,5 +1,5 @@
 /** Generated from protocol/schemas. DO NOT EDIT. Run bun run protocol:generate.
- * Schema SHA-256: 76a5ab0c9e784ea75082c34d79449c3113a38299fc300be5483e011275bfcda0
+ * Schema SHA-256: db9fece7b9dc6fedbc3e8c8cb74ee01925547512e6ee5068b33c94031e832ee6
  */
 
 export type ProtocolContracts = AgentJob | EmitRequest | DesktopStreamBatchRequest;
@@ -142,6 +142,11 @@ export type ToolStep = {
   duration_ms: number;
   result_block?: ToolDisplayBlock;
   error_block?: ToolDisplayBlock;
+  image_view?: {
+    view_id: string;
+    name: string;
+    media_type: string;
+  };
 };
 export type ToolDisplayBlock = {
   language: "json" | "text";
