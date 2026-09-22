@@ -11,7 +11,6 @@ import type { WireGuardTunnelConfiguration } from "../wireguard-types";
 export class DesktopCloudConfigService {
   constructor(
     private readonly repository: DesktopConfigRepository,
-    private readonly secretEnvironment: Readonly<Record<string, string | undefined>> = {},
   ) {}
 
   configuration(): DesktopCloudConfiguration {

@@ -52,7 +52,7 @@ export class DesktopConfigStore {
       options.secretEnvironment,
       llmConfigRoot,
     );
-    this.cloud = new DesktopCloudConfigService(repository, options.secretEnvironment);
+    this.cloud = new DesktopCloudConfigService(repository);
     this.setup.migrateModelCredentialStorage();
   }
 
