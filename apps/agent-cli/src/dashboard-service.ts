@@ -269,14 +269,20 @@ export class DashboardService {
   private readonly handlers: AgentDashboardRpcHandlers = {
     "sessions.questions": input => {
       const captcha = input.session_id ? this.options.shangmanCaptcha?.snapshot(input.session_id) : undefined;
+      const pendingInput = input.session_id ? this.options.questions?.pendingInputSnapshot(input.session_id) : undefined;
       return {
         items: this.options.questions?.snapshot() ?? [],
+        ...(pendingInput ? { pending_input: pendingInput } : {}),
         ...(captcha ? { shangman_captcha: captcha } : {}),
       };
     },
     "sessions.answer": input => {
       if (!this.options.questions) return rpcError("unavailable", "User questions are unavailable");
       return this.options.questions.submit(input);
+    },
+    "sessions.pending_input.answer": input => {
+      if (!this.options.questions) return rpcError("unavailable", "Sensitive input is unavailable");
+      return this.options.questions.submitPendingInput(input);
     },
     "sessions.shangman_captcha.answer": input => {
       if (!this.options.shangmanCaptcha) return rpcError("unavailable", "Shangman captcha input is unavailable");

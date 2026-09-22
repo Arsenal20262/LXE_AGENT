@@ -7,7 +7,7 @@ test("question reads, answers and change notifications cross the shared IPC/JSON
     { operation: "sessions.questions" as const, input: { session_id: "s" } },
     { operation: "sessions.answer" as const, input: { session_id: "s", request_id: "request", answers: [{ id: "q", selected: ["a"] }] } },
     { operation: "sessions.answer" as const, input: { session_id: "s", request_id: "request", answers: [{ id: "q", selected: [] }] } },
-    { operation: "sessions.shangman_captcha.answer" as const, input: { session_id: "s", challenge_id: "opaque", code: "A7x9" } },
+    { operation: "sessions.pending_input.answer" as const, input: { session_id: "s", request_id: "opaque", value: "A7x9" } },
   ];
   for (const call of calls) {
     expect(parseDashboardRpcCall(call)).toEqual(call);
@@ -17,18 +17,18 @@ test("question reads, answers and change notifications cross the shared IPC/JSON
   expect(decodeAgentEvent(encodeAgentEvent(event))).toEqual(event);
 });
 
-test("captcha answers accept only bounded local interaction fields", () => {
+test("pending input answers accept only bounded local interaction fields", () => {
   const call = {
-    operation: "sessions.shangman_captcha.answer" as const,
-    input: { session_id: "s", challenge_id: "opaque", code: " A7x9 " },
+    operation: "sessions.pending_input.answer" as const,
+    input: { session_id: "s", request_id: "opaque", value: " A7x9 " },
   };
   expect(parseDashboardRpcCall(call)).toEqual({
     operation: call.operation,
-    input: { session_id: "s", challenge_id: "opaque", code: "A7x9" },
+    input: { session_id: "s", request_id: "opaque", value: "A7x9" },
   });
   expect(() => parseDashboardRpcCall({
     operation: call.operation,
-    input: { ...call.input, code: " " },
+    input: { ...call.input, value: " " },
   })).toThrow();
 });
 

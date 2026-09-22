@@ -12,6 +12,7 @@ from services.zhihui_tms.client import DEFAULT_MAX_HTTP_ATTEMPTS, ZhihuiTmsClien
 from services.zhihui_tms.errors import redact_text
 from services.zhihui_tms.planner import plan_product_export
 from services.zhihui_tms.product_export import export_stockwarehouse_pages
+from services.zhihui_tms.session import ZhihuiTmsSessionProvider
 from services.zhihui_tms.xlsx_delivery import deliver_product_exports
 from shared.process_lock import InterProcessLockTimeout, interprocess_lock
 from shared.workspace import artifact_root
@@ -36,23 +37,62 @@ def _account_lock_path(account: str) -> Path:
     return lock_root / "locks" / "zhihui_tms" / f"{account_hash}.lock"
 
 
+def _terminal_data(
+    *,
+    confirmation_required: bool = False,
+    row_count: int | None = None,
+    partial: bool | None = None,
+    partial_pages: int | None = None,
+    partial_rows: int | None = None,
+) -> dict[str, Any]:
+    data: dict[str, Any] = {
+        "platform": "zhihui_tms",
+        "country": "PH",
+        "business_type": "product_export",
+    }
+    if confirmation_required:
+        data["confirmation_required"] = True
+    if row_count is not None:
+        data["row_count"] = row_count
+    if partial is not None:
+        data["partial"] = partial
+    if partial_pages is not None:
+        data["partial_pages"] = partial_pages
+    if partial_rows is not None:
+        data["partial_rows"] = partial_rows
+    return data
+
+
+def _terminal_projection(data: dict[str, Any], *, code: str | None = None, message: str | None = None) -> dict[str, Any]:
+    projection: dict[str, Any] = {"data": data}
+    if code is not None and message is not None:
+        projection["error"] = {"code": code, "message": message}
+    return {"terminal_projection": projection}
+
+
 def run(arguments: dict[str, Any]) -> dict[str, Any]:
-    """Catalog entrypoint; credentials are process environment only."""
-    return _run(arguments, on_event=None)
+    """Legacy internal entrypoint; public catalog uses action-specific wrappers."""
+    return run_action(arguments, action="preview")
 
 
 def run_with_events(
     arguments: dict[str, Any], on_event: Callable[[dict[str, Any]], None],
 ) -> dict[str, Any]:
-    """Catalog entrypoint with credential-free progress records."""
-    return _run(arguments, on_event=on_event)
+    """Legacy internal entrypoint; public catalog uses action-specific wrappers."""
+    return run_action(arguments, action="preview", on_event=on_event)
+
+
+def run_action(
+    arguments: dict[str, Any], *, action: str, on_event: Callable[[dict[str, Any]], None] | None = None,
+) -> dict[str, Any]:
+    return _run(arguments, action=action, on_event=on_event)
 
 
 def _run(
-    arguments: dict[str, Any], *, on_event: Callable[[dict[str, Any]], None] | None,
+    arguments: dict[str, Any], *, action: str, on_event: Callable[[dict[str, Any]], None] | None,
 ) -> dict[str, Any]:
     try:
-        plan = plan_product_export(arguments)
+        plan = plan_product_export(arguments, action=action)
     except (TypeError, ValueError) as exc:
         return {"success": False, "code": "tms_plan_invalid", "exception": str(exc), "artifacts": []}
 
@@ -71,23 +111,33 @@ def _run(
         "artifacts": [],
     }
     if plan.action == "preview":
-        return {"success": True, **summary}
+        return {
+            "success": True,
+            "artifacts": [],
+            **_terminal_projection(_terminal_data(confirmation_required=True)),
+        }
 
     if os.environ.get("ZHIHUI_TMS_PRODUCTION_ENABLED") != "1":
+        code = "tms_production_disabled"
+        message = "智汇 TMS 生产调用开关未启用"
         return {
             "success": False,
-            "code": "tms_production_disabled",
-            "exception": "智汇 TMS 生产调用开关未启用",
+            "code": code,
+            "exception": message,
             **summary,
+            **_terminal_projection(_terminal_data(partial=False), code=code, message=message),
         }
     account = os.environ.get("ZHIHUI_TMS_ACCOUNT", "").strip()
     password = os.environ.get("ZHIHUI_TMS_PASSWORD", "")
     if not account or not password:
+        code = "tms_credentials_missing"
+        message = "智汇 TMS 运行时账号或密码未配置"
         return {
             "success": False,
-            "code": "tms_credentials_missing",
-            "exception": "智汇 TMS 运行时账号或密码未配置",
+            "code": code,
+            "exception": message,
             **summary,
+            **_terminal_projection(_terminal_data(partial=False), code=code, message=message),
         }
 
     output_dir = artifact_root() / "zhihui_tms" / uuid4().hex
@@ -99,10 +149,19 @@ def _run(
 
     try:
         with interprocess_lock(_account_lock_path(account), timeout_seconds=0):
-            client = ZhihuiTmsClient()
-            emit({"stage": "login_started"})
-            client.login(account, password)
-            emit({"stage": "authenticated"})
+            session_provider = ZhihuiTmsSessionProvider.from_environment()
+            client = ZhihuiTmsClient(api_token=session_provider.read(account) or "")
+
+            def authenticate_and_persist() -> None:
+                session_provider.clear(account)
+                emit({"stage": "login_started"})
+                client.login(account, password)
+                session_provider.write(account, client.api_token)
+                emit({"stage": "authenticated"})
+
+            client.set_authentication_recovery(authenticate_and_persist)
+            if not client.api_token:
+                authenticate_and_persist()
             export_result = export_stockwarehouse_pages(
                 client,
                 max_pages=plan.max_pages,
@@ -131,13 +190,17 @@ def _run(
                 "request_count": export_result.request_count,
                 "http_attempt_count": getattr(client, "request_attempt_count", None),
                 "total_rows": delivery.total_rows,
+                **_terminal_projection(_terminal_data(row_count=delivery.total_rows)),
             }
     except InterProcessLockTimeout:
+        code = "tms_export_busy"
+        message = "智汇 TMS 商品导出正在执行，请等待当前任务结束"
         return {
             "success": False,
             **summary,
-            "code": "tms_export_busy",
-            "exception": "智汇 TMS 商品导出正在执行，请等待当前任务结束",
+            "code": code,
+            "exception": message,
+            **_terminal_projection(_terminal_data(partial=False), code=code, message=message),
         }
     except Exception as exc:  # noqa: BLE001 — the CLI must return the observed redacted failure
         partial_artifacts = [
@@ -145,15 +208,28 @@ def _run(
             for item in getattr(exc, "partial_artifacts", ())
         ]
         artifacts = partial_artifacts or _existing_delivery(output_dir, plan.date_label)
+        exception = redact_text(f"{type(exc).__name__}: {exc}", secrets=(account, password))
+        partial = bool(artifacts)
+        error_code = str(getattr(exc, "code", "tms_export_failed"))
+        terminal_data = _terminal_data(
+            partial=partial,
+            partial_pages=getattr(exc, "partial_pages", None) if partial else None,
+            partial_rows=getattr(exc, "partial_rows", None) if partial else None,
+        )
         return {
             "success": False,
             **summary,
-            "code": getattr(exc, "code", "tms_export_failed"),
-            "exception": redact_text(f"{type(exc).__name__}: {exc}", secrets=(account, password)),
+            "code": error_code,
+            "exception": exception,
             "http_attempt_count": getattr(client, "request_attempt_count", None),
             "artifacts": artifacts,
             "partial_pages": getattr(exc, "partial_pages", None),
             "partial_rows": getattr(exc, "partial_rows", None),
+            **_terminal_projection(
+                terminal_data,
+                code="tms_export_partial" if partial else error_code,
+                message=exception,
+            ),
         }
     finally:
         session = getattr(client, "session", None)
@@ -163,4 +239,4 @@ def _run(
                 close()
 
 
-__all__ = ["run", "run_with_events"]
+__all__ = ["run", "run_action", "run_with_events"]

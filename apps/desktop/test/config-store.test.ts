@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -138,6 +139,61 @@ describe("DesktopConfigStore", () => {
     const cleared = store.save({ workspace_root: join(root, "workspace"), zhihui_tms: { action: "clear" } });
     expect(cleared.zhihui_tms).toMatchObject({ configured: false, password_configured: false, production_enabled: false });
     expect(store.environment().ZHIHUI_TMS_PRODUCTION_ENABLED).toBe("0");
+  });
+
+  test("persists a matching encrypted Zhihui session and clears it when credentials or production access change", () => {
+    const root = createRoot();
+    const workspaceRoot = join(root, "workspace");
+    const fingerprint = createHash("sha256").update("fixture-tms-account", "utf8").digest("hex");
+    const store = new DesktopConfigStore(root, workspaceRoot, safeStorage, { platform: "darwin" });
+    store.save({
+      workspace_root: workspaceRoot,
+      zhihui_tms: {
+        action: "save",
+        account: "fixture-tms-account",
+        password: "fixture-tms-secret",
+        production_enabled: true,
+      },
+    });
+
+    store.saveZhihuiTmsSession(fingerprint, "fixture-api-token");
+    const restarted = new DesktopConfigStore(root, workspaceRoot, safeStorage, { platform: "darwin" });
+    expect(restarted.readZhihuiTmsSession(fingerprint)).toBe("fixture-api-token");
+    expect(restarted.readZhihuiTmsSession("b".repeat(64))).toBeNull();
+    expect(readFileSync(join(root, "config", "settings.json"), "utf8")).not.toContain("fixture-api-token");
+    expect(JSON.stringify(restarted.state())).not.toContain("fixture-api-token");
+
+    restarted.save({
+      workspace_root: workspaceRoot,
+      zhihui_tms: { action: "save", account: "fixture-tms-account", production_enabled: true },
+    });
+    expect(restarted.readZhihuiTmsSession(fingerprint)).toBe("fixture-api-token");
+
+    restarted.save({
+      workspace_root: workspaceRoot,
+      zhihui_tms: {
+        action: "save",
+        account: "fixture-tms-account",
+        password: "fixture-new-secret",
+        production_enabled: true,
+      },
+    });
+    expect(restarted.readZhihuiTmsSession(fingerprint)).toBeNull();
+
+    restarted.saveZhihuiTmsSession(fingerprint, "fixture-api-token-2");
+    restarted.save({
+      workspace_root: workspaceRoot,
+      zhihui_tms: { action: "save", account: "fixture-tms-account-2", production_enabled: true },
+    });
+    expect(restarted.readZhihuiTmsSession(fingerprint)).toBeNull();
+
+    const secondFingerprint = createHash("sha256").update("fixture-tms-account-2", "utf8").digest("hex");
+    restarted.saveZhihuiTmsSession(secondFingerprint, "fixture-api-token-3");
+    restarted.save({
+      workspace_root: workspaceRoot,
+      zhihui_tms: { action: "save", account: "fixture-tms-account-2", production_enabled: false },
+    });
+    expect(restarted.readZhihuiTmsSession(secondFingerprint)).toBeNull();
   });
 
   test("keeps every secret encrypted and maps complete integrations and diagnostic logs", () => {

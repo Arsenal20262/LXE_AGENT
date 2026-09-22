@@ -143,12 +143,23 @@ describe("lxeskill command recognition", () => {
         ownerSkills: [],
         artifactPaths: [{ field: "xlsx_paths[]", role: "deliverable" }],
       });
-    expect(entries.find((entry) => entry.name === "zhihui_export_products"))
+    expect(entries.find((entry) => entry.name === "zhihui_preview_products"))
       .toMatchObject({
-        command: "lxeskill tms philippines products-export",
-        module: "services.agent_cli.zhihui.export_products",
+        command: "lxeskill tms philippines products-export preview",
+        module: "services.agent_cli.zhihui.preview_products",
         ownerSkills: ["zhihui-tms-product-export"],
         artifactPaths: [{ field: "artifacts[].path", role: "deliverable" }],
+      });
+    expect(entries.find((entry) => entry.name === "zhihui_execute_products"))
+      .toMatchObject({
+        command: "lxeskill tms philippines products-export execute",
+        module: "services.agent_cli.zhihui.execute_products",
+        confirmation: {
+          header: "确认执行",
+          question: "该操作将登录真实业务系统并导出文件，是否继续？",
+          confirmLabel: "确认执行导出",
+          cancelLabel: "取消",
+        },
       });
     expect(entries.find((entry) => entry.name === "ziniao_page")).toMatchObject({
       ownerSkills: ["ziniao-browser"],

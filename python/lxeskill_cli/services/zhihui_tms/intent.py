@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-
-
-_PRODUCT_TERMS = ("商品", "库存", "销量", "入库", "上架", "菲律宾", "智汇", "tms")
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -13,13 +11,19 @@ class ZhihuiTmsProductExportIntent:
     historical_metrics_available: bool = False
 
 
-def normalize_product_export_intent(request: str = "") -> ZhihuiTmsProductExportIntent:
-    """Treat report wording as a request for the one supported product export."""
-    if not isinstance(request, str):
-        raise ValueError("request 必须是文本")
-    wording = request.strip().lower()
-    if wording and not any(term in wording for term in _PRODUCT_TERMS):
-        raise ValueError("request 未表达智汇 TMS 菲律宾商品导出需求")
+def normalize_product_export_intent(arguments: dict[str, Any]) -> ZhihuiTmsProductExportIntent:
+    """Validate the public structured contract before any client construction."""
+    if not isinstance(arguments, dict):
+        raise ValueError("arguments 必须是对象")
+    unknown = set(arguments) - {"platform", "warehouse", "intent"}
+    if unknown:
+        raise ValueError(f"不支持的参数: {', '.join(sorted(unknown))}")
+    if arguments.get("platform") != "zhihui_tms":
+        raise ValueError("platform 必须是 zhihui_tms")
+    if arguments.get("warehouse") != "PH":
+        raise ValueError("warehouse 必须是 PH")
+    if arguments.get("intent") != "product_export":
+        raise ValueError("intent 必须是 product_export")
     return ZhihuiTmsProductExportIntent()
 
 

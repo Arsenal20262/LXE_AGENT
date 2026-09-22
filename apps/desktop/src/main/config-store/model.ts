@@ -87,11 +87,18 @@ export interface DesktopConfig {
   };
 }
 
+export interface ZhihuiTmsSessionRecord {
+  account_fingerprint: string;
+  api_token: string;
+  saved_at: number;
+}
+
 export interface DesktopSecrets {
   ziniao_password: string;
   mabang_password: string;
   yacang_password: string;
   zhihui_tms_password: string;
+  zhihui_tms_session: ZhihuiTmsSessionRecord | null;
   feishu_app_secret: string;
   shangman_processed_password: string;
   shangman_basic_auth: string;
@@ -172,6 +179,7 @@ const DEFAULT_SECRETS: DesktopSecrets = {
   mabang_password: "",
   yacang_password: "",
   zhihui_tms_password: "",
+  zhihui_tms_session: null,
   feishu_app_secret: "",
   shangman_processed_password: "",
   shangman_basic_auth: "",
@@ -508,6 +516,22 @@ export const parseConfig = (
 
 export const parseSecrets = (raw: unknown): DesktopSecrets => {
   const value = objectValue(raw);
+  const zhihuiSession = objectValue(value.zhihui_tms_session);
+  const zhihuiSessionFingerprint = text(zhihuiSession.account_fingerprint);
+  const zhihuiSessionToken = text(zhihuiSession.api_token);
+  const zhihuiSessionSavedAt = Number(zhihuiSession.saved_at);
+  const parsedZhihuiSession: ZhihuiTmsSessionRecord | null =
+    /^[a-f0-9]{64}$/u.test(zhihuiSessionFingerprint)
+      && zhihuiSessionToken.length > 0
+      && zhihuiSessionToken.length <= 8_192
+      && Number.isSafeInteger(zhihuiSessionSavedAt)
+      && zhihuiSessionSavedAt > 0
+      ? {
+          account_fingerprint: zhihuiSessionFingerprint,
+          api_token: zhihuiSessionToken,
+          saved_at: zhihuiSessionSavedAt,
+        }
+      : null;
   const managedCredential = objectValue(value.managed_llm_credential);
   const revision = text(managedCredential.credential_revision).toLowerCase();
   const invalidRevision = text(managedCredential.invalid_revision).toLowerCase();
@@ -534,6 +558,7 @@ export const parseSecrets = (raw: unknown): DesktopSecrets => {
     mabang_password: text(value.mabang_password),
     yacang_password: text(value.yacang_password),
     zhihui_tms_password: text(value.zhihui_tms_password),
+    zhihui_tms_session: parsedZhihuiSession,
     feishu_app_secret: text(value.feishu_app_secret),
     shangman_processed_password: text(value.shangman_processed_password),
     shangman_basic_auth: text(value.shangman_basic_auth),

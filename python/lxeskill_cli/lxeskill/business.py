@@ -224,6 +224,25 @@ def execute_module_json(
     return _finalize_payload(entry, module_name, payload)
 
 
+def _terminal_projection(payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, str] | None] | None:
+    raw = payload.get("terminal_projection")
+    if not isinstance(raw, dict):
+        return None
+    raw_data = raw.get("data")
+    if not isinstance(raw_data, dict):
+        return None
+    raw_error = raw.get("error")
+    if raw_error is None:
+        return dict(raw_data), None
+    if not isinstance(raw_error, dict):
+        return None
+    code = raw_error.get("code")
+    message = raw_error.get("message")
+    if not isinstance(code, str) or not code.strip() or not isinstance(message, str) or not message.strip():
+        return None
+    return dict(raw_data), {"code": code.strip(), "message": message.strip()}
+
+
 def _finalize_payload(
     entry: dict[str, Any],
     module_name: str,
@@ -239,9 +258,13 @@ def _finalize_payload(
         success = success and bool(payload.get("finished"))
     deliver_on_failure = bool(entry.get("deliver_artifacts_on_failure", False))
     files = collect_declared_artifacts(entry, payload) if success or deliver_on_failure else []
-    content = [{"type": "text", "text": json.dumps(payload, ensure_ascii=False, separators=(",", ":"))}]
+    projection = _terminal_projection(payload)
+    terminal_data = projection[0] if projection is not None else payload
+    content = [{"type": "text", "text": json.dumps(terminal_data, ensure_ascii=False, separators=(",", ":"))}]
     if success:
         return True, content, files, None
+    if projection is not None and projection[1] is not None:
+        return False, content, files, projection[1]
     nested_error = payload.get("error")
     nested_message = nested_error.get("message") if isinstance(nested_error, dict) else ""
     message = str(

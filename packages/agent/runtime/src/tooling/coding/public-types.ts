@@ -1,12 +1,14 @@
 import type { JsonObject } from "@lxe/protocol";
 import type { ExecShellAdapter } from "../exec-shell";
 import type { LxeSkillRuntimeStatus } from "../../operations/lxeskill-runtime";
+import type { LxeSkillCommandConfirmation } from "../lxeskill-command";
 
 export interface LxeSkillRecoveryCommand {
   command: string;
   module?: string;
   ownerSkills: readonly string[];
   attributionSkill?: string;
+  confirmation?: LxeSkillCommandConfirmation;
 }
 
 export type ProcessStatus = "running" | "completed" | "failed" | "killed";
@@ -40,4 +42,14 @@ export interface CodingToolOptions {
     turnId: string;
   }) => Record<string, string>;
   lxeSkillStatus?: () => LxeSkillRuntimeStatus;
+  confirmLxeSkillCommand?: (input: {
+    confirmation: LxeSkillCommandConfirmation;
+    command: string;
+    commandId: string;
+    sessionId: string;
+    turnId: string;
+    toolCallId: string;
+    platform?: string;
+    signal: AbortSignal;
+  }) => Promise<boolean>;
 }

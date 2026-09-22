@@ -1,4 +1,5 @@
 import { withManagedModels, managedTargetKey, managedCredentialFor, parseManagedState, singleManagedState, type ManagedLlmState } from "@lxe/core";
+import { createHash } from "node:crypto";
 import { rmSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type {
@@ -35,6 +36,11 @@ const sameManagedTarget = (
 // credential. It must never be derived from the account password or exposed
 // as an extra Dashboard field.
 const DEFAULT_SHANGMAN_BASIC_AUTH = "Basic c2FiZXI6c2FiZXJfc2VjcmV0";
+const ZHIHUI_TMS_SESSION_FINGERPRINT = /^[a-f0-9]{64}$/u;
+const MAX_ZHIHUI_TMS_SESSION_TOKEN_CHARS = 8_192;
+
+const zhihuiTmsAccountFingerprint = (account: string): string =>
+  createHash("sha256").update(account, "utf8").digest("hex");
 
 export class DesktopSetupService {
   constructor(
@@ -237,7 +243,9 @@ export class DesktopSetupService {
     if (input.zhihui_tms?.action === "clear") {
       config.integrations.zhihui_tms = { managed: true, account: "", production_enabled: false };
       secrets.zhihui_tms_password = "";
+      secrets.zhihui_tms_session = null;
     } else if (input.zhihui_tms?.action === "save") {
+      const previous = config.integrations.zhihui_tms;
       const account = text(input.zhihui_tms.account);
       const inputPassword = text(input.zhihui_tms.password);
       const password = inputPassword || effectiveSecrets.zhihui_tms_password;
@@ -248,6 +256,13 @@ export class DesktopSetupService {
         production_enabled: input.zhihui_tms.production_enabled === true,
       };
       if (inputPassword) secrets.zhihui_tms_password = inputPassword;
+      if (
+        previous.account !== account
+        || Boolean(inputPassword)
+        || input.zhihui_tms.production_enabled !== true
+      ) {
+        secrets.zhihui_tms_session = null;
+      }
     }
 
     if (input.feishu?.action === "clear") {
@@ -551,6 +566,55 @@ export class DesktopSetupService {
     const secrets = this.repository.readSecrets();
     secrets.managed_llm_state = singleManagedState(null);
     secrets.managed_llm_credential = null;
+    this.repository.commit(config, secrets);
+  }
+
+  readZhihuiTmsSession(accountFingerprint: string): string | null {
+    if (!ZHIHUI_TMS_SESSION_FINGERPRINT.test(accountFingerprint)) return null;
+    const config = this.repository.readConfig();
+    const secrets = this.effectiveSecrets();
+    const zhihuiTms = config.integrations.zhihui_tms;
+    const configured = zhihuiTms.managed
+      && zhihuiTms.production_enabled
+      && this.validation.zhihuiTmsIssues(zhihuiTms, secrets).length === 0;
+    if (!configured || zhihuiTmsAccountFingerprint(zhihuiTms.account) !== accountFingerprint) return null;
+    const record = secrets.zhihui_tms_session;
+    return record?.account_fingerprint === accountFingerprint ? record.api_token : null;
+  }
+
+  saveZhihuiTmsSession(accountFingerprint: string, apiToken: string): void {
+    if (!ZHIHUI_TMS_SESSION_FINGERPRINT.test(accountFingerprint)) {
+      throw new Error("智汇 TMS 会话账号指纹无效");
+    }
+    const token = text(apiToken);
+    if (!token || token.length > MAX_ZHIHUI_TMS_SESSION_TOKEN_CHARS) {
+      throw new Error("智汇 TMS 会话 token 无效");
+    }
+    const config = this.repository.readConfig();
+    const secrets = this.repository.readSecrets();
+    const effectiveSecrets = this.effectiveSecrets(secrets);
+    const zhihuiTms = config.integrations.zhihui_tms;
+    const configured = zhihuiTms.managed
+      && zhihuiTms.production_enabled
+      && this.validation.zhihuiTmsIssues(zhihuiTms, effectiveSecrets).length === 0;
+    if (!configured || zhihuiTmsAccountFingerprint(zhihuiTms.account) !== accountFingerprint) return;
+    secrets.zhihui_tms_session = {
+      account_fingerprint: accountFingerprint,
+      api_token: token,
+      saved_at: Date.now(),
+    };
+    this.repository.commit(config, secrets);
+  }
+
+  clearZhihuiTmsSession(accountFingerprint?: string): void {
+    if (accountFingerprint !== undefined && !ZHIHUI_TMS_SESSION_FINGERPRINT.test(accountFingerprint)) return;
+    const config = this.repository.readConfig();
+    const secrets = this.repository.readSecrets();
+    if (
+      secrets.zhihui_tms_session === null
+      || (accountFingerprint !== undefined && secrets.zhihui_tms_session.account_fingerprint !== accountFingerprint)
+    ) return;
+    secrets.zhihui_tms_session = null;
     this.repository.commit(config, secrets);
   }
 

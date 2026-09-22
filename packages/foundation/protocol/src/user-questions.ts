@@ -22,6 +22,23 @@ export interface PendingUserQuestion {
   questions: UserQuestion[];
 }
 
+/** A one-time sensitive value request rendered by the desktop, never transcripted. */
+export interface PendingSensitiveInput {
+  request_id: string;
+  session_id: string;
+  kind: "image_text";
+  prompt: string;
+  image_data_url: string;
+  sensitive: true;
+  expires_at: number;
+}
+
+export interface SubmitPendingSensitiveInput {
+  session_id: string;
+  request_id: string;
+  value: string;
+}
+
 export interface SubmitUserQuestionAnswer {
   session_id: string;
   request_id: string;

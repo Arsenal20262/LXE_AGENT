@@ -1188,6 +1188,31 @@ describe("native coding tools", () => {
   });
 });
 
+test("catalog confirmation gates an execute command before a process can start", async () => {
+  const registry = new ToolRegistry();
+  const confirmations: unknown[] = [];
+  const processes = registerCodingTools(registry, {
+    businessCommands: new Map([["lxeskill tms philippines products-export execute", ["zhihui-tms-product-export"]]]),
+    businessCommandCatalog: [{
+      command: "lxeskill tms philippines products-export execute",
+      ownerSkills: ["zhihui-tms-product-export"],
+      confirmation: { header: "确认执行", question: "将导出文件，是否继续？", confirmLabel: "确认执行导出", cancelLabel: "取消" },
+    }],
+    confirmLxeSkillCommand: async input => { confirmations.push(input); return false; },
+  });
+  try {
+    const result = await registry.execute("exec", {
+      command: "lxeskill tms philippines products-export execute --platform zhihui_tms",
+    }, { ...context(projectRoot), platform: "desktop" });
+    expect(JSON.parse(String(result.content[0]?.text))).toEqual({
+      status: "cancelled", command: "lxeskill tms philippines products-export execute",
+    });
+    expect(confirmations).toEqual([expect.objectContaining({
+      commandId: "tms philippines products-export execute", sessionId: "s1", turnId: "turn-1", toolCallId: "tool-exec-1",
+    })]);
+  } finally { await processes.stop(); }
+});
+
 
 test("existing file and exec tools create, validate, discover and edit personal skills", async () => {
   const root = mkdtempSync(join(tmpdir(), "lxe-creator-flow-")); roots.push(root);

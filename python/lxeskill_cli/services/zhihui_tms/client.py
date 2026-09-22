@@ -76,6 +76,7 @@ class ZhihuiTmsClient:
         clock: Callable[[], float] = time.monotonic,
         min_request_interval_seconds: float = DEFAULT_MIN_REQUEST_INTERVAL_SECONDS,
         max_http_attempts: int = DEFAULT_MAX_HTTP_ATTEMPTS,
+        api_token: str = "",
     ) -> None:
         normalized_base_url = str(base_url or "").strip().rstrip("/")
         if not normalized_base_url.startswith(("https://", "http://")):
@@ -114,7 +115,9 @@ class ZhihuiTmsClient:
         self._last_request_started: float | None = None
         self.max_http_attempts = max_http_attempts
         self._request_attempt_count = 0
-        self._api_token = ""
+        self._api_token = str(api_token or "")
+        self._authentication_recovery: Callable[[], None] | None = None
+        self._authentication_recovery_attempted = False
 
     @property
     def request_attempt_count(self) -> int:
@@ -125,6 +128,11 @@ class ZhihuiTmsClient:
         """Return the in-memory token for authenticated follow-up requests."""
 
         return self._api_token
+
+    def set_authentication_recovery(self, callback: Callable[[], None]) -> None:
+        """Register the one-shot recovery used only after an explicit HTTP 401."""
+
+        self._authentication_recovery = callback
 
     def login(
         self,
@@ -416,59 +424,82 @@ class ZhihuiTmsClient:
                 f"{operation} 请求体必须是 JSON object",
             )
         url = f"{self.base_url}/{str(path or '').lstrip('/')}"
-        headers = {
-            "Accept": "application/json, text/plain, */*",
-            "Content-Type": "application/json;charset=UTF-8",
-            "lang": "zh_CN",
-        }
-        if login:
-            headers["menu-path"] = "#/login"
-        elif self._api_token:
-            headers["token"] = self._api_token
-
         retryable_operation = not login and path == "/findMyStockwarehouseList"
-        for attempt in range(1, self.retry_policy.max_attempts + 1):
-            self._pace_request()
-            try:
-                response = self.session.request(
-                    "POST",
-                    url,
-                    headers=headers,
-                    json=dict(payload),
-                    timeout=self.timeout,
-                    allow_redirects=False,
-                )
-            except (requests.Timeout, requests.ConnectionError) as exc:
-                if retryable_operation and attempt < self.retry_policy.max_attempts:
-                    self._sleep_for_retry(attempt)
-                    continue
-                raise ZhihuiTmsTransportError(
-                    "tms_transport_error",
-                    f"{operation} 网络请求失败: {exc}",
-                    secrets=secrets,
-                ) from exc
-            except requests.RequestException as exc:
-                raise ZhihuiTmsTransportError(
-                    "tms_transport_error",
-                    f"{operation} HTTP 客户端失败: {exc}",
-                    secrets=secrets,
-                ) from exc
+        for _recovery_attempt in range(2):
+            headers = {
+                "Accept": "application/json, text/plain, */*",
+                "Content-Type": "application/json;charset=UTF-8",
+                "lang": "zh_CN",
+            }
+            if login:
+                headers["menu-path"] = "#/login"
+            elif self._api_token:
+                headers["token"] = self._api_token
 
-            status_code = int(response.status_code)
-            if (
-                retryable_operation
-                and status_code != 429
-                and status_code in self.retry_policy.retryable_status_codes
-                and attempt < self.retry_policy.max_attempts
-            ):
-                self._sleep_for_retry(attempt, retry_after=response.headers.get("Retry-After"))
+            recovered = False
+            for attempt in range(1, self.retry_policy.max_attempts + 1):
+                self._pace_request()
+                try:
+                    response = self.session.request(
+                        "POST",
+                        url,
+                        headers=headers,
+                        json=dict(payload),
+                        timeout=self.timeout,
+                        allow_redirects=False,
+                    )
+                except (requests.Timeout, requests.ConnectionError) as exc:
+                    if retryable_operation and attempt < self.retry_policy.max_attempts:
+                        self._sleep_for_retry(attempt)
+                        continue
+                    raise ZhihuiTmsTransportError(
+                        "tms_transport_error",
+                        f"{operation} 网络请求失败: {exc}",
+                        secrets=secrets,
+                    ) from exc
+                except requests.RequestException as exc:
+                    raise ZhihuiTmsTransportError(
+                        "tms_transport_error",
+                        f"{operation} HTTP 客户端失败: {exc}",
+                        secrets=secrets,
+                    ) from exc
+
+                status_code = int(response.status_code)
+                if (
+                    retryable_operation
+                    and status_code != 429
+                    and status_code in self.retry_policy.retryable_status_codes
+                    and attempt < self.retry_policy.max_attempts
+                ):
+                    self._sleep_for_retry(attempt, retry_after=response.headers.get("Retry-After"))
+                    continue
+                try:
+                    return self._decode_response(
+                        response,
+                        operation=operation,
+                        secrets=secrets if login else (self._api_token,),
+                        require_http_200=login,
+                    )
+                except ZhihuiTmsHttpError:
+                    if (
+                        login
+                        or status_code != 401
+                        or self._authentication_recovery_attempted
+                        or self._authentication_recovery is None
+                    ):
+                        raise
+                    self._authentication_recovery_attempted = True
+                    self._api_token = ""
+                    self._authentication_recovery()
+                    if not self._api_token:
+                        raise ZhihuiTmsConfigError(
+                            "tms_authentication_recovery_failed",
+                            f"{operation} 的登录态恢复没有返回 token",
+                        )
+                    recovered = True
+                    break
+            if recovered:
                 continue
-            return self._decode_response(
-                response,
-                operation=operation,
-                secrets=secrets,
-                require_http_200=login,
-            )
 
         raise AssertionError("unreachable")
 

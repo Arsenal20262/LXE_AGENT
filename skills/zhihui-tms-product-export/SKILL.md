@@ -3,7 +3,8 @@ name: zhihui-tms-product-export
 description: 用户当前轮明确提到“智汇”或“TMS”，且要求查询或导出销量、库存、入库、上架或商品数据时使用；这些语义都归入菲律宾商品全量导出。当前轮平台优先于历史 Context；不抢雅仓、智慧印尼或马帮巴西请求，只说“菲律宾库存”时先澄清。
 type: amazon_replenish
 commands:
-  - lxeskill tms philippines products-export
+  - lxeskill tms philippines products-export preview
+  - lxeskill tms philippines products-export execute
 ---
 
 # 智汇 TMS 菲律宾商品导出
@@ -12,26 +13,29 @@ commands:
 
 ## 自然语言触发边界
 
-用户请求必须明确指向“智汇”或“TMS”，并命中商品数据意图，才可归一到本 Skill。明确指向智汇但未说国家的商品请求，可在参数翻译确认仅支持的菲律宾商品范围后继续；仅说“菲律宾”不足以确定平台。以下表达属于本 Skill：
+用户请求必须明确指向“智汇”或“TMS”，并命中商品数据意图，才可归一到本 Skill。当前版本只支持菲律宾：用户明确提到“智汇”或“TMS”但未指定国家时，固定归一为 PH，不追问国家；仅说“菲律宾”不足以确定平台。商品、SKU、销量、库存、入库时间、上架时间都只表示同一个菲律宾商品全量导出意图，不代表独立报表或执行分支。以下表达属于本 Skill：
 
 - “导出/下载/拉取/整理智汇菲律宾商品”“把智汇菲律宾商品清单导成 Excel/XLSX”；
 - “查智汇菲律宾商品 SKU、销量、库存、入库时间、上架时间，并导出文件”；
 - “帮我把智汇菲律宾站的商品数据拉下来”“查询智汇菲律宾库存”“生成智汇菲律宾商品表”；
-- “导出智汇商品”“下载智汇商品资料”“导出智汇商品 Excel/XLSX”（均须由 AI 参数翻译确认目标为菲律宾商品数据）。
+- “导出智汇商品”“下载智汇商品资料”“导出智汇商品 Excel/XLSX”；
+- “查 TMS 库存”“下载 TMS 销量”“导出 TMS SKU”。
 
 只说“菲律宾库存”“导出商品表”或依赖上一轮上下文的简短追问，应先澄清目标平台，不要直接触发本 Skill。请求同时出现雅仓、智慧印尼或马帮巴西仓时，留在普通 Agent 路由中分别判断或追问，不能让智汇确认卡直接接管。
 
 本 Skill 不处理订单、物流、发货、采购、财务报表或独立的历史销量/库存报表；先说明当前接口只提供商品全量导出。
 
-先通过 AI 将用户请求翻译成受约束的商品导出参数，再由运行时代码做平台、仓库、意图和字段白名单校验。校验通过后通过 CLI 预览固定导出计划，Desktop 展示预览和确认卡；只有用户在本次确认卡中选择“确认执行导出”，运行时才执行一次 `action=execute`。AI 翻译失败、返回非法 JSON、参数不完整或无法确定意图时，不调用本 Skill，回到普通对话。用户不需要自行再发送“执行”，也不得将普通聊天文本当成确认。若从非确认卡流程直接调用本 Skill，则只能在有明确、当前的执行授权时使用 `action=execute`。只调用声明的命令，不自己拼 TMS HTTP 请求、Cookie、Token 或账号密码。
+模型选中本 Skill 后，只生成唯一 canonical 参数，运行时代码会再次校验平台、仓库和意图。先调用 preview；再调用 execute。execute 命令的 catalog 会自动显示本轮确认卡，只有选择“确认执行导出”才会启动 Python。确认卡保留 preview 已确定的 canonical 参数；点击确认后不得重新解释原始自然语言、重新选择参数或再次调用 preview。普通聊天中的“执行”不构成确认，也不能绕过该卡片。参数不完整或无法确定意图时，不调用本 Skill，回到普通对话。只调用声明的命令，不自己拼 TMS HTTP 请求、Cookie、Token 或账号密码。
 
 ```text
-lxeskill tms philippines products-export --action preview --request "菲律宾商品数据"
-lxeskill tms philippines products-export --action execute --request "菲律宾商品数据"
+lxeskill tms philippines products-export preview --platform zhihui_tms --warehouse PH --intent product_export
+lxeskill tms philippines products-export execute --platform zhihui_tms --warehouse PH --intent product_export
 ```
 
 CLI 不接受凭据参数。执行需要 Desktop 在进程环境中安全注入账号、密码和生产调用开关；缺失时直接返回失败。不要把账号密码写进命令、输入 JSON、聊天或文件。
 
-“销量月度 7/14/30 天”“销量日度 90 天”“库存月末快照”“入库/上架时间”都归一化为同一商品全量导出，不得宣称这是四个独立的历史报表。没有真实历史接口时，只说明导出文件中实际提供的字段。
+preview 永远不读取网络或登录态，也不生成文件。preview 成功时 `ok=true`、`data.confirmation_required=true` 且 `files=[]`，表示参数已经确定、当前等待人工确认、不是最终导出完成；不要重新分析参数、搜索 fixture/parser/transcript 或再次调用 preview。Desktop 启动的 execute 会优先复用当前账号的加密本机会话；没有有效会话时才登录，Desktop 重启后仍可复用。明确 HTTP 401 时会清除旧会话、登录一次并仅重放被拒绝请求一次；403、429、下载/网络错误、未知业务错误或第二次 401 都必须停止，不得再次执行命令。直接运行没有 Desktop 会话宿主的 CLI 时保留一次 execute 一次登录的兼容行为。
 
-只读取最后一条 `type="result"` 记录。`ok=true` 且 `action=execute` 时，按 `data.artifacts` 说明分页及合并 XLSX，并交付 `files`。`action=preview` 时只报告计划，不说文件已生成。失败时转述真实的脱敏错误；若 `files` 中已有分页文件，可作为部分结果交付，但不称合并完成。429、403、验证码或账号异常后不要重复运行命令。
+所有商品数据表达均归一为 `platform=zhihui_tms`、`warehouse=PH`、`intent=product_export`。没有真实历史接口时，只说明最终导出文件实际提供的内容，不得宣称存在独立历史销量、库存、入库或上架报表。
+
+只读取最后一条 `type="result"` 记录。execute 返回 `ok=true` 且 `files` 非空时，`files` 是最终交付文件唯一真源：当前任务已完成，直接交付 files 并结束；不再读取其他 Skill、搜索 fixture/parser/transcript、再次 preview/execute 或判断文件是否完成。失败时转述真实的脱敏错误；若 `ok=false` 且 `data.partial=true` 并且 `files` 非空，files 是程序确认可交付的部分文件，但不得称完整成功。429、403、验证码或账号异常后不要重复运行命令。

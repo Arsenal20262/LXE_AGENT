@@ -31,8 +31,6 @@ import {
   McpManager,
   OfficialMcpConnector,
   OneShotCliRunner,
-  ZhihuiTmsConfirmationRouter,
-  ProviderZhihuiParameterTranslator,
   registerCodingTools,
   registerShangmanCaptchaTool,
   registerToolSearch,
@@ -220,6 +218,21 @@ export function createAgentRuntimeHost(
     businessCommandCatalog: cliCommands,
     execShell,
     lxeSkillStatus: () => lxeSkillRuntime.snapshot(),
+    confirmLxeSkillCommand: async ({ confirmation, sessionId, turnId, toolCallId, platform, signal }) => {
+      if (platform !== "desktop" || !turnId || !toolCallId) {
+        throw new DashboardRpcError("unavailable", "This business command requires an active desktop confirmation");
+      }
+      const answers = await questions.askForTurn([{
+        id: "execute_confirmation",
+        header: confirmation.header,
+        question: confirmation.question,
+        options: [
+          { label: confirmation.confirmLabel },
+          { label: confirmation.cancelLabel },
+        ],
+      }], { sessionId, turnId, toolCallId, signal });
+      return answers[0]?.selected[0] === confirmation.confirmLabel;
+    },
     execEnv: ({ skillNames, sessionId, turnId }) => {
       const env: Record<string, string> = { LXESKILL_SKILL_SCOPE: skillNames.join(",") };
       if (skillNames.includes(SHANGMAN_CAPTCHA_SKILL) || shangmanCaptcha.hasSession(sessionId)) {
@@ -308,14 +321,6 @@ export function createAgentRuntimeHost(
       environment,
     }),
     tools,
-    ...(lxeSkillRunner ? { zhihuiConfirmation: {
-      router: new ZhihuiTmsConfirmationRouter(lxeSkillRunner),
-      translator: new ProviderZhihuiParameterTranslator({ turn: request => providerManager.acquire().provider.turn(request) }),
-      ask: async (question, context) => {
-        const answers = await questions.askForTurn([question], context);
-        return answers[0]?.selected[0] ?? "";
-      },
-    } } : {}),
     workspaceInstances,
     contextWindowTokens: providerDescriptor.contextWindowTokens,
     display: {

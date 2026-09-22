@@ -37,8 +37,8 @@ def test_coerce_parses_one_of_object_schema_as_json_object() -> None:
 def test_catalog_defines_every_cli_command_and_hidden_alias() -> None:
     catalog = load_catalog()
 
-    assert len(catalog) == 48
-    assert sum(bool(entry.get("module")) for entry in catalog.values()) == 42
+    assert len(catalog) == 49
+    assert sum(bool(entry.get("module")) for entry in catalog.values()) == 43
     assert sum(entry.get("handler") == "browser" for entry in catalog.values()) == 2
     assert sum(entry.get("visibility") == "maintenance" for entry in catalog.values()) == 4
     assert len({tuple(entry["command_path"]) for entry in catalog.values()}) == len(catalog)
@@ -59,11 +59,11 @@ def test_yacang_catalog_exposes_only_the_unified_natural_language_command() -> N
         and entry.get("exposed") is True
     ]
     assert [entry["command_path"] for entry in public_yacang] == [["yacang", "export", "run"]]
-    assert all(
-        entry["legacy_aliases"] == [name]
-        for name, entry in catalog.items()
-        if not name.startswith("browser_auth_")
-    )
+    entries_without_legacy_aliases = {
+        name for name, entry in catalog.items()
+        if not name.startswith("browser_auth_") and entry["legacy_aliases"] != [name]
+    }
+    assert entries_without_legacy_aliases == {"zhihui_preview_products", "zhihui_execute_products"}
 
 
 @pytest.mark.parametrize(
@@ -134,7 +134,7 @@ def test_list_and_help_write_one_terminal_jsonl_record(capsys) -> None:
     assert len(records) == 1
     assert records[0]["type"] == "result"
     assert records[0]["ok"] is True
-    assert len(records[0]["data"]["commands"]) == 40
+    assert len(records[0]["data"]["commands"]) == 41
 
     assert lxeskill.main(["fba", "customs", "preview", "--help"]) == 0
     records = _records(capsys)
@@ -291,11 +291,11 @@ def test_doctor_reports_repository_contract_without_adding_a_list_command(capsys
             "command": "doctor",
             "ok": True,
             "data": {
-                "catalog_commands": 48,
-                "business_commands": 36,
+                "catalog_commands": 49,
+                "business_commands": 37,
                 "skill_files": 59,
                 "owner_skills": 28,
-                "command_declarations": 36,
+                "command_declarations": 37,
             },
             "files": [],
         }
@@ -638,6 +638,30 @@ def test_business_failure_preserves_payload_in_the_only_terminal(monkeypatch, ca
     assert records[0]["error"] == {"code": "business_cli_failed", "message": "login expired"}
     assert records[0]["files"] == ["/safe/partial.xlsx"]
     assert records[0]["recovery"] == {"command": "lxeskill auth refresh"}
+
+
+def test_business_terminal_projection_controls_only_the_exposed_terminal(monkeypatch, capsys) -> None:
+    def fake_execute(entry, arguments, session, *, on_event, on_text):
+        return (
+            False,
+            [{"type": "text", "text": json.dumps({"platform": "zhihui_tms", "partial": True})}],
+            ["/safe/partial.xlsx"],
+            {"code": "tms_export_partial", "message": "download failed"},
+        )
+
+    monkeypatch.setattr(lxeskill, "execute_module_json", fake_execute)
+
+    assert lxeskill.main(["fba", "shipment", "delivery-csv-download", "--delivery-no", "SP1"]) == lxeskill.EXIT_BUSINESS
+    records = _records(capsys)
+    assert records == [{
+        "protocol_version": "1",
+        "type": "result",
+        "command": "fba shipment delivery-csv-download",
+        "ok": False,
+        "data": {"platform": "zhihui_tms", "partial": True},
+        "files": ["/safe/partial.xlsx"],
+        "error": {"code": "tms_export_partial", "message": "download failed"},
+    }]
 
 
 @pytest.mark.parametrize('required', [False, True])

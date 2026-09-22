@@ -26,11 +26,12 @@ class ZhihuiTmsProductExportPlan:
     max_runtime: float = DEFAULT_MAX_RUNTIME
 
 
-def plan_product_export(arguments: dict[str, Any], *, date_label: str | None = None) -> ZhihuiTmsProductExportPlan:
-    action = str(arguments.get("action") or "preview").strip()
+def plan_product_export(
+    arguments: dict[str, Any], *, action: str, date_label: str | None = None,
+) -> ZhihuiTmsProductExportPlan:
     if action not in {"preview", "execute"}:
         raise ValueError("action 只允许 preview 或 execute")
-    intent = normalize_product_export_intent(arguments.get("request", ""))
+    intent = normalize_product_export_intent(arguments)
     label = date_label or datetime.now().strftime("%Y%m%d")
     if len(label) != 8 or not label.isdigit():
         raise ValueError("date_label 必须是 YYYYMMDD")
