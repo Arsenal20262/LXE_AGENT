@@ -10,7 +10,7 @@ from shared.repository import repository_root
 
 
 GOODS_PARAMS = {
-    "platform": "智慧",
+    "platform": "上马印尼",
     "country": "印尼",
     "operation": "goods_export",
 }
@@ -25,7 +25,7 @@ def test_skill_contract_maps_all_supported_wording_to_one_goods_export() -> None
     ).read_text(encoding="utf-8")
 
     for phrase in [
-        "智慧商品",
+        "上马印尼商品",
         "销量",
         "库存",
         "库存加销量",
@@ -36,12 +36,12 @@ def test_skill_contract_maps_all_supported_wording_to_one_goods_export() -> None
         "7/14/30/90 天销量",
         "90 天日度销量",
         "最近一个月销量",
-        "智慧库存和销量",
-        "智慧销量、库存和上架时间",
+        "上马印尼库存和销量",
+        "上马印尼销量、库存和上架时间",
     ]:
         assert phrase in text
     assert text.count(
-        'lxeskill shangman export run --params \'{"platform":"智慧","country":"印尼","operation":"goods_export"}\''
+        'lxeskill shangman export run --params \'{"platform":"上马印尼","country":"印尼","operation":"goods_export"}\''
     ) == 1
     assert "不得按指标或周期拆成多次调用" in text
     assert "不再次调用 `run`" in text
@@ -94,6 +94,12 @@ def test_catalog_exposes_only_structured_params_for_both_public_commands() -> No
         for entry in entries
     )
     assert all(
+        entry["input_schema"]["properties"]["params"]["properties"]["platform"] == {
+            "const": "上马印尼"
+        }
+        for entry in entries
+    )
+    assert all(
         entry["input_schema"]["properties"]["params"]["additionalProperties"] is False
         for entry in entries
     )
@@ -134,7 +140,7 @@ def test_run_stops_at_production_gate_without_network(monkeypatch) -> None:
         "params": GOODS_PARAMS,
         "intent": {
             "type": "goods-export",
-            "platform": "智慧",
+            "platform": "上马印尼",
             "country": "印尼",
             "operation": "goods_export",
             "params": GOODS_PARAMS,
@@ -151,7 +157,7 @@ def test_run_stops_at_production_gate_without_network(monkeypatch) -> None:
         },
         "terminal_projection": {
             "data": {
-                "platform": "智慧",
+                "platform": "上马印尼",
                 "country": "印尼",
                 "business_type": "goods_export",
                 "recoverable": True,
@@ -195,7 +201,7 @@ def test_run_reuses_first_stage_client_and_returns_one_artifact(monkeypatch, tmp
         "LXE_AGENT_TURN_ID": "turn-id",
     }.items():
         monkeypatch.setenv(name, value)
-    artifact = tmp_path / "智慧-商品-20260917-150000.xlsx"
+    artifact = tmp_path / "上马印尼-商品-20260917-150000.xlsx"
     artifact.write_bytes(b"fake xlsx")
     calls: list[dict] = []
 
@@ -220,7 +226,7 @@ def test_run_reuses_first_stage_client_and_returns_one_artifact(monkeypatch, tmp
     assert result["plan"]["type"] == "goods-export"
     assert result["terminal_projection"] == {
         "data": {
-            "platform": "智慧",
+            "platform": "上马印尼",
             "country": "印尼",
             "business_type": "goods_export",
         }
@@ -260,7 +266,7 @@ def test_run_redacts_runtime_credentials_but_keeps_client_diagnostic(monkeypatch
     }
     assert result["terminal_projection"] == {
         "data": {
-            "platform": "智慧",
+            "platform": "上马印尼",
             "country": "印尼",
             "business_type": "goods_export",
             "recoverable": True,

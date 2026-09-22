@@ -21,8 +21,8 @@ from shared.workspace import artifact_root
 def _existing_delivery(output_dir: Path, date_label: str) -> list[dict[str, Any]]:
     if not output_dir.is_dir():
         return []
-    partial = output_dir / f"智慧tms-商品-部分合并-{date_label}.xlsx"
-    merged = output_dir / f"智慧tms-商品-合并-{date_label}.xlsx"
+    partial = output_dir / f"智汇tms-商品-部分合并-{date_label}.xlsx"
+    merged = output_dir / f"智汇tms-商品-合并-{date_label}.xlsx"
     if partial.is_file():
         return [{"path": str(partial.resolve()), "kind": "merged_partial", "page": None, "total_pages": None}]
     if merged.is_file():

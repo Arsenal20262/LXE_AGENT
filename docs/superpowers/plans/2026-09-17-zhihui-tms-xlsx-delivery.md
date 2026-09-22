@@ -15,7 +15,7 @@
 - Download URLs must be HTTPS and restricted to the trusted TMS export host `tms-cos.mabangerp.com` by default.
 - Redirects are disabled; a redirect or untrusted host stops the task before writing output.
 - Accept only XLS/XLSX file signatures, appropriate spreadsheet MIME values, and bounded file sizes.
-- Output names use one `YYYYMMDD` label: `智慧tms-商品-第N页-YYYYMMDD.xlsx` and `智慧tms-商品-合并-YYYYMMDD.xlsx`.
+- Output names use one `YYYYMMDD` label: `智汇tms-商品-第N页-YYYYMMDD.xlsx` and `智汇tms-商品-合并-YYYYMMDD.xlsx`.
 - Every page workbook and the merged workbook is a separate `artifacts[]` item; no duplicate paths and no merged artifact after merge failure.
 - Page order and exactly one header row are preserved; headers must match across all pages.
 - Tests use generated non-production workbook bytes and fake HTTP; no live TMS or production credentials.

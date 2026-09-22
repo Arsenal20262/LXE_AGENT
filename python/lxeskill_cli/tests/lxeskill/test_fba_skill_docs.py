@@ -29,10 +29,11 @@ def test_shangman_goods_export_is_the_single_owner_with_formal_permission_domain
     assert "type: amazon_replenish" in frontmatter
     assert frontmatter.count("lxeskill shangman export") == 2
     assert "params" in text
-    assert 'platform: "智慧"' in text
+    assert 'platform: "上马印尼"' in text
     assert 'country: "印尼"' in text
     assert "--params" in text
-    assert "只明确说“智慧”" in text
+    assert "只明确说“上马”" in text
+    assert "智慧" not in text
     assert "直接调用 `run`" in text
     assert "当前轮" in text
 
@@ -132,7 +133,7 @@ def test_four_platform_skill_boundaries_are_explicit_and_brazil_documents_suppor
     brazil = _skill_text("replenishment-workflow-map")
 
     assert "雅仓" in shangman and "智汇" in shangman and "马帮" in shangman
-    assert "雅仓" in zhihui and "智慧" in zhihui and "马帮" in zhihui
+    assert "雅仓" in zhihui and "上马印尼" in zhihui and "马帮" in zhihui
     assert not (PROJECT_ROOT / "skills" / "replenishment-brazil-overseas-export" / "SKILL.md").exists()
     assert "name: replenishment-workflow-map" in brazil.split("---", 2)[1]
     assert "lxeskill replenish brazil-overseas export" in brazil.split("---", 2)[1]

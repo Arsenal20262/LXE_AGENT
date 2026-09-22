@@ -155,7 +155,7 @@ def test_export_goods_authenticates_downloads_and_returns_canonical_payload(tmp_
     result = asyncio.run(make_client(session, tmp_path).export_goods())
 
     assert result.to_payload() == {
-        "platform": "shangman-indonesia",
+        "platform": "上马印尼",
         "source": "shangman_goods_export",
         "artifact_path": str(tmp_path / result.filename),
         "filename": result.filename,
@@ -164,9 +164,9 @@ def test_export_goods_authenticates_downloads_and_returns_canonical_payload(tmp_
         "headers": BUSINESS_HEADERS,
         "download_host": "download.example.test",
     }
-    assert result.filename.startswith("智慧-商品-")
+    assert result.filename.startswith("上马印尼-商品-")
     assert result.filename.endswith(".xlsx")
-    assert len(result.filename) == len("智慧-商品-YYYYMMDD-HHMMSS.xlsx")
+    assert len(result.filename) == len("上马印尼-商品-YYYYMMDD-HHMMSS.xlsx")
     assert Path(result.artifact_path).is_file()
     assert load_workbook(result.artifact_path, read_only=True).sheetnames == ["sheet1"]
 

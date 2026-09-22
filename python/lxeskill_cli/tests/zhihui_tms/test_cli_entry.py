@@ -73,6 +73,15 @@ def test_execute_requires_gate_and_runtime_secrets(monkeypatch) -> None:
     assert export_products.run_action(ARGUMENTS, action="execute")["code"] == "tms_credentials_missing"
 
 
+def test_existing_delivery_uses_the_canonical_zhihui_tms_filename(tmp_path: Path) -> None:
+    path = tmp_path / "智汇tms-商品-合并-20260917.xlsx"
+    path.write_bytes(b"merged")
+
+    assert export_products._existing_delivery(tmp_path, "20260917") == [
+        {"path": str(path.resolve()), "kind": "merged", "page": None, "total_pages": None},
+    ]
+
+
 def test_execute_refuses_second_run_before_login(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("ZHIHUI_TMS_PRODUCTION_ENABLED", "1")
     monkeypatch.setenv("ZHIHUI_TMS_ACCOUNT", "fixture-account")

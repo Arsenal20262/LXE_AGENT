@@ -288,7 +288,7 @@ export class DesktopSetupService {
       const processedPassword = inputProcessedPassword || effectiveSecrets.shangman_processed_password;
       const basicAuth = effectiveSecrets.shangman_basic_auth || DEFAULT_SHANGMAN_BASIC_AUTH;
       if (!tenantId || !username || !processedPassword || !basicAuth) {
-        throw new Error("智慧 ID、账号、密码和客户端认证必须完整配置");
+        throw new Error("上马印尼 ID、账号、密码和客户端认证必须完整配置");
       }
       config.integrations.shangman = {
         managed: true,

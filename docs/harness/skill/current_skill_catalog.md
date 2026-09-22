@@ -9,7 +9,7 @@ The repository currently contains 33 top-level workflow and default runtime skil
 | Type | Count | Purpose |
 | --- | ---: | --- |
 | `amazon_fba` | 14 | shipment, customs, purchase, contract, and export-tax workflows |
-| `amazon_replenish` | 13 | inventory snapshots, sales analysis, parameters, replenishment calculation, Yacang exports, Wisdom goods export, Brazil overseas source exports, and Zhihui TMS product export |
+| `amazon_replenish` | 13 | inventory snapshots, sales analysis, parameters, replenishment calculation, Yacang exports, Shangman Indonesia goods export, Brazil overseas source exports, and Zhihui TMS product export |
 | `amazon_operations` | 2 | listing, keyword, competitor, and public-review analysis |
 | `default` | 3 | general connector, workbook and custom Skill creation capabilities |
 | `ziniao_browser` | 1 | controlled Ziniao browser lifecycle and page operations |

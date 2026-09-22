@@ -6,7 +6,7 @@ from services.shangman.intent import build_goods_export_plan
 
 
 BASE_PARAMS = {
-    "platform": "智慧",
+    "platform": "上马印尼",
     "country": "印尼",
     "operation": "goods_export",
 }
@@ -19,7 +19,7 @@ def test_structured_params_map_to_one_goods_export_plan() -> None:
     assert result["params"] == BASE_PARAMS
     assert result["intent"] == {
         "type": "goods-export",
-        "platform": "智慧",
+        "platform": "上马印尼",
         "country": "印尼",
         "operation": "goods_export",
         "params": BASE_PARAMS,
@@ -52,6 +52,13 @@ def test_rejects_params_outside_the_declared_contract(field: str, value: object)
 def test_rejects_missing_or_non_object_params() -> None:
     assert build_goods_export_plan(None)["error"]["code"] == "params_invalid"
     assert build_goods_export_plan({})["error"]["code"] == "params_invalid"
+
+
+def test_rejects_the_retired_wisdom_platform_label() -> None:
+    result = build_goods_export_plan({**BASE_PARAMS, "platform": "智慧"})
+
+    assert result["status"] == "blocked"
+    assert result["error"]["code"] == "params_invalid"
 
 
 @pytest.mark.parametrize(

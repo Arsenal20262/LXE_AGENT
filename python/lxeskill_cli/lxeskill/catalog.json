@@ -394,7 +394,7 @@
       "visibility": "business", "session_mode": "none",
       "owner_skills": ["shangman-goods-export-workflow-map"],
       "timeout_ms": 30000, "exposed": true,
-      "input_schema": {"type": "object", "properties": {"params": {"type": "object", "properties": {"platform": {"const": "智慧"}, "country": {"const": "印尼"}, "operation": {"const": "goods_export"}}, "required": ["platform", "country", "operation"], "additionalProperties": false}}, "required": ["params"], "additionalProperties": false}
+      "input_schema": {"type": "object", "properties": {"params": {"type": "object", "properties": {"platform": {"const": "上马印尼"}, "country": {"const": "印尼"}, "operation": {"const": "goods_export"}}, "required": ["platform", "country", "operation"], "additionalProperties": false}}, "required": ["params"], "additionalProperties": false}
     },
     {
       "name": "shangman_goods_export_run", "module": "services.agent_cli.shangman.goods_export_run",
@@ -404,7 +404,7 @@
       "owner_skills": ["shangman-goods-export-workflow-map"],
       "artifact_paths": [{"field": "artifact_path", "role": "deliverable"}],
       "timeout_ms": 300000, "exposed": true,
-      "input_schema": {"type": "object", "properties": {"params": {"type": "object", "properties": {"platform": {"const": "智慧"}, "country": {"const": "印尼"}, "operation": {"const": "goods_export"}}, "required": ["platform", "country", "operation"], "additionalProperties": false}}, "required": ["params"], "additionalProperties": false}
+      "input_schema": {"type": "object", "properties": {"params": {"type": "object", "properties": {"platform": {"const": "上马印尼"}, "country": {"const": "印尼"}, "operation": {"const": "goods_export"}}, "required": ["platform", "country", "operation"], "additionalProperties": false}}, "required": ["params"], "additionalProperties": false}
     },
     {
       "name": "yacang_export_workflow", "module": "services.agent_cli.yacang.export_workflow",

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 
-PLATFORM = "智慧"
+PLATFORM = "上马印尼"
 COUNTRY = "印尼"
 OPERATION = "goods_export"
 PARAM_KEYS = frozenset({"platform", "country", "operation"})

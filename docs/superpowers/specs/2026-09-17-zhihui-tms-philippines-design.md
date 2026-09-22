@@ -31,14 +31,14 @@
 每次任务使用同一个 `YYYYMMDD` 日期标签。分页文件命名为：
 
 ```text
-智慧tms-商品-第1页-YYYYMMDD.xlsx
-智慧tms-商品-第2页-YYYYMMDD.xlsx
+智汇tms-商品-第1页-YYYYMMDD.xlsx
+智汇tms-商品-第2页-YYYYMMDD.xlsx
 ```
 
 合并文件命名为：
 
 ```text
-智慧tms-商品-合并-YYYYMMDD.xlsx
+智汇tms-商品-合并-YYYYMMDD.xlsx
 ```
 
 每个分页文件和合并文件均作为独立 `artifacts[]` 返回。合并文件只保留一次表头并按分页顺序追加数据；分页文件保留真实分页结果，便于审计和排查。

@@ -26,7 +26,7 @@ TOKEN_PATH = "/api/blade-auth/oauth/token"
 GOODS_EXPORT_PATH = "/api/blade-goods/goods/merchant/exportNew"
 DEFAULT_OUTPUT_DIR = artifact_root() / "shangman" / "indonesia"
 SOURCE = "shangman_goods_export"
-PLATFORM = "shangman-indonesia"
+PLATFORM = "上马印尼"
 _DEFAULT_ACCESS_TOKEN_TTL_SECONDS = 300.0
 
 REQUIRED_BUSINESS_HEADERS = (
@@ -478,7 +478,7 @@ class ShangmanClient:
                 )
 
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        filename = f"智慧-商品-{datetime.now().strftime('%Y%m%d-%H%M%S')}.xlsx"
+        filename = f"上马印尼-商品-{datetime.now().strftime('%Y%m%d-%H%M%S')}.xlsx"
         artifact_path = self.output_dir / filename
         temporary_path: Path | None = None
         try:

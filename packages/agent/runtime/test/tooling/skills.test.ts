@@ -27,7 +27,7 @@ describe("skill context", () => {
     ]);
     const description = skill?.description ?? "";
     for (const phrase of [
-      "智慧印尼",
+      "上马印尼",
       "库存",
       "销量",
       "入库时间",

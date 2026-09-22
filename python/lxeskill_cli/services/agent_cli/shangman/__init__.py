@@ -1,1 +1,1 @@
-"""LXE CLI adapters for the public Wisdom Indonesia export workflow."""
+"""LXE CLI adapters for the public Shangman Indonesia export workflow."""
