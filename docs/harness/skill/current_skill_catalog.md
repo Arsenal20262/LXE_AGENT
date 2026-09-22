@@ -4,19 +4,19 @@ This page is a navigation inventory, not a second source of runtime prompt truth
 
 ## Inventory
 
-The repository currently contains 31 top-level workflow and default runtime skills:
+The repository currently contains 32 top-level workflow and default runtime skills:
 
 | Type | Count | Purpose |
 | --- | ---: | --- |
 | `amazon_fba` | 14 | shipment, customs, purchase, contract, and export-tax workflows |
-| `replenishment` | 11 | inventory snapshots, sales analysis, parameters, replenishment calculation, and Shangman ERP login/export |
+| `replenishment` | 12 | Amazon replenishment workflows and Southeast Asia data preparation with Shangman ERP |
 | `amazon_operations` | 2 | listing, keyword, competitor, and public-review analysis |
 | `default` | 3 | general connector, workbook and custom Skill creation capabilities |
 | `ziniao_browser` | 1 | controlled Ziniao browser lifecycle and page operations |
 
 Counts describe top-level repository skills before per-agent permission and connector filtering. The
 bundled Lark CLI contributes another 27 nested connector-specific Skill manifests, so recursive runtime
-discovery sees 58 repository manifests in total.
+discovery sees 59 repository manifests in total.
 
 ## Amazon FBA
 
@@ -51,7 +51,11 @@ Start with `fba-workflow-map` for routing. The individual skills own exact input
 
 Start with `replenishment-workflow-map`. Snapshot and analysis skills prepare explicit artifacts; calculation consumes those artifacts and the selected algorithm configuration.
 
-## 上马登录与商品导出
+## 东南亚备货
+
+- `southeast-asia-replenishment-workflow-map`：东南亚备货流程入口，当前衔接上马 ERP 原始数据采集与交付；数据整理和备货计算尚未接通，不使用 Amazon 备货计算代替。
+- 上马 ERP 是当前数据来源；商品导出负责采集，登录负责认证。新增数据源的用途、产出和后续消费者在流程入口维护，平台操作规则保留在对应业务 Skill 中。
+- Amazon 与东南亚拥有各自流程入口，当前共同使用 `replenishment` 权限域，没有新增权限类型。
 
 - `shangman-login`（`replenishment` 权限）：通过真实验证码登录上马 ERP，保存本地登录态，并支持状态查询与清除。由普通 Agent Loop 使用 `exec`、`read` 和已有问答工具编排，不执行商品导出。
 - 在桌面“上马”设置填写 ID、账号和密码。密码加密保存；Token 按马帮方式保存在应用状态目录，过期或凭据变更后重新登录。
@@ -93,7 +97,7 @@ Dashboard skill APIs and the runtime prompt must use the same filtered catalog. 
 
 `config/skill-labels.json` 是本地与服务器前端共用的官方中文名源，首次覆盖本页的
 FBA、备货、亚马逊运营和紫鸟 26 个技能。只用于 UI 展示，不参与 AI 提示词、命令或权限判断。
-中文界面按英文 `name` 查名称；英文界面及未知技能保留原名。
+中文界面按英文 `name` 查名称；英文界面及未知技能保留原名。当前备货名称区分 Amazon 流程与东南亚流程，上马登录和商品导出服务于东南亚数据采集。
 
 新增上述类型的技能时追加中文名，删除技能时保留映射，让历史统计继续可读。
 同一 `name` 始终代表同一技能；业务含义改变时使用新标识。更新中文名称会统一影响

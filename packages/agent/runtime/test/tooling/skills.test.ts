@@ -15,16 +15,17 @@ afterEach(() => {
 });
 
 describe("skill context", () => {
-  test("loads the nine bundled replenishment skills and their local references outside the source checkout", () => {
+  test("loads Amazon and Southeast Asia replenishment skills under the existing permission outside the source checkout", () => {
     const root = mkdtempSync(join(tmpdir(), "lxe-replenishment-skills-"));
     roots.push(root);
     const source = join(repositoryRoot(import.meta.dir), "skills");
-    const names = readdirSync(source).filter((name) => name.startsWith("replenishment-"));
-    expect(names).toHaveLength(9);
+    const names = readdirSync(source).filter((name) => name.startsWith("replenishment-")
+      || name.startsWith("shangman-") || name === "southeast-asia-replenishment-workflow-map");
+    expect(names).toHaveLength(12);
     for (const name of names) cpSync(join(source, name), join(root, "skills", name), { recursive: true });
     const catalog = new SkillCatalog(root, join(root, "missing-user"), { sharedSkillsRoot: false });
     const skills = catalog.list({ allowedTypes: new Set(["replenishment"]) });
-    expect(skills).toHaveLength(9);
+    expect(skills).toHaveLength(12);
     expect(skills.every(skill => skill.type === "replenishment")).toBe(true);
     expect(catalog.list({ allowedTypes: new Set(["amazon_replenish"]) })).toHaveLength(0);
     expect(catalog.list({ allowedTypes: new Set() })).toHaveLength(0);
@@ -34,6 +35,9 @@ describe("skill context", () => {
     }));
     expect(references).toHaveLength(5);
     expect(skills.find((skill) => skill.name === "replenishment-workflow-map")?.commands).toEqual([]);
+    expect(skills.find((skill) => skill.name === "southeast-asia-replenishment-workflow-map")?.commands).toEqual([]);
+    expect(skills.find((skill) => skill.name === "shangman-goods-export")?.commands).toEqual(["lxeskill shangman export run"]);
+    expect(skills.find((skill) => skill.name === "shangman-login")?.commands).toHaveLength(4);
   });
 
   test("indexes allowed skill manifests and points the agent to their source", () => {

@@ -8,7 +8,7 @@ references:
   - references/report.md
 ---
 
-# 真实库存（深圳仓库）
+# Amazon 备货真实库存（深圳仓库）
 
 ## 执行与错误
 

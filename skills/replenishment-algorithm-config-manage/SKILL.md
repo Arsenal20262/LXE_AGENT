@@ -6,7 +6,7 @@ commands:
   - lxeskill replenish template
 ---
 
-# 管理备货算法参数方案
+# 管理 Amazon 备货算法参数方案
 
 ## 执行与错误
 

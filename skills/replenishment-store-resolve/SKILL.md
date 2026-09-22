@@ -6,7 +6,7 @@ commands:
   - lxeskill replenish store resolve
 ---
 
-# 解析马帮店铺
+# 解析马帮 Amazon 店铺
 
 ## 执行与错误
 

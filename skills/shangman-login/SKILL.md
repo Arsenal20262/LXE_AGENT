@@ -1,6 +1,6 @@
 ---
 name: shangman-login
-description: 登录上马 ERP（Shangman ERP），读取真实验证码并提交登录，保存供后续脚本复用的登录态；也支持查看或清除本地登录态。用于上马登录请求或商品导出的登录前置步骤，本 Skill 不执行导出。
+description: 登录上马 ERP（Shangman ERP），读取真实验证码并提交登录，保存供后续脚本复用的登录态；也支持查看或清除本地登录态。用于独立上马登录请求，或东南亚备货上马数据采集的认证前置步骤；本 Skill 不执行导出或备货计算。
 type: replenishment
 commands:
   - lxeskill shangman login prepare
@@ -10,6 +10,8 @@ commands:
 ---
 
 # 上马登录
+
+为上马 ERP 数据采集提供认证支持。独立登录成功后结束；作为已授权任务的前置步骤时，成功且登录态已保存后返回调用 Skill 继续原任务，不把登录成功当作数据采集完成。
 
 使用普通 Agent Loop，通过 `exec` 调用下列 CLI。ID、账号和密码在桌面“上马”设置中配置；缺字段时，告诉用户实际缺项，不读取密码文件或自行配置凭据。
 

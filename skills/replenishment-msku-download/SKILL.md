@@ -6,7 +6,7 @@ commands:
   - lxeskill replenish msku download
 ---
 
-# 下载并核验 MSKU 源表
+# 下载并核验 Amazon 店铺 MSKU 源表
 
 ## 执行与错误
 

@@ -8,7 +8,7 @@ references:
   - references/report.md
 ---
 
-# 销量分析
+# Amazon 店铺销量分析
 
 ## 执行与错误
 
