@@ -86,7 +86,7 @@
     "id": "inventory_and_sales",
     "text": "库存和销量",
     "expected_state": "resolved",
-    "data_types": ["inventory-sales"]
+    "data_types": ["inventory-sales", "inventory-current-snapshot"]
   },
   {
     "id": "inventory_sales_alias",
@@ -127,6 +127,20 @@
     "text": "四个仓的库存",
     "expected_state": "resolved",
     "data_types": ["inventory-current-snapshot"],
+    "warehouses": ["MY8801", "PH8805", "TH8802", "VN8806"]
+  },
+  {
+    "id": "warehouse_all_takes_priority_over_vietnam",
+    "text": "全部仓库和越南仓库存",
+    "expected_state": "resolved",
+    "data_types": ["inventory-current-snapshot"],
+    "warehouses": ["MY8801", "PH8805", "TH8802", "VN8806"]
+  },
+  {
+    "id": "warehouse_all_takes_priority_for_inventory_and_sales",
+    "text": "全部仓库和越南仓库存和销量",
+    "expected_state": "resolved",
+    "data_types": ["inventory-sales", "inventory-current-snapshot"],
     "warehouses": ["MY8801", "PH8805", "TH8802", "VN8806"]
   },
   {

@@ -177,6 +177,46 @@ def test_yacang_unified_cli_returns_canonical_clarification_envelope(capsys) -> 
     assert record["data"]["questions"]
 
 
+def test_yacang_success_with_files_emits_one_terminal_and_stops(capsys, monkeypatch, tmp_path) -> None:
+    try:
+        activate_external_workspace(tmp_path)
+        output = artifact_root() / "yacang" / "inventory.xlsx"
+        output.parent.mkdir(parents=True)
+        output.write_bytes(b"fixture")
+        calls = []
+
+        def fake_execute(entry, arguments, session, *, on_event, on_text):
+            calls.append(entry["command_path"])
+            return (
+                True,
+                [{
+                    "type": "text",
+                    "text": json.dumps({
+                        "success": True,
+                        "overall_status": "success",
+                        "artifacts": [{"path": str(output)}],
+                    }),
+                }],
+                [str(output.resolve())],
+                None,
+            )
+
+        monkeypatch.setattr(lxeskill, "execute_module_json", fake_execute)
+
+        assert lxeskill.main([
+            "yacang", "export", "run", "--request-text", "导出当前库存",
+        ]) == 0
+
+        records = _records(capsys)
+        assert len(records) == 1
+        assert records[0]["type"] == "result"
+        assert records[0]["ok"] is True
+        assert records[0]["files"] == [str(output.resolve())]
+        assert calls == [["yacang", "export", "run"]]
+    finally:
+        activate_project_workspace()
+
+
 def test_yacang_unified_cli_forwards_only_approved_high_level_candidates(monkeypatch) -> None:
     import services.agent_cli.yacang.export_workflow as adapter
 

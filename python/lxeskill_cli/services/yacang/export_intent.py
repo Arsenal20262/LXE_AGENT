@@ -5,7 +5,11 @@ from datetime import date, timedelta
 from typing import Any, Callable, Mapping
 
 from services.yacang.exports.sales_source import resolve_source_date_range
-from services.yacang.warehouses import WAREHOUSES, match_warehouse_aliases
+from services.yacang.warehouses import (
+    WAREHOUSES,
+    WAREHOUSE_ALIAS_TO_CODE,
+    match_warehouse_aliases,
+)
 
 
 ALL_DATA_TYPES = (
@@ -56,6 +60,7 @@ _ALL_WAREHOUSE_MARKERS = (
     "四个仓库",
     "全部仓库",
     "所有仓库",
+    "全仓",
     "全部四仓",
     "四仓都要",
 )
@@ -299,6 +304,7 @@ def validate_intent_candidates(
             "warehouse_intent",
             warehouse_intent,
             allowed_values=WAREHOUSE_CODES,
+            aliases=WAREHOUSE_ALIAS_TO_CODE,
         ),
         "created_date_filter": _validate_created_candidate(
             created_date_filter,
@@ -478,19 +484,10 @@ def _parse_warehouse_intent(
             )
         )
         return {"state": "ambiguous"}, True
-    if selected and all_requested:
-        questions.append(
-            _question(
-                "warehouse",
-                "WAREHOUSE_SCOPE_CONFLICT",
-                "同时检测到具体仓库和全部仓库，请确认最终仓库范围。",
-            )
-        )
-        return {"state": "ambiguous"}, True
-    if selected:
-        return {"state": "resolved", "values": selected}, True
     if all_requested:
         return {"state": "resolved", "values": list(WAREHOUSE_CODES)}, True
+    if selected:
+        return {"state": "resolved", "values": selected}, True
     vague = re.search(r"美国仓|美仓|某仓|\d+号仓", text)
     if vague:
         questions.append(
@@ -651,9 +648,15 @@ def _parse_data_type_intent(
     text: str,
     questions: list[dict[str, str]],
 ) -> tuple[dict[str, Any], list[str], dict[str, Any], list[dict[str, Any]]]:
-    explicit_inventory_sales = bool(
-        re.search(r"库存动销|库存和销量|库存与销量|动销数据|销量", text)
+    combined_inventory_sales = bool(
+        re.search(
+            r"(?:库存\s*(?:和|与|、|及|以及)\s*(?:两种|两类)?销量|销量\s*(?:和|与|、|及|以及)\s*库存)",
+            text,
+        )
     )
+    explicit_inventory_sales = bool(
+        re.search(r"库存动销|动销数据|销量", text)
+    ) or combined_inventory_sales
     daily_sales_detail = bool(_DAILY_SALES_DETAIL_RE.search(text)) and bool(
         explicit_inventory_sales or re.search(r"销售|出货|卖|日销|日度", text)
     )
@@ -717,7 +720,7 @@ def _parse_data_type_intent(
     bare_inventory = (
         "库存" in text
         and "库存动销" not in text
-        and re.search(r"库存.*销量", text) is None
+        and (re.search(r"库存.*销量", text) is None or combined_inventory_sales)
         and "库存相关" not in text
         and not bare_month_end
         and not historical_inventory

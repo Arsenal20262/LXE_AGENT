@@ -20,6 +20,24 @@ WAREHOUSES: tuple[Warehouse, ...] = (
     Warehouse("VN8806", 80, "越南仓", ("越南仓", "越南", "越仓", "VN")),
 )
 WAREHOUSE_IDS = {warehouse.code: warehouse.warehouse_id for warehouse in WAREHOUSES}
+WAREHOUSE_ALIAS_TO_CODE = {
+    key: warehouse.code
+    for warehouse in WAREHOUSES
+    for alias in (*warehouse.aliases, warehouse.code)
+    for key in (
+        (alias.upper(), alias.lower())
+        if alias.isascii()
+        else (alias,)
+    )
+}
+
+
+def normalize_warehouse_alias(value: str) -> str:
+    """Normalize a supported warehouse alias to its canonical code."""
+
+    text = value.strip()
+    key = text.upper() if text.isascii() else text
+    return WAREHOUSE_ALIAS_TO_CODE.get(key, key)
 
 
 def match_warehouse_aliases(text: str) -> tuple[str, ...]:
@@ -76,8 +94,10 @@ def select_warehouses(value: Any = None) -> tuple[Warehouse, ...]:
 __all__ = [
     "WAREHOUSES",
     "WAREHOUSE_IDS",
+    "WAREHOUSE_ALIAS_TO_CODE",
     "Warehouse",
     "match_warehouse_aliases",
+    "normalize_warehouse_alias",
     "select_warehouses",
     "warehouse_display_name",
 ]

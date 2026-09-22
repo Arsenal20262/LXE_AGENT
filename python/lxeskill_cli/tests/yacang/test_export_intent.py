@@ -79,6 +79,20 @@ def test_structured_inventory_and_sales_default_to_all_four_warehouses() -> None
         assert result["effective_request"]["warehouses"] == list(WAREHOUSE_CODES)
 
 
+@pytest.mark.parametrize("warehouse_alias", ["越南仓", "越南", "越仓", "VN"])
+def test_structured_warehouse_aliases_normalize_to_canonical_codes(warehouse_alias: str) -> None:
+    result = structured(
+        warehouse_intent={"state": "resolved", "values": [warehouse_alias]},
+    )
+
+    assert result["requires_clarification"] is False
+    assert result["intent"]["warehouse_intent"] == {
+        "state": "resolved",
+        "values": ["VN8806"],
+    }
+    assert result["effective_request"]["warehouses"] == ["VN8806"]
+
+
 def test_structured_explicit_dates_are_validated_and_preserved() -> None:
     result = structured(created_date_filter={
         "state": "resolved",
@@ -267,7 +281,6 @@ def test_daily_sales_detail_is_unsupported_not_a_cumulative_report(text: str) ->
         "导出60天销量",
         "导出90天销量",
         "导出库存动销",
-        "导出库存和销量",
         "导出动销数据",
     ],
 )
@@ -276,6 +289,21 @@ def test_sales_language_resolves_to_complete_inventory_sales(text: str) -> None:
 
     assert result["requires_clarification"] is False
     assert result["effective_request"]["data_types"] == ["inventory-sales"]
+
+
+@pytest.mark.parametrize("text", ["导出库存和销量", "导出销量和库存", "库存与销量"])
+def test_inventory_and_sales_select_two_canonical_types(text: str) -> None:
+    result = normalized(text)
+
+    assert result["requires_clarification"] is False
+    assert result["intent"]["data_type_intent"] == {
+        "state": "resolved",
+        "values": ["inventory-sales", "inventory-current-snapshot"],
+    }
+    assert result["effective_request"]["data_types"] == [
+        "inventory-sales",
+        "inventory-current-snapshot",
+    ]
 
 
 @pytest.mark.parametrize(
@@ -353,10 +381,13 @@ def test_generic_sales_with_relative_creation_filter_resolves_complete_report() 
     assert result["effective_request"]["data_types"] == ["inventory-sales"]
 
 
-def test_inventory_plus_both_sales_selects_one_complete_report() -> None:
+def test_inventory_plus_both_sales_selects_two_report_types() -> None:
     result = normalized("库存和两种销量都要")
 
-    assert result["effective_request"]["data_types"] == ["inventory-sales"]
+    assert result["effective_request"]["data_types"] == [
+        "inventory-sales",
+        "inventory-current-snapshot",
+    ]
 
 
 @pytest.mark.parametrize(
@@ -636,7 +667,7 @@ def test_chinese_and_code_warehouse_combinations_are_ordered_and_deduplicated(
     assert result["effective_request"]["warehouses"] == expected
 
 
-@pytest.mark.parametrize("marker", ["四仓", "四个仓", "全部仓库", "所有仓库"])
+@pytest.mark.parametrize("marker", ["四仓", "四个仓", "全部仓库", "所有仓库", "全仓"])
 def test_all_warehouse_markers_expand_to_all_canonical_codes(marker: str) -> None:
     result = normalized(f"导出{marker}当前库存")
 
@@ -644,15 +675,23 @@ def test_all_warehouse_markers_expand_to_all_canonical_codes(marker: str) -> Non
     assert result["effective_request"]["warehouses"] == list(WAREHOUSE_CODES)
 
 
-def test_specific_alias_and_all_warehouses_remain_a_scope_conflict() -> None:
-    result = normalized("导出马来仓和全部仓库当前库存")
+@pytest.mark.parametrize("marker", ["四仓", "四个仓", "全部仓库", "所有仓库", "全仓"])
+def test_all_warehouse_scope_takes_priority_over_specific_warehouse(marker: str) -> None:
+    result = normalized(f"导出{marker}和越南仓当前库存")
 
-    assert result["requires_clarification"] is True
-    assert result["effective_request"] is None
-    assert any(
-        question["code"] == "WAREHOUSE_SCOPE_CONFLICT"
-        for question in result["questions"]
-    )
+    assert result["requires_clarification"] is False
+    assert result["effective_request"]["warehouses"] == list(WAREHOUSE_CODES)
+
+
+def test_all_warehouse_scope_takes_priority_for_inventory_and_sales() -> None:
+    result = normalized("全部仓库和越南仓库存和销量")
+
+    assert result["requires_clarification"] is False
+    assert result["effective_request"]["data_types"] == [
+        "inventory-sales",
+        "inventory-current-snapshot",
+    ]
+    assert result["effective_request"]["warehouses"] == list(WAREHOUSE_CODES)
 
 
 @pytest.mark.parametrize("text", ["导出美国仓当前库存", "导出某仓当前库存"])

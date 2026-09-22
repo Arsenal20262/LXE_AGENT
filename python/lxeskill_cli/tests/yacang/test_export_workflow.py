@@ -106,6 +106,63 @@ def test_inventory_sales_plan_keeps_one_task_and_source_per_warehouse() -> None:
     )
 
 
+def test_inventory_and_sales_phrase_plans_both_report_types() -> None:
+    plan = plan_export_workflow(
+        normalized("导出库存和销量"),
+        execution_date="2026-09-14",
+    )
+
+    assert [(task["data_type"], task.get("warehouse")) for task in plan["logical_tasks"]] == [
+        ("inventory-sales", "MY8801"),
+        ("inventory-sales", "PH8805"),
+        ("inventory-sales", "TH8802"),
+        ("inventory-sales", "VN8806"),
+        ("inventory-current-snapshot", "MY8801"),
+        ("inventory-current-snapshot", "PH8805"),
+        ("inventory-current-snapshot", "TH8802"),
+        ("inventory-current-snapshot", "VN8806"),
+    ]
+    assert [fetch["warehouse"] for fetch in plan["source_fetches"]] == [
+        "MY8801",
+        "PH8805",
+        "TH8802",
+        "VN8806",
+    ]
+
+
+def test_all_warehouse_inventory_and_sales_phrase_plans_four_warehouses() -> None:
+    plan = plan_export_workflow(
+        normalized("全部仓库和越南仓库存和销量"),
+        execution_date="2026-09-14",
+    )
+
+    assert plan["requires_clarification"] is False
+    assert [(task["data_type"], task.get("warehouse")) for task in plan["logical_tasks"]] == [
+        ("inventory-sales", "MY8801"),
+        ("inventory-sales", "PH8805"),
+        ("inventory-sales", "TH8802"),
+        ("inventory-sales", "VN8806"),
+        ("inventory-current-snapshot", "MY8801"),
+        ("inventory-current-snapshot", "PH8805"),
+        ("inventory-current-snapshot", "TH8802"),
+        ("inventory-current-snapshot", "VN8806"),
+    ]
+
+
+def test_vietnam_inventory_sales_and_inbound_plans_vietnam_and_global_tasks() -> None:
+    plan = plan_export_workflow(
+        normalized("越南仓库存、销量、入库时间"),
+        execution_date="2026-09-14",
+    )
+
+    assert [(task["data_type"], task.get("warehouse")) for task in plan["logical_tasks"]] == [
+        ("inventory-sales", "VN8806"),
+        ("inventory-current-snapshot", "VN8806"),
+        ("inbound-listing-time", None),
+    ]
+    assert plan["logical_tasks"][-1]["warehouse_scope"] == "all"
+
+
 def test_plan_orders_tasks_scopes_parameters_and_shared_sales_sources() -> None:
     plan = plan_export_workflow(
         normalized("导出 MY8801、TH8802 的两种销量、当前库存和上架时间"),
@@ -753,6 +810,109 @@ def test_executor_preserves_fixed_type_and_warehouse_execution_order(monkeypatch
         "inbound-listing-time",
     ]
     assert len(result["artifacts"]) == 6
+
+
+def test_executor_emits_both_artifact_types_for_combined_phrase(monkeypatch, tmp_path: Path) -> None:
+    plan = plan_export_workflow(normalized("导出库存和销量"), execution_date="2026-09-14")
+
+    monkeypatch.setattr(
+        executor_module,
+        "acquire_inventory_sales_sources",
+        lambda _fetches, **_kwargs: _source_batch(plan, source_dir=tmp_path),
+    )
+    monkeypatch.setattr(
+        executor_module,
+        "publish_inventory_sales_workbook",
+        lambda sources, destination: destination.write_bytes(Path(sources[0][1]).read_bytes()) or len(sources),
+    )
+    monkeypatch.setattr(
+        executor_module,
+        "export_inventory_current_snapshot",
+        lambda *, warehouse, **_kwargs: _successful_export(
+            "inventory-current-snapshot", warehouse, tmp_path / f"inventory-{warehouse}.xlsx"
+        ),
+    )
+
+    result = execute_export_plan(plan)
+
+    assert result["overall_status"] == "success"
+    assert [task["data_type"] for task in result["tasks"]] == [
+        "inventory-sales", "inventory-sales", "inventory-sales", "inventory-sales",
+        "inventory-current-snapshot", "inventory-current-snapshot",
+        "inventory-current-snapshot", "inventory-current-snapshot",
+    ]
+    assert [artifact["data_type"] for artifact in result["artifacts"]] == [
+        "inventory-sales",
+        "inventory-current-snapshot", "inventory-current-snapshot",
+        "inventory-current-snapshot", "inventory-current-snapshot",
+    ]
+
+
+def test_executor_keeps_successful_files_when_one_current_inventory_fails(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    plan = plan_export_workflow(
+        normalized("全部仓库和越南仓库存和销量"),
+        execution_date="2026-09-14",
+    )
+    calls: list[str] = []
+
+    monkeypatch.setattr(
+        executor_module,
+        "acquire_inventory_sales_sources",
+        lambda _fetches, **_kwargs: _source_batch(plan, source_dir=tmp_path),
+    )
+    monkeypatch.setattr(
+        executor_module,
+        "publish_inventory_sales_workbook",
+        lambda sources, destination: destination.write_bytes(Path(sources[0][1]).read_bytes()) or len(sources),
+    )
+
+    def current_inventory(*, warehouse, **_kwargs):
+        calls.append(warehouse)
+        if warehouse == "PH8805":
+            return {
+                "exports": [{
+                    "status": "failed",
+                    "error_code": "FIXTURE_CURRENT_INVENTORY_FAILED",
+                    "error": "fixture current inventory failure",
+                }],
+                "xlsx_paths": [],
+            }
+        return _successful_export(
+            "inventory-current-snapshot", warehouse, tmp_path / f"inventory-{warehouse}.xlsx"
+        )
+
+    monkeypatch.setattr(executor_module, "export_inventory_current_snapshot", current_inventory)
+
+    result = execute_export_plan(plan)
+
+    assert calls == ["MY8801", "PH8805", "TH8802", "VN8806"]
+    assert result["overall_status"] == "partial_success"
+    assert len(result["artifacts"]) == 4
+    assert [artifact["data_type"] for artifact in result["artifacts"]] == [
+        "inventory-sales",
+        "inventory-current-snapshot", "inventory-current-snapshot", "inventory-current-snapshot",
+    ]
+    failed_tasks = [task for task in result["tasks"] if task["status"] == "failed"]
+    assert failed_tasks == [{
+        "task_id": "inventory-current-snapshot:PH8805",
+        "data_type": "inventory-current-snapshot",
+        "scope": "warehouse",
+        "warehouse": "PH8805",
+        "status": "failed",
+        "source_fetch_id": None,
+        "effective_parameters": {"warehouse": "PH8805"},
+        "artifact_ids": [],
+        "diagnostic_codes": ["FIXTURE_CURRENT_INVENTORY_FAILED"],
+    }]
+    assert any(
+        item.get("task_id") == "inventory-current-snapshot:PH8805"
+        and item.get("warehouse") == "PH8805"
+        and item.get("code") == "FIXTURE_CURRENT_INVENTORY_FAILED"
+        for item in result["diagnostics"]
+    )
 
 
 def test_local_source_failure_continues_and_preserves_success_artifacts(monkeypatch, tmp_path: Path) -> None:
