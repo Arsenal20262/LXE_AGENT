@@ -2337,6 +2337,97 @@ describe("TypeScriptAgentRuntime", () => {
     await runtime.stop();
   });
 
+  test.each([false, true])("continues the same turn for steering during a final response (streamed: %s)", async streamed => {
+    const store = new MemoryStore();
+    const queue: ReturnType<RuntimeHandle["drainSteering"]> = [];
+    const frames: EmitRequest[] = [];
+    const requests: RuntimeProviderRequest[] = [];
+    const runHandle: RuntimeHandle = { ...handle(), drainSteering: () => queue.splice(0) };
+    const runtime = new TypeScriptAgentRuntime({
+      store, tools: new ToolRegistry(), systemPrompt: "test",
+      provider: { summarize, turn: async request => {
+        requests.push(request);
+        expect(frames.filter(frame => frame.state === "final")).toEqual([]);
+        expect(store.metrics).toEqual([]);
+        const text = requests.length === 1 ? "原回答" : "已处理补充指令";
+        if (streamed) {
+          const id = `answer-${requests.length}`;
+          await request.onEvent?.(eventFixture("text_start", id));
+          await request.onEvent?.(eventFixture("text_delta", id, text));
+          await request.onEvent?.(eventFixture("text_end", id));
+        }
+        if (requests.length === 1) {
+          queue.push({ text: "先检查原因" }, { text: "  " }, { text: "然后解释" });
+        }
+        return messageFixture({ content: [{ type: "text", text }], usage: { input_tokens: 3, output_tokens: 2 } });
+      } },
+      emitter: {
+        emit: async frame => { frames.push(structuredClone(frame)); },
+        desktopStream: async () => undefined,
+        typing: async () => undefined,
+      },
+    });
+    await runtime.start();
+    try {
+      const outcome = await runtime.runTurn(job({ source: { platform: "desktop" } }), runHandle);
+      expect(outcome).toMatchObject({ status: "completed", reply: "已处理补充指令", input_tokens: 6, output_tokens: 4 });
+      expect(requests).toHaveLength(2);
+      expect(requests[1]!.messages.slice(-3)).toEqual([
+        expect.objectContaining({ role: "assistant", content: [{ type: "text", text: "原回答" }] }),
+        { role: "user", content: "先检查原因" },
+        { role: "user", content: "然后解释" },
+      ]);
+      expect(store.messages.slice(-4)).toEqual([
+        ...requests[1]!.messages.slice(-3),
+        expect.objectContaining({ role: "assistant", content: [{ type: "text", text: "已处理补充指令" }] }),
+      ]);
+      expect(new Set(store.messageTurnIds)).toEqual(new Set(["j1"]));
+      expect(store.messageReasons.filter(reason => reason === "steering")).toHaveLength(2);
+      expect(store.metrics).toHaveLength(1);
+      expect(store.metrics[0]).toMatchObject({ input_tokens: 6, output_tokens: 4, api_calls: 2 });
+      const finals = frames.filter(frame => frame.emit_kind === "stream" && frame.state === "final");
+      expect(finals).toHaveLength(1);
+      expect(finals[0]).toMatchObject({ turn_id: "j1", content: "已处理补充指令", process_parts: [
+        expect.objectContaining({ type: "text", text: "原回答", presentation: "process", status: "completed" }),
+        expect.objectContaining({ type: "text", text: "已处理补充指令", presentation: "final", status: "completed" }),
+      ] });
+      expect(queue).toEqual([]);
+    } finally { await runtime.stop(); }
+  });
+
+  test.each(["empty", "blank", "limit", "repeated_limit", "cancel", "error", "returned_error", "returned_aborted"] as const)(
+    "does not extend the turn for steering at the %s boundary", async scenario => {
+      const store = new MemoryStore();
+      const queue: ReturnType<RuntimeHandle["drainSteering"]> = [];
+      const controller = new AbortController();
+      const runHandle: RuntimeHandle = { ...handle(), signal: controller.signal, drainSteering: () => queue.splice(0) };
+      let providerCalls = 0;
+      const runtime = new TypeScriptAgentRuntime({
+        store, tools: new ToolRegistry(), systemPrompt: "test", maxSteps: scenario === "limit" ? 1 : scenario === "repeated_limit" ? 2 : 3,
+        provider: { summarize, turn: async () => {
+          providerCalls += 1;
+          if (scenario !== "empty") queue.push({ text: scenario === "blank" ? "  " : "补充指令" });
+          if (scenario === "cancel") controller.abort();
+          if (scenario === "error") throw new RuntimeProviderError("provider failed", "test", "test", "provider failed", false);
+          return messageFixture({
+            content: [{ type: "text", text: "原回答" }],
+            stopReason: scenario === "returned_error" ? "error" : scenario === "returned_aborted" ? "aborted" : "stop",
+          });
+        } },
+        emitter: { emit: async () => undefined, typing: async () => undefined },
+      });
+      await runtime.start();
+      try {
+        const outcome = await runtime.runTurn(job(), runHandle);
+        expect(providerCalls).toBe(scenario === "repeated_limit" ? 2 : 1);
+        expect(outcome.status).toBe(scenario === "cancel" ? "cancelled" : scenario === "error" ? "error" : "completed");
+        expect(store.messageReasons.filter(reason => reason === "steering")).toHaveLength(scenario === "repeated_limit" ? 1 : 0);
+        expect(queue).toEqual(scenario === "empty" || scenario === "blank" ? [] : [{ text: "补充指令" }]);
+        expect(store.metrics).toHaveLength(1);
+      } finally { await runtime.stop(); }
+    },
+  );
+
   test("returns the compatible continuation message at the step limit", async () => {
     const store = new MemoryStore();
     const tools = new ToolRegistry();

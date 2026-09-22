@@ -675,7 +675,6 @@ export class TypeScriptAgentRuntime implements AgentRuntime {
           ? textContent(response.content) || MAX_STEP_REPLY
           : "";
         const responseText = forcedLastStepReply || textContent(response.content);
-        finalAnswerStreamer?.completeModelResponse(responseText, calls.length === 0 || isLastStep);
         const assistantContent: RuntimeContentBlock[] = forcedLastStepReply
           ? [{ type: "text", text: forcedLastStepReply }]
           : response.content;
@@ -685,6 +684,18 @@ export class TypeScriptAgentRuntime implements AgentRuntime {
         messages.push(assistant);
         await this.appendMessage(job.session_id, assistant, "assistant_response", job.job_id);
         await updateContext();
+        if ((calls.length === 0 || isLastStep) && isCancelled(handle)) {
+          throw new DOMException("Aborted", "AbortError");
+        }
+        // A final model response does not end the turn while steering is waiting.
+        // Leave the queue intact at the step limit for the scheduler's existing fallback.
+        if (calls.length === 0 && !isLastStep
+          && response.stopReason !== "error" && response.stopReason !== "aborted"
+          && await appendSteering() > 0) {
+          finalAnswerStreamer?.completeModelResponse(responseText, false);
+          continue;
+        }
+        finalAnswerStreamer?.completeModelResponse(responseText, calls.length === 0 || isLastStep);
         if (calls.length === 0 || isLastStep) {
           const reply = responseText;
           const streamDelivered = finalAnswerStreamer ? await finalAnswerStreamer.finish(reply) : false;
