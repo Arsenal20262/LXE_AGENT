@@ -483,7 +483,7 @@ class ZhihuiTmsClient:
                 except ZhihuiTmsHttpError:
                     if (
                         login
-                        or status_code != 401
+                        or status_code not in {401, 302}
                         or self._authentication_recovery_attempted
                         or self._authentication_recovery is None
                     ):
@@ -528,6 +528,25 @@ class ZhihuiTmsClient:
         require_http_200: bool,
     ) -> dict[str, Any]:
         status_code = int(response.status_code)
+
+        if not 200 <= status_code < 300:
+            try:
+                payload = response.json()
+            except Exception:
+                payload = None
+
+            if isinstance(payload, Mapping):
+                observed_message = str(payload.get("msg") or payload.get("message") or response.text)
+            else:
+                observed_message = str(getattr(response, "text", "") or "")
+            raise ZhihuiTmsHttpError(
+                f"tms_http_{status_code}",
+                f"{operation} HTTP {status_code}: {observed_message}",
+                http_status=status_code,
+                payload=payload if payload is not None else observed_message,
+                secrets=secrets,
+            )
+
         try:
             payload = response.json()
         except Exception as exc:
@@ -549,7 +568,7 @@ class ZhihuiTmsClient:
                 secrets=secrets,
             )
 
-        if not 200 <= status_code < 300 or (require_http_200 and status_code != 200):
+        if require_http_200 and status_code != 200:
             observed_message = str(payload.get("msg") or payload.get("message") or response.text)
             raise ZhihuiTmsHttpError(
                 f"tms_http_{status_code}",

@@ -144,6 +144,15 @@ def test_four_platform_skill_boundaries_are_explicit_and_brazil_documents_suppor
     ]
 
 
+def test_zhihui_product_export_is_direct_execute_without_manual_confirmation() -> None:
+    text = _skill_text("zhihui-tms-product-export")
+
+    assert "正常导出请求直接调用 `execute`" in text
+    assert "先调用 preview；再调用 execute" not in text
+    assert "确认执行导出" not in text
+    assert "confirmation_required=true" not in text
+
+
 def test_ziniao_is_independent_and_shipment_owns_only_four_stages() -> None:
     catalog = load_catalog()
     assert catalog["ziniao_browser"]["owner_skills"] == ["ziniao-browser"]

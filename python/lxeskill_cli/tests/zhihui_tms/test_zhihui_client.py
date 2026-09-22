@@ -309,6 +309,58 @@ def test_a_second_http_401_stops_after_one_reauthentication() -> None:
     assert "fixture-api-token" not in str(captured.value)
 
 
+def test_http_302_reauthenticates_once_and_replays_the_rejected_request() -> None:
+    session = FakeSession(
+        [
+            FakeResponse(302, text="", headers={"Location": "/login"}, json_error=ValueError("empty")),
+            FakeResponse(200, _fixture("login_success.json")),
+            FakeResponse(200, {"code": "200", "datas": []}),
+        ]
+    )
+    client = _client(session)
+    client._api_token = "stale-token"
+    recoveries: list[str] = []
+
+    def recover() -> None:
+        recoveries.append("called")
+        client.login("fixture-user", "fixture-password", local_time="2026-09-17 12:34:56")
+
+    client.set_authentication_recovery(recover)
+    result = client.find_my_stockwarehouse_list(page=1)
+
+    assert result["code"] == "200"
+    assert recoveries == ["called"]
+    assert len(session.calls) == 3
+    assert session.calls[0]["headers"]["token"] == "stale-token"
+    assert "token" not in session.calls[1]["headers"]
+    assert session.calls[2]["headers"]["token"] == "fixture-api-token"
+
+
+def test_a_second_http_302_stops_after_one_reauthentication() -> None:
+    session = FakeSession(
+        [
+            FakeResponse(302, text="", headers={"Location": "/login"}, json_error=ValueError("empty")),
+            FakeResponse(200, _fixture("login_success.json")),
+            FakeResponse(302, text="", headers={"Location": "/login"}, json_error=ValueError("empty")),
+        ]
+    )
+    client = _client(session)
+    client._api_token = "stale-token"
+    recoveries: list[str] = []
+
+    def recover() -> None:
+        recoveries.append("called")
+        client.login("fixture-user", "fixture-password", local_time="2026-09-17 12:34:56")
+
+    client.set_authentication_recovery(recover)
+    with pytest.raises(ZhihuiTmsHttpError) as captured:
+        client.find_my_stockwarehouse_list(page=1)
+
+    assert captured.value.http_status == 302
+    assert recoveries == ["called"]
+    assert len(session.calls) == 3
+
+
 @pytest.mark.parametrize("status", [403, 429])
 def test_403_and_429_never_invoke_authentication_recovery(status: int) -> None:
     session = FakeSession([FakeResponse(status, {"code": str(status), "msg": "request stopped"})])

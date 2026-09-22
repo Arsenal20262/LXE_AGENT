@@ -51,7 +51,7 @@ def test_preview_does_not_construct_a_client_or_create_artifacts(monkeypatch, tm
             "platform": "zhihui_tms",
             "country": "PH",
             "business_type": "product_export",
-            "confirmation_required": True,
+            "preview": True,
         },
     }
     assert list(tmp_path.iterdir()) == []
@@ -205,7 +205,7 @@ def test_catalog_exposes_exact_preview_and_execute_paths(monkeypatch, capsys) ->
         assert entry["input_schema"]["additionalProperties"] is False
         schemas.append(entry["input_schema"])
     assert schemas[0] == schemas[1]
-    assert catalog["zhihui_execute_products"]["confirmation"]["confirm_label"] == "确认执行导出"
+    assert "confirmation" not in catalog["zhihui_execute_products"]
     assert lxeskill_cli.main(["tms", "philippines", "products-export", "preview", "--platform", "zhihui_tms", "--warehouse", "PH", "--intent", "product_export"]) == 0
     result = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line][-1]
     assert result == {
@@ -217,7 +217,7 @@ def test_catalog_exposes_exact_preview_and_execute_paths(monkeypatch, capsys) ->
             "platform": "zhihui_tms",
             "country": "PH",
             "business_type": "product_export",
-            "confirmation_required": True,
+            "preview": True,
         },
         "files": [],
     }

@@ -39,7 +39,7 @@ def _account_lock_path(account: str) -> Path:
 
 def _terminal_data(
     *,
-    confirmation_required: bool = False,
+    preview: bool = False,
     row_count: int | None = None,
     partial: bool | None = None,
     partial_pages: int | None = None,
@@ -50,8 +50,8 @@ def _terminal_data(
         "country": "PH",
         "business_type": "product_export",
     }
-    if confirmation_required:
-        data["confirmation_required"] = True
+    if preview:
+        data["preview"] = True
     if row_count is not None:
         data["row_count"] = row_count
     if partial is not None:
@@ -114,7 +114,7 @@ def _run(
         return {
             "success": True,
             "artifacts": [],
-            **_terminal_projection(_terminal_data(confirmation_required=True)),
+            **_terminal_projection(_terminal_data(preview=True)),
         }
 
     if os.environ.get("ZHIHUI_TMS_PRODUCTION_ENABLED") != "1":
