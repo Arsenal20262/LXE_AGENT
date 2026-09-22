@@ -55,7 +55,7 @@ export class DesktopSetupService {
 
   state(): DesktopSetupState {
     const config = this.repository.readConfig();
-    const secrets = this.effectiveSecrets();
+    const secrets = this.effectiveSecrets(undefined, config.integrations.shangman.managed);
     const localAuth = this.auth.snapshot();
     const providerKeyConfigured = Boolean(localAuth.configured[config.llm.provider]);
     const localProvider = this.catalog.provider(config.llm.last_local_provider)?.name ?? this.catalog.defaultProvider;
@@ -142,7 +142,7 @@ export class DesktopSetupService {
     const workspaceRoot = this.validation.validateWorkspaceRoot(text(input.workspace_root) || this.defaultWorkspaceRoot);
     const config = this.repository.readConfig();
     const secrets = this.repository.readSecrets();
-    const effectiveSecrets = this.effectiveSecrets(secrets);
+    const effectiveSecrets = this.effectiveSecrets(secrets, config.integrations.shangman.managed);
     config.workspace_root = workspaceRoot;
 
     if (input.ziniao?.action === "clear") {
@@ -489,7 +489,7 @@ export class DesktopSetupService {
 
   environment(): Record<string, string> {
     const config = this.repository.readConfig();
-    const secrets = this.effectiveSecrets();
+    const secrets = this.effectiveSecrets(undefined, config.integrations.shangman.managed);
     const provider = config.llm.provider;
     const storedManagedCredential = config.cloud.switch_in_progress
       ? null
@@ -565,9 +565,9 @@ export class DesktopSetupService {
     };
   }
 
-  private effectiveSecrets(persisted = this.repository.readSecrets()) {
+  private effectiveSecrets(persisted = this.repository.readSecrets(), shangmanManaged = false) {
     const effective = effectiveDesktopSecrets(persisted, this.secretEnvironment);
-    if (this.repository.readConfig().integrations.shangman.managed) {
+    if (shangmanManaged) {
       effective.shangman_processed_password = persisted.shangman_processed_password;
       effective.shangman_basic_auth = persisted.shangman_basic_auth;
     }
