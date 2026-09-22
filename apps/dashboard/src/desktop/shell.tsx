@@ -286,7 +286,6 @@ function DesktopCloudPanel({
         headingRef={headingRef}
         title={t.desktop.sectionTitles.cloud}
       />
-      <DeviceContextPanel cloud={cloud} busy={activating} onRefresh={onRefreshContext} onConfirm={onConfirmDevice} />
       <h3>{t.desktop.cloud.permission.enrollmentTitle}</h3>
       {!cloud.configured ? <p className="desktop-form-hint">{t.desktop.cloud.permission.enrollmentHint}</p> : null}
       {supported && !dependenciesReady ? (
@@ -411,6 +410,7 @@ function DesktopCloudPanel({
           </div>
         </div>
       ) : null}
+      <DeviceContextPanel cloud={cloud} busy={activating} onRefresh={onRefreshContext} onConfirm={onConfirmDevice} />
     </section>
   );
 }
