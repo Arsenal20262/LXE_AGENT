@@ -10,13 +10,13 @@ import { SkillDetailDialog } from "../../shared/ui/skill-detail-dialog";
 function SkillDetail({ enabled, skill, close }: { enabled: boolean; skill: SkillPayload; close: () => void }) {
   const t = useUiText();
   const [file, setFile] = useState("SKILL.md");
-  const contentQuery = useSkillContentQuery(skill.name, enabled);
+  const contentQuery = useSkillContentQuery(skill.name, enabled && file === "SKILL.md");
   const referenceQuery = useSkillReferenceQuery(skill.name, file, enabled && file !== "SKILL.md");
   const selected = file === "SKILL.md" ? contentQuery : referenceQuery;
   const references = contentQuery.data?.references ?? skill.references;
   return <SkillDetailDialog skill={contentQuery.data ?? skill} title={t.skillDisplayName(skill.name)} close={close}
     files={["SKILL.md", ...references.map(reference => reference.path)]} selectedFile={file} onSelectFile={setFile}
-    content={selected.data?.content} loading={selected.isPending} error={queryError(contentQuery.error || referenceQuery.error)} />;
+    content={selected.data?.content} loading={selected.isPending} error={queryError(selected.error)} />;
 }
 
 function ToolParameters({ parameters }: { parameters: Record<string, unknown> }) {
