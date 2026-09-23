@@ -516,6 +516,8 @@ async function bootstrap(): Promise<void> {
     activateCloudEnrollment: (input: DesktopCloudActivationInput) => cloud.activate(input),
     prepareCloudDependencies: () => cloud.prepareDependencies(),
     getCloudState: () => cloud.state(),
+    refreshCloudContext: () => cloud.check(),
+    confirmCloudDevice: () => cloud.confirmDevice(),
     retryCloudConnection: () => cloud.retry(),
     openCloudDestination: async (destination: DesktopCloudDestination): Promise<void> => {
       const state = cloud.state();

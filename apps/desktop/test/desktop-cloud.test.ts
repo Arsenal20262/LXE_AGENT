@@ -1488,10 +1488,10 @@ describe("DesktopCloudService", () => {
 });
 
 describe("independent CLI skill permissions", () => {
-  function fixture() {
+  function fixture(enrolled = true) {
     const root = mkdtempSync(join(tmpdir(), "lxe-skill-context-service-")); roots.push(root);
     const config = new DesktopConfigStore(root, join(root, "workspace"), safeStorage, { platform: "win32" });
-    configuredIdentity(config);
+    if (enrolled) configuredIdentity(config);
     const context = (skills = ["amazon_fba"], version = 1) => ({
       response_schema: "lxe.device-context.v1",
       device: { id: enrollmentPayload.device.id, kind: "managed_device", display_name: "Finance PC", wireguard_ip: "10.88.0.8" },
@@ -1500,7 +1500,7 @@ describe("independent CLI skill permissions", () => {
     const updates: string[][] = [];
     let query: (url: string, signal: AbortSignal) => Promise<unknown> = async () => context();
     let identityFetch: typeof fetch = async () => Response.json({ detail: "identity credential expired" }, { status: 401 });
-    const make = () => new DesktopCloudService({ dataRoot: root, config, supported: true,
+    const make = (clock?: DesktopCloudClock, supported = true) => new DesktopCloudService({ dataRoot: root, config, supported, clock,
       logger: testLogger([]), provisioner: { provision: async () => {} }, enrollments: new DesktopCloudEnrollmentManager(),
       onConfigured: async () => {}, onPermissionChanged: (skills) => { updates.push([...skills]); },
       contextClient: { query: (url, signal) => query(url, signal) }, fetch: (input, init) => identityFetch(input, init),
@@ -1508,6 +1508,108 @@ describe("independent CLI skill permissions", () => {
     return { root, config, context, updates, make,
       setQuery: (next: typeof query) => { query = next; }, setIdentity: (next: typeof fetch) => { identityFetch = next; } };
   }
+  test("unbound discovery polls even when enrollment tooling is unsupported", async () => {
+    const f = fixture(false), clock = new FakeClock();
+    let queries = 0;
+    f.setQuery(async () => { queries++; return f.context(); });
+    const service = f.make(clock, false);
+    expect(await service.start()).toMatchObject({ permission_status: "verified", connection: "unsupported" });
+    expect(queries).toBe(1);
+    clock.fireIntervals();
+    await service.check();
+    expect(queries).toBe(2);
+    await service.stop();
+    clock.fireIntervals();
+    expect(queries).toBe(2);
+  });
+  test("enrollment switching withholds the native URL and cancels permission discovery", async () => {
+    const f = fixture();
+    f.config.beginCloudEnrollmentSwitch();
+    expect(f.config.environment().LXE_DATA_SERVER_URL).toBe("");
+    // Constructor recovers interrupted switches; use the live service for an active switch.
+    f.config.abortCloudEnrollmentSwitch();
+    const service = f.make();
+    f.config.beginCloudEnrollmentSwitch();
+    let queries = 0;
+    f.setQuery(async () => { queries++; return f.context(); });
+    await service.check();
+    expect(queries).toBe(0);
+    await service.stop();
+  });
+  test("fresh directory discovers all grants without enrollment, identity fetch or provisioning", async () => {
+    const f = fixture(false);
+    f.setIdentity(async () => { throw new Error("must not call identity APIs"); });
+    f.setQuery(async url => {
+      expect(url).toBe("http://10.88.0.1:8000");
+      const c = f.context(["replenishment"]);
+      c.device.kind = "system_administrator";
+      c.permission.grants = { ...c.permission.grants, desktop_features: ["erp_dashboard"], server_capabilities: ["erp", "mabang_read"], erp_actions: ["purchase_import"] };
+      return c;
+    });
+    const service = f.make();
+    expect(await service.start()).toMatchObject({ configured: false, is_admin: false, permission_status: "verified",
+      desktop_features: ["erp_dashboard"], device_context: { server_url: "http://10.88.0.1:8000", skill_types: ["replenishment"], server_capabilities: ["erp", "mabang_read"], erp_actions: ["purchase_import"] } });
+    expect(f.config.cloudConfiguration().managed).toBe(false);
+    expect(f.config.cloudIdentityCredential()).toBe("");
+    expect(f.config.environment()).toMatchObject({ LXE_DATA_SERVER_URL: "http://10.88.0.1:8000", LXE_DATA_SERVER_ENABLED: "0" });
+    await expect(service.erpDashboardUrl()).rejects.toThrow("登录凭据");
+    await service.stop();
+    f.setQuery(async () => { throw new CloudContextError("offline", "cloud_connection_failed"); });
+    const restarted = f.make();
+    expect(await restarted.check()).toMatchObject({ permission_status: "cached", device_context: { server_capabilities: ["erp", "mabang_read"] } });
+    expect(restarted.allowedSkillTypes()).toEqual(["replenishment"]);
+    await restarted.stop();
+  });
+  test("discovered identity changes clear grants and require a fresh matching confirmation", async () => {
+    const f = fixture(false), service = f.make();
+    await service.check();
+    const changed = (id: string) => ({ ...f.context(["replenishment"]), device: { ...f.context().device, id } });
+    f.setQuery(async () => changed("B"));
+    expect(await service.check()).toMatchObject({ permission_status: "denied", device_context: { pending_device: { id: "B" } } });
+    expect(f.config.cloudPermissionSnapshot()).toBeNull();
+    expect(service.allowedSkillTypes()).toEqual([]);
+    expect(f.config.cloudObservedDevice()?.id).toBe(enrollmentPayload.device.id);
+    f.setQuery(async () => changed("C"));
+    expect(await service.confirmDevice()).toMatchObject({ permission_status: "denied", device_context: { pending_device: { id: "C" } } });
+    expect(await service.confirmDevice()).toMatchObject({ permission_status: "verified", device_context: { device: { id: "C" }, pending_device: null } });
+    expect(f.config.cloudConfiguration().managed).toBe(false);
+    await service.stop();
+  });
+  test("denial keeps remembered identity but clears persistent grants across restarts", async () => {
+    const f = fixture(false), service = f.make();
+    await service.check();
+    f.setQuery(async () => { throw new CloudContextError("revoked", "denied", 403); });
+    expect(await service.check()).toMatchObject({ permission_status: "denied" });
+    await service.stop();
+    f.setQuery(async () => { throw new CloudContextError("offline", "cloud_connection_failed"); });
+    const restarted = f.make();
+    expect(await restarted.check()).toMatchObject({ permission_status: "pending_verification" });
+    expect(restarted.allowedSkillTypes()).toEqual([]);
+    expect(f.config.cloudObservedDevice()?.id).toBe(enrollmentPayload.device.id);
+    await restarted.stop();
+  });
+  test("business grants cannot change under the same published version", async () => {
+    const f = fixture(false), service = f.make();
+    await service.check();
+    f.setQuery(async () => { const c = f.context(); c.permission.grants.server_capabilities = ["saihu"]; return c; });
+    expect(await service.check()).toMatchObject({ permission_status: "cached", permission_error: "device permission content changed without a profile revision increase" });
+    expect(service.state().device_context?.server_capabilities).toEqual([]);
+    await service.stop();
+  });
+  test("stopping discovery ignores a late result and coalesces callers", async () => {
+    const f = fixture(false);
+    let resolve!: (value: unknown) => void;
+    let queries = 0;
+    f.setQuery(() => { queries++; return new Promise(r => { resolve = r; }); });
+    const service = f.make();
+    const first = service.check(), second = service.check();
+    expect(first).toBe(second);
+    const stopped = service.stop();
+    resolve(f.context());
+    await Promise.all([first, stopped]);
+    expect(queries).toBe(1);
+    expect(f.config.cloudPermissionSnapshot()).toBeNull();
+  });
   test("identity refusal does not block CLI skill discovery or server address", async () => {
     const f = fixture(), service = f.make();
     expect(await service.check()).toMatchObject({ connection: "error", permission_status: "verified", permission_profile: "custom", is_admin: false });

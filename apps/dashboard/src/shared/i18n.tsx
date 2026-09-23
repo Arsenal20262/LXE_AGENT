@@ -8,7 +8,7 @@ const LEGACY_LANGUAGE_STORAGE_KEY = "agent-dashboard-language";
 export type Language = "zh" | "en";
 
 export const ZH_TEXT = {
-  updates: {title:"应用更新",update:"更新",check:"检查更新",downloading:"正在下载",verifying:"正在校验更新",installing:"正在准备重启",checking:"检查中…",noUpdate:"暂无更新",paused:"更新已暂停",details:"更新失败 · 查看详情",failed:"更新失败",retry:"重试",close:"关闭",restart:"重启更新",confirm:"将关闭并重新启动 LXE。有任务正在运行时不会安装，请先结束任务。"},
+  updates: {title:"应用更新",update:"更新",check:"检查更新",downloading:"正在下载",verifying:"正在校验更新",installing:"正在准备重启",checking:"检查中…",noUpdate:"暂无更新",paused:"更新已暂停",details:"更新失败 · 查看详情",failed:"更新失败",retry:"重试",close:"关闭",later:"稍后",restart:"重启更新",confirm:"将关闭并重新启动 LXE。有任务正在运行时不会安装，请先结束任务。"},
   userSkills: {
     add: "添加技能", userDirectory: "用户目录", use: "在对话中使用",
     delete: "移至回收目录", disabled: "已禁用", unavailable: "不可用",
@@ -683,7 +683,7 @@ export const ZH_TEXT = {
       themeAria: "外观主题"
     },
     cloud: {
-      description: "连接公司内网并启用每小时云端同步。",
+      description: "查看当前设备的权限，管理设备接入与云端访问。",
       unconfiguredBadge: "未配置",
       unsupportedBadge: "平台不支持",
       unsupportedHint: "请使用 Windows 10/11 x64 安装包，或在 Apple Silicon Mac 开发版中导入设备文件。",
@@ -735,13 +735,33 @@ export const ZH_TEXT = {
         version: "版本",
         unassigned: "未分配",
         labelLocale: "zh-CN",
+        details: "权限详情", errorDetails: "查看错误详情", assignmentVersion: "权限分配版本", profileRevision: "模板发布版本",
+        allSkills: "全部技能", allFeatures: "全部桌面功能", allServices: "全部业务服务", allActions: "全部操作",
+        notes: {
+          verified: "", cached: "本次未更新，正在使用上次验证的权限。", pending_verification: "尚未取得有效权限，技能范围待验证。",
+          denied: "权限查询被拒绝，已清空本地授权。", error: "未取得有效的查询结果，请查看错误详情或重试。", unassigned: "服务器尚未分配权限，当前没有可用技能。",
+        },
+        labels: {
+          skills: { amazon_operations: "Amazon 运营", shopee_operations: "Shopee 运营", ziniao_browser: "紫鸟浏览器" },
+          features: { erp_dashboard: "FBA ERP" }, services: { erp: "ERP", mabang_read: "马帮查询", saihu: "赛狐" },
+          actions: { purchase_import: "采购导入", purchase_cancel: "撤销采购", packing_confirm: "装箱确认", packing_cancel: "撤销装箱",
+          packing_sp_update: "装箱 SP 映射", reconciliation_adjust: "对账调整", inventory_import: "历史库存补录", inventory_cancel: "撤销库存补录", supplier_rename: "供应商更名" },
+        },
+        contextTitle: "当前设备与权限", previousDevice: "上次确认的设备",
+        enrollmentTitle: "设备接入与身份凭据",
+        enrollmentHint: "自动识别不配置模型凭据或网页登录；需要这些能力时，请完成设备接入。",
+        server: "公司服务器", device: "当前设备", skills: "可用技能", features: "桌面功能",
+        services: "业务服务", actions: "ERP 操作", unknown: "待查询", empty: "未授权",
+        refresh: "刷新权限", confirm: "确认使用当前设备",
+        changed: "当前网络设备身份已变化，原权限已清空。请确认后重新查询；此操作不转移凭据或历史数据。",
+        checked: "最近验证", loginMissing: "已有功能授权；网页登录仍需配置设备身份凭据。",
         status: {
-          pending_verification: "待服务器验证，当前不开放仓库 Skill",
-          denied: "设备权限查询被拒绝",
-          error: "Skill 权限查询失败",
-          verified: "已由服务器验证",
-          cached: "正在沿用最近一次验证快照",
-          unassigned: "服务器尚未分配权限，当前不开放仓库 Skill"
+          pending_verification: "待验证",
+          denied: "查询被拒绝",
+          error: "查询失败",
+          verified: "已验证",
+          cached: "使用缓存",
+          unassigned: "未分配权限"
         }
       },
       shortcuts: {
@@ -883,7 +903,7 @@ export type UiText = typeof ZH_TEXT;
 export const UI_TEXT: Record<Language, UiText> = {
   zh: ZH_TEXT,
   en: {
-    updates: {title:"App update",update:"Update",check:"Check for updates",downloading:"Downloading",verifying:"Verifying update",installing:"Preparing restart",checking:"Checking…",noUpdate:"No updates available",paused:"Updates paused",details:"Update failed · Details",failed:"Update failed",retry:"Retry",close:"Close",restart:"Restart and update",confirm:"LXE will close and restart. Finish all running tasks before installing."},
+    updates: {title:"App update",update:"Update",check:"Check for updates",downloading:"Downloading",verifying:"Verifying update",installing:"Preparing restart",checking:"Checking…",noUpdate:"No updates available",paused:"Updates paused",details:"Update failed · Details",failed:"Update failed",retry:"Retry",close:"Close",later:"Later",restart:"Restart and update",confirm:"LXE will close and restart. Finish all running tasks before installing."},
     userSkills: {
       add: "Add skill", userDirectory: "User directory", use: "Use in conversation",
       delete: "Move to recycle folder", disabled: "Disabled", unavailable: "Unavailable",
@@ -1557,7 +1577,7 @@ export const UI_TEXT: Record<Language, UiText> = {
         themeAria: "Appearance theme"
       },
       cloud: {
-        description: "Connect to the company intranet and enable hourly cloud sync.",
+        description: "View this device’s permissions and manage enrollment and cloud access.",
         unconfiguredBadge: "Not configured",
         unsupportedBadge: "Unsupported platform",
         unsupportedHint: "Use the Windows 10/11 x64 installer or the Apple Silicon Mac development build.",
@@ -1609,13 +1629,33 @@ export const UI_TEXT: Record<Language, UiText> = {
           version: "Version",
           unassigned: "Unassigned",
           labelLocale: "en-US",
+          details: "Permission details", errorDetails: "View error details", assignmentVersion: "Permission assignment version", profileRevision: "Published profile version",
+          allSkills: "All skills", allFeatures: "All desktop features", allServices: "All business services", allActions: "All actions",
+          notes: {
+            verified: "", cached: "This refresh did not update permissions. Using the last verified result.", pending_verification: "No verified permissions yet. Skill access is awaiting verification.",
+            denied: "The permission query was denied. Local grants have been cleared.", error: "No valid query result was received. View error details or retry.", unassigned: "The server has not assigned a profile. No skills are available.",
+          },
+          labels: {
+            skills: { amazon_operations: "Amazon Operations", shopee_operations: "Shopee Operations", ziniao_browser: "ZiNiao Browser" },
+            features: { erp_dashboard: "FBA ERP" }, services: { erp: "ERP", mabang_read: "Mabang queries", saihu: "Saihu" },
+            actions: { purchase_import: "Import purchases", purchase_cancel: "Cancel purchases", packing_confirm: "Confirm packing", packing_cancel: "Cancel packing",
+            packing_sp_update: "Packing SP mapping", reconciliation_adjust: "Adjust reconciliation", inventory_import: "Import historical inventory", inventory_cancel: "Cancel inventory import", supplier_rename: "Rename suppliers" },
+          },
+          contextTitle: "Current device and permissions", previousDevice: "Last confirmed device",
+          enrollmentTitle: "Device enrollment and identity credentials",
+          enrollmentHint: "Discovery does not configure model credentials or web login. Complete enrollment when those capabilities are needed.",
+          server: "Company server", device: "Current device", skills: "Skills", features: "Desktop features",
+          services: "Business services", actions: "ERP actions", unknown: "Awaiting query", empty: "No grants",
+          refresh: "Refresh permissions", confirm: "Confirm current device",
+          changed: "The network device identity changed. Previous grants were cleared. Confirm to query again; credentials and historical data are not transferred.",
+          checked: "Last verified", loginMissing: "Feature access is granted; web login still requires device identity credentials.",
           status: {
-            pending_verification: "Awaiting server verification; repository Skills are unavailable",
-            denied: "Device permission query denied",
-            error: "Skill permission query failed",
-            verified: "Verified by the server",
-            cached: "Using the most recently verified snapshot",
-            unassigned: "No server profile is assigned; repository Skills are unavailable"
+            pending_verification: "Awaiting verification",
+            denied: "Query denied",
+            error: "Query failed",
+            verified: "Verified",
+            cached: "Using cache",
+            unassigned: "No profile assigned"
           }
         },
         shortcuts: {

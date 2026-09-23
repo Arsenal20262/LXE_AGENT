@@ -34,6 +34,23 @@ describe("skill context", () => {
     }
   });
 
+  test("does not reinterpret a live legacy amazon_replenish grant as replenishment", () => {
+    const source = repositoryRoot(import.meta.dir);
+    const catalog = new SkillCatalog(source, join(source, "missing-user"), { sharedSkillsRoot: false });
+    const snapshot = catalog.snapshot({
+      allowedTypes: new Set(["amazon_replenish", "amazon_operations"]),
+    });
+
+    for (const name of [
+      "yacang-export-workflow-map",
+      "zhihui-tms-product-export",
+      "replenishment-workflow-map",
+      "shangman-goods-export-workflow-map",
+    ]) {
+      expect(snapshot.names).not.toContain(name);
+    }
+  });
+
   test("discovers the Shangman export skill under its production permission type", () => {
     const source = repositoryRoot(import.meta.dir);
     const skills = new SkillCatalog(source, join(source, "missing-user"), { sharedSkillsRoot: false }).list();

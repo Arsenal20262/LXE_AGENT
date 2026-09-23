@@ -1,3 +1,5 @@
+import { companyServerUrl } from "./company-server";
+import type { DesktopObservedDevice } from "@lxe/desktop-protocol";
 import { parseManagedManifest, managedTargetKey, type ManagedLlmState } from "@lxe/core";
 import { CloudHttpError, cloudErrorMessage, limitCloudText, parseCloudError } from "./cloud-errors";
 import { randomUUID } from "node:crypto";
@@ -25,6 +27,7 @@ import { wireGuardTunnelFromEnrollment } from "./wireguard-types";
 import {
   legacySnapshotCanUpgrade,
   parseDeviceContext,
+  sameObservedDevice,
   permissionSnapshotsEqual,
 } from "./cloud-permissions";
 import { CloudContextError, contextDiagnostic, type CloudContextQuery } from "./cloud-context";
@@ -109,6 +112,8 @@ export class DesktopCloudService {
   private lastCheckedAt = 0;
   private permissionSnapshot: DesktopCloudPermissionSnapshot | null;
   private permissionFresh = false;
+  private pendingDevice: DesktopObservedDevice | null = null;
+  private confirmation: Promise<DesktopCloudState> | undefined;
   private permissionError = "";
   private permissionFailure: "denied" | "error" | undefined;
   private contextController: AbortController | undefined;
@@ -172,6 +177,14 @@ export class DesktopCloudService {
       dependency_error: this.dependencyError,
       ...permission,
       permission_error: this.permissionError,
+      device_context: {
+        server_url: companyServerUrl(cloud),
+        device: switching ? null : this.options.config.cloudObservedDevice(),
+        pending_device: switching ? null : this.pendingDevice,
+        skill_types: switching ? [] : [...this.allowedSkillTypes()],
+        server_capabilities: switching ? null : this.permissionSnapshot?.server_capabilities ?? null,
+        erp_actions: switching ? null : this.permissionSnapshot?.erp_actions ?? null,
+      },
     };
   }
 
@@ -180,6 +193,9 @@ export class DesktopCloudService {
   }
 
   async erpDashboardUrl(): Promise<string> {
+    if (!this.options.config.cloudConfiguration().managed && this.permissionSnapshot?.desktop_features.some(name => name === "erp_dashboard" || name === "*")) {
+      throw new Error("ERP permission is granted; device login credentials are not configured / 已有 ERP 权限，尚未配置设备登录凭据");
+    }
     const state = this.state();
     resolveCloudDestinationUrl({
       configured: state.configured, connection: state.connection,
@@ -225,7 +241,7 @@ export class DesktopCloudService {
 
   start(): Promise<DesktopCloudState> {
     this.stopped = false;
-    if ((this.options.supported || this.options.config.cloudConfiguration().managed) && this.probeTimer === undefined) {
+    if (this.probeTimer === undefined) {
       this.probeTimer = this.clock.setInterval(() => {
         void this.check();
       }, Math.max(1, Math.trunc(this.options.probeIntervalMs ?? 60_000)));
@@ -244,7 +260,7 @@ export class DesktopCloudService {
     this.probeTimer = undefined;
     for (const controller of this.controllers) controller.abort(new Error("cloud service stopped"));
     const probe = this.probe;
-    await Promise.allSettled([probe, this.round].filter(Boolean));
+    await Promise.allSettled([probe, this.round, this.confirmation].filter(Boolean));
   }
 
   check(): Promise<DesktopCloudState> {
@@ -281,7 +297,8 @@ export class DesktopCloudService {
   activate(input: DesktopCloudActivationInput): Promise<DesktopCloudState> {
     if (this.activation) return this.activation;
     this.cancelContext();
-    const previousProbe = this.round ?? this.probe;
+    this.pendingDevice = null;
+    const previousProbe = this.confirmation ?? this.round ?? this.probe;
     let tracked: Promise<DesktopCloudState>;
     tracked = Promise.resolve().then(async () => {
       if (previousProbe) await previousProbe.catch(() => undefined);
@@ -302,6 +319,7 @@ export class DesktopCloudService {
 
   private checkConnection(showProgress: boolean): Promise<DesktopCloudState> {
     if (this.activation) return this.activation;
+    if (this.confirmation) return this.confirmation;
     if (this.round) return this.round;
     const tracked = Promise.allSettled([this.checkIdentityConnection(showProgress), this.syncSkillPermission()])
       .then(() => this.state()).finally(() => { if (this.round === tracked) this.round = undefined; });
@@ -309,9 +327,25 @@ export class DesktopCloudService {
     return tracked;
   }
 
-  private async syncSkillPermission(): Promise<void> {
+  confirmDevice(): Promise<DesktopCloudState> {
+    if (this.confirmation) return this.confirmation;
+    if (this.activation || this.options.config.cloudConfiguration().managed || !this.pendingDevice) return Promise.resolve(this.state());
+    const expected = { ...this.pendingDevice };
+    this.cancelContext();
+    const previous = this.round;
+    const work = Promise.resolve().then(async () => {
+      if (previous) await previous;
+      if (!this.stopped && !this.activation && !this.options.config.cloudConfiguration().managed) await this.syncSkillPermission(expected);
+      return this.state();
+    }).finally(() => { if (this.confirmation === work) this.confirmation = undefined; });
+    this.confirmation = work;
+    return work;
+  }
+
+  private async syncSkillPermission(confirmedDevice?: DesktopObservedDevice): Promise<void> {
     const cloud = this.options.config.cloudConfiguration();
-    if (this.stopped || !cloud.managed || cloud.switch_in_progress) return;
+    const serverUrl = companyServerUrl(cloud);
+    if (this.stopped || !serverUrl || cloud.switch_in_progress) return;
     this.cancelContext();
     const generation = this.contextGeneration;
     const controller = new AbortController();
@@ -319,15 +353,25 @@ export class DesktopCloudService {
     const current = () => {
       const latest = this.options.config.cloudConfiguration();
       return !this.stopped && generation === this.contextGeneration && !latest.switch_in_progress
-        && latest.managed && latest.device_id === cloud.device_id && latest.vpn_ip === cloud.vpn_ip
+        && latest.managed === cloud.managed && latest.device_id === cloud.device_id && latest.vpn_ip === cloud.vpn_ip
         && latest.data_server_url === cloud.data_server_url;
     };
     try {
       if (!this.options.contextClient) throw new CloudContextError("Device permission CLI is not configured", "cloud_context_unavailable");
-      const value = await this.options.contextClient.query(cloud.data_server_url, controller.signal);
+      const value = await this.options.contextClient.query(serverUrl, controller.signal);
       if (!current()) return;
-      const next = parseDeviceContext(value, cloud.device_id, cloud.vpn_ip, Math.floor(this.now() / 1_000));
+      const next = parseDeviceContext(value, cloud.managed ? cloud.device_id : undefined, cloud.managed ? cloud.vpn_ip : undefined, Math.floor(this.now() / 1_000));
+      const observed = { ...next.observed_device!, server_url: serverUrl };
+      next.observed_device = observed;
+      const previousDevice = this.options.config.cloudObservedDevice();
+      if (!cloud.managed && (this.pendingDevice || (previousDevice && !sameObservedDevice(previousDevice, observed)))) {
+        if (!confirmedDevice || !sameObservedDevice(confirmedDevice, observed)) {
+          this.pendingDevice = observed;
+          throw new Error("Device context identity mismatch");
+        }
+      }
       await this.acceptPermission(next);
+      this.pendingDevice = null;
       if (!current()) return;
       this.permissionError = "";
       this.permissionFailure = undefined;
