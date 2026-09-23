@@ -52,7 +52,7 @@ export class DesktopConfigStore {
       options.secretEnvironment,
       llmConfigRoot,
     );
-    this.cloud = new DesktopCloudConfigService(repository, options.secretEnvironment);
+    this.cloud = new DesktopCloudConfigService(repository);
     this.setup.migrateModelCredentialStorage();
   }
 
@@ -131,11 +131,6 @@ export class DesktopConfigStore {
   completeCloudIdentityMigration(legacyToken: string, candidate: string): void {
     this.cloud.completeIdentityMigration(legacyToken, candidate);
   }
-  cloudBusinessCredential() { return this.cloud.businessCredential(); }
-  saveCloudBusinessCredential(value: { token: string; erp_token: string; expires_at: number }): void {
-    this.cloud.saveBusinessCredential(value);
-  }
-
   saveCloudEnrollment(input: DesktopCloudEnrollmentConfig): DesktopCloudConfiguration {
     return this.cloud.saveEnrollment(input);
   }
@@ -163,6 +158,8 @@ export class DesktopConfigStore {
   cloudWireGuardConfiguration(): WireGuardTunnelConfiguration | null {
     return this.cloud.wireGuardConfiguration();
   }
+
+  clearCloudPermissionSnapshot(): void { this.cloud.clearPermissionSnapshot(); }
 
   saveCloudPermissionSnapshot(
     snapshot: DesktopCloudPermissionSnapshot,

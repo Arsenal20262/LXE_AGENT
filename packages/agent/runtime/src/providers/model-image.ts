@@ -50,8 +50,9 @@ interface Candidate {
 const MAX_PIXELS = 40_000_000;
 const READ_MAX_WIDTH = 2_000;
 const READ_MAX_HEIGHT = 2_000;
-const READ_MAX_BYTES = Math.trunc(4.5 * 1024 * 1024);
-const READ_JPEG_QUALITY_STEPS = [85, 70, 55, 40] as const;
+// Budget the Base64 payload, not decoded bytes or the complete provider request.
+const READ_MAX_BASE64_BYTES = Math.trunc(4.5 * 1024 * 1024);
+const READ_JPEG_QUALITY_STEPS = [85, 80, 70, 55, 40] as const;
 const READ_SCALE_FACTORS = [0.75, 0.5, 0.35, 0.25] as const;
 const supportedFormats = new Set<Bun.Image.Format>(["jpeg", "png", "webp", "bmp", "gif"]);
 const knownErrorCodes = new Set<string>(MODEL_IMAGE_ERROR_CODES);
@@ -135,11 +136,7 @@ const fitSize = (width: number, height: number, maxWidth: number, maxHeight: num
   return [Math.max(1, Math.round(width * scale)), Math.max(1, Math.round(height * scale))];
 };
 
-const chooseSmallest = (candidates: Candidate[]): Candidate => {
-  const candidate = [...candidates].sort((left, right) => left.bytes.byteLength - right.bytes.byteLength)[0];
-  if (!candidate) throw new ModelImageError("ERR_IMAGE_ENCODE_FAILED", "no image candidate was encoded");
-  return candidate;
-};
+const base64ByteLength = (bytes: Uint8Array): number => 4 * Math.ceil(bytes.byteLength / 3);
 
 const outputInfo = (candidate: Candidate, original: ModelImageInfo): ModelImageInfo => ({
   mime: candidate.mediaType,
@@ -198,52 +195,35 @@ export class ModelImageProcessor {
     if (!original.animated
       && original.width <= READ_MAX_WIDTH
       && original.height <= READ_MAX_HEIGHT
-      && bytes.byteLength <= READ_MAX_BYTES) {
+      && base64ByteLength(bytes) < READ_MAX_BASE64_BYTES) {
       return { bytes, mediaType: original.mime as ModelImageResult["mediaType"], original, processed: { ...original } };
     }
 
     const [baseWidth, baseHeight] = fitSize(original.width, original.height, READ_MAX_WIDTH, READ_MAX_HEIGHT);
-    const initial: Candidate[] = [await this.encode(bytes, baseWidth, baseHeight, "png")];
-    if (!original.hasAlpha) initial.push(await this.encode(bytes, baseWidth, baseHeight, "jpeg", 80));
-    const fittingInitial = initial.filter((candidate) => candidate.bytes.byteLength <= READ_MAX_BYTES);
-    if (fittingInitial.length > 0) {
-      const candidate = chooseSmallest(fittingInitial);
-      return { bytes: candidate.bytes, mediaType: candidate.mediaType, original, processed: outputInfo(candidate, original) };
-    }
-    let smallest = chooseSmallest(initial);
-
-    if (!original.hasAlpha) {
-      for (const quality of READ_JPEG_QUALITY_STEPS) {
-        const candidate = await this.encode(bytes, baseWidth, baseHeight, "jpeg", quality);
-        if (candidate.bytes.byteLength < smallest.bytes.byteLength) smallest = candidate;
-        if (candidate.bytes.byteLength <= READ_MAX_BYTES) {
-          return { bytes: candidate.bytes, mediaType: candidate.mediaType, original, processed: outputInfo(candidate, original) };
-        }
-      }
-    }
-
-    for (const factor of READ_SCALE_FACTORS) {
+    let smallestBase64Bytes = Number.POSITIVE_INFINITY;
+    for (const factor of [1, ...READ_SCALE_FACTORS]) {
       const width = Math.max(1, Math.round(baseWidth * factor));
       const height = Math.max(1, Math.round(baseHeight * factor));
-      if (original.hasAlpha) {
-        const candidate = await this.encode(bytes, width, height, "png");
-        if (candidate.bytes.byteLength < smallest.bytes.byteLength) smallest = candidate;
-        if (candidate.bytes.byteLength <= READ_MAX_BYTES) {
-          return { bytes: candidate.bytes, mediaType: candidate.mediaType, original, processed: outputInfo(candidate, original) };
-        }
-        continue;
+      // Preserve pixels when PNG fits, even if a lossy encoding would be smaller.
+      const png = await this.encode(bytes, width, height, "png");
+      const pngBase64Bytes = base64ByteLength(png.bytes);
+      smallestBase64Bytes = Math.min(smallestBase64Bytes, pngBase64Bytes);
+      if (pngBase64Bytes < READ_MAX_BASE64_BYTES) {
+        return { bytes: png.bytes, mediaType: png.mediaType, original, processed: outputInfo(png, original) };
       }
+      if (original.hasAlpha) continue;
       for (const quality of READ_JPEG_QUALITY_STEPS) {
         const candidate = await this.encode(bytes, width, height, "jpeg", quality);
-        if (candidate.bytes.byteLength < smallest.bytes.byteLength) smallest = candidate;
-        if (candidate.bytes.byteLength <= READ_MAX_BYTES) {
+        const candidateBase64Bytes = base64ByteLength(candidate.bytes);
+        smallestBase64Bytes = Math.min(smallestBase64Bytes, candidateBase64Bytes);
+        if (candidateBase64Bytes < READ_MAX_BASE64_BYTES) {
           return { bytes: candidate.bytes, mediaType: candidate.mediaType, original, processed: outputInfo(candidate, original) };
         }
       }
     }
     throw new ModelImageError(
       "ERR_IMAGE_OUTPUT_TOO_LARGE",
-      `processed image remains above ${READ_MAX_BYTES} bytes (smallest=${smallest.bytes.byteLength})`,
+      `processed image must be below ${READ_MAX_BASE64_BYTES} Base64 bytes (smallest=${smallestBase64Bytes} Base64 bytes)`,
     );
   }
 

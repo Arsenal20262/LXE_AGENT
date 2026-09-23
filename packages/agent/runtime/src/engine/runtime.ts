@@ -1,3 +1,4 @@
+import { normalizeToolResultImages } from "../tooling/tool-result-images";
 import { contextFingerprint } from "./context-meter";
 import { turnAbortedMessage } from "./turn-aborted";
 import { captureEnvironment, environmentChanged, environmentMessage } from "./environment-context";
@@ -746,9 +747,9 @@ export class TypeScriptAgentRuntime implements AgentRuntime {
           await finalAnswerStreamer?.pushToolStart(call);
           let toolStatus: "success" | "error" = "success";
           let toolDisplayStatus: import("@lxe/protocol").ToolStepStatus = "success";
-          let toolDisplayOutput: { result?: unknown; error?: unknown } | undefined;
+          let toolDisplayOutput: { result?: unknown; error?: unknown; image_view?: import("@lxe/protocol").ToolStep["image_view"] } | undefined;
           try {
-            const result = await this.options.tools.execute(call.name, call.arguments, {
+            const executed = await this.options.tools.execute(call.name, call.arguments, {
               handle,
               platform: String(job.source.platform ?? "").trim(),
               session_id: job.session_id,
@@ -760,6 +761,11 @@ export class TypeScriptAgentRuntime implements AgentRuntime {
               workspace,
               ...(workspaceLease ? { workspaceSearch: workspaceLease.search } : {}),
             });
+            const normalizedImages = await normalizeToolResultImages(executed.content, handle.signal);
+            const result = { ...executed, content: normalizedImages.content };
+            for (const failure of normalizedImages.failures) {
+              this.logger.warn("tool_image_processing_failed", { tool: call.name, tool_call_id: call.id, image_index: failure.imageIndex, error: failure.error });
+            }
             if (result.state_patch && Object.keys(result.state_patch).length > 0) {
               await this.options.store.patchSessionState(job.session_id, result.state_patch);
             }
@@ -805,6 +811,20 @@ export class TypeScriptAgentRuntime implements AgentRuntime {
             };
             toolDisplayStatus = result.display_status ?? toolStatus;
             toolDisplayOutput = { result: result.content };
+            if (call.name === "read" && definition?.source !== "mcp" && result.image_view
+              && !isCancelled(handle) && toolDisplayStatus === "success"
+              && result.content.some((block) => block.type === "image")) {
+              const view = { ...result.image_view,
+                view_id: `iv_${Buffer.from(JSON.stringify([job.job_id, call.id])).toString("base64url")}`,
+                turn_id: job.job_id, tool_call_id: call.id, ts: Date.now() / 1_000,
+              };
+              try {
+                await this.options.store.appendImageView(job.session_id, view, result.content.find(block => block.type === "image"));
+                toolDisplayOutput.image_view = { view_id: view.view_id, name: view.name, media_type: view.media_type };
+              } catch (error) {
+                this.logger.warn("image_view_persistence_failed", { session_id: job.session_id, tool_call_id: call.id, error });
+              }
+            }
           } catch (cause) {
             usage.errors += 1;
             toolStatus = "error";
@@ -954,6 +974,7 @@ export class TypeScriptAgentRuntime implements AgentRuntime {
       }
       return this.outcome("error", reply, inputTokens, outputTokens, toolCalls);
     } finally {
+      this.options.store.clearPendingImageViews(job.session_id, job.job_id);
       if (typingStarted) {
         await this.typingBestEffort({
           session_id: job.session_id,

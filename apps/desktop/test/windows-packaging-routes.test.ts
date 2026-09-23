@@ -58,7 +58,7 @@ describe("Windows desktop packaging routes", () => {
     expect(wrapper).toMatch(/ValidateSet\("Nsis", "Unpacked"\)/u);
     expect(wrapper).toMatch(/\[string\]\$PackageTarget = "Nsis"/u);
     expect(wrapper).toContain(
-      '$versionSelector = Join-Path $repositoryRoot "apps\\desktop\\scripts\\select-desktop-version.ts"',
+      '$versionSelector = if ($PackageTarget -eq "Nsis") { Join-Path $repositoryRoot "scripts\\desktop-release.ts" } else { Join-Path $repositoryRoot "apps\\desktop\\scripts\\select-desktop-version.ts" }',
     );
     expect(wrapper).toContain(
       '$versionAction = if ($PackageTarget -eq "Nsis") { "select" } else { "current" }',
@@ -67,7 +67,7 @@ describe("Windows desktop packaging routes", () => {
     expect(wrapper).toContain('"Load desktop product version"');
     expect(wrapper).toContain('$env:LXE_DESKTOP_PRODUCT_VERSION = [string]$selection.selected_version');
     expect(wrapper).toMatch(
-      /"Enforce desktop resource size budgets"[\s\S]+if \(\$PackageTarget -eq "Nsis"\) \{[\s\S]+& \$bunCommand\.Source \$versionSelector "commit"/u,
+      /"Enforce desktop resource size budgets"[\s\S]+if \(\$PackageTarget -eq "Nsis"\) \{[\s\S]+& \$bunCommand\.Source \$versionSelector "candidate"/u,
     );
     expect(wrapper).toContain('if ($PackageTarget -eq "Unpacked")');
     expect(wrapper).toContain('"dist\\desktop-unpacked"');

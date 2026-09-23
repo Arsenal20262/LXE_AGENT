@@ -2,7 +2,7 @@
 import type { UiText } from "./i18n";
 import type { SkillPayload } from "../api/payloads";
 
-const SKILL_TYPE_ORDER = ["default", "amazon_fba", "amazon_replenish", "amazon_operations", "yacang_operations"];
+const SKILL_TYPE_ORDER = ["default", "amazon_fba", "replenishment", "amazon_replenish", "amazon_operations", "yacang_operations"];
 
 export function formatDate(value: number): string {
   if (!value) {
@@ -70,6 +70,7 @@ export function skillTypeLabel(type: string, t: UiText): string {
   const labels: Record<string, string> = {
     default: t.skillTypes.default,
     amazon_fba: t.skillTypes.amazon_fba,
+    replenishment: t.skillTypes.replenishment,
     amazon_replenish: t.skillTypes.amazon_replenish,
     amazon_operations: t.skillTypes.amazon_operations,
     yacang_operations: t.skillTypes.yacang_operations
@@ -82,10 +83,10 @@ function skillTypeRank(type: string): number {
   return index >= 0 ? index : SKILL_TYPE_ORDER.length;
 }
 
-export function groupSkillsByType(skills: SkillPayload[], t: UiText): Array<{ type: string; label: string; skills: SkillPayload[] }> {
-  const groups = new Map<string, SkillPayload[]>();
+export function groupSkillsByType<T extends SkillPayload>(skills: T[], t: UiText, groupType: (skill: T) => string = skill => skill.type): Array<{ type: string; label: string; skills: T[] }> {
+  const groups = new Map<string, T[]>();
   for (const skill of skills) {
-    const type = String(skill.type || "").trim() || "uncategorized";
+    const type = String(groupType(skill) || "").trim() || "uncategorized";
     groups.set(type, [...(groups.get(type) || []), skill]);
   }
   return Array.from(groups.entries())

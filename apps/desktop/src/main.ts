@@ -1,3 +1,6 @@
+import { UpdateJournal } from "./main/update-journal";
+import { DesktopUpdateService, UpdateBusyError } from "./main/update-service";
+import { DesktopUpdateApi, ElectronUpdateInstaller } from "./main/update-electron";
 import { join } from "node:path";
 import {
   app,
@@ -45,6 +48,7 @@ import { DesktopCloudEnrollmentManager } from "./main/cloud-enrollment";
 import { resolveCloudDestinationUrl } from "./main/cloud-destinations";
 import { DesktopConfigStore } from "./main/config-store";
 import { attachmentThumbnail } from "./main/attachment-thumbnail";
+import { DesktopCloudContextClient } from "./main/cloud-context";
 import { DesktopCloudService } from "./main/desktop-cloud";
 import {
   ALL_DASHBOARD_DATA_DOMAINS,
@@ -145,7 +149,11 @@ let activeSyntheticPerformer: DesktopSyntheticPerformerService | undefined;
 let activeConversationAttachments: DesktopConversationAttachmentService | undefined;
 let removeCloudResumeListener: (() => void) | undefined;
 
+let activeUpdates: DesktopUpdateService | undefined;
+let updateShutdown = false;
+
 const shutdownApplication = (exitCode = 0): Promise<void> => {
+  activeUpdates?.stop();
   if (shutdownPromise) return shutdownPromise;
   quitting = true;
   shutdownPromise = (async () => {
@@ -226,7 +234,11 @@ async function bootstrap(): Promise<void> {
       if (!browserWindow.isDestroyed()) browserWindow.webContents.send(IPC_CHANNELS.statusChanged, health);
     }
   };
+  let updateNetworkReady = false;
   const broadcastCloudState = (state: DesktopCloudState): void => {
+    const connected = state.connection === "connected";
+    if (connected && !updateNetworkReady) void activeUpdates?.check();
+    updateNetworkReady = connected;
     for (const browserWindow of applicationWindows()) {
       if (!browserWindow.isDestroyed()) browserWindow.webContents.send(IPC_CHANNELS.cloudStateChanged, state);
     }
@@ -346,9 +358,7 @@ async function bootstrap(): Promise<void> {
     enrollments: new DesktopCloudEnrollmentManager(),
     logger: cloudLogger,
     provisioner: cloudProvisioner,
-    onRuntimeCredentialChanged: async () => {
-      if (gateway.health().gateway !== "stopped") await gateway.restart();
-    },
+    contextClient: new DesktopCloudContextClient({ pythonPath: paths.managedPythonPath, cwd: paths.dataRoot }),
     onConfigured: async () => {
       await gateway.restart();
       invalidations.push(ALL_DASHBOARD_DATA_DOMAINS);
@@ -397,7 +407,50 @@ async function bootstrap(): Promise<void> {
   const checkCloudAfterResume = (): void => { void cloud.check(); };
   powerMonitor.on("resume", checkCloudAfterResume);
   removeCloudResumeListener = () => powerMonitor.removeListener("resume", checkCloudAfterResume);
+  const updateSupported = packagedRuntime && process.platform === "win32" && process.arch === "x64";
+  const updateJournal = new UpdateJournal(join(paths.dataRoot, "updates", "last-attempt.json"));
+  const lastAttempt = updateJournal.previous(app.getVersion());
+  const updates = new DesktopUpdateService({
+    ...(lastAttempt ? {lastAttempt} : {}),
+    recordAttempt: release => updateJournal.start(release.version, release.build_id),
+    recordError: error => updateJournal.error(error),
+    supported: updateSupported,
+    configured: () => Boolean(config.cloudConfiguration().data_server_url) && cloud.state().connection === "connected",
+    api: new DesktopUpdateApi(() => config.cloudConfiguration().data_server_url, app.getVersion()),
+    installer: updateSupported ? new ElectronUpdateInstaller(error => activeUpdates?.recordFailure(error)) : {
+      download: async () => { throw new Error("Updates unsupported"); },
+      verify: async () => {}, install: () => {},
+    },
+    beginInstall: () => {
+      const task = syntheticPerformer.current();
+      if (task?.state === "running" || task?.state === "queued") throw new UpdateBusyError("仍有任务正在运行，请结束后再次点击更新");
+      const release = gateway.beginUpdate();
+      updateShutdown = true;
+      return () => { updateShutdown = false; release(); };
+    },
+    cleanup: async () => {
+      try {
+        await cloud.stop();
+        await syntheticPerformer.stop();
+        await gateway.stop(true);
+        await authBrowserHost.stop();
+        shutdownComplete = true;
+        quitting = true;
+        activeUpdates?.stop();
+        await logging.close();
+      } catch (error) {
+        quitting = false;
+        shutdownComplete = false;
+        throw new Error("更新前退出清理失败，请手动重启应用后重试：" + String(error));
+      }
+    },
+  });
+  activeUpdates = updates;
+  updates.start();
   const ipcApplication: DesktopIpcApplication = {
+    getUpdateState: () => updates.state(),
+    checkForUpdate: () => updates.check(),
+    installUpdate: () => updates.install(),
     // The renderer paints its own surface but not the frame around it. macOS
     // draws its controls from the system appearance and needs nothing; Windows
     // holds whatever colour it was handed at construction, so the caption strip
@@ -487,7 +540,10 @@ async function bootstrap(): Promise<void> {
     registerSyntheticPerformerSources: (kind, selectedPaths) =>
       syntheticPerformer.registerSources(kind, selectedPaths),
     registerSyntheticPerformerOutput: (path) => syntheticPerformer.registerOutput(path),
-    startSyntheticPerformerTask: (input) => syntheticPerformer.start(input),
+    startSyntheticPerformerTask: (input) => {
+      if (updateShutdown) throw new Error("正在准备更新，暂时不能启动任务");
+      return syntheticPerformer.start(input);
+    },
     getSyntheticPerformerTask: () => syntheticPerformer.current(),
     cancelSyntheticPerformerTask: (taskId) => syntheticPerformer.cancel(taskId),
     syntheticPerformerOutputPath: (taskId) => syntheticPerformer.outputPath(taskId),
@@ -497,9 +553,9 @@ async function bootstrap(): Promise<void> {
     inputAssetSlotDirectory: (slot) => inputAssets.directoryFor(slot),
     registerConversationFiles: (selectedPaths) => conversationAttachments.register(selectedPaths),
     registerPastedConversationFiles: (input) => conversationAttachments.registerPaste(input),
-    previewDraftConversationFile: async (attachmentId) => {
+    previewDraftConversationFile: async (attachmentId, variant = "expanded") => {
       const [attachment] = conversationAttachments.resolve([attachmentId]);
-      return { data_url: await attachmentThumbnail(attachment!.path, 1600) };
+      return { data_url: await attachmentThumbnail(attachment!.path, variant === "thumbnail" ? 320 : 1600) };
     },
     discardConversationFiles: (attachmentIds) => conversationAttachments.discard(attachmentIds),
   };

@@ -12,7 +12,6 @@ export function effectiveDesktopSecrets(
     zhihui_tms_password: text(environment.ZHIHUI_TMS_PASSWORD),
     feishu_app_secret: text(environment.FEISHU_APP_SECRET),
     shangman_processed_password: text(environment.LXE_SHANGMAN_PROCESSED_PASSWORD),
-    shangman_basic_auth: text(environment.LXE_SHANGMAN_BASIC_AUTH),
     data_server_api_key: text(environment.LXE_DATA_SERVER_API_KEY),
     data_server_fallback_api_key: text(environment.LXE_DATA_SERVER_FALLBACK_API_KEY),
     erp_api_key: text(environment.LXE_ERP_API_KEY),

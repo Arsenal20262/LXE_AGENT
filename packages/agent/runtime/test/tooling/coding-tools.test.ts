@@ -965,10 +965,44 @@ describe("native coding tools", () => {
     const registry = new ToolRegistry();
     const processes = registerCodingTools(registry, {});
     const result = await registry.execute("read", { path: "screenshot.data" }, context(root));
+    expect(result.image_view).toEqual({ path: join(root, "screenshot.data"), name: "screenshot.data", media_type: "image/png" });
     expect(result.content[0]?.text).toContain("Read image file [image/png]");
     expect(result.content[0]?.text).toContain("Multiply coordinates");
     expect(result.content[1]).toMatchObject({ type: "image", source: { media_type: "image/png" } });
     await processes.stop();
+  });
+
+  test("returns a decodable PNG with a bounded Base64 payload and accurate coordinates after resizing", async () => {
+    const root = mkdtempSync(join(tmpdir(), "lxe-coding-image-resize-"));
+    roots.push(root);
+    const fixture = readFileSync(join(projectRoot,
+      "skills/replenishment-amazon-restock-inventory-snapshot/assets/amazon_restock_inventory_download_step_1_menu.jpg"));
+    const oversized = await new Bun.Image(fixture).resize(2_600, 2_600, { fit: "inside" }).jpeg({ quality: 95 }).bytes();
+    const original = await new Bun.Image(oversized).metadata();
+    writeFileSync(join(root, "screenshot.data"), oversized);
+    const registry = new ToolRegistry();
+    const processes = registerCodingTools(registry, {});
+    try {
+      const result = await registry.execute("read", { path: "screenshot.data" }, context(root));
+      const image = result.content[1]!;
+      expect(image.type).toBe("image");
+      const source = image.source as JsonObject;
+      expect(source.type).toBe("base64");
+      expect(source.media_type).toBe("image/png");
+      expect(typeof source.data).toBe("string");
+      const data = String(source.data);
+      expect(data.length).toBeLessThan(4.5 * 1024 * 1024);
+      const decoded = await new Bun.Image(Buffer.from(data, "base64")).png().bytes();
+      const output = await new Bun.Image(decoded).metadata();
+      expect(Math.max(output.width, output.height)).toBeLessThanOrEqual(2_000);
+      expect(Math.max(output.width, output.height)).toBeGreaterThan(1_900);
+      expect(result.content[0]).toEqual({
+        type: "text",
+        text: `Read image file [image/png]\n[Image: original ${original.width}x${original.height}, displayed at ${output.width}x${output.height}. Multiply coordinates by ${(original.width / output.width).toFixed(2)} to map to original image.]`,
+      });
+    } finally {
+      await processes.stop();
+    }
   });
 
   test("rejects unknown-extension binary files by content", async () => {
@@ -981,10 +1015,86 @@ describe("native coding tools", () => {
     await processes.stop();
   });
 
+  for (const lineCount of [150, 3_000]) {
+    test(`reads all ${lineCount} lines through contiguous character-budget pages`, async () => {
+      const root = mkdtempSync(join(tmpdir(), "lxe-coding-read-pages-"));
+      roots.push(root);
+      const lines = Array.from({ length: lineCount }, (_, index) => `line-${index + 1} 中文🙂 ${"x".repeat(190)}`);
+      writeFileSync(join(root, "pages.txt"), `${lines.join("\r\n")}\r\n`);
+      const registry = new ToolRegistry();
+      const processes = registerCodingTools(registry, {});
+      try {
+        let offset = 1;
+        let readLines = 0;
+        while (offset <= lineCount) {
+          const result = await registry.execute("read", { path: "pages.txt", offset }, context(root));
+          const output = String(result.content[0]?.text);
+          expect(output.length).toBeLessThanOrEqual(10_000);
+          const rows = output.split("\n").filter((line) => /^\s*\d+\t/u.test(line));
+          expect(rows.length).toBeGreaterThan(0);
+          expect(rows).toEqual(lines.slice(offset - 1, offset - 1 + rows.length)
+            .map((line, index) => `${String(offset + index).padStart(6, " ")}\t${line}`));
+          readLines += rows.length;
+          const next = output.match(/使用 offset=(\d+) 继续/u);
+          if (!next) break;
+          expect(Number(next[1])).toBe(offset + rows.length);
+          offset = Number(next[1]);
+        }
+        expect(readLines).toBe(lineCount);
+        await expect(registry.execute("read", { path: "pages.txt", offset: lineCount + 1 }, context(root)))
+          .rejects.toThrow(`Offset ${lineCount + 1} is beyond end of file (${lineCount} lines total)`);
+      } finally { await processes.stop(); }
+    });
+  }
+
+  test("pages small files by line limit, handles EOF and empty files, and rejects out-of-range reads", async () => {
+    const root = mkdtempSync(join(tmpdir(), "lxe-coding-read-limits-"));
+    roots.push(root);
+    writeFileSync(join(root, "small.txt"), "one\ntwo\nthree\n");
+    writeFileSync(join(root, "empty.txt"), "");
+    const registry = new ToolRegistry();
+    const processes = registerCodingTools(registry, {});
+    try {
+      expect((await registry.execute("read", { path: "small.txt", limit: 2 }, context(root))).content)
+        .toEqual([{ type: "text", text: "     1\tone\n     2\ttwo\n... (更多内容，使用 offset=3 继续)" }]);
+      expect((await registry.execute("read", { path: "small.txt", offset: 3, limit: 1 }, context(root))).content)
+        .toEqual([{ type: "text", text: "     3\tthree" }]);
+      expect((await registry.execute("read", { path: "empty.txt" }, context(root))).content)
+        .toEqual([{ type: "text", text: "" }]);
+      await expect(registry.execute("read", { path: "small.txt", offset: 4 }, context(root)))
+        .rejects.toThrow("Offset 4 is beyond end of file (3 lines total)");
+      await expect(registry.execute("read", { path: "empty.txt", offset: 2 }, context(root)))
+        .rejects.toThrow("Offset 2 is beyond end of file (0 lines total)");
+      writeFileSync(join(root, "unread.txt"), "one\n");
+      await expect(registry.execute("read", { path: "unread.txt", offset: 2 }, context(root))).rejects.toThrow("beyond end of file");
+      await expect(registry.execute("edit", {
+        path: "unread.txt", edits: [{ oldText: "one", newText: "two" }],
+      }, context(root))).rejects.toThrow("请先用 read");
+    } finally { await processes.stop(); }
+  });
+
+  test("bounds oversized lines in small files without skipping their unread remainder", async () => {
+    const root = mkdtempSync(join(tmpdir(), "lxe-coding-read-small-long-line-"));
+    roots.push(root);
+    writeFileSync(join(root, "long.txt"), `first\n${"x".repeat(15_000)}\nlast\n`);
+    const registry = new ToolRegistry();
+    const processes = registerCodingTools(registry, {});
+    try {
+      expect((await registry.execute("read", { path: "long.txt" }, context(root))).content)
+        .toEqual([{ type: "text", text: "     1\tfirst\n... (更多内容，使用 offset=2 继续)" }]);
+      const result = await registry.execute("read", { path: "long.txt", offset: 2 }, context(root));
+      const output = String(result.content[0]?.text);
+      expect(output.length).toBeLessThanOrEqual(10_000);
+      expect(output).toContain("第 2 行超过本次 9840 字符正文预算（含行号）");
+      expect(output).not.toContain("使用 offset=");
+      expect(output).not.toContain("last");
+    } finally { await processes.stop(); }
+  });
+
   test("reads a range from a large file without scanning to EOF", async () => {
     const root = mkdtempSync(join(tmpdir(), "lxe-coding-large-read-"));
     roots.push(root);
-    // ~2 MiB file (well above the 512 KiB small-file threshold), 20k lines.
+    // ~2 MiB file, 20k lines.
     const big = Array.from({ length: 20_000 }, (_unused, index) => `line-${index + 1} ${"x".repeat(90)}`).join("\n");
     writeFileSync(join(root, "big.txt"), `${big}\n`);
     const registry = new ToolRegistry();
@@ -1016,7 +1126,7 @@ describe("native coding tools", () => {
     const result = await registry.execute("read", { path: "giant.txt" }, context(root));
     const output = String(result.content[0]?.text ?? "");
     expect(output.length).toBeLessThanOrEqual(10_000);
-    expect(output).toContain("第 1 行超过 10000 字符读取上限");
+    expect(output).toContain("第 1 行超过本次 9840 字符正文预算（含行号）");
     expect(output).not.toContain("使用 offset=");
     await processes.stop();
   });

@@ -1,7 +1,7 @@
 ---
 name: zhihui-tms-product-export
 description: 用户当前轮明确提到“智汇”或“TMS”，且要求查询或导出销量、库存、入库、上架或商品数据时使用；这些语义都归入菲律宾商品全量导出。当前轮平台优先于历史 Context；不抢雅仓、上马印尼或马帮巴西请求，只说“菲律宾库存”时先澄清。
-type: amazon_replenish
+type: replenishment
 commands:
   - lxeskill tms philippines products-export preview
   - lxeskill tms philippines products-export execute

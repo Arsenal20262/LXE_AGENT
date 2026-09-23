@@ -2,6 +2,7 @@ import { parseManagedState, type ManagedLlmState } from "@lxe/core/managed-llm";
 import { parseJsonRpcEnvelope, parseJsonRpcJson, JsonRpcError,
   type JsonRpcId, type JsonRpcSuccess, type JsonRpcFailure, type JsonRpcResponse } from "./json-rpc";
 export * from "./json-rpc";
+export * from "./updates";
 import {
   desktopStreamBatchValidationError,
   validateAgentJob,
@@ -123,11 +124,17 @@ export type AgentCommandPayloads = {
   append_pending_event: { session_id: string; event: JsonObject };
   has_pending_events: { session_id: string };
   resolve_artifact: { session_id: string; artifact_id: string };
+  resolve_image_view: { session_id: string; view_id: string };
+  resolve_image_preview: { session_id: string; kind: "attachment" | "image_view"; id: string };
   resolve_attachment: { session_id: string; attachment_id: string };
   dashboard_call: AgentDashboardRpcCall;
   session_status: SessionStatusRequest;
   shutdown: Record<string, never>;
 };
+
+export type ConversationImagePreviewSource =
+  | { source: "history"; image: JsonObject }
+  | { source: "current_file"; path: string };
 
 export type AgentCommand = keyof AgentCommandPayloads;
 
@@ -355,7 +362,9 @@ export type DesktopCloudPermissionStatus =
   | "pending_verification"
   | "verified"
   | "cached"
-  | "unassigned";
+  | "unassigned"
+  | "denied"
+  | "error";
 
 export type DesktopCloudDependencyState =
   | "not_required"
@@ -390,6 +399,7 @@ export interface DesktopCloudState {
   dependency_state: DesktopCloudDependencyState;
   dependency_error: string;
   permission_status: DesktopCloudPermissionStatus;
+  permission_error?: string;
   permission_profile: DesktopPermissionProfile | null;
   permission_version: number;
   profile_revision: number;
@@ -497,7 +507,6 @@ export interface DesktopSetupState {
     tenant_id: string;
     username: string;
     password_configured: boolean;
-    basic_auth_configured: boolean;
     production_enabled: boolean;
   };
   logging: {
@@ -541,6 +550,8 @@ export type DesktopShangmanSetupInput =
       action: "save";
       tenant_id: string;
       username: string;
+      /** Preferred field; `processed_password` remains IPC compatibility only. */
+      password?: string;
       processed_password?: string;
       production_enabled?: boolean;
     };
@@ -548,11 +559,11 @@ export type DesktopShangmanSetupInput =
 export interface DesktopSetupInput {
   workspace_root: string;
   ziniao?: DesktopZiniaoSetupInput;
+  shangman?: DesktopShangmanSetupInput;
   mabang?: DesktopMabangSetupInput;
   yacang?: DesktopYacangSetupInput;
   zhihui_tms?: DesktopZhihuiTmsSetupInput;
   feishu?: DesktopFeishuSetupInput;
-  shangman?: DesktopShangmanSetupInput;
   logging?: {
     profile: DesktopLogProfile;
     retention_days: DesktopLogRetentionDays;
@@ -652,6 +663,9 @@ export interface LxeDesktopBridge {
   dashboard: DashboardTransport;
   desktop: {
     readonly platform: DesktopPlatform;
+    getUpdateState?(): Promise<import("./updates").DesktopUpdateState>;
+    checkForUpdate?(): Promise<import("./updates").DesktopUpdateState>;
+    installUpdate?(): Promise<import("./updates").DesktopUpdateState>;
     selectWorkspace(): Promise<string | null>;
     selectZiniaoApp(): Promise<string | null>;
     selectZiniaoWebDriverDirectory(): Promise<string | null>;
@@ -677,7 +691,7 @@ export interface LxeDesktopBridge {
     selectConversationFiles(): Promise<DesktopInputAttachmentPayload[]>;
     stageDroppedConversationFiles(files: File[]): Promise<DesktopInputAttachmentPayload[]>;
     stagePastedConversationFiles(files: File[]): Promise<DesktopDraftAttachmentPayload[]>;
-    previewDraftConversationFile(attachmentId: string): Promise<{ data_url: string }>;
+    previewDraftConversationFile(attachmentId: string, variant?: "thumbnail" | "expanded"): Promise<{ data_url: string }>;
     discardConversationFiles(attachmentIds: string[]): Promise<void>;
     startSyntheticPerformerTask(
       input: DesktopSyntheticPerformerTaskInput,
@@ -717,6 +731,8 @@ const agentCommands = new Set<AgentCommand>([
   "append_pending_event",
   "has_pending_events",
   "resolve_artifact",
+  "resolve_image_view",
+  "resolve_image_preview",
   "resolve_attachment",
   "dashboard_call",
   "session_status",
@@ -848,6 +864,15 @@ const validateRequestPayload = (command: AgentCommand, payload: Record<string, u
     case "resolve_artifact":
       requireText("session_id");
       requireText("artifact_id");
+      break;
+    case "resolve_image_preview":
+      requireText("session_id");
+      requireText("id");
+      if (payload.kind !== "attachment" && payload.kind !== "image_view") throw new Error("resolve_image_preview.kind must be attachment or image_view");
+      break;
+    case "resolve_image_view":
+      requireText("session_id");
+      requireText("view_id");
       break;
     case "resolve_attachment":
       requireText("session_id");

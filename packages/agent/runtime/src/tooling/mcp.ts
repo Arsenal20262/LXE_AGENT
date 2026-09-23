@@ -1,3 +1,4 @@
+import { saihuNativeFetch } from "./saihu-native-http";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -228,6 +229,16 @@ export class OfficialMcpConnector implements McpConnector {
   ) {}
 
   async connect(server: McpServerConfig, signal?: AbortSignal): Promise<McpConnection> {
+    const nativeSaihu = server.transport === "streamable-http" && server.name === "lxe-saihu";
+    const configurationError = "Company Saihu MCP requires X-LXE-Client: cli without credentials; update its configuration";
+    if (nativeSaihu && (server.bearerTokenEnvVar
+      || [...Object.keys(server.headers), ...Object.keys(server.envHeaders)].some(key => /^(authorization|cookie|proxy-authorization)$/iu.test(key)))) {
+      throw new Error(configurationError);
+    }
+    const headers = server.transport === "streamable-http" ? resolveMcpHttpHeaders(server, this.environment) : {};
+    if (nativeSaihu && !Object.entries(headers).some(([key, value]) => key.toLowerCase() === "x-lxe-client" && value === "cli")) {
+      throw new Error(configurationError);
+    }
     const client = this.clientFactory();
     const closeOnAbort = (): void => { void client.close(); };
     signal?.addEventListener("abort", closeOnAbort, { once: true });
@@ -239,7 +250,8 @@ export class OfficialMcpConnector implements McpConnector {
         ...(server.cwd ? { cwd: server.cwd } : {}),
       })
       : new StreamableHTTPClientTransport(new URL(server.url), {
-        requestInit: { headers: resolveMcpHttpHeaders(server, this.environment) },
+        requestInit: { headers },
+        ...(nativeSaihu ? { fetch: saihuNativeFetch(server.url) } : {}),
       });
     try {
       await client.connect(transport);

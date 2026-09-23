@@ -75,6 +75,34 @@ export function useUserQuestionActions() {
   return { answer: answer.mutateAsync, stop: stop.mutateAsync };
 }
 
+export function useDraftImagePreviewQuery(id: string, variant: "thumbnail" | "expanded", enabled = true) {
+  return useQuery({
+    queryKey: ["draft-image-preview", id, variant],
+    queryFn: async ({ signal }) => {
+      if (!window.lxe) throw new Error("Desktop bridge is unavailable");
+      const result = await window.lxe.desktop.previewDraftConversationFile(id, variant);
+      signal.throwIfAborted();
+      return result;
+    },
+    enabled, retry: false, staleTime: Infinity, gcTime: 0, refetchOnWindowFocus: false,
+  });
+}
+
+export function useImageViewPreviewQuery(
+  sessionId: string | undefined, viewId: string, variant: "thumbnail" | "expanded", enabled: boolean,
+) {
+  return useQuery({
+    queryKey: ["sessions", "image-view-preview", sessionId, viewId, variant],
+    queryFn: async ({ signal }) => {
+      const result = await callDashboard({ operation: "sessions.image_view.preview",
+        input: { session_id: sessionId!, view_id: viewId, variant } });
+      signal.throwIfAborted();
+      return result;
+    },
+    enabled: enabled && !!sessionId, retry: false, staleTime: Infinity, gcTime: 0, refetchOnWindowFocus: false,
+  });
+}
+
 export function useAttachmentPreviewQuery(
   sessionId: string | undefined, id: string, variant: "thumbnail" | "expanded", enabled: boolean,
 ) {
@@ -449,10 +477,7 @@ export function useUserSkillContentQuery(id: string, path: string) {
 export function useUserSkillMutation(onRecycled: (id: string, path: string) => void) {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: async ({ skill, action }: { skill: UserSkillPayload; action: "toggle" | "delete" }) => {
-      if (action === "delete") return callDashboard({ operation: "skills.user.delete", input: { id: skill.id, version: skill.version } });
-      await callDashboard({ operation: "skills.user.setEnabled", input: { id: skill.id, version: skill.version, enabled: !skill.enabled } });
-    },
+    mutationFn: (skill: UserSkillPayload) => callDashboard({ operation: "skills.user.delete", input: { id: skill.id, version: skill.version } }),
     onSuccess: result => { if (result) onRecycled(result.id, result.recycled_path); },
     onSettled: () => client.invalidateQueries({ queryKey: dashboardQueryKeys.skills.all }),
   });

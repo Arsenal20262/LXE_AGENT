@@ -44,7 +44,6 @@ test("v2 sync invalidates known changed keys before fetching and isolates failur
   const machine = resolveMachineIdentity(join(root, "db", "machine_identity.json"));
   config.saveCloudEnrollment({ deviceId: "fixture", deviceName: "Fixture", vpnIp: "10.88.0.2",
     dataServerUrl: "http://company.test", tunnelName: "", apiKey: "lxe_client_fixture.test-credential" });
-  config.saveCloudBusinessCredential({ token: `lxe_run_${"b".repeat(43)}`, erp_token: `lxe_erp_run_${"e".repeat(43)}`, expires_at: 4_000_000_000 });
   const fetched: string[] = []; const observations: number[] = [];
   const service = new DesktopCloudService({ dataRoot: root, supported: false, config,
     enrollments: new DesktopCloudEnrollmentManager(), logger, provisioner: { provision: async () => undefined }, onConfigured: async () => undefined,

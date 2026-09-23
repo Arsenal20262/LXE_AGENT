@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  validateDraftImagePreviewVariant,
   validateCloudActivationInput,
   validateCloudDestination,
   validateDashboardRpcCall,
@@ -187,7 +188,7 @@ describe("desktop IPC validation", () => {
         action: "save",
         tenant_id: "tenant-1",
         username: "user",
-        processed_password: "processed-password",
+        password: "processed-password",
       },
     });
   });
@@ -202,4 +203,21 @@ describe("desktop IPC validation", () => {
     expect(() => validateLocalModelCredentialInput({ provider: "deepseek", api_key: "" }))
       .toThrow("required");
   });
+});
+
+
+test("draft image previews default to expanded and reject unsupported variants", () => {
+  expect(validateDraftImagePreviewVariant(undefined)).toBe("expanded");
+  expect(validateDraftImagePreviewVariant("thumbnail")).toBe("thumbnail");
+  expect(validateDraftImagePreviewVariant("expanded")).toBe("expanded");
+  for (const invalid of [null, "original", { path: "/tmp/image.png" }]) {
+    expect(() => validateDraftImagePreviewVariant(invalid)).toThrow("variant must be");
+  }
+});
+
+test("Shangman IPC accepts credentials without a production switch and bounds secrets", () => {
+  const input = { workspace_root: "/workspace", shangman: { action: "save", tenant_id: "tenant", username: "user", password: "secret" } };
+  expect(validateSetupInput(input).shangman).toEqual(input.shangman);
+  expect(() => validateSetupInput({ ...input, shangman: { ...input.shangman, password: "x".repeat(16385) } })).toThrow();
+  expect(validateSetupInput({ workspace_root: "/workspace", shangman: { action: "clear" } }).shangman).toEqual({ action: "clear" });
 });

@@ -153,6 +153,16 @@ describe("ProcessAgentRuntime", () => {
       .toEqual({ items: [], total: 0 });
     expect(await runtime.resolveArtifact("session-1", "artifact-1")).toBe("/tmp/report.xlsx");
     expect(await runtime.resolveArtifact("session-2", "artifact-1")).toBeUndefined();
+    expect(await runtime.resolveImagePreview("session-1", "image_view", "v")).toEqual({ source: "history", image: {
+      type: "image", source: { type: "base64", media_type: "image/png", data: "YWJj" },
+    } });
+    expect(await runtime.resolveImagePreview("session-1", "attachment", "file")).toEqual({ source: "current_file", path: "/tmp/source.png" });
+    expect(await runtime.resolveImagePreview("other", "image_view", "v")).toBeUndefined();
+    // Await pipe I/O before entering Bun's matcher; rejects.toThrow can stall it on Windows.
+    const previewError = await runtime.resolveImagePreview("session-1", "attachment", "malformed")
+      .catch((error: unknown) => error);
+    expect(previewError).toBeInstanceOf(Error);
+    expect((previewError as Error).message).toContain("malformed image preview source");
     await runtime.stop();
 
     expect(runtime.status().state).toBe("stopped");

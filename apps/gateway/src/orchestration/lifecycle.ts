@@ -73,6 +73,7 @@ export class GatewayLifecycle {
   private startTask: Promise<void> | undefined;
   private stopPromise: Promise<void> | undefined;
   private lastError = "";
+  get shutdownError(): string { return this.lastError; }
 
   constructor(private readonly options: GatewayLifecycleOptions) {
     this.logger = options.logger ?? createLogger("gateway.lifecycle");

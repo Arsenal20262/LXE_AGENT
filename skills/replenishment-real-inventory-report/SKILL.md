@@ -1,14 +1,14 @@
 ---
 name: replenishment-real-inventory-report
 description: 基于本地已下载的马帮 Amazon 店铺 MSKU 数据查询并生成真实库存（深圳仓库）报告。用户要求查看某个店铺 MSKU、本地SKU、组合SKU 或备货分析所需的真实库存（深圳仓库）数量时使用；如果用户只给模糊店铺名，先使用 replenishment-store-resolve 获取规范 store_name。
-type: amazon_replenish
+type: replenishment
 commands:
   - lxeskill replenish inventory actual-export
 references:
   - references/report.md
 ---
 
-# 真实库存（深圳仓库）
+# Amazon 备货真实库存（深圳仓库）
 
 ## 执行与错误
 

@@ -9,6 +9,7 @@ const sourceDir = path.resolve(testDir, "../../src");
 const readSource = (relativePath) => readFileSync(path.join(sourceDir, relativePath), "utf8");
 
 const main = readSource("main.tsx");
+const status = readSource("desktop/sidebar-status.tsx");
 const shell = readSource("desktop/shell.tsx");
 const details = readSource("features/details/view.tsx");
 const integrations = readSource("features/integrations/view.tsx");
@@ -20,10 +21,10 @@ const styles = readSource("styles.css");
 const dialogFocus = readSource("shared/ui/use-dialog-focus.ts");
 
 test("status and settings have one sidebar entry and no floating duplicate", () => {
-  assert.match(main, /t\.sidebar\.statusAndSettings/);
-  assert.match(main, /onClick=\{\(\) => onOpenDesktopSettings\?\.\("status"\)\}/);
-  const statusCardStart = main.indexOf('className="sidebar-status-card"');
-  const statusCard = main.slice(statusCardStart, main.indexOf("</button>", statusCardStart));
+  assert.match(status, /t\.sidebar\.statusAndSettings/);
+  assert.match(main, /onOpen=\{\(\) => onOpenDesktopSettings\?\.\("status"\)\}/);
+  const statusCardStart = status.indexOf('className="sidebar-status-card"');
+  const statusCard = status.slice(statusCardStart, status.indexOf("</button>", statusCardStart));
   assert.doesNotMatch(statusCard, /currentModelQuery|sidebar-status-meta/);
   assert.doesNotMatch(main, /DashboardStatusModal|dashboardStatusOpen|statusSessionsQuery/);
   assert.doesNotMatch(shell, /desktop-status-button/);
@@ -120,7 +121,11 @@ test("dialogs trap focus, close with Escape, and avoid native confirmations", ()
   assert.match(dialogFocus, /event\.key !== "Tab"/);
   assert.match(dialogFocus, /previouslyFocused\?\.focus\(\)/);
   assert.match(shell, /useDialogFocus<HTMLFormElement>\(settingsOpen, closeSettings\)/);
-  assert.match(details, /useDialogFocus<HTMLElement>\(Boolean\(target\), onClose\)/);
+  assert.match(details, /useDialogFocus<HTMLElement>\(true, onClose\)/);
+  assert.match(details, /if \(!target\) return null/);
+  const skillDialog = readSource("shared/ui/skill-detail-dialog.tsx");
+  assert.match(skillDialog, /useDialogFocus<HTMLElement>\(true, close\)/);
+  assert.match(skillDialog, /role="dialog" aria-modal="true"/);
   assert.match(shell, /role="dialog"/);
   assert.doesNotMatch(shell, /window\.confirm/);
   assert.match(shell, /aria-live="polite"/);

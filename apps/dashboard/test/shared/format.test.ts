@@ -56,7 +56,7 @@ describe("Amazon Operations skill group", () => {
   test("sorts the module after the existing Amazon groups", () => {
     const groups = groupSkillsByType([
       { name: "operations", type: "amazon_operations" },
-      { name: "replenish", type: "amazon_replenish" },
+      { name: "replenish", type: "replenishment" },
       { name: "fba", type: "amazon_fba" },
       { name: "default", type: "default" },
       { name: "yacang", type: "yacang_operations" },
@@ -65,7 +65,7 @@ describe("Amazon Operations skill group", () => {
     expect(groups.map((group) => group.type)).toEqual([
       "default",
       "amazon_fba",
-      "amazon_replenish",
+      "replenishment",
       "amazon_operations",
       "yacang_operations",
     ]);

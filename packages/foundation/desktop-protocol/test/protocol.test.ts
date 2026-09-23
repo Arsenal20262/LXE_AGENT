@@ -450,10 +450,11 @@ describe("desktop agent protocol", () => {
       "sessions.file.reveal": { session_id: "session-1", artifact_id: "artifact-1" },
       "sessions.attachment.open": { session_id: "session-1", attachment_id: "attachment-1" },
       "sessions.attachment.preview": { session_id: "session-1", attachment_id: "attachment-1" },
+      "sessions.image_view.preview": { session_id: "session-1", view_id: "view-1" },
     };
     for (const operation of [
       "sessions.send", "sessions.stop", "sessions.activity", "sessions.file.open",
-      "sessions.file.reveal", "sessions.attachment.open", "sessions.attachment.preview",
+      "sessions.file.reveal", "sessions.attachment.open", "sessions.attachment.preview", "sessions.image_view.preview",
     ]) {
       expect(() => parseAgentWireMessage(JSON.stringify({
         jsonrpc: "2.0",
@@ -524,4 +525,18 @@ test("conversation identity and bidirectional cursor inputs are explicit", () =>
   expect(parseDashboardRpcCall({operation:"sessions.send",input:{text:"hello",client_message_id:"client-1"}})).toEqual({operation:"sessions.send",input:{text:"hello",client_message_id:"client-1"}});
   expect(parseDashboardRpcCall({operation:"sessions.detail",input:{session_id:"s",message_after:"cursor"}})).toEqual({operation:"sessions.detail",input:{session_id:"s",message_limit:10,message_after:"cursor"}});
   expect(()=>parseDashboardRpcCall({operation:"sessions.detail",input:{session_id:"s",message_before:"a",message_after:"b"}})).toThrow("mutually exclusive");
+});
+
+
+test("image preview RPC accepts registered references and rejects arbitrary paths", () => {
+  for (const variant of ["thumbnail", "expanded"] as const) {
+    const call = { operation: "sessions.image_view.preview" as const, input: { session_id: "s", view_id: "v", variant } };
+    expect(parseDashboardRpcCall(call)).toEqual(call);
+  }
+  expect(() => parseDashboardRpcCall({ operation: "sessions.image_view.preview",
+    input: { session_id: "s", view_id: "v", path: "/arbitrary" },
+  })).toThrow("unsupported fields");
+  expect(() => parseDashboardRpcCall({ operation: "sessions.image_view.preview",
+    input: { session_id: "s", view_id: "v", variant: "original" },
+  })).toThrow("variant must be");
 });

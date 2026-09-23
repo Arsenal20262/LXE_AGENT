@@ -156,6 +156,29 @@
         },
         "error_block": {
           "$ref": "common.schema.json#/$defs/ToolDisplayBlock"
+        },
+        "image_view": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "view_id",
+            "name",
+            "media_type"
+          ],
+          "properties": {
+            "view_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "media_type": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
         }
       },
       "title": "ToolStep"

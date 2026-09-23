@@ -1,7 +1,7 @@
 ---
 name: shangman-goods-export-workflow-map
 description: 用户当前轮明确提到“上马”“上马印尼”或“Shangman”，并查询商品、销量、库存、入库时间、上架时间、月末库存、月末快照、7/14/30/90 天销量、90 天日度销量或最近一个月销量时使用的唯一上马印尼商品原始导出入口；所有表达都只执行一次 goods_export 并交付一个原始 XLSX。当前轮平台优先于历史 Context；不用于雅仓、智汇/TMS 或马帮。
-type: amazon_replenish
+type: replenishment
 commands:
   - lxeskill shangman export preview
   - lxeskill shangman export run

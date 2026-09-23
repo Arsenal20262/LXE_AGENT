@@ -403,7 +403,7 @@ describe("SqliteRuntimeStore", () => {
     await reopened.stop();
   });
 
-  test("caches transcript replay, sanitizes persisted images, derives title, and invalidates external writes", async () => {
+  test("caches transcript replay, retains persisted images, derives title, and invalidates external writes", async () => {
     const root = mkdtempSync(join(tmpdir(), "lxe-runtime-cache-store-"));
     roots.push(root);
     const store = new SqliteRuntimeStore(join(root, "local_agent.sqlite3"));
@@ -418,8 +418,8 @@ describe("SqliteRuntimeStore", () => {
     }, "turn_input");
     const transcript = join(root, "session_transcripts", "images.jsonl");
     const persisted = readFileSync(transcript, "utf8");
-    expect(persisted).not.toContain("aGVsbG8=");
-    expect(persisted).toContain("Image omitted from persisted transcript");
+    expect(persisted).toContain("aGVsbG8=");
+    expect(JSON.stringify((await store.sessionDetail("images", { limit: 10 }))?.messages)).not.toContain("aGVsbG8=");
     expect(store.listSessions({ limit: 10, offset: 0 }).items[0]?.title).toBe("第一条真实用户消息 with title");
 
     await store.loadMessages("images");
@@ -447,17 +447,17 @@ describe("SqliteRuntimeStore", () => {
     await store.recordTurn("s1", {
       turn_id: "turn-1", started_at: startedAt, status: "completed", elapsed_ms: 40,
       input_tokens: 1, output_tokens: 1, tool_calls: 2, api_calls: 1, tools: [],
-      activations: [{ skill: "demo", module: "amazon_replenish" }],
+      activations: [{ skill: "demo", module: "replenishment" }],
       executions: [
-        { skill: "demo", module: "amazon_replenish", command: "replenish store resolve", success: true, duration_ms: 10 },
-        { skill: "demo", module: "amazon_replenish", command: "replenish store resolve", success: false, duration_ms: 20 },
+        { skill: "demo", module: "replenishment", command: "replenish store resolve", success: true, duration_ms: 10 },
+        { skill: "demo", module: "replenishment", command: "replenish store resolve", success: false, duration_ms: 20 },
       ],
     });
     await store.recordTurn("s1", {
       turn_id: "turn-2", started_at: startedAt + 1, status: "completed", elapsed_ms: 30,
       input_tokens: 1, output_tokens: 1, tool_calls: 1, api_calls: 1, tools: [], activations: [],
       executions: [
-        { skill: "demo", module: "amazon_replenish", command: "replenish store resolve", success: true, duration_ms: 30 },
+        { skill: "demo", module: "replenishment", command: "replenish store resolve", success: true, duration_ms: 30 },
       ],
     });
     await store.recordTurn("s1", {
@@ -480,7 +480,7 @@ describe("SqliteRuntimeStore", () => {
     }
 
     expect(store.skillUsageStats(30, "demo")).toEqual([{
-      name: "demo", module: "amazon_replenish", activations: 1, executions: 3,
+      name: "demo", module: "replenishment", activations: 1, executions: 3,
       failures: 1, execution_turns: 2, duration_ms: 60, last_used_at: startedAt + 1,
     }]);
     expect(store.skillUsageStats(30, "activation-only")).toEqual([expect.objectContaining({
@@ -491,7 +491,7 @@ describe("SqliteRuntimeStore", () => {
     expect(store.usageOverview(30)).toMatchObject({
       totals: { skill_executions: 3, skill_failures: 1 },
       modules: [{
-        module: "amazon_replenish", skills: 1, turns: 2, executions: 3, failures: 1, duration_ms: 60,
+        module: "replenishment", skills: 1, turns: 2, executions: 3, failures: 1, duration_ms: 60,
       }],
       daily: [expect.objectContaining({ executions: 3, failures: 1 })],
     });
@@ -504,7 +504,7 @@ describe("SqliteRuntimeStore", () => {
     });
     const exported = store.exportTurnUsage(30);
     expect(exported.flatMap((turn) => Array.isArray(turn.items) ? turn.items : [])).toEqual(expect.arrayContaining([
-      expect.objectContaining({ kind: "skill_activation", name: "demo", module: "amazon_replenish" }),
+      expect.objectContaining({ kind: "skill_activation", name: "demo", module: "replenishment" }),
       expect.objectContaining({ kind: "skill_execution", name: "demo", detail: "replenish store resolve" }),
     ]));
     expect(JSON.stringify(exported)).not.toContain('"kind":"skill"');

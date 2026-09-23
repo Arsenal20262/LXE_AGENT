@@ -133,6 +133,13 @@ export class SessionScheduler {
   private readonly sessionKeyDeletionFences = new Set<string>();
   private draining = false;
   private runtimeReady = true;
+  private updateFenced = false;
+
+  beginUpdate(): (() => void) | undefined {
+    if (this.updateFenced || this.hasInflightJobs()) return undefined;
+    this.updateFenced = true;
+    return () => { this.updateFenced = false; };
+  }
 
   constructor(options: SchedulerOptions) {
     this.runtime = options.runtime;
@@ -150,6 +157,7 @@ export class SessionScheduler {
   }
 
   async enqueue(job: AgentJob, options: { front?: boolean } = {}): Promise<void> {
+    if (this.updateFenced) throw new Error("Application update is preparing; new tasks are blocked");
     const sessionId = clean(job.session_id);
     if (!sessionId) throw new Error("session_id required");
     if (this.sessionDeletionFences.has(sessionId)) {

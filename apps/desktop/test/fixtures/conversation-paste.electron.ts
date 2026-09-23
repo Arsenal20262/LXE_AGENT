@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { IPC_CHANNELS } from "../../src/ipc-channels";
 import { DesktopConversationAttachmentService } from "../../src/main/conversation-attachments";
+import { validateDraftImagePreviewVariant } from "../../src/main/ipc-validation";
 import { attachmentThumbnail } from "../../src/main/attachment-thumbnail";
 import { ElectronInboundImageProcessor, prepareClipboardScreenshot } from "../../src/main/inbound-image";
 import { prepareConversationAttachments } from "../../src/main/conversation-submission";
@@ -100,21 +101,36 @@ async function run() {
   const snapshot = JSON.parse(pasteboard({ action: "snapshot" })) as unknown;
   let window: BrowserWindow | undefined;
   let writer: ChildProcess | undefined;
-  const service = new DesktopConversationAttachmentService(undefined, undefined, {
+  let clock = Date.now();
+  let previewMode = "normal";
+  let releasePreview: (() => void) | undefined;
+  const service = new DesktopConversationAttachmentService(() => clock, undefined, {
     directory: join(root, "screenshots"), prepare: prepareClipboardScreenshot,
   });
   try {
     const input = join(root, "中文 file.txt"); writeFileSync(input, "local reference");
     const imagePath = join(root, "original.png");
-    const image = nativeImage.createFromBitmap(Buffer.alloc(4 * 800 * 400, 255), { width: 800, height: 400 });
+    const pixels = Buffer.alloc(4 * 800 * 400, 255);
+    for (let y = 0; y < 400; y++) for (let x = 0; x < 800; x++) {
+      const offset = (y * 800 + x) * 4;
+      pixels[offset] = 180; pixels[offset + 1] = Math.round(y / 400 * 200); pixels[offset + 2] = Math.round(x / 800 * 200);
+    }
+    const image = nativeImage.createFromBitmap(pixels, { width: 800, height: 400 });
     assert.equal(image.isEmpty(), false);
     writeFileSync(imagePath, image.toPNG());
+    const jpegPath = join(root, "beauty.jpg"); writeFileSync(jpegPath, image.toJPEG(90));
     let staged: DesktopDraftAttachmentPayload[] = [];
     ipcMain.handle(IPC_CHANNELS.stagePastedConversationFiles, (_event, value) => { staged = service.registerPaste(value); return staged; });
     ipcMain.handle(IPC_CHANNELS.readClipboardConversationFiles, () => { staged = service.register(readClipboardFilePaths()); return staged; });
-    ipcMain.handle(IPC_CHANNELS.previewDraftConversationFile, async (_event, id) => {
+    ipcMain.handle(IPC_CHANNELS.selectConversationFiles, () => { staged = service.register([jpegPath]); return staged; });
+    ipcMain.handle(IPC_CHANNELS.previewDraftConversationFile, async (_event, id, value) => {
+      const variant = validateDraftImagePreviewVariant(value);
+      if (variant === "thumbnail" && previewMode === "delay") await new Promise<void>(resolve => { releasePreview = resolve; });
+      if (variant === "thumbnail" && previewMode === "missing") rmSync(imagePath);
+      if (variant === "thumbnail" && previewMode === "invalid") writeFileSync(imagePath, "not an image");
+      if (variant === "thumbnail" && previewMode === "expired") clock += 31 * 60_000;
       const [item] = service.resolve([id]);
-      return { data_url: await attachmentThumbnail(item!.path, 1600) };
+      return { data_url: await attachmentThumbnail(item!.path, variant === "thumbnail" ? 320 : 1600) };
     });
     ipcMain.handle(IPC_CHANNELS.discardConversationFiles, (_event, ids) => service.discard(ids));
     window = new BrowserWindow({ show: false, width: 850, height: 400, webPreferences: { preload, contextIsolation: true, sandbox: true } });
@@ -127,7 +143,9 @@ async function run() {
           .then(items => ({items, text}));
       });
     </script>`));
-    async function paste(): Promise<{ items: DesktopDraftAttachmentPayload[]; text: string }> {
+    const js = (source: string) => window!.webContents.executeJavaScript(source);
+    const wait = (condition: string) => js(`new Promise((resolve,reject)=>{let tries=0;const timer=setInterval(()=>{if(${condition}){clearInterval(timer);resolve(true)}else if(++tries>250){clearInterval(timer);reject(new Error(document.body.innerText))}},20)})`);
+    async function paste(send = true, checkPreview = true): Promise<{ items: DesktopDraftAttachmentPayload[]; text: string }> {
       await window!.webContents.executeJavaScript("window.result=null; document.querySelector('textarea').focus()");
       window!.webContents.paste();
       if (composerPage) {
@@ -139,7 +157,9 @@ async function run() {
           },20)
         })`);
         assert.equal(state.count, staged.length);
-        if (state.preview) {
+        const expectedImages = staged.filter(item => item.media_type.startsWith("image/")).length;
+        if (checkPreview && expectedImages) {
+          await wait(`document.querySelectorAll('.input-attachment-preview').length===${expectedImages} && [...document.querySelectorAll('.input-attachment-preview')].every(i=>i.complete&&i.naturalWidth>0)`);
           const tile = await window!.webContents.executeJavaScript(`(()=>{
             const tile=document.querySelector('.input-attachment-image');
             const r=tile.getBoundingClientRect();
@@ -163,14 +183,14 @@ async function run() {
           assert.equal(await window!.webContents.executeJavaScript("!!document.querySelector('.sent-image-dialog')"), false);
         }
         const items = staged;
-        await window!.webContents.executeJavaScript("document.querySelector('.conversation-send-button').click()");
+        if (send) await window!.webContents.executeJavaScript("document.querySelector('.conversation-send-button').click()");
         return { items, text: state.text };
       }
       return window!.webContents.executeJavaScript(`new Promise((resolve,reject)=>{
         let tries=0; const timer=setInterval(()=>{if(window.result){clearInterval(timer);window.result.then(resolve,reject)}else if(++tries>100){clearInterval(timer);reject(new Error('No native paste event'))}},20)
       })`);
     }
-    for (const paths of [[input], [input, imagePath], [imagePath]]) {
+    for (const paths of [[input], [input, imagePath], [imagePath], [jpegPath]]) {
       writer?.kill(); writer = await writeFiles(paths);
       assert.equal(readClipboardFilePaths().length, paths.length);
       const pasted = await paste(); assert.equal(pasted.items.length, paths.length);
@@ -190,6 +210,36 @@ async function run() {
     assert.equal(ready[0]!.image_block?.type, "image");
     assert(!JSON.stringify(ready).includes("preview_data_url"));
     service.consume(ids); service.clear(); assert(existsSync(refs[0]!.path));
+    if (composerPage) {
+      await wait("!document.querySelector('.input-attachment-chip')");
+      await js("document.querySelector('.conversation-attach-button').click()");
+      await wait("document.querySelector('.input-attachment-preview')?.naturalWidth===320");
+      assert.equal(staged[0]!.preview_data_url, undefined, "Reference thumbnails must not change draft metadata");
+      await js("document.querySelector('.input-attachment-remove').click()");
+      await wait("!document.querySelector('.input-attachment-chip')");
+      for (const [mode, error] of [["missing", "ENOENT"], ["invalid", "could not decode"], ["expired", "expired"]]) {
+        writeFileSync(imagePath, image.toPNG()); previewMode = mode!;
+        writer?.kill(); writer = await writeFiles([imagePath]);
+        await paste(false, false);
+        await wait(`document.querySelector('[role=alert]')?.textContent.includes(${JSON.stringify(error)})`);
+        assert.equal(await js("document.querySelectorAll('.input-attachment-chip').length"), 1);
+        assert.equal(await js("document.querySelector('.conversation-send-button').disabled"), false);
+        await js("document.querySelector('.input-attachment-remove').click()");
+        await wait("!document.querySelector('.input-attachment-chip')");
+      }
+      for (const action of ["remove", "switch"]) {
+        writeFileSync(imagePath, image.toPNG()); previewMode = "delay"; releasePreview = undefined;
+        writer?.kill(); writer = await writeFiles([imagePath]);
+        await paste(false, false);
+        assert(releasePreview, "Thumbnail request must be in flight");
+        await js(action === "remove" ? "document.querySelector('.input-attachment-remove').click()" : "window.fixtureSession('another-session')");
+        await wait("!document.querySelector('.input-attachment-chip')");
+        previewMode = "normal"; releasePreview();
+        await new Promise(resolve => setTimeout(resolve, 100));
+        assert.equal(await js("document.querySelectorAll('.input-attachment-chip').length"), 0);
+      }
+      console.log("PASS: JPEG/PNG reference thumbnails, file selection, real missing/invalid/expired errors, non-blocking preview failures, late results after removal/session switch");
+    }
     console.log("PASS: native macOS single/multi-file and image references, screenshot + text, PNG preview, 54px draft tile and expanded original with Escape dismissal, visual model block, accepted-file retention");
   } finally {
     writer?.kill();

@@ -1,6 +1,6 @@
 ---
 name: minimax-xlsx
-description: "Excel/spreadsheet file handling for generic .xlsx, .xlsm, .csv, and .tsv tasks: create, read, analyze, edit, validate, repair formulas, preserve workbook structure, and apply professional financial formatting. Use when the user's primary deliverable or input is a spreadsheet file and no more specific FBA or replenishment business skill applies. Do not use for FBA shipment, invoice, customs, logistics, export-tax, MSKU, inventory, sales-analysis, replenishment calculation, or replenishment workflow requests that match a dedicated amazon_fba or amazon_replenish skill."
+description: "Excel/spreadsheet file handling for generic .xlsx, .xlsm, .csv, and .tsv tasks: create, read, analyze, edit, validate, repair formulas, preserve workbook structure, and apply professional financial formatting. Use when the user's primary deliverable or input is a spreadsheet file and no more specific FBA or replenishment business skill applies. Do not use for FBA shipment, invoice, customs, logistics, export-tax, MSKU, inventory, sales-analysis, replenishment calculation, or replenishment workflow requests that match a dedicated amazon_fba or replenishment skill."
 type: default
 description_zh: "Excel 文件创建与分析"
 description_en: "Create, edit, and analyze Excel spreadsheets"

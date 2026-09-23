@@ -18,6 +18,7 @@ import { WorkspaceSearchService } from "../../src/tooling/workspace-search";
 import type {
   RuntimeHandle,
   RuntimeArtifactRecord,
+  RuntimeImageViewRecord,
   RuntimeMessage,
   RuntimeProviderRequest,
   RuntimeStore,
@@ -91,6 +92,10 @@ class MemoryStore implements RuntimeStore {
   async resolveArtifact(_sessionId: string, artifactId: string): Promise<RuntimeArtifactRecord | undefined> {
     return this.artifacts.find((artifact) => artifact.artifact_id === artifactId);
   }
+  imageViews: RuntimeImageViewRecord[] = [];
+  async appendImageView(_sessionId: string, view: RuntimeImageViewRecord): Promise<void> { this.imageViews.push(view); }
+  clearPendingImageViews(): void {}
+  async resolveImageView(): Promise<undefined> { return undefined; }
   async resolveAttachment(): Promise<undefined> { return undefined; }
   async attachmentPaths(): Promise<string[]> { return []; }
   async appendMessage(
@@ -826,7 +831,7 @@ describe("TypeScriptAgentRuntime", () => {
         return {
           names: ["replenishment-store-resolve"],
           prompt: "skills: replenishment-store-resolve",
-          modules: { "replenishment-store-resolve": "amazon_replenish" },
+          modules: { "replenishment-store-resolve": "replenishment" },
         };
       },
     });
@@ -847,7 +852,7 @@ describe("TypeScriptAgentRuntime", () => {
     ]);
     expect(store.metrics[0]?.activations).toEqual([{
       skill: "replenishment-store-resolve",
-      module: "amazon_replenish",
+      module: "replenishment",
     }]);
     expect(store.metrics[0]?.executions).toEqual([]);
     expect(store.metrics[1]?.tools).toContainEqual(expect.objectContaining({
@@ -859,13 +864,13 @@ describe("TypeScriptAgentRuntime", () => {
     expect(store.metrics[1]?.executions).toEqual([
       expect.objectContaining({
         skill: "replenishment-store-resolve",
-        module: "amazon_replenish",
+        module: "replenishment",
         command: "replenish store resolve",
         success: true,
       }),
       expect.objectContaining({
         skill: "replenishment-store-resolve",
-        module: "amazon_replenish",
+        module: "replenishment",
         command: "replenish store resolve",
         success: false,
       }),
@@ -2254,31 +2259,6 @@ describe("TypeScriptAgentRuntime", () => {
     await runtime.stop();
   });
 
-  test("ages processed history images after a completed turn", async () => {
-    const store = new MemoryStore();
-    store.messages = [{
-      role: "user",
-      content: [{ type: "image", source: { type: "base64", media_type: "image/png", data: "secret-base64" } }],
-    }];
-    const runtime = new TypeScriptAgentRuntime({
-      store,
-      tools: new ToolRegistry(),
-      provider: { summarize, turn: async () => (messageFixture({
-        content: [{ type: "text", text: "done" }],
-        stopReason: "stop",
-        usage: { input_tokens: 1, output_tokens: 1 },
-      })) },
-      emitter: { emit: async () => undefined, typing: async () => undefined },
-      systemPrompt: "test",
-    });
-    await runtime.start();
-    const outcome = await runtime.runTurn(job(), handle());
-    expect(outcome.status).toBe("completed");
-    expect(JSON.stringify(store.messages)).toContain("already processed");
-    expect(JSON.stringify(store.messages)).not.toContain("secret-base64");
-    await runtime.stop();
-  });
-
   test("closes remaining tool calls when cancellation arrives between dispatches", async () => {
     const store = new MemoryStore();
     const tools = new ToolRegistry();
@@ -2775,7 +2755,7 @@ test("persists coherent display observations and isolates heartbeat and persiste
   expect(JSON.stringify(store.messages)).not.toContain("context_display");
 });
 
-test("saves the post-image-cleanup measurement instead of the pre-maintenance display", async () => {
+test("keeps calibrated image occupancy after turn maintenance", async () => {
   const snapshots: import("@lxe/protocol").ContextDisplaySnapshot[]=[];
   const store=new MemoryStore() as MemoryStore & Pick<RuntimeStore,"beginContextDisplay"|"saveContextDisplay">;
   store.beginContextDisplay=async()=> "epoch";
@@ -2790,7 +2770,7 @@ test("saves the post-image-cleanup measurement instead of the pre-maintenance di
   await runtime.stop();
   const calibrated=snapshots.filter(snapshot=>snapshot.context_source==="usage_calibrated");
   expect(calibrated.length).toBeGreaterThan(1);
-  expect(calibrated.at(-1)!.context_tokens).toBeLessThan(calibrated[0]!.context_tokens);
+  expect(calibrated.at(-1)!.context_tokens).toBe(calibrated[0]!.context_tokens);
   expect(calibrated.at(-1)!.input_tokens).toBe(5000);
 });
 
@@ -2820,4 +2800,45 @@ test.each(["error","cancelled"] as const)("saves final consumption on %s without
   await runtime.stop();
   expect(snapshots.at(-1)).toMatchObject({input_tokens:100,output_tokens:3,context_source:"estimated"});
   expect(snapshots.at(-1)!.context_tokens).toBe(snapshots.at(-2)!.context_tokens);
+});
+
+test.each(["read", "text", "mcp", "failed", "storage-failed", "cancelled"] as const)("image view runtime delivery: %s", async scenario => {
+  const store = new MemoryStore();
+  if (scenario === "storage-failed") store.appendImageView = async () => { throw new Error("disk failure fixture"); };
+  const controller = new AbortController();
+  const tools = new ToolRegistry();
+  const payload = { type: "image", source: { type: "base64", media_type: "image/png", data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aWZkAAAAASUVORK5CYII=" } };
+  tools.register({ name: "read", source: scenario === "mcp" ? "mcp" : "native",
+    description: "read fixture", input_schema: { type: "object", properties: { path: { type: "string" } } },
+    execute: async () => {
+      if (scenario === "failed") throw new Error("decode failure fixture");
+      if (scenario === "cancelled") controller.abort();
+      return { content: scenario === "text" ? [{ type: "text", text: "plain text" }] : [payload],
+        image_view: { path: "/tmp/example.png", name: "example.png", media_type: "image/png" } };
+    },
+  });
+  const batches: DesktopStreamBatchRequest[] = [];
+  let round = 0;
+  const runtime = new TypeScriptAgentRuntime({ store, tools, systemPrompt: "test",
+    provider: { summarize, turn: async request => {
+      if (round++ === 0) return messageFixture({ stopReason: "toolUse", content: ["a", "b"].map(id => ({
+        type: "tool_call", name: "read", id, arguments: { path: "/tmp/example.png" },
+      })) });
+      const results = request.messages.filter(message => message.role === "tool");
+      expect(JSON.stringify(results)).not.toContain("image_view");
+      if (scenario === "read" || scenario === "storage-failed") expect(JSON.stringify(results)).toContain("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aWZkAAAAASUVORK5CYII=");
+      return messageFixture({ content: [{ type: "text", text: "done" }] });
+    } },
+    emitter: { emit: async () => {}, typing: async () => {}, desktopStream: async batch => { batches.push(batch); } },
+  });
+  await runtime.start();
+  try {
+    await runtime.runTurn(job({ source: { platform: "desktop" } }), { ...handle(), signal: controller.signal });
+    expect(store.imageViews).toHaveLength(scenario === "read" ? 2 : 0);
+    expect(JSON.stringify(batches)).not.toContain("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aWZkAAAAASUVORK5CYII=");
+    const seen = new Set(batches.flatMap(batch => batch.mutations.flatMap(mutation =>
+      mutation.kind === "part_updated" && mutation.part.type === "tool" && mutation.part.tool_step.image_view
+        ? [mutation.part.tool_step.image_view.view_id] : [])));
+    expect(seen.size).toBe(scenario === "read" ? 2 : 0);
+  } finally { await runtime.stop(); }
 });

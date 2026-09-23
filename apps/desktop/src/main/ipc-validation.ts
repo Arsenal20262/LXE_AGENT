@@ -187,8 +187,8 @@ export function validateSetupInput(value: unknown): DesktopSetupInput {
     app_id: boundedText(feishu.app_id, "Feishu App ID", 1_024),
     ...(feishuSecret ? { app_secret: feishuSecret } : {}),
   } : feishu?.action === "clear" ? { action: "clear" as const } : undefined;
-  const shangmanProcessedPassword = shangman?.action === "save"
-    ? boundedText(shangman.processed_password, "Shangman processed password", 16_384)
+  const shangmanPassword = shangman?.action === "save"
+    ? boundedText(shangman.password ?? shangman.processed_password, "Shangman password", 16_384)
     : "";
   if (shangman?.action === "save" && shangman.production_enabled !== undefined
     && typeof shangman.production_enabled !== "boolean") {
@@ -201,7 +201,7 @@ export function validateSetupInput(value: unknown): DesktopSetupInput {
     action: "save" as const,
     tenant_id: boundedText(shangman.tenant_id, "Shangman Tenant ID", 1_024),
     username: boundedText(shangman.username, "Shangman username", 1_024),
-    ...(shangmanProcessedPassword ? { processed_password: shangmanProcessedPassword } : {}),
+    ...(shangmanPassword ? { password: shangmanPassword } : {}),
     ...(shangmanProductionEnabled !== undefined ? { production_enabled: shangmanProductionEnabled } : {}),
   } : shangman?.action === "clear" ? { action: "clear" as const } : undefined;
   let loggingInput: DesktopSetupInput["logging"];
@@ -240,4 +240,11 @@ export function validateLocalModelCredentialInput(value: unknown): DesktopLocalM
   const apiKey = boundedText(input.api_key, "Model API key", 16_384);
   if (!apiKey) throw new Error("Model API key is required");
   return { provider: validateModelProvider(input.provider), api_key: apiKey };
+}
+
+
+export function validateDraftImagePreviewVariant(value: unknown): "thumbnail" | "expanded" {
+  if (value === undefined) return "expanded";
+  if (value !== "thumbnail" && value !== "expanded") throw new Error("Image preview variant must be thumbnail or expanded");
+  return value;
 }

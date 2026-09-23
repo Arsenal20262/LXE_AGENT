@@ -18,7 +18,7 @@ afterEach(() => {
 });
 
 describe("MCP manager", () => {
-  test("ships the disabled cloud Saihu connector with its independent bearer key", () => {
+  test("ships the disabled cloud Saihu connector with native device authentication", () => {
     const path = join(process.cwd(), "config", "mcp_servers.default.yaml");
     const environment = { LXE_SAIHU_MCP_API_KEY: "developer-secret" };
     const server = loadMcpConfig(path, environment).servers.find(
@@ -29,11 +29,11 @@ describe("MCP manager", () => {
       enabled: false,
       transport: "streamable-http",
       url: "http://10.88.0.1:8000/mcp/",
-      bearerTokenEnvVar: "LXE_SAIHU_MCP_API_KEY",
+      bearerTokenEnvVar: "",
       connectorId: "lxe-saihu",
     });
     expect(resolveMcpHttpHeaders(server!, environment)).toEqual({
-      Authorization: "Bearer developer-secret",
+      "X-LXE-Client": "cli",
     });
   });
 
@@ -269,4 +269,21 @@ describe("MCP manager", () => {
     expect(manager.status("remote").toolCount).toBe(2);
     await manager.stop();
   });
+});
+
+test("company MCP rejects legacy authentication before creating a client", async () => {
+  const defaults = loadMcpConfig("config/mcp_servers.default.yaml", {}).servers.find(server => server.name === "lxe-saihu")!;
+  let clients = 0;
+  const connector = new OfficialMcpConnector({ OLD_KEY: "expired-key" }, () => { clients++; throw new Error("must not create client"); });
+  for (const override of [
+    { bearerTokenEnvVar: "OLD_KEY" },
+    { bearerTokenEnvVar: "MISSING_OLD_KEY" },
+    { headers: { Authorization: "Bearer expired-key" } },
+    { headers: { "X-LXE-Client": "cli", Cookie: "session=old" } },
+    { envHeaders: { Authorization: "OLD_KEY" } },
+    { headers: {} },
+  ]) {
+    await expect(connector.connect({ ...defaults, enabled: true, ...override })).rejects.toThrow("Company Saihu MCP requires");
+  }
+  expect(clients).toBe(0);
 });

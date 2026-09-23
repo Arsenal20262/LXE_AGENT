@@ -15,8 +15,8 @@ def _skill_text(name: str) -> str:
 
 def test_repository_skill_inventory_distinguishes_top_level_and_nested_manifests() -> None:
     skill_root = PROJECT_ROOT / "skills"
-    assert len(list(skill_root.glob("*/SKILL.md"))) == 33
-    assert len(list(skill_root.rglob("SKILL.md"))) == 60
+    assert len(list(skill_root.glob("*/SKILL.md"))) == 34
+    assert len(list(skill_root.rglob("SKILL.md"))) == 61
     assert not (skill_root / "feishu-im-read" / "SKILL.md").exists()
     assert (skill_root / "larksuite-cli" / "lark-im" / "SKILL.md").exists()
 
@@ -26,7 +26,7 @@ def test_shangman_goods_export_is_the_single_owner_with_formal_permission_domain
     frontmatter = text.split("---", 2)[1]
 
     assert "name: shangman-goods-export-workflow-map" in frontmatter
-    assert "type: amazon_replenish" in frontmatter
+    assert "type: replenishment" in frontmatter
     assert frontmatter.count("lxeskill shangman export") == 2
     assert "params" in text
     assert 'platform: "上马印尼"' in text
@@ -48,7 +48,7 @@ def test_yacang_has_one_discoverable_skill_and_one_natural_language_command() ->
             manifests.append((metadata["name"], metadata.get("type"), path))
 
     assert [(name, skill_type, path.parent.name) for name, skill_type, path in manifests] == [
-        ("yacang-export-workflow-map", "amazon_replenish", "yacang-export-workflow-map")
+        ("yacang-export-workflow-map", "replenishment", "yacang-export-workflow-map")
     ]
 
     router = _skill_text("yacang-export-workflow-map")

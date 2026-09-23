@@ -74,7 +74,7 @@ if ($LASTEXITCODE -ne 0 -or $bunVersion -ne "1.4.2") {
     throw "Bun 1.4.2 is required; found '$bunVersion' at $($bunCommand.Source)."
 }
 
-$versionSelector = Join-Path $repositoryRoot "apps\desktop\scripts\select-desktop-version.ts"
+$versionSelector = if ($PackageTarget -eq "Nsis") { Join-Path $repositoryRoot "scripts\desktop-release.ts" } else { Join-Path $repositoryRoot "apps\desktop\scripts\select-desktop-version.ts" }
 $versionSelectionPath = Join-Path $repositoryRoot "build\desktop-version-selection.json"
 $versionAction = if ($PackageTarget -eq "Nsis") { "select" } else { "current" }
 $versionStage = if ($PackageTarget -eq "Nsis") { "Select desktop product version" } else { "Load desktop product version" }
@@ -282,8 +282,8 @@ try {
         $sizeReport
     )
     if ($PackageTarget -eq "Nsis") {
-        Write-Host "==> Record successful desktop product version"
-        & $bunCommand.Source $versionSelector "commit"
+        Write-Host "==> Record release candidate (not published)"
+        & $bunCommand.Source $versionSelector "candidate"
         if ($LASTEXITCODE -ne 0) {
             throw "Desktop product version commit failed with exit code $LASTEXITCODE."
         }

@@ -1,3 +1,4 @@
+import { omitImageData } from "../messages/image-content";
 import { validContextDisplaySnapshot, type ContextDisplaySnapshot } from "@lxe/protocol";
 import { existsSync, mkdirSync, statSync } from "node:fs";
 import { appendFile, mkdir, open, readFile, rename, stat, truncate, unlink } from "node:fs/promises";
@@ -9,6 +10,7 @@ import type { JsonObject, JsonValue, SessionWorkspaceRequest, WorkspaceContext }
 import type {
   RuntimeMessage,
   RuntimeArtifactRecord,
+  RuntimeImageViewRecord,
   RuntimeAttachmentRecord,
   RuntimeSessionRecord,
   RuntimeStore,
@@ -31,6 +33,9 @@ import {
   tryParseTranscriptEvent,
 } from "./transcript";
 import { allPrepared, getPrepared, parseObject, text } from "./sql";
+import { indexHistoryImages, extractHistoryImage, type HistoryImageLocation } from "./history-images";
+import type { ConversationImagePreviewSource } from "./history-images";
+import { transcriptImageView, indexImageView, attachImageView } from "./image-views";
 import { UsageStore } from "./usage-store";
 import { SessionStatusStore } from "./session-status-store";
 import type { SessionStatusRequest, SessionRunSummary } from "@lxe/protocol/session-status";
@@ -104,7 +109,13 @@ const publicAttachment = (attachment: RuntimeAttachmentRecord): JsonObject => ({
 });
 
 const publicMessage = (value: JsonObject): JsonObject => {
-  const message = structuredClone(value);
+  // Attached images already have a preview reference; do not add a visible placeholder.
+  const hasAttachments = Array.isArray(value.content) && value.content.some((block) => transcriptAttachment(block));
+  const message = omitImageData(hasAttachments ? {
+    ...value,
+    content: (value.content as JsonValue[]).filter((block) => parseObject(block).type !== "image"),
+  } : value) as JsonObject;
+  delete message.image_views;
   delete message.artifacts;
   delete message.attachments;
   if (!Array.isArray(message.content)) return message;
@@ -138,40 +149,6 @@ const mergeObjects = (base: JsonObject, patch: JsonObject): JsonObject => {
 };
 
 const retiredWorkspaceColumn = ["workspace", "server", "scope"].join("_");
-
-const imagePlaceholder = (): JsonObject => ({
-  type: "text",
-  text: "[Image omitted from persisted transcript after this turn]",
-});
-
-const sanitizePersistedValue = (value: JsonValue): JsonValue => {
-  if (Array.isArray(value)) return value.map(sanitizePersistedValue);
-  if (value === null || typeof value !== "object") {
-    return typeof value === "string" && /^data:image\/[^;]+;base64,/iu.test(value)
-      ? "[Image data URL omitted from persisted transcript after this turn]"
-      : value;
-  }
-  const source = parseObject(value.source);
-  if (text(value.type) === "image" && (text(source.type) === "base64" || typeof source.data === "string")) {
-    return imagePlaceholder();
-  }
-  return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, sanitizePersistedValue(item)]));
-};
-
-const persistedMessage = (message: RuntimeMessage): RuntimeMessage => {
-  if (message.role === "compactionSummary") {
-    return sanitizePersistedValue(message as unknown as JsonObject) as unknown as RuntimeMessage;
-  }
-  if (Array.isArray(message.content) && message.content.some((block) => transcriptAttachment(block))) {
-    return sanitizePersistedValue({
-      ...message,
-      // Attached images remain durable through their local_file reference;
-      // their transient visual block is only for the current provider call.
-      content: message.content.filter((block) => text(block.type) !== "image"),
-    } as unknown as JsonObject) as unknown as RuntimeMessage;
-  }
-  return sanitizePersistedValue(message as unknown as JsonObject) as unknown as RuntimeMessage;
-};
 
 const sessionTitle = (message: RuntimeMessage, reason: string): string => {
   if (message.role !== "user" || !["turn_input", "user_input", "inbound"].includes(reason)) return "";
@@ -279,7 +256,7 @@ const transcriptDisplayPage = (
       }
       continue;
     }
-    if (transcriptArtifact(event) && pendingStart !== undefined) {
+    if ((transcriptArtifact(event) || transcriptImageView(event)) && pendingStart !== undefined) {
       pendingEnd = index + 1;
       continue;
     }
@@ -319,6 +296,8 @@ const transcriptDisplayPage = (
         }
         continue;
       }
+      const view = transcriptImageView(event);
+      if (view) { attachImageView(latestMessage, view); continue; }
       const artifact = transcriptArtifact(event);
       if (artifact && latestMessage) {
         const key = `${artifact.turn_id}\u0000${artifact.path}`;
@@ -407,6 +386,7 @@ export class SqliteRuntimeStore implements RuntimeStore {
   private readonly logger = createLogger("runtime.storage");
   private database: Database | undefined;
   private usageStore: UsageStore | undefined;
+  private readonly pendingImages = new Map<string, { sessionId: string; turnId: string; image: JsonObject }>();
   private readonly replayCache = new Map<string, ReplayCacheEntry>();
   private readonly writeQueues = new Map<string, Promise<void>>();
   private readonly indexQueues = new Map<string, Promise<void>>();
@@ -433,6 +413,7 @@ export class SqliteRuntimeStore implements RuntimeStore {
     database.exec("PRAGMA busy_timeout = 5000");
     database.exec("PRAGMA journal_mode = WAL");
     this.database = database;
+    const hadHistoryImageIndex = database.query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'transcript_history_images'").get();
     this.usageStore = new UsageStore(database);
     try {
       database.exec("BEGIN IMMEDIATE");
@@ -465,6 +446,11 @@ export class SqliteRuntimeStore implements RuntimeStore {
           queued_at TEXT NOT NULL,
           FOREIGN KEY(session_id) REFERENCES agent_sessions(session_id) ON DELETE CASCADE
         );
+        CREATE TABLE IF NOT EXISTS transcript_history_images (
+          session_id TEXT NOT NULL, kind TEXT NOT NULL, target_id TEXT NOT NULL, turn_id TEXT NOT NULL,
+          byte_start INTEGER NOT NULL, byte_end INTEGER NOT NULL, outer_index INTEGER NOT NULL, inner_index INTEGER NOT NULL,
+          PRIMARY KEY (session_id, kind, target_id, turn_id)
+        );
         CREATE TABLE IF NOT EXISTS transcript_file_state (
           session_id TEXT PRIMARY KEY,
           file_size INTEGER NOT NULL DEFAULT 0,
@@ -484,6 +470,11 @@ export class SqliteRuntimeStore implements RuntimeStore {
           group_kind TEXT NOT NULL,
           turn_id TEXT NOT NULL DEFAULT '',
           PRIMARY KEY (session_id, group_number)
+        );
+        CREATE TABLE IF NOT EXISTS transcript_image_views (
+          session_id TEXT NOT NULL, view_id TEXT NOT NULL, turn_id TEXT NOT NULL, tool_call_id TEXT NOT NULL,
+          path TEXT NOT NULL, name TEXT NOT NULL, media_type TEXT NOT NULL, ts REAL NOT NULL,
+          PRIMARY KEY (session_id, view_id), UNIQUE (session_id, turn_id, tool_call_id)
         );
         CREATE TABLE IF NOT EXISTS transcript_artifacts (
           session_id TEXT NOT NULL,
@@ -542,6 +533,7 @@ export class SqliteRuntimeStore implements RuntimeStore {
       }
       UsageStore.migrate(database);
       SessionStatusStore.migrate(database);
+      if (!hadHistoryImageIndex) database.exec("DELETE FROM transcript_file_state");
       const displayGroupColumns = this.allPrepared<{ name: string }>(
         "PRAGMA table_info(transcript_display_groups)",
       );
@@ -566,6 +558,7 @@ export class SqliteRuntimeStore implements RuntimeStore {
 
   async stop(): Promise<void> {
     await Promise.all([...this.writeQueues.values(), ...this.indexQueues.values()]);
+    this.pendingImages.clear();
     this.database?.close(false);
     this.database = undefined;
     this.usageStore = undefined;
@@ -788,7 +781,7 @@ export class SqliteRuntimeStore implements RuntimeStore {
     await this.enqueueSessionWrite(safeSessionId, async () => {
       const path = this.transcriptPath(safeSessionId);
       const cached = this.validCacheBeforeWrite(safeSessionId, path);
-      const persisted = persistedMessage(message);
+      const persisted = structuredClone(message);
       await this.appendTranscriptEvent(safeSessionId, {
         kind: "message",
         message: persisted as unknown as JsonObject,
@@ -805,6 +798,11 @@ export class SqliteRuntimeStore implements RuntimeStore {
       if (cached) await this.appendReplayCacheMessage(safeSessionId, path, cached, persisted);
       else this.removeReplayCacheEntry(safeSessionId);
       await this.enqueueIndexSync(safeSessionId, path);
+      if (persisted.role === "tool" && Array.isArray(persisted.content)) {
+        for (const block of persisted.content) if (block.type === "tool_result") {
+          this.pendingImages.delete(JSON.stringify([safeSessionId, turnId, block.tool_call_id]));
+        }
+      }
     });
   }
 
@@ -850,6 +848,62 @@ export class SqliteRuntimeStore implements RuntimeStore {
       if (cached) await this.refreshReplayCacheMetadata(safeSessionId, path, cached);
       await this.enqueueIndexSync(safeSessionId, path);
     });
+  }
+
+  async appendImageView(sessionId: string, candidate: RuntimeImageViewRecord, image?: JsonObject): Promise<void> {
+    const view = transcriptImageView({ ...candidate, kind: "image_view" });
+    if (!text(sessionId) || !view) throw new Error("invalid transcript image view");
+    await this.enqueueSessionWrite(sessionId, async () => {
+      const path = this.transcriptPath(sessionId);
+      await this.enqueueIndexSync(sessionId, path);
+      const existing = this.getPrepared<{ view_id: string }>(
+        "SELECT view_id FROM transcript_image_views WHERE session_id = ? AND turn_id = ? AND tool_call_id = ?",
+        sessionId, view.turn_id, view.tool_call_id);
+      if (existing) {
+        if (existing.view_id !== view.view_id) throw new Error("image view identity mismatch");
+        return;
+      }
+      const cached = this.validCacheBeforeWrite(sessionId, path);
+      await this.appendTranscriptEvent(sessionId, { kind: "image_view", ...view });
+      if (cached) await this.refreshReplayCacheMetadata(sessionId, path, cached);
+      await this.enqueueIndexSync(sessionId, path);
+      if (image) this.pendingImages.set(JSON.stringify([sessionId, view.turn_id, view.tool_call_id]), { sessionId, turnId: view.turn_id, image });
+    });
+  }
+
+  clearPendingImageViews(sessionId: string, turnId?: string): void {
+    for (const [key, value] of this.pendingImages) {
+      if (value.sessionId === sessionId && (turnId === undefined || value.turnId === turnId)) this.pendingImages.delete(key);
+    }
+  }
+
+  async resolveImagePreview(sessionId: string, kind: "attachment" | "image_view", id: string): Promise<ConversationImagePreviewSource | undefined> {
+    const reference = kind === "attachment" ? await this.resolveAttachment(sessionId, id) : await this.resolveImageView(sessionId, id);
+    if (!reference) return undefined;
+    const targetId = kind === "attachment" ? id : String(reference.tool_call_id);
+    const turnId = kind === "attachment" ? "" : reference.turn_id;
+    const location = this.getPrepared<HistoryImageLocation>(`SELECT byte_start, byte_end, outer_index, inner_index
+      FROM transcript_history_images WHERE session_id = ? AND kind = ? AND target_id = ? AND turn_id = ?`,
+      sessionId, kind, targetId, turnId);
+    if (location) {
+      const bytes = await this.readByteRange(this.transcriptPath(sessionId), location.byte_start, location.byte_end);
+      const lines = scanTranscriptBuffer(bytes, location.byte_start, true).lines;
+      if (lines.length !== 1) throw new Error("Historical image record is missing or incomplete");
+      this.pendingImages.delete(JSON.stringify([sessionId, turnId, targetId]));
+      return { source: "history", image: extractHistoryImage(lines[0]!.event, location) };
+    }
+    const pending = this.pendingImages.get(JSON.stringify([sessionId, turnId, targetId]));
+    return pending ? { source: "history", image: pending.image } : { source: "current_file", path: reference.path };
+  }
+
+  async resolveImageView(sessionId: string, viewId: string): Promise<RuntimeImageViewRecord | undefined> {
+    if (!text(sessionId) || !text(viewId)) return undefined;
+    await this.waitForSessionWrites(sessionId);
+    await this.enqueueIndexSync(sessionId, this.transcriptPath(sessionId));
+    const view = this.getPrepared<RuntimeImageViewRecord>(
+      "SELECT view_id, turn_id, tool_call_id, path, name, media_type, ts FROM transcript_image_views WHERE session_id = ? AND view_id = ?",
+      sessionId, viewId);
+    return view ? transcriptImageView({ kind: "image_view", ...view }) : undefined;
   }
 
   async appendArtifact(sessionId: string, artifact: RuntimeArtifactRecord): Promise<void> {
@@ -950,7 +1004,7 @@ export class SqliteRuntimeStore implements RuntimeStore {
       const path = this.transcriptPath(safeSessionId);
       const previous = await this.loadMessagesUnqueued(safeSessionId);
       this.validCacheBeforeWrite(safeSessionId, path);
-      const persisted = messages.map(persistedMessage);
+      const persisted = structuredClone(messages);
       await this.appendTranscriptEvent(
         safeSessionId,
         createContextPatchEvent(previous, persisted, replacementKind, metadata),
@@ -1150,6 +1204,9 @@ export class SqliteRuntimeStore implements RuntimeStore {
         this.db().transaction(() => {
           new SessionStatusStore(this.db()).delete(safeSessionId);
           this.db().query("DELETE FROM transcript_display_groups WHERE session_id = ?").run(safeSessionId);
+          this.db().query("DELETE FROM transcript_history_images WHERE session_id = ?").run(safeSessionId);
+          this.clearPendingImageViews(safeSessionId);
+          this.db().query("DELETE FROM transcript_image_views WHERE session_id = ?").run(safeSessionId);
           this.db().query("DELETE FROM transcript_artifacts WHERE session_id = ?").run(safeSessionId);
           this.db().query("DELETE FROM transcript_attachments WHERE session_id = ?").run(safeSessionId);
           this.db().query("DELETE FROM transcript_file_state WHERE session_id = ?").run(safeSessionId);
@@ -1472,6 +1529,8 @@ export class SqliteRuntimeStore implements RuntimeStore {
   private clearTranscriptIndex(sessionId: string): void {
     this.db().transaction(() => {
       this.db().query("DELETE FROM transcript_display_groups WHERE session_id = ?").run(sessionId);
+      this.db().query("DELETE FROM transcript_history_images WHERE session_id = ?").run(sessionId);
+      this.db().query("DELETE FROM transcript_image_views WHERE session_id = ?").run(sessionId);
       this.db().query("DELETE FROM transcript_artifacts WHERE session_id = ?").run(sessionId);
       this.db().query("DELETE FROM transcript_attachments WHERE session_id = ?").run(sessionId);
       this.db().query("DELETE FROM transcript_file_state WHERE session_id = ?").run(sessionId);
@@ -1548,6 +1607,8 @@ export class SqliteRuntimeStore implements RuntimeStore {
     const transaction = this.db().transaction(() => {
       if (rebuild) {
         this.db().query("DELETE FROM transcript_display_groups WHERE session_id = ?").run(sessionId);
+        this.db().query("DELETE FROM transcript_history_images WHERE session_id = ?").run(sessionId);
+        this.db().query("DELETE FROM transcript_image_views WHERE session_id = ?").run(sessionId);
         this.db().query("DELETE FROM transcript_artifacts WHERE session_id = ?").run(sessionId);
         this.db().query("DELETE FROM transcript_attachments WHERE session_id = ?").run(sessionId);
         this.db().query(`
@@ -1559,6 +1620,7 @@ export class SqliteRuntimeStore implements RuntimeStore {
         const event = line.event;
         eventCount += 1;
         if (text(event.kind) === "turn_context") latestContext = event;
+        indexHistoryImages(this.db(), sessionId, line, text(event.turn_id) || text(latestContext?.turn_id));
         if (text(event.kind) === "message") {
           rawMessageCount += 1;
           const message = parseObject(event.message);
@@ -1608,6 +1670,15 @@ export class SqliteRuntimeStore implements RuntimeStore {
             `).run(sessionId, displayGroupCount, line.byteStart, line.byteEnd, turnId);
             displayGroupCount += 1;
             lastDisplayKind = "message";
+          }
+          continue;
+        }
+        const view = transcriptImageView(event);
+        if (view) {
+          indexImageView(this.db(), sessionId, view);
+          if (lastDisplayKind === "assistant_tool" && displayGroupCount > 0) {
+            this.db().query("UPDATE transcript_display_groups SET byte_end = ? WHERE session_id = ? AND group_number = ?")
+              .run(line.byteEnd, sessionId, displayGroupCount - 1);
           }
           continue;
         }
@@ -1795,6 +1866,8 @@ export class SqliteRuntimeStore implements RuntimeStore {
             }
             continue;
           }
+          const view = transcriptImageView(event);
+          if (view) { attachImageView(latestMessage, view); continue; }
           const artifact = transcriptArtifact(event);
           if (artifact && latestMessage) {
             const key = `${artifact.turn_id}\u0000${artifact.path}`;

@@ -32,6 +32,7 @@ import type {
   DesktopSetupState,
   DesktopZiniaoVersion,
 } from "@lxe/desktop-protocol";
+import { UpdateControl } from "./update-control";
 import { BrandMark } from "../shared/ui/brand-mark";
 import { useUiText } from "../shared/i18n";
 import type { Language, UiText } from "../shared/i18n";
@@ -166,11 +167,11 @@ function DesktopSettingsNavigation({
         {item("base", t.desktop.sectionTitles.base, desktopSettingsSectionStatus(t.desktop, "base", setup), Settings2)}
         <p className="desktop-settings-nav-group">{t.desktop.integrationsGroup}</p>
         {item("ziniao", t.desktop.sectionTitles.ziniao, desktopSettingsSectionStatus(t.desktop, "ziniao", setup), Globe)}
+        {item("shangman", t.desktop.sectionTitles.shangman, desktopSettingsSectionStatus(t.desktop, "shangman", setup), ShieldCheck)}
         {item("mabang", t.desktop.sectionTitles.mabang, desktopSettingsSectionStatus(t.desktop, "mabang", setup), Store)}
         {item("yacang", t.desktop.sectionTitles.yacang, desktopSettingsSectionStatus(t.desktop, "yacang", setup), Store)}
         {item("zhihui_tms", t.desktop.sectionTitles.zhihui_tms, desktopSettingsSectionStatus(t.desktop, "zhihui_tms", setup), Store)}
         {item("feishu", t.desktop.sectionTitles.feishu, desktopSettingsSectionStatus(t.desktop, "feishu", setup), Feather)}
-        {item("shangman", t.desktop.sectionTitles.shangman, desktopSettingsSectionStatus(t.desktop, "shangman", setup), ShieldCheck)}
         {item("logging", t.desktop.sectionTitles.logging, desktopSettingsSectionStatus(t.desktop, "logging", setup), ScrollText)}
       </div>
       <div className="desktop-settings-nav-footer">
@@ -332,6 +333,7 @@ function DesktopCloudPanel({
             <strong>{t.desktop.cloud.permission.title}</strong>
             <span>{t.desktop.cloud.permission.status[cloud.permission_status]}</span>
           </div>
+          {cloud.permission_error ? <p role="alert">{cloud.permission_error}</p> : null}
           <dl>
             <div>
               <dt>{t.desktop.cloud.permission.profile}</dt>
@@ -1580,7 +1582,7 @@ export function DesktopShell({
           tenant_id: form.shangmanTenantId,
           username: form.shangmanUsername,
           production_enabled: form.shangmanProductionEnabled,
-          ...(form.shangmanProcessedPassword ? { processed_password: form.shangmanProcessedPassword } : {}),
+          ...(form.shangmanProcessedPassword ? { password: form.shangmanProcessedPassword } : {}),
         },
       } : {}),
     };
@@ -1916,7 +1918,10 @@ export function DesktopShell({
               </div>
             </div>
             <footer>
-              <span className="desktop-version">{health?.version ? `v${health.version}` : "—"}</span>
+              <div className="desktop-version-updates">
+                <span className="desktop-version">{health?.version ? `v${health.version}` : "—"}</span>
+                <UpdateControl manual />
+              </div>
               {activeSettingsSection !== "status"
                 && activeSettingsSection !== "appearance"
                 && activeSettingsSection !== "cloud" ? (

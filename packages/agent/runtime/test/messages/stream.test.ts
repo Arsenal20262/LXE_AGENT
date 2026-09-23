@@ -6,7 +6,7 @@ import { OpenAIResponsesStreamAdapter } from "../../src/providers/protocols/open
 import { AnthropicMessagesStreamAdapter } from "../../src/providers/protocols/anthropic-messages";
 import { adaptMessagesForResponses } from "../../src/providers/responses-provider";
 import { adaptMessagesForCompletions } from "../../src/providers/completions-provider";
-import { cleanCanonicalMessages, pruneProcessedHistoryImages } from "../../src/engine/context";
+import { cleanCanonicalMessages } from "../../src/engine/context";
 import { normalizeTranscriptMessage } from "../../src/state/transcript";
 import type { ProviderDescriptor } from "../../src/providers/provider";
 
@@ -124,7 +124,7 @@ describe("Responses message translation", () => {
     expect(result.content[1]).toMatchObject({ id: "call_1", providerItemId: "fc_1", arguments: { path: "new" }, namespace: "files" });
     expect(result.content.slice(2).map((b) => b.text)).toEqual(["a", "b"]);
     const restored = normalizeTranscriptMessage(JSON.parse(JSON.stringify(result)))!;
-    const cleaned = pruneProcessedHistoryImages(cleanCanonicalMessages([restored])).messages;
+    const cleaned = cleanCanonicalMessages([restored]);
     expect(cleaned[0]).toEqual(result);
     const replay = adaptMessagesForResponses(cleaned, false, origin as ProviderDescriptor);
     expect(replay[0]).toMatchObject({ type: "reasoning", encrypted_content: "encrypted" });

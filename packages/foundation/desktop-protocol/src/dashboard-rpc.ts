@@ -98,6 +98,7 @@ export type SessionMessage = {
   tool_calls?: unknown;
   turn?: SessionTurnDisplayPayload;
   artifacts?: SessionArtifactPayload[];
+  image_views?: Array<NonNullable<ToolStep["image_view"]> & { turn_id: string; tool_call_id: string }>;
   attachments?: DesktopInputAttachmentPayload[];
   [key: string]: unknown;
 };
@@ -516,9 +517,13 @@ export interface DashboardRpcSpec {
     input: { session_id: string; attachment_id: string };
     result: DesktopConversationFileOpenPayload;
   };
+  "sessions.image_view.preview": {
+    input: { session_id: string; view_id: string; variant?: "thumbnail" | "expanded" };
+    result: { data_url: string; source: "history" | "current_file" };
+  };
   "sessions.attachment.preview": {
     input: { session_id: string; attachment_id: string; variant?: "thumbnail" | "expanded" };
-    result: { data_url: string };
+    result: { data_url: string; source: "history" | "current_file" };
   };
   "sessions.workspace.reload": {
     input: { session_id: string };
@@ -569,7 +574,7 @@ export type AgentDashboardRpcOperation = Exclude<
   DashboardRpcOperation,
   "channels.health" | "sessions.send" | "sessions.stop" | "sessions.activity"
     | "sessions.status.list" | "sessions.status.ack"
-    | "sessions.file.open" | "sessions.file.reveal" | "sessions.attachment.open" | "sessions.attachment.preview"
+    | "sessions.file.open" | "sessions.file.reveal" | "sessions.attachment.open" | "sessions.attachment.preview" | "sessions.image_view.preview"
 >;
 
 export type AgentDashboardRpcCall<
@@ -776,6 +781,16 @@ export function parseDashboardRpcCall(value: unknown): DashboardRpcCall {
         session_id: textValue(input.session_id, `${operation}.session_id`)!,
         artifact_id: textValue(input.artifact_id, `${operation}.artifact_id`)!,
       } };
+    case "sessions.image_view.preview":
+      exactKeys(input, ["session_id", "view_id", "variant"], `${operation}.input`);
+      if (input.variant !== undefined && input.variant !== "thumbnail" && input.variant !== "expanded") {
+        return rpcError("sessions.image_view.preview.variant must be thumbnail or expanded");
+      }
+      return { operation, input: {
+        session_id: textValue(input.session_id, `${operation}.session_id`)!,
+        view_id: textValue(input.view_id, `${operation}.view_id`)!,
+        ...(input.variant ? { variant: input.variant } : {}),
+      } };
     case "sessions.attachment.preview":
       exactKeys(input, ["session_id", "attachment_id", "variant"], `${operation}.input`);
       if (input.variant !== undefined && input.variant !== "thumbnail" && input.variant !== "expanded") {
@@ -879,7 +894,8 @@ export function parseAgentDashboardRpcCall(value: unknown): AgentDashboardRpcCal
     || call.operation === "sessions.file.open"
     || call.operation === "sessions.file.reveal"
     || call.operation === "sessions.attachment.open"
-    || call.operation === "sessions.attachment.preview") {
+    || call.operation === "sessions.attachment.preview"
+    || call.operation === "sessions.image_view.preview") {
     return rpcError(`${call.operation} is owned by Electron Main`);
   }
   return call;

@@ -1,6 +1,6 @@
 # Amazon-YYH-US 赛狐源数据对照
 
-这是 2026-09-05 的独立验证工具，不是正式数据源切换。脚本只写显式指定的输出目录，不修改工具目录契约、正式数据集和报表。真实业务样本留在本地输出目录，不提交 Git。
+这是 2026-09-05 的独立研究记录，不是正式数据源切换。在线采集器 `scripts/saihu_msku_compare.py` 已于 2026-09-22 淘汰；历史采集文件、离线分析和渲染继续保留。脚本只写显式指定的输出目录，不修改工具目录契约、正式数据集和报表。真实业务样本留在本地输出目录，不提交 Git。
 
 用户已确认：后续以赛狐作为销量和FBA库存的目标口径，马帮用于历史基线和本地SKU/深圳库存。对照用于解释迁移影响，不要求赛狐复刻马帮数值或旧算法的重复项。
 
@@ -19,15 +19,10 @@
 从领取的 worktree 根运行，使用该 worktree 的独立虚拟环境：
 
 ```bash
-uv run --frozen python scripts/saihu_msku_compare.py \
-  --env-file /path/to/data-server.env \
-  --auth-state /path/to/mabang/browser/state.json \
-  --output /path/to/isolated-output
-
 uv run --frozen python scripts/analyze_saihu_msku_compare.py /path/to/isolated-output
 ```
 
-采集器限定本次YYH-US实验，日期为2026-09-04，使用环境文件中的数据服务地址和API key。认证状态只在进程内读取，不复制虚拟环境或读写Agent数据库。`--probe`仅取少量接口样本。`--resume-fixed`只补齐未完成的马帮固定输入阶段，不重新读取赛狐或下载源表；不要用它拼接不同轮次的数据。
+离线分析读取已有采集目录，不再提供在线采集、探测或续采入口。`scripts/source_comparison_helpers.py` 保存共用的数量、去重、文件和脱敏函数；独立的 `check_yyh_inactive_sales.py` 核对功能保持不变。
 
 赛狐商品分析真实返回 `shopIdList/marketplaceIdList/mskuList/asinList/productIdList`，销量为 `fieldsMap.*.currValue`。日期虽然在代理文档中可选，上游缺失时实际返回40014。分页、行数、店铺/站点和重复页都需校验；不能因为HTTP成功就认为数据完整。
 
@@ -43,4 +38,4 @@ uv run --frozen python scripts/analyze_saihu_msku_compare.py /path/to/isolated-o
 uv run --frozen pytest python/lxeskill_cli/tests/test_saihu_msku_compare.py
 ```
 
-覆盖分页/空结果/数量变化/重复页、店铺站点隔离、分析数组结构、重复冲突、缺失和无效数量、认证头、限流重试、真实错误脱敏以及固定输入下重放一致。正式CLI与catalog未修改。
+覆盖分析数组结构、重复冲突、缺失和无效数量、真实错误脱敏以及固定输入下重放一致；在线采集器专属网络测试已删除。正式CLI与catalog未修改。

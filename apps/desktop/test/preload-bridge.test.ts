@@ -23,6 +23,7 @@ describe("preload bridge", () => {
     expect(Object.keys(bridge).sort()).toEqual(["dashboard", "desktop"]);
     expect(Object.keys(bridge.dashboard)).toEqual(["call"]);
     expect(Object.keys(bridge.desktop).sort()).toEqual([
+      "getUpdateState", "checkForUpdate", "installUpdate",
       "activateCloudEnrollment",
       "applyAppearance",
       "cancelSyntheticPerformerTask",
@@ -63,7 +64,7 @@ describe("preload bridge", () => {
       "stageDroppedConversationFiles",
       "stagePastedConversationFiles",
       "startSyntheticPerformerTask",
-    ]);
+    ].sort());
     expect(bridge.desktop.platform).toBe("win32");
     await bridge.dashboard.call({ operation: "models.list", input: {} });
     await bridge.desktop.saveLocalModelCredential({ provider: "deepseek", api_key: "local-key" });
@@ -219,4 +220,18 @@ describe("preload bridge", () => {
     }]);
     expect(invocations[14]?.arguments).toEqual(["dark"]);
   });
+});
+
+
+test("draft preview bridge forwards the registered ID and requested size only", async () => {
+  const calls: unknown[][] = [];
+  const bridge = createDesktopBridge({ invoke: async <T>(...args: unknown[]): Promise<T> => {
+    calls.push(args); return { data_url: "data:image/png;base64,AQID" } as T;
+  }, on() {}, removeListener() {} }, "darwin");
+  await bridge.desktop.previewDraftConversationFile("draft-1", "thumbnail");
+  await bridge.desktop.previewDraftConversationFile("draft-1", "expanded");
+  expect(calls).toEqual([
+    [IPC_CHANNELS.previewDraftConversationFile, "draft-1", "thumbnail"],
+    [IPC_CHANNELS.previewDraftConversationFile, "draft-1", "expanded"],
+  ]);
 });

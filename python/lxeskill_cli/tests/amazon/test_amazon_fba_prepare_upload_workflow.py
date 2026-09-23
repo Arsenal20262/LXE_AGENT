@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from services.browser.workflows.amazon_fba_common import WorkflowBrowserSession
 from services.browser.workflows.amazon_fba_prepare_upload import run_prepare_upload_workflow
 
@@ -23,14 +25,16 @@ def _payload() -> dict[str, str]:
     }
 
 
-def test_prepare_upload_waits_for_step1_inventory_confirmation_before_success(tmp_path) -> None:
+@pytest.mark.parametrize("site", ["US", "sa", "ae"])
+def test_prepare_upload_waits_for_step1_inventory_confirmation_before_success(tmp_path, site) -> None:
     calls: list[str] = []
+    sites: list[str] = []
 
     result = run_prepare_upload_workflow(
         session=_session(tmp_path),
-        payload=_payload(),
+        payload={**_payload(), "site": site},
         event_writer=lambda _event: None,
-        switch_region_fn=lambda *_args, **_kwargs: calls.append("switch_region") or {},
+        switch_region_fn=lambda _session, target, **_kwargs: sites.append(target) or calls.append("switch_region") or {},
         open_upload_mode_fn=lambda *_args, **_kwargs: calls.append("open_upload_mode") or {},
         prepare_consignment_fn=lambda consignment_no: calls.append(f"prepare:{consignment_no}")
         or {"excel_path": "D:\\tmp\\consignment.xlsx"},
@@ -48,6 +52,8 @@ def test_prepare_upload_waits_for_step1_inventory_confirmation_before_success(tm
     assert "第一阶段完成" in result["notice"]
     assert "已确认要发送的库存" in result["notice"]
     assert calls[-2:] == ["upload_template", "advance_multi_box_entry"]
+    assert sites == [site.upper()]
+    assert result["context"]["site"] == site.upper()
 
 
 def test_prepare_upload_advance_failure_keeps_generated_file_paths(tmp_path) -> None:

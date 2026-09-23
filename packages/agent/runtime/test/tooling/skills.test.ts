@@ -15,12 +15,31 @@ afterEach(() => {
 });
 
 describe("skill context", () => {
+  test("discovers all four platform entries with main replenishment permissions", () => {
+    const source = repositoryRoot(import.meta.dir);
+    const catalog = new SkillCatalog(source, join(source, "missing-user"), { sharedSkillsRoot: false });
+    const snapshot = catalog.snapshot({
+      allowedTypes: new Set(["replenishment", "amazon_operations"]),
+    });
+
+    for (const name of [
+      "yacang-export-workflow-map",
+      "zhihui-tms-product-export",
+      "replenishment-workflow-map",
+      "shangman-goods-export-workflow-map",
+    ]) {
+      expect(snapshot.names).toContain(name);
+      expect(snapshot.prompt).toContain(name);
+      expect(snapshot.modules[name]).toBe("replenishment");
+    }
+  });
+
   test("discovers the Shangman export skill under its production permission type", () => {
     const source = repositoryRoot(import.meta.dir);
     const skills = new SkillCatalog(source, join(source, "missing-user"), { sharedSkillsRoot: false }).list();
     const skill = skills.find((entry) => entry.name === "shangman-goods-export-workflow-map");
     expect(skill).toBeDefined();
-    expect(skill?.type).toBe("amazon_replenish");
+    expect(skill?.type).toBe("replenishment");
     expect(skill?.commands).toEqual([
       "lxeskill shangman export preview",
       "lxeskill shangman export run",
@@ -50,7 +69,7 @@ describe("skill context", () => {
     cpSync(source, join(root, "skills", "yacang-export-workflow-map"), { recursive: true });
     const catalog = new SkillCatalog(root, join(root, "missing-user"), { sharedSkillsRoot: false });
 
-    expect(catalog.snapshot({ allowedTypes: new Set(["amazon_replenish"]) }).names)
+    expect(catalog.snapshot({ allowedTypes: new Set(["replenishment"]) }).names)
       .toEqual(["yacang-export-workflow-map"]);
     expect(catalog.snapshot({ allowedTypes: new Set(["default"]) }).names).toEqual([]);
     expect(catalog.snapshot({ allowedTypes: new Set() }).names).toEqual([]);

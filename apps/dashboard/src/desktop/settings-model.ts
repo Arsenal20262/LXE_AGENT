@@ -49,11 +49,11 @@ export type DesktopSettingsSection =
   | "cloud"
   | "base"
   | "ziniao"
+  | "shangman"
   | "mabang"
   | "yacang"
   | "zhihui_tms"
   | "feishu"
-  | "shangman"
   | "logging";
 
 export type EditableDesktopSettingsSection = Exclude<DesktopSettingsSection, "status" | "appearance" | "cloud">;

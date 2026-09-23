@@ -1,7 +1,7 @@
 ---
 name: yacang-export-workflow-map
 description: 用户当前轮明确提到“雅仓/Yacang”，并查询销量、库存、入库或上架时使用的唯一雅仓导出入口。当前轮的雅仓平台词优先于历史 Context；不用于上马印尼、智汇/TMS、马帮巴西或 Amazon 补货。
-type: amazon_replenish
+type: replenishment
 commands:
   - lxeskill yacang export run
 ---

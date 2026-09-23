@@ -1,0 +1,39 @@
+.sidebar-status-card { cursor: default; }
+.sidebar-settings-button { display:flex; align-items:center; gap:10px; flex:1; min-width:0; padding:0; border:0; background:none; color:inherit; text-align:left; cursor:pointer; }
+.sidebar-settings-button:focus-visible,.lxe-update-button:focus-visible { outline:2px solid var(--focus-ring); outline-offset:3px; }
+.lxe-update-slot { flex:0 0 58px; height:32px; display:flex; align-items:center; justify-content:flex-end; }
+.lxe-update-button { position:relative; display:flex; align-items:center; justify-content:center; flex:0 0 auto; width:28px; height:28px; padding:0; border:0; border-radius:999px; background:#347ce5; color:white; cursor:pointer; overflow:hidden; transition:width .16s ease; }
+.lxe-update-button.is-working { width:32px; height:32px; color:#6aa3ff; background:transparent; }
+.lxe-update-button.is-ready:hover,.lxe-update-button.is-ready:focus-visible { width:56px; }
+.lxe-update-label { display:none; white-space:nowrap; font-size:12px; font-weight:600; }
+.lxe-update-button.is-ready:hover > svg,.lxe-update-button.is-ready:focus-visible > svg { display:none; }
+.lxe-update-button.is-ready:hover .lxe-update-label,.lxe-update-button.is-ready:focus-visible .lxe-update-label { display:block; }
+.lxe-update-ring { position:absolute; inset:0; width:32px; height:32px; transform:rotate(-90deg); fill:none; stroke-width:2; }
+.ring-track { stroke:currentColor; opacity:.2; }
+.ring-progress { stroke:currentColor; stroke-linecap:round; transition:stroke-dashoffset .2s linear; }
+.lxe-update-ring.is-spinning { animation:lxe-update-spin 1s linear infinite; }
+@keyframes lxe-update-spin { to { transform:rotate(270deg); } }
+.lxe-update-backdrop { z-index:300; }
+.desktop-version-updates { display:flex; align-items:center; gap:12px; min-width:0; margin-right:auto; }
+.desktop-version-updates .desktop-version { flex:none; margin-right:0; }
+.lxe-update-manual { display:flex; min-width:0; }
+.desktop-settings-modal > footer .lxe-update-manual-button {
+ display:inline-flex; align-items:center; gap:6px; min-width:0; min-height:28px; padding:4px 7px;
+ border:0; border-radius:6px; background:transparent; color:var(--muted); font:inherit; font-size:12px;
+ line-height:20px; text-align:left; cursor:pointer;
+}
+.lxe-update-manual-button > svg { flex:none; }
+.lxe-update-manual-button:hover:not(:disabled) { background:color-mix(in srgb,var(--text) 7%,transparent); color:var(--text); }
+.lxe-update-manual-button:focus-visible { outline:2px solid var(--focus-ring); outline-offset:2px; }
+.lxe-update-manual-button:disabled { cursor:default; opacity:1; }
+.lxe-update-manual-button .lxe-update-ring { position:static; width:16px; height:16px; color:var(--accent); }
+.desktop-settings-modal > footer > .desktop-primary-button { flex:none; }
+.lxe-update-dialog { width:min(440px,calc(100vw - 40px)); border:1px solid var(--border); border-radius:14px; padding:24px; background:var(--surface); color:var(--text); box-shadow:0 16px 60px #0005; }
+.lxe-update-dialog p { overflow-wrap:anywhere; }
+.lxe-update-dialog h2 { margin:0 0 16px; font-size:18px; }
+.lxe-update-notes { white-space:pre-wrap; max-height:40vh; overflow:auto; }
+.lxe-update-actions { display:flex; gap:12px; justify-content:flex-end; margin-top:20px; }
+.lxe-update-actions button { border:1px solid var(--border); border-radius:8px; background:var(--surface); color:inherit; padding:8px 14px; cursor:pointer; }
+.lxe-update-actions button:last-child { background:#347ce5; color:white; border-color:#347ce5; }
+.lxe-update-actions button:disabled { opacity:.5; cursor:default; }
+@media (prefers-reduced-motion:reduce) { .lxe-update-button,.ring-progress { transition:none; } .lxe-update-ring.is-spinning { animation:none; } }

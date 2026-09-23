@@ -1,5 +1,5 @@
 import { withManagedModels, managedTargetKey, managedCredentialFor, parseManagedState, singleManagedState, type ManagedLlmState } from "@lxe/core";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { rmSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type {
@@ -32,10 +32,6 @@ const sameManagedTarget = (
   right: ManagedLlmTarget,
 ): boolean => left.provider === right.provider && left.model === right.model;
 
-// The ERP's OAuth client identity is platform-level configuration, not a user
-// credential. It must never be derived from the account password or exposed
-// as an extra Dashboard field.
-const DEFAULT_SHANGMAN_BASIC_AUTH = "Basic c2FiZXI6c2FiZXJfc2VjcmV0";
 const ZHIHUI_TMS_SESSION_FINGERPRINT = /^[a-f0-9]{64}$/u;
 const MAX_ZHIHUI_TMS_SESSION_TOKEN_CHARS = 8_192;
 
@@ -164,7 +160,6 @@ export class DesktopSetupService {
         tenant_id: shangman.tenant_id,
         username: shangman.username,
         password_configured: Boolean(secrets.shangman_processed_password),
-        basic_auth_configured: Boolean(secrets.shangman_basic_auth),
         production_enabled: shangman.production_enabled,
       },
       logging: {
@@ -278,26 +273,33 @@ export class DesktopSetupService {
     }
 
     if (input.shangman?.action === "clear") {
-      config.integrations.shangman = { managed: true, tenant_id: "", username: "", production_enabled: false };
+      config.integrations.shangman = {
+        managed: true,
+        tenant_id: "",
+        username: "",
+        revision: randomUUID(),
+        production_enabled: false,
+      };
       secrets.shangman_processed_password = "";
-      secrets.shangman_basic_auth = "";
     } else if (input.shangman?.action === "save") {
+      const previous = config.integrations.shangman;
       const tenantId = text(input.shangman.tenant_id);
       const username = text(input.shangman.username);
-      const inputProcessedPassword = text(input.shangman.processed_password);
-      const processedPassword = inputProcessedPassword || effectiveSecrets.shangman_processed_password;
-      const basicAuth = effectiveSecrets.shangman_basic_auth || DEFAULT_SHANGMAN_BASIC_AUTH;
-      if (!tenantId || !username || !processedPassword || !basicAuth) {
-        throw new Error("上马印尼 ID、账号、密码和客户端认证必须完整配置");
+      const inputPassword = text(input.shangman.password ?? input.shangman.processed_password);
+      const accountChanged = tenantId !== previous.tenant_id || username !== previous.username;
+      const password = inputPassword || (accountChanged ? "" : effectiveSecrets.shangman_processed_password);
+      if (!tenantId || !username || !password) {
+        throw new Error("上马印尼 ID、账号和密码必须完整配置；更换账号时请重新填写密码");
       }
+      const changed = accountChanged || password !== effectiveSecrets.shangman_processed_password;
       config.integrations.shangman = {
         managed: true,
         tenant_id: tenantId,
         username,
+        revision: changed || !previous.revision ? randomUUID() : previous.revision,
         production_enabled: input.shangman.production_enabled ?? config.integrations.shangman.production_enabled,
       };
-      if (inputProcessedPassword) secrets.shangman_processed_password = inputProcessedPassword;
-      secrets.shangman_basic_auth = basicAuth;
+      if (inputPassword) secrets.shangman_processed_password = inputPassword;
     }
 
     if (input.logging) {
@@ -656,10 +658,6 @@ export class DesktopSetupService {
     const shangmanConfigured = shangman.managed && this.validation.shangmanIssues(shangman, secrets).length === 0;
     const diagnostic = config.logging.profile === "diagnostic";
     const logsEnabled = config.logging.profile !== "off";
-    const cloudEnabled = config.cloud.managed
-      && !config.cloud.switch_in_progress
-      && Boolean(text(secrets.cloud_business_token))
-      && secrets.cloud_business_expires_at > Date.now() / 1_000;
     return {
       AGENT_LLM_PROVIDER: provider,
       AGENT_LLM_CREDENTIAL_SOURCE: config.llm.credential_source,
@@ -694,9 +692,7 @@ export class DesktopSetupService {
       LXE_SHANGMAN_TENANT_ID: shangmanConfigured ? shangman.tenant_id : "",
       LXE_SHANGMAN_USERNAME: shangmanConfigured ? shangman.username : "",
       LXE_SHANGMAN_PROCESSED_PASSWORD: shangmanConfigured ? secrets.shangman_processed_password : "",
-      LXE_SHANGMAN_BASIC_AUTH: shangmanConfigured
-        ? (secrets.shangman_basic_auth || DEFAULT_SHANGMAN_BASIC_AUTH)
-        : "",
+      LXE_SHANGMAN_CONFIG_REVISION: shangman.revision,
       LXE_SHANGMAN_PROD_ENABLED: shangman.production_enabled ? "true" : "false",
       LOCAL_LOGS_ENABLED: logsEnabled ? "1" : "0",
       LOCAL_LOG_RETENTION_DAYS: String(config.logging.retention_days),
@@ -706,16 +702,8 @@ export class DesktopSetupService {
       AGENT_SSE_WIRE_TRACE_ENABLED: diagnostic ? "1" : "0",
       ZINIAO_DIAGNOSTIC_TRACE_ENABLED: diagnostic ? "1" : "0",
       FEISHU_RAW_EVENT_DUMP_ENABLED: diagnostic ? "1" : "0",
-      LXE_DATA_SERVER_ENABLED: cloudEnabled ? "1" : "0",
-      LXE_DATA_SERVER_URL: cloudEnabled ? config.cloud.data_server_url : "",
-      LXE_DATA_SERVER_API_KEY: cloudEnabled ? secrets.cloud_business_token : "",
-      LXE_DATA_SERVER_FALLBACK_API_KEY: config.cloud.local_fallback_enabled
-        ? secrets.data_server_fallback_api_key
-        : "",
-      LXE_ERP_API_KEY: cloudEnabled ? secrets.cloud_business_erp_token : "",
-      LXE_SAIHU_MCP_API_KEY: cloudEnabled ? secrets.cloud_business_token : "",
-      LXE_DATA_SERVER_LOCAL_FALLBACK_ENABLED: config.cloud.local_fallback_enabled ? "1" : "0",
-      LXE_DATA_SERVER_FALLBACK_URL: config.cloud.local_fallback_url,
+      LXE_DATA_SERVER_ENABLED: config.cloud.managed && !config.cloud.switch_in_progress && Boolean(config.cloud.data_server_url) ? "1" : "0",
+      LXE_DATA_SERVER_URL: config.cloud.managed && !config.cloud.switch_in_progress ? config.cloud.data_server_url : "",
       BROWSER_AUTH_HEADLESS: "1",
     };
   }

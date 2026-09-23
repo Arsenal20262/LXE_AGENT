@@ -63,6 +63,7 @@ export type LocalConversationAttachment = DesktopInputAttachmentPayload & {
 interface InternalTurn {
   payload: DesktopConversationTurnPayload;
   attachmentPaths: Map<string, string>;
+  attachmentImages: Map<string, JsonObject>;
   sessionId: string;
   responseRouteId: string;
   streamEmitId?: string;
@@ -117,6 +118,16 @@ export class LocalConversationController {
     for (const turn of this.turns.values()) {
       if (turn.sessionId === sessionId && turn.attachmentPaths.has(attachmentId)) {
         return turn.attachmentPaths.get(attachmentId);
+      }
+    }
+    return undefined;
+  }
+
+  resolveAttachmentPreviewImage(sessionId: string, attachmentId: string): JsonObject | undefined {
+    for (const turn of this.turns.values()) {
+      if (turn.sessionId === sessionId) {
+        const image = turn.attachmentImages.get(attachmentId);
+        if (image) return image;
       }
     }
     return undefined;
@@ -209,6 +220,7 @@ export class LocalConversationController {
       sessionId,
       responseRouteId,
       attachmentPaths: new Map(attachments.map((attachment) => [attachment.attachment_id, attachment.path])),
+      attachmentImages: new Map(attachments.flatMap(attachment => attachment.image_block ? [[attachment.attachment_id, attachment.image_block] as const] : [])),
       payload: {
         turn_id: turnId,
         message_id: messageId,
@@ -320,6 +332,7 @@ export class LocalConversationController {
       if (activity.activeTurnId === turnId) activity.activeTurnId = undefined;
       turn.payload.state = event.state === "cleared" ? "cancelled" : event.state;
       turn.payload.settled_at = this.now();
+      turn.attachmentImages.clear();
       if (activity.latestTurnId && activity.latestTurnId !== turnId) {
         const previous = this.turns.get(activity.latestTurnId);
         this.turns.delete(activity.latestTurnId);
@@ -739,6 +752,9 @@ function sanitizeToolStep(value: unknown): ToolStep | undefined {
   if (!name || !title || !iconToken || (status !== "running" && status !== "success" && status !== "error")) {
     return undefined;
   }
+  const image = record(step.image_view);
+  const imageView = status === "success" && image && clean(image.view_id) && clean(image.name) && clean(image.media_type)
+    ? { view_id: clean(image.view_id), name: clean(image.name), media_type: clean(image.media_type) } : undefined;
   const resultBlock = sanitizeToolDisplayBlock(step.result_block);
   const errorBlock = sanitizeToolDisplayBlock(step.error_block);
   return {
@@ -752,6 +768,7 @@ function sanitizeToolStep(value: unknown): ToolStep | undefined {
     icon_token: iconToken,
     status,
     duration_ms: integer(step.duration_ms),
+    ...(imageView ? { image_view: imageView } : {}),
     ...(resultBlock ? { result_block: resultBlock } : {}),
     ...(errorBlock ? { error_block: errorBlock } : {}),
   };
@@ -768,6 +785,7 @@ function sanitizeToolDisplayBlock(value: unknown): ToolDisplayBlock | undefined 
 function cloneToolStep(step: ToolStep): ToolStep {
   return {
     ...step,
+    ...(step.image_view ? { image_view: { ...step.image_view } } : {}),
     ...(step.result_block ? { result_block: { ...step.result_block } } : {}),
     ...(step.error_block ? { error_block: { ...step.error_block } } : {}),
   };

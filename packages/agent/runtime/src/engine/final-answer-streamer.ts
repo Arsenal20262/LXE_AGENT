@@ -42,6 +42,7 @@ export interface FinalAnswerStreamerOptions {
 
 const cloneStep = (step: ToolStep): ToolStep => ({
   ...step,
+  ...(step.image_view ? { image_view: { ...step.image_view } } : {}),
   ...(step.result_block ? { result_block: { ...step.result_block } } : {}),
   ...(step.error_block ? { error_block: { ...step.error_block } } : {}),
 });
@@ -285,7 +286,7 @@ export class FinalAnswerStreamer {
     call: ToolCallBlock,
     status: ToolStep["status"],
     durationMs: number,
-    output?: { result?: unknown; error?: unknown },
+    output?: { result?: unknown; error?: unknown; image_view?: ToolStep["image_view"] },
   ): Promise<void> {
     if (this.terminal || this.options.toolUseMode === "off") return;
     this.toolPending = false;
@@ -296,6 +297,7 @@ export class FinalAnswerStreamer {
     const step = buildToolDisplayStep(call.id, call.name, call.arguments, status, durationMs, {
       ...(this.options.showFullPaths === undefined ? {} : { showFullPaths: this.options.showFullPaths }),
       showResultDetails: this.options.toolUseMode === "full",
+      ...(output?.image_view ? { image_view: output.image_view } : {}),
       result: output?.result,
       error: output?.error,
     });

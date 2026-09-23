@@ -45,10 +45,7 @@ describe("DesktopConfigStore", () => {
   test("does not enable Yacang production without a saved account and password", () => {
     const root = createRoot();
     const workspaceRoot = join(root, "workspace");
-    const store = new DesktopConfigStore(root, workspaceRoot, safeStorage, {
-      platform: "darwin",
-      secretEnvironment: { LXE_SHANGMAN_BASIC_AUTH: "Basic client-auth" },
-    });
+    const store = new DesktopConfigStore(root, workspaceRoot, safeStorage, { platform: "darwin" });
 
     expect(() => store.save({
       workspace_root: workspaceRoot,
@@ -60,10 +57,7 @@ describe("DesktopConfigStore", () => {
   test("keeps all four platform configurations after saving one integration and restarting", () => {
     const root = createRoot();
     const workspaceRoot = join(root, "workspace");
-    const store = new DesktopConfigStore(root, workspaceRoot, safeStorage, {
-      platform: "darwin",
-      secretEnvironment: { LXE_SHANGMAN_BASIC_AUTH: "Basic client-auth" },
-    });
+    const store = new DesktopConfigStore(root, workspaceRoot, safeStorage, { platform: "darwin" });
     store.save({
       workspace_root: workspaceRoot,
       mabang: { action: "save", account: "pool4-account", password: "pool4-secret" },
@@ -263,7 +257,7 @@ describe("DesktopConfigStore", () => {
     expect(environment).not.toHaveProperty("AGENT_STREAM_TRACE_DIR");
   });
 
-  test("uses source-development integration secrets without accepting model keys from the environment", () => {
+  test("uses source-development platform credentials without accepting model or cloud business keys from the environment", () => {
     const root = createRoot();
     const store = new DesktopConfigStore(root, join(root, "workspace"), safeStorage, {
       platform: "darwin",
@@ -273,7 +267,7 @@ describe("DesktopConfigStore", () => {
         MABANG_PASSWORD: "source-mabang-secret",
         LXE_YACANG_PASSWORD: "source-yacang-secret",
         FEISHU_APP_SECRET: "source-feishu-secret",
-        LXE_SAIHU_MCP_API_KEY: "source-saihu-secret",
+      LXE_SAIHU_MCP_API_KEY: "source-saihu-secret",
       },
     });
 
@@ -302,8 +296,8 @@ describe("DesktopConfigStore", () => {
       LXE_YACANG_PASSWORD: "source-yacang-secret",
       LXE_YACANG_PROD_ENABLED: "false",
       FEISHU_APP_SECRET: "source-feishu-secret",
-      LXE_SAIHU_MCP_API_KEY: "",
     });
+    expect(store.environment()).not.toHaveProperty("LXE_SAIHU_MCP_API_KEY");
     expect(store.environment()).not.toHaveProperty("KIMI_CODE_API_KEY");
     store.saveRuntimePreference("kimi_coding", "k3", "high");
     const persistedSecrets = readFileSync(join(root, "config", "secrets.bin"), "utf8");
@@ -349,12 +343,8 @@ describe("DesktopConfigStore", () => {
 
   test("persists Shangman non-secrets separately and emits only the new runtime contract", () => {
     const root = createRoot();
-    const store = new DesktopConfigStore(root, join(root, "workspace"), safeStorage);
     const processedPassword = "processed-password";
-    const basicAuth = "Basic client-auth";
-    const configuredStore = new DesktopConfigStore(root, join(root, "workspace"), safeStorage, {
-      secretEnvironment: { LXE_SHANGMAN_BASIC_AUTH: basicAuth },
-    });
+    const configuredStore = new DesktopConfigStore(root, join(root, "workspace"), safeStorage);
     const state = configuredStore.save({
       workspace_root: join(root, "workspace"),
       shangman: {
@@ -372,52 +362,55 @@ describe("DesktopConfigStore", () => {
       tenant_id: "tenant-1",
       username: "processed-user",
       password_configured: true,
-      basic_auth_configured: true,
       production_enabled: true,
       issues: [],
     });
     const settings = readFileSync(join(root, "config", "settings.json"), "utf8");
     expect(settings).toContain("tenant-1");
     expect(settings).not.toContain(processedPassword);
-    expect(settings).not.toContain(basicAuth);
     expect(JSON.stringify(state)).not.toContain(processedPassword);
-    expect(JSON.stringify(state)).not.toContain(basicAuth);
-    expect(store.environment()).toMatchObject({
+    expect(configuredStore.environment()).toMatchObject({
       LXE_SHANGMAN_TENANT_ID: "tenant-1",
       LXE_SHANGMAN_USERNAME: "processed-user",
       LXE_SHANGMAN_PROCESSED_PASSWORD: processedPassword,
-      LXE_SHANGMAN_BASIC_AUTH: basicAuth,
       LXE_SHANGMAN_PROD_ENABLED: "true",
     });
-    expect(store.environment()).not.toHaveProperty("LXE_SHANGMAN_PASSWORD");
-    expect(store.environment()).not.toHaveProperty("LXE_SHANGMAN_BASIC_USERNAME");
-    expect(store.environment()).not.toHaveProperty("LXE_SHANGMAN_BASIC_PASSWORD");
+    const firstRevision = configuredStore.environment().LXE_SHANGMAN_CONFIG_REVISION;
+    expect(firstRevision).toMatch(/^[0-9a-f-]{36}$/u);
+    expect(configuredStore.environment()).not.toHaveProperty("LXE_SHANGMAN_BASIC_AUTH");
+    expect(configuredStore.environment()).not.toHaveProperty("LXE_SHANGMAN_PASSWORD");
+    expect(configuredStore.environment()).not.toHaveProperty("LXE_SHANGMAN_BASIC_USERNAME");
+    expect(configuredStore.environment()).not.toHaveProperty("LXE_SHANGMAN_BASIC_PASSWORD");
 
     const patched = configuredStore.save({
       workspace_root: join(root, "workspace"),
-      shangman: { action: "save", tenant_id: "tenant-2", username: "next-user" },
+      shangman: {
+        action: "save",
+        tenant_id: "tenant-2",
+        username: "next-user",
+        password: "next-password",
+      },
     });
     expect(patched.shangman.configured).toBeTrue();
-    expect(store.environment()).toMatchObject({
+    expect(configuredStore.environment()).toMatchObject({
       LXE_SHANGMAN_TENANT_ID: "tenant-2",
-      LXE_SHANGMAN_PROCESSED_PASSWORD: processedPassword,
-      LXE_SHANGMAN_BASIC_AUTH: basicAuth,
+      LXE_SHANGMAN_PROCESSED_PASSWORD: "next-password",
     });
+    expect(configuredStore.environment().LXE_SHANGMAN_CONFIG_REVISION).not.toBe(firstRevision);
 
     const cleared = configuredStore.save({
       workspace_root: join(root, "workspace"),
       shangman: { action: "clear" },
     });
     expect(cleared.shangman).toMatchObject({ managed: true, configured: false });
-    expect(store.environment()).toMatchObject({
+    expect(configuredStore.environment()).toMatchObject({
       LXE_SHANGMAN_TENANT_ID: "",
       LXE_SHANGMAN_USERNAME: "",
       LXE_SHANGMAN_PROCESSED_PASSWORD: "",
-      LXE_SHANGMAN_BASIC_AUTH: "",
     });
   });
 
-  test("supplies Shangman platform client authorization without an extra user field", () => {
+  test("does not let legacy environment client authorization override persisted Shangman credentials", () => {
     const root = createRoot();
     const configuredStore = new DesktopConfigStore(root, join(root, "workspace"), safeStorage);
     const state = configuredStore.save({
@@ -438,6 +431,7 @@ describe("DesktopConfigStore", () => {
     });
 
     expect(store.state().shangman.issues).toEqual([]);
+    expect(store.environment()).not.toHaveProperty("LXE_SHANGMAN_BASIC_AUTH");
   });
 
   test("retires legacy model credentials and dotenv files before startup", () => {
@@ -682,12 +676,12 @@ describe("DesktopConfigStore", () => {
       address: "10.88.0.8/32",
     });
     expect(store.environment()).toMatchObject({
-      LXE_DATA_SERVER_ENABLED: "0",
-      LXE_DATA_SERVER_URL: "",
-      LXE_DATA_SERVER_API_KEY: "",
-      LXE_ERP_API_KEY: "",
-      LXE_DATA_SERVER_LOCAL_FALLBACK_ENABLED: "0",
+      LXE_DATA_SERVER_ENABLED: "1",
+      LXE_DATA_SERVER_URL: "http://10.88.0.1:8000",
     });
+    for (const name of ["LXE_DATA_SERVER_API_KEY", "LXE_ERP_API_KEY", "LXE_DATA_SERVER_LOCAL_FALLBACK_ENABLED"]) {
+      expect(store.environment()).not.toHaveProperty(name);
+    }
 
     store.saveCloudPermissionSnapshot({
       device_id: "0123456789abcdef0123456789abcdef",
@@ -752,10 +746,10 @@ describe("DesktopConfigStore", () => {
     });
     expect(store.environment()).toMatchObject({
       LXE_DATA_SERVER_ENABLED: "0",
-      LXE_DATA_SERVER_API_KEY: "",
-      LXE_ERP_API_KEY: "",
       LXE_MANAGED_LLM_API_KEY: "",
     });
+    expect(store.environment()).not.toHaveProperty("LXE_DATA_SERVER_API_KEY");
+    expect(store.environment()).not.toHaveProperty("LXE_ERP_API_KEY");
     expect(store.state()).toMatchObject({ complete: false, managed_model_configured: false });
 
     expect(store.abortCloudEnrollmentSwitch()).toMatchObject({
@@ -763,11 +757,12 @@ describe("DesktopConfigStore", () => {
       switch_in_progress: false,
     });
     expect(store.environment()).toMatchObject({
-      LXE_DATA_SERVER_ENABLED: "0",
-      LXE_DATA_SERVER_API_KEY: "",
-      LXE_ERP_API_KEY: "",
+      LXE_DATA_SERVER_ENABLED: "1",
+      LXE_DATA_SERVER_URL: "http://10.88.0.1:8000",
       LXE_MANAGED_LLM_API_KEY: "old-managed-model-token",
     });
+    expect(store.environment()).not.toHaveProperty("LXE_DATA_SERVER_API_KEY");
+    expect(store.environment()).not.toHaveProperty("LXE_ERP_API_KEY");
     expect(store.cloudPermissionSnapshot()).toMatchObject({ permission_profile: "fba" });
 
     store.beginCloudEnrollmentSwitch();
@@ -824,10 +819,10 @@ describe("DesktopConfigStore", () => {
     });
     expect(store.environment()).toMatchObject({
       LXE_DATA_SERVER_ENABLED: "0",
-      LXE_DATA_SERVER_API_KEY: "",
-      LXE_ERP_API_KEY: "",
       LXE_MANAGED_LLM_API_KEY: "",
     });
+    expect(store.environment()).not.toHaveProperty("LXE_DATA_SERVER_API_KEY");
+    expect(store.environment()).not.toHaveProperty("LXE_ERP_API_KEY");
     encryptedSecrets = readFileSync(join(root, "config", "secrets.bin"), "utf8");
     expect(encryptedSecrets).not.toContain("new-data-token");
     expect(encryptedSecrets).not.toContain("new-erp-token");

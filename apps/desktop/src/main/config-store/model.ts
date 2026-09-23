@@ -68,7 +68,13 @@ export interface DesktopConfig {
     yacang: { managed: boolean; mobile: string; production_enabled: boolean };
     zhihui_tms: { managed: boolean; account: string; production_enabled: boolean };
     feishu: { managed: boolean; app_id: string };
-    shangman: { managed: boolean; tenant_id: string; username: string; production_enabled: boolean };
+    shangman: {
+      managed: boolean;
+      tenant_id: string;
+      username: string;
+      revision: string;
+      production_enabled: boolean;
+    };
   };
   logging: {
     profile: DesktopLogProfile;
@@ -101,7 +107,6 @@ export interface DesktopSecrets {
   zhihui_tms_session: ZhihuiTmsSessionRecord | null;
   feishu_app_secret: string;
   shangman_processed_password: string;
-  shangman_basic_auth: string;
   data_server_api_key: string;
   cloud_identity_candidate: string;
   cloud_business_token: string;
@@ -157,7 +162,7 @@ const defaultConfig = (catalog: LlmProviderCatalog): DesktopConfig => {
       yacang: { managed: false, mobile: "", production_enabled: false },
       zhihui_tms: { managed: false, account: "", production_enabled: false },
       feishu: { managed: false, app_id: "" },
-      shangman: { managed: false, tenant_id: "", username: "", production_enabled: false },
+      shangman: { managed: false, tenant_id: "", username: "", revision: "", production_enabled: false },
     },
     logging: { profile: "standard", retention_days: 7 },
     cloud: {
@@ -182,7 +187,6 @@ const DEFAULT_SECRETS: DesktopSecrets = {
   zhihui_tms_session: null,
   feishu_app_secret: "",
   shangman_processed_password: "",
-  shangman_basic_auth: "",
   data_server_api_key: "",
   cloud_identity_candidate: "",
   cloud_business_token: "",
@@ -339,7 +343,7 @@ export const parseSettings = (
   assertOnlyFields(yacang, ["managed", "mobile", "production_enabled"], "settings.integrations.yacang");
   assertOnlyFields(zhihuiTms, ["managed", "account", "production_enabled"], "settings.integrations.zhihui_tms");
   assertOnlyFields(feishu, ["managed", "app_id"], "settings.integrations.feishu");
-  assertOnlyFields(shangman, ["managed", "tenant_id", "username", "production_enabled"], "settings.integrations.shangman");
+  assertOnlyFields(shangman, ["managed", "tenant_id", "username", "revision", "production_enabled"], "settings.integrations.shangman");
   assertFieldTypes(ziniao, {
     managed: "boolean", company: "string", username: "string", app_version: "string",
     app_path: "string", webdriver_path: "string",
@@ -493,6 +497,7 @@ export const parseConfig = (
         managed: Boolean(rawShangman.managed),
         tenant_id: text(rawShangman.tenant_id),
         username: text(rawShangman.username),
+        revision: text(rawShangman.revision),
         production_enabled: rawShangman.production_enabled === true,
       },
     },
@@ -561,7 +566,6 @@ export const parseSecrets = (raw: unknown): DesktopSecrets => {
     zhihui_tms_session: parsedZhihuiSession,
     feishu_app_secret: text(value.feishu_app_secret),
     shangman_processed_password: text(value.shangman_processed_password),
-    shangman_basic_auth: text(value.shangman_basic_auth),
     data_server_api_key: text(value.data_server_api_key),
     cloud_identity_candidate: text(value.cloud_identity_candidate),
     cloud_business_token: text(value.cloud_business_token),

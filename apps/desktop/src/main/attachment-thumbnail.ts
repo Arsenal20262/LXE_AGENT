@@ -23,8 +23,14 @@ export async function attachmentThumbnail(path: string, edge: number): Promise<s
     if (length > current.size) throw new Error("Image file grew while reading its preview");
     bytes = buffer.subarray(0, length);
   } finally { await file.close(); }
-  const image = nativeImage.createFromBuffer(bytes);
-  if (image.isEmpty()) throw new Error(`Electron could not decode image preview: ${path}`);
+  return imageBytesThumbnail(bytes, edge, path);
+}
+
+/** Preview historical bytes using the same limits as file previews. */
+export function imageBytesThumbnail(bytes: Uint8Array, edge: number, name = "historical image"): string {
+  if (bytes.byteLength > MAX_SCREENSHOT_BYTES) throw new Error("Image preview source exceeds 20 MiB");
+  const image = nativeImage.createFromBuffer(Buffer.from(bytes));
+  if (image.isEmpty()) throw new Error(`Electron could not decode image preview: ${name}`);
   const { width, height } = image.getSize();
   if (width * height > MAX_SCREENSHOT_PIXELS) throw new Error("Image preview exceeds 40000000 pixels");
   const scale = Math.min(1, edge / Math.max(width, height));

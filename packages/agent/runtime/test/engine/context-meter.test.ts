@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { contextFingerprint, latestContextAnchor, measureContext } from "../../src/engine/context-meter";
-import { requestContextTokenEstimate, sanitizeMessagesForProvider, pruneProcessedHistoryImages } from "../../src/engine/context";
+import { requestContextTokenEstimate, sanitizeMessagesForProvider } from "../../src/engine/context";
 import { normalizeTranscriptMessages } from "../../src/state/transcript";
 import type { RuntimeMessage } from "../../src/engine/types";
 
@@ -30,14 +30,14 @@ test("replay and sanitization retain valid anchors, user XML and invalid metadat
   const summary: RuntimeMessage = {role:"compactionSummary",summary:"summary",tokensBefore:900,details:{readFiles:[],modifiedFiles:[]},contextTokenAnchor:anchor};
   expect(latestContextAnchor(sanitizeMessagesForProvider(normalizeTranscriptMessages([summary])).messages)).toEqual(anchor);
 });
-test("image cleanup changes only heuristic delta, not anchor usage", () => {
+test("retained image bytes do not count as text tokens or alter the usage anchor", () => {
   const history: RuntimeMessage[] = [{role:"user",content:[{type:"image",source:{type:"base64",media_type:"image/png",data:"AAAA"}}]}, ...messages];
-  const before = requestContextTokenEstimate("s",history);
-  const cleaned = pruneProcessedHistoryImages(history).messages;
-  const after = requestContextTokenEstimate("s",cleaned);
-  expect(after).toBeLessThan(before);
-  expect(measureContext(cleaned,after,fingerprint,10000).tokens).toBe(Math.max(0,200+after-100));
-  expect(latestContextAnchor(cleaned)).toEqual(anchor);
+  const expanded = structuredClone(history);
+  (expanded[0]!.content as import("@lxe/protocol").JsonObject[])[0]!.source = {type:"base64",media_type:"image/png",data:"AAAA".repeat(100_000)};
+  const estimate = requestContextTokenEstimate("s", history);
+  expect(requestContextTokenEstimate("s", expanded)).toBe(estimate);
+  expect(measureContext(expanded,estimate,fingerprint,10000).tokens).toBe(Math.max(0,200+estimate-100));
+  expect(latestContextAnchor(expanded)).toEqual(anchor);
 });
 
 test("all provider wire builders omit anchors and keep the original request prefix", async () => {

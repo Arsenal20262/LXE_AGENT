@@ -21,6 +21,8 @@ import {
 } from "lucide-react";
 
 import "./styles.css";
+import "./desktop/update-control.css";
+import { SidebarStatus } from "./desktop/sidebar-status";
 import { ConversationDisplayController, sendConversationMessage } from "./features/sessions/display-controller";
 import { useConversationEntry } from "./features/sessions/use-conversation-entry";
 import { useSessionStatus } from "./api/queries";
@@ -84,8 +86,8 @@ import {
   SessionDetailView,
   SessionsIndex
 } from "./features/sessions/view";
-import { SkillsView } from "./features/skills/view";
-import { UserSkillsView, type SkillConversationAction } from "./features/skills/user-view";
+import { SkillsCatalogView, type SkillConversationAction } from "./features/skills/user-view";
+import { AddSkillMenu } from "./features/skills/add-menu";
 import { appendComposerDraftPrompt } from "./features/sessions/composer-draft";
 import type { SkillPayload } from "@lxe/desktop-protocol";
 import { StatsView } from "./features/stats/view";
@@ -96,7 +98,6 @@ import { InputAssetsWorkbench, useInputAssetSlots } from "./features/workbench/i
 import { DesktopShell } from "./desktop/shell";
 import type { DesktopSettingsSection } from "./desktop/settings-model";
 import { DashboardRootErrorBoundary } from "./root-error-boundary";
-import { BrandMark } from "./shared/ui/brand-mark";
 import {
   dashboardRouteFromHistory,
   type WorkbenchView,
@@ -114,12 +115,14 @@ const DOCS_HOME_PATH = "README.md";
 
 function WorkspaceView<T extends string>({
   activeView,
+  actions,
   children,
   items,
   label,
   onSelect,
 }: {
   activeView: T;
+  actions?: ReactNode;
   children: ReactNode;
   items: ReadonlyArray<{ id: T; label: string }>;
   label: string;
@@ -128,8 +131,7 @@ function WorkspaceView<T extends string>({
   return (
     <section className="workspace-view">
       <header className="workspace-view-header">
-        <h2>{label}</h2>
-        <nav aria-label={label} className="workspace-subnav">
+        <div className="workspace-header-actions"><nav aria-label={label} className="workspace-subnav">
           {items.map((item) => (
             <button
               aria-current={activeView === item.id ? "page" : undefined}
@@ -141,7 +143,7 @@ function WorkspaceView<T extends string>({
               {item.label}
             </button>
           ))}
-        </nav>
+        </nav>{actions}</div>
       </header>
       <div className="workspace-view-content">{children}</div>
     </section>
@@ -433,7 +435,6 @@ function App({
 
   function startSkillConversation(action: SkillConversationAction, skill?: SkillPayload) {
     const prompt = action === "create" ? t.userSkills.createPrompt
-      : action === "edit" && skill ? t.userSkills.editPrompt(skill.name, skill.location)
       : skill ? t.userSkills.usePrompt(skill.name) : "";
     if (!prompt) return;
     if (!newConversation) {
@@ -762,10 +763,10 @@ function App({
     { id: "activity", label: t.nav.activity, icon: <ChartColumn size={16} /> },
   ];
   const capabilityItems: Array<{ id: CapabilityView; label: string }> = [
-    { id: "models", label: t.nav.models },
     { id: "skills", label: t.nav.skills },
     { id: "tools", label: t.nav.tools },
     { id: "connections", label: t.nav.connections },
+    { id: "models", label: t.nav.models },
   ];
   const pageTitle = activeSection === "home"
     ? t.home.title
@@ -904,20 +905,7 @@ function App({
               deleteBlockedSessionIds={deleteBlockedSessionIds}
             />
           </div>
-          <button
-            aria-label={t.sidebar.statusAndSettings}
-            className="sidebar-status-card"
-            title={t.sidebar.statusAndSettings}
-            type="button"
-            onClick={() => onOpenDesktopSettings?.("status")}
-          >
-            <span className="sidebar-status-icon">
-              <BrandMark />
-            </span>
-            <span className="sidebar-status-copy">
-              <span className="sidebar-status-title">{t.sidebar.statusAndSettings}</span>
-            </span>
-          </button>
+          <SidebarStatus onOpen={() => onOpenDesktopSettings?.("status")} />
         </aside>
 
         <section className={showDashboardHome ? "main-panel dashboard-home-panel" : "main-panel"}>
@@ -1027,6 +1015,8 @@ function App({
                 items={capabilityItems}
                 label={t.nav.capabilities}
                 onSelect={openCapabilityView}
+                actions={capabilityView === "skills" ? <AddSkillMenu disabled={!dashboardRuntimeReady}
+                  onAdd={() => startSkillConversation("create")} /> : undefined}
               >
                 {capabilityView === "models" ? (
                   !dashboardRuntimeReady ? <EmptyState label={t.conversation.unavailable} />
@@ -1042,11 +1032,12 @@ function App({
                   !dashboardRuntimeReady ? <EmptyState label={t.conversation.unavailable} />
                     : skillsQuery.isPending || commandsQuery.isPending ? <EmptyState label={t.common.loading} />
                     : skillsQuery.data && commandsQuery.data
-                      ? <><UserSkillsView onConversation={startSkillConversation} /><SkillsView
-                          skills={skillsQuery.data.items.filter(skill => skill.source !== "user")}
+                      ? <SkillsCatalogView
+                          skills={skillsQuery.data.items}
                           commands={commandsQuery.data.items}
                           onOpen={setDetailTarget}
-                        /></>
+                          onConversation={startSkillConversation}
+                        />
                       : <EmptyState label={t.common.errorPrefix(t.errors.api, queryError(skillsQuery.error || commandsQuery.error))} />
                 ) : null}
                 {capabilityView === "tools" ? (

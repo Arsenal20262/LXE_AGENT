@@ -51,7 +51,6 @@ describe("project environment", () => {
       KIMI_CODE_API_KEY: "secret",
       FEISHU_APP_SECRET: "feishu-secret",
       LXE_SHANGMAN_PROCESSED_PASSWORD: "processed-password",
-      LXE_SHANGMAN_BASIC_AUTH: "Basic ZHVtbXk6cGFzcw==",
       LXE_SHANGMAN_PROD_ENABLED: "true",
       ZHIHUI_TMS_PASSWORD: "fixture-tms-secret",
       FEISHU_APP_ID: "must-come-from-settings",
@@ -62,7 +61,6 @@ describe("project environment", () => {
     })).toEqual({
       FEISHU_APP_SECRET: "feishu-secret",
       LXE_SHANGMAN_PROCESSED_PASSWORD: "processed-password",
-      LXE_SHANGMAN_BASIC_AUTH: "Basic ZHVtbXk6cGFzcw==",
       LXE_SHANGMAN_PROD_ENABLED: "true",
       ZHIHUI_TMS_PASSWORD: "fixture-tms-secret",
       LXE_SAIHU_MCP_API_KEY: "saihu-mcp-secret",

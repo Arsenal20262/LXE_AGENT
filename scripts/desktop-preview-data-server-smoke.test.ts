@@ -19,16 +19,17 @@ const serveOnAvailablePort = (fetch: (request: Request) => Promise<Response>) =>
   throw new Error("No available local port for Preview Data Server smoke test");
 };
 
-test("Scoped desktop environment uploads to the configured Data Server without logging its API key", async () => {
+test("Scoped desktop environment uploads natively without sending or logging legacy credentials", async () => {
   const root = mkdtempSync(join(tmpdir(), "lxe-preview-data-server-smoke-"));
   const dataRoot = join(root, "var");
   const apiKey = "lxe_run_" + "t".repeat(43);
   const managedSecret = "inherited-admin-secret-must-not-win";
-  const uploads: Array<{ authorization: string; body: string }> = [];
+  const uploads: Array<{ authorization: string; client: string; body: string }> = [];
   const server = serveOnAvailablePort(async (request) => {
     const body = await request.text();
     uploads.push({
       authorization: request.headers.get("authorization") ?? "",
+      client: request.headers.get("x-lxe-client") ?? "",
       body,
     });
     const turns = (JSON.parse(body) as { turns: Array<{ sequence: number }> }).turns;
@@ -127,7 +128,8 @@ test("Scoped desktop environment uploads to the configured Data Server without l
     initialTasks.shift()?.();
     for (let attempt = 0; attempt < 100 && uploads.length === 0; attempt += 1) await Bun.sleep(1);
     expect(uploads).toHaveLength(1);
-    expect(uploads[0]?.authorization).toBe(`Bearer ${apiKey}`);
+    expect(uploads[0]?.authorization).toBe("");
+    expect(uploads[0]?.client).toBe("cli");
     expect(JSON.parse(uploads[0]?.body ?? "{}")).toMatchObject({
       protocol_version: 1,
       gateway_id: "preview-gateway",

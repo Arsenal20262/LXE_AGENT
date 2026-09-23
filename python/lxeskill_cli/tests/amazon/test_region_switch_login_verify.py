@@ -64,6 +64,49 @@ def test_site_aliases_include_australia() -> None:
     assert "澳大利亚" in aliases
 
 
+@pytest.mark.parametrize("site,expected", [
+    ("sa", "SA"), ("SA", "SA"), ("沙特", "SA"), ("沙特阿拉伯", "SA"),
+    ("Saudi Arabia", "SA"), ("ae", "AE"), ("AE", "AE"), ("UAE", "AE"),
+    ("阿联酋", "AE"), ("阿拉伯联合酋长国", "AE"), ("United Arab Emirates", "AE"),
+])
+def test_normalize_middle_east_sites(site, expected):
+    assert region_switch.normalize_site_code(site) == expected
+
+
+@pytest.mark.parametrize("target,label", [
+    ("SA", "USA"), ("US", "AUS"), ("IT", "United Arab Emirates"),
+    ("AE", "Saudi Arabia"), ("SA", "United Arab Emirates"),
+])
+def test_country_labels_do_not_match_other_country_codes(target, label):
+    assert not region_switch._label_matches_site(label, target)
+
+
+@pytest.mark.parametrize("site,option,home", [
+    ("sa", "Saudi Arabia", "沙特阿拉伯"),
+    ("ae", "United Arab Emirates", "阿联酋"),
+    ("SA", "SA (当前)", "Saudi Arabia"),
+    ("AE", "UAE", "阿拉伯联合酋长国"),
+])
+def test_switch_region_supports_middle_east_sites(monkeypatch, site, option, home):
+    _patch_successful_switcher(
+        monkeypatch, current_path="/home", initial_label="USA",
+        option_label=option, home_label=home,
+    )
+    result = region_switch.switch_region(_Session(), site)
+    assert result["switched"] is True
+    assert result["site"] == site.upper()
+    assert result["current_label"] == home
+
+
+@pytest.mark.parametrize("site", ["SA", "AE"])
+def test_middle_east_site_must_be_available_in_store(monkeypatch, site):
+    _patch_successful_switcher(
+        monkeypatch, current_path="/home", initial_label="USA", option_label="USA",
+    )
+    with pytest.raises(RuntimeError, match=f"站点切换页未找到目标站点.*target={site}"):
+        region_switch.switch_region(_Session(), site)
+
+
 def test_switch_region_skips_switcher_when_current_label_matches_target(monkeypatch) -> None:
     monkeypatch.setattr(region_switch.time, "sleep", lambda _seconds: None)
     monkeypatch.setattr(region_switch, "_read_home_region_label", lambda _session: "英国")

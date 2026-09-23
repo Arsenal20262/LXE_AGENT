@@ -20,7 +20,7 @@ describe("desktop runtime environment policy", () => {
     expect(source.AGENT_STREAM_TRACE_ENABLED).toBe("1");
   });
 
-  test("removes retired split Shangman credentials while preserving the new contract", () => {
+  test("removes retired Shangman credentials while preserving the persisted-auth contract", () => {
     const source = {
       LXE_SHANGMAN_PASSWORD: "old-password",
       LXE_SHANGMAN_BASIC_USERNAME: "old-user",
@@ -31,7 +31,6 @@ describe("desktop runtime environment policy", () => {
     };
     expect(withoutRetiredShangmanEnvironment(source)).toEqual({
       LXE_SHANGMAN_PROCESSED_PASSWORD: "processed-password",
-      LXE_SHANGMAN_BASIC_AUTH: "Basic ZHVtbXk6cGFzcw==",
       LXE_SHANGMAN_PROD_ENABLED: "false",
     });
     expect(source.LXE_SHANGMAN_PASSWORD).toBe("old-password");

@@ -1,3 +1,5 @@
+import { imageBytesThumbnail } from "./attachment-thumbnail";
+import { UpdateBusyError } from "./update-service";
 import { prepareConversationAttachments } from "./conversation-submission";
 import { existsSync, mkdirSync } from "node:fs";
 import { access } from "node:fs/promises";
@@ -45,6 +47,7 @@ import {
   openConversationArtifact,
   openConversationAttachment,
   previewConversationAttachment,
+  previewConversationImageView,
   revealConversationArtifact,
 } from "./conversation-artifacts";
 import { attachmentThumbnail } from "./attachment-thumbnail";
@@ -120,6 +123,7 @@ export interface DesktopGatewayOptions {
 }
 
 export class DesktopGateway {
+  private updatePreparing = false;
   private readonly imageProcessor = new ElectronInboundImageProcessor();
   private composition: DirectGatewayComposition | undefined;
   private runtime: ProcessAgentRuntime | undefined;
@@ -131,6 +135,7 @@ export class DesktopGateway {
   constructor(private readonly options: DesktopGatewayOptions) {}
 
   async start(): Promise<void> {
+    if (this.updatePreparing) throw new Error("Application update is preparing");
     if (this.composition) return;
     this.gatewayState = "starting";
     this.publishHealth();
@@ -302,10 +307,21 @@ export class DesktopGateway {
     }
   }
 
-  async stop(): Promise<void> {
+  beginUpdate(): () => void {
+    if (!this.composition || !this.runtime?.isReady) throw new UpdateBusyError("Agent 状态尚未就绪，无法确认是否空闲");
+    const release = this.composition.parts.scheduler.beginUpdate();
+    if (!release) throw new UpdateBusyError("仍有任务正在运行或排队，请结束任务后再次点击更新");
+    this.updatePreparing = true;
+    return () => { this.updatePreparing = false; release(); };
+  }
+
+  async stop(strict = false): Promise<void> {
     const composition = this.composition;
-    this.composition = undefined;
     if (composition) await composition.stop();
+    if (strict && composition?.parts.lifecycle.shutdownError) {
+      throw new Error("更新前清理失败：" + composition.parts.lifecycle.shutdownError + "。请手动重启应用后重试");
+    }
+    this.composition = undefined;
     this.store?.stop();
     this.store = undefined;
     this.runtime = undefined;
@@ -315,11 +331,13 @@ export class DesktopGateway {
   }
 
   async restart(): Promise<void> {
+    if (this.updatePreparing) throw new Error("Application update is preparing");
     await this.stop();
     await this.start();
   }
 
   async restartAgent(): Promise<DesktopHealth> {
+    if (this.updatePreparing) throw new Error("Application update is preparing");
     if (!this.runtime) {
       await this.start();
       return this.health();
@@ -472,12 +490,25 @@ export class DesktopGateway {
         revealPath: (path) => shell.showItemInFolder(path),
       }, sessionId, artifactId) as DashboardRpcResult<O>;
     }
+    if (call.operation === "sessions.image_view.preview") {
+      return await previewConversationImageView({
+        resolvePreview: (sessionId, viewId) => this.runtime!.resolveImagePreview(sessionId, "image_view", viewId),
+        thumbnail: attachmentThumbnail, imageThumbnail: imageBytesThumbnail,
+      }, call.input.session_id, call.input.view_id, call.input.variant) as DashboardRpcResult<O>;
+    }
     if (call.operation === "sessions.attachment.preview") {
       return await previewConversationAttachment({
-        resolveAttachment: async (sessionId, attachmentId) =>
-          this.composition!.parts.conversations.resolveAttachmentPreview(sessionId, attachmentId)
-          ?? await this.runtime!.resolveAttachment(sessionId, attachmentId),
-        thumbnail: attachmentThumbnail,
+        resolvePreview: async (sessionId, attachmentId) => {
+          const stored = await this.runtime!.resolveImagePreview(sessionId, "attachment", attachmentId);
+          if (stored?.source === "history") return stored;
+          const conversations = this.composition!.parts.conversations;
+          const image = conversations.resolveAttachmentPreviewImage(sessionId, attachmentId);
+          if (image) return { source: "history", image };
+          if (stored) return stored;
+          const path = conversations.resolveAttachmentPreview(sessionId, attachmentId);
+          return path ? { source: "current_file", path } : undefined;
+        },
+        thumbnail: attachmentThumbnail, imageThumbnail: imageBytesThumbnail,
       }, call.input.session_id, call.input.attachment_id, call.input.variant) as DashboardRpcResult<O>;
     }
     if (call.operation === "sessions.attachment.open") {

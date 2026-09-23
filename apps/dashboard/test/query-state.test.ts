@@ -150,3 +150,21 @@ describe("Dashboard Query state", () => {
     expect(client.getQueryData(dashboardQueryKeys.models.list)).toBeUndefined();
   });
 });
+
+test("history writes refresh fallback and failed image previews without reloading stable historical images", async () => {
+  const client = createDashboardQueryClient();
+  const history = ["sessions", "image-view-preview", "s", "history", "thumbnail"];
+  const fallback = ["sessions", "attachment-preview", "s", "file", "thumbnail"];
+  const failed = ["sessions", "image-view-preview", "s", "failed", "expanded"];
+  const other = ["sessions", "attachment-preview", "other", "file", "thumbnail"];
+  client.setQueryData(history, { source: "history", data_url: "saved" });
+  client.setQueryData(fallback, { source: "current_file", data_url: "mutable" });
+  client.setQueryData(other, { source: "current_file", data_url: "other" });
+  await client.fetchQuery({ queryKey: failed, queryFn: () => { throw new Error("not yet available"); }, retry: false }).catch(() => {});
+  await applyDashboardInvalidation(client, { revision: 1, domains: ["sessions"], session_ids: ["s"] });
+  expect(client.getQueryState(history)?.isInvalidated).toBe(false);
+  expect(client.getQueryState(other)?.isInvalidated).toBe(false);
+  expect(client.getQueryState(fallback)?.isInvalidated).toBe(true);
+  expect(client.getQueryState(failed)?.isInvalidated).toBe(true);
+  client.clear();
+});

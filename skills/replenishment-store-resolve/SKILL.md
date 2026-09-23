@@ -1,12 +1,12 @@
 ---
 name: replenishment-store-resolve
 description: 解析马帮 Amazon 店铺名称、网页查询 ID 和真实候选。用于备货前确认店铺、查询店铺 ID 或处理模糊名称；解析结果可能为整组，下载时仍须限定单站点。
-type: amazon_replenish
+type: replenishment
 commands:
   - lxeskill replenish store resolve
 ---
 
-# 解析马帮店铺
+# 解析马帮 Amazon 店铺
 
 ## 执行与错误
 

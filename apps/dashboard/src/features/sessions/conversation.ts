@@ -144,6 +144,7 @@ function appendArtifactGroups(items: ConversationRenderItem[]): ConversationRend
 }
 
 export interface ToolOperation {
+  image_view?: DesktopConversationStreamPayload["tool_steps"][number]["image_view"];
   key: string;
   name: string;
   argument: string;
@@ -373,12 +374,17 @@ const toolResultStatus = (result: unknown, toolName = ""): ToolOperation["status
  * failure.
  */
 export function toolOperations(messages: SessionMessage[]): ToolOperation[] {
+  const imageViews = new Map(messages.flatMap(message => (message.image_views ?? []).map(view => [
+    JSON.stringify([view.turn_id, view.tool_call_id]), view,
+  ] as const)));
+  const callTurns = new Map<unknown, string>();
   const calls: unknown[] = [];
   const callStates = new Map<unknown, string | undefined>();
   const results: unknown[] = [];
   for (const message of messages) {
     for (const call of toolCallBlocks(message)) {
       calls.push(call);
+      callTurns.set(call, message.turn?.turn_id ?? "");
       callStates.set(call, message.turn?.status ?? undefined);
     }
     const own = toolResultBlocks(message);
@@ -417,12 +423,17 @@ export function toolOperations(messages: SessionMessage[]): ToolOperation[] {
     const result = take(callId);
     const name = (isRecord(call) ? scalarText(call.name) : "") || "tool";
     const argument = operationArgument(call);
+    const candidates = callTurns.get(call) ? [] : [...imageViews.values()].filter(view => view.tool_call_id === callId);
+    const view = imageViews.get(JSON.stringify([callTurns.get(call), callId]))
+      ?? (!callTurns.get(call) && candidates.length === 1 ? candidates[0] : undefined);
+    const imageView = name === "read" && view && (result === undefined || toolResultStatus(result, name) === "success") ? view : undefined;
     return {
+      ...(imageView ? { image_view: { view_id: imageView.view_id, name: imageView.name, media_type: imageView.media_type } } : {}),
       key: callId || `call-${index}`,
       name,
       argument,
       ...toolOperationPresentation(name, argument),
-      status: result === undefined && ["running", "queued"].includes(callStates.get(call) ?? "")
+      status: imageView ? "success" : result === undefined && ["running", "queued"].includes(callStates.get(call) ?? "")
         ? "pending" : toolResultStatus(result, name),
       call,
       result,

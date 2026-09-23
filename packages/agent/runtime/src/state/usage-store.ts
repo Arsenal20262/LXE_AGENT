@@ -4,6 +4,9 @@ import type { JsonObject } from "@lxe/protocol";
 import type { RuntimeTurnUsageRecord } from "../engine/types";
 import { allPrepared, clippedText, getPrepared, parseObject, text } from "./sql";
 
+// Read-only statistics normalization. Uploads and stored events retain their original values.
+const statisticsModule = "CASE WHEN module = 'amazon_replenish' THEN 'replenishment' ELSE module END";
+
 /**
  * Owns the turn_usage* tables: per-turn telemetry, tool/skill counters and the
  * cloud export cursor. Deliberately independent of session lifecycle — usage
@@ -253,11 +256,11 @@ export class UsageStore {
       FROM turn_usage_items WHERE kind = 'skill_execution' AND started_at >= ?
     `, cutoff);
     const modules = this.all<Record<string, unknown>>(`
-      SELECT module, COUNT(DISTINCT name) AS skills, COUNT(DISTINCT turn_id) AS turns,
+      SELECT ${statisticsModule} AS module, COUNT(DISTINCT name) AS skills, COUNT(DISTINCT turn_id) AS turns,
              COALESCE(SUM(calls), 0) AS executions, COALESCE(SUM(errors), 0) AS failures,
              COALESCE(SUM(duration_ms), 0) AS duration_ms
       FROM turn_usage_items WHERE kind = 'skill_execution' AND started_at >= ?
-      GROUP BY module ORDER BY executions DESC, module ASC
+      GROUP BY ${statisticsModule} ORDER BY executions DESC, module ASC
     `, cutoff);
     // The hour the operator actually works in, in their own timezone: the busiest
     // one wins, and the earliest breaks a tie so the answer is stable.
@@ -313,7 +316,7 @@ export class UsageStore {
     const cutoff = Date.now() / 1_000 - Math.max(1, Math.min(Math.trunc(days), 365)) * 86_400;
     const skillName = text(name);
     const rows = this.all<Record<string, unknown>>(`
-      SELECT name, MAX(module) AS module,
+      SELECT name, MAX(${statisticsModule}) AS module,
              COALESCE(SUM(CASE WHEN kind = 'skill_activation' THEN calls ELSE 0 END), 0) AS activations,
              COALESCE(SUM(CASE WHEN kind = 'skill_execution' THEN calls ELSE 0 END), 0) AS executions,
              COALESCE(SUM(CASE WHEN kind = 'skill_execution' THEN errors ELSE 0 END), 0) AS failures,
@@ -432,9 +435,9 @@ export class UsageStore {
              provider, model, status, elapsed_ms, llm_calls, tool_calls, input_tokens, output_tokens,
              cache_read_input_tokens, cache_creation_input_tokens
       FROM turn_usage
-      WHERE sequence > ? AND started_at >= ?
+      WHERE sequence > ?
       ORDER BY sequence ASC LIMIT ?
-    `, acknowledgedSequence, safeCutoff, safeLimit);
+    `, acknowledgedSequence, safeLimit);
     const turns = rows.map((row) => ({
       sequence: Number(row.sequence ?? 0),
       turn_id: clippedText(row.turn_id, 256),
@@ -463,12 +466,12 @@ export class UsageStore {
         FROM turn_usage_items AS item
         JOIN (
           SELECT turn_id FROM turn_usage
-          WHERE sequence > ? AND started_at >= ?
+          WHERE sequence > ?
           ORDER BY sequence ASC LIMIT ?
         ) AS selected ON selected.turn_id = item.turn_id
         WHERE item.kind IN ('tool', 'skill_activation', 'skill_execution')
         ORDER BY item.item_id ASC
-      `, acknowledgedSequence, safeCutoff, safeLimit);
+      `, acknowledgedSequence, safeLimit);
       const itemCounts = new Map<string, number>();
       for (const row of items) {
         const turnId = text(row.turn_id);
@@ -489,8 +492,8 @@ export class UsageStore {
     const lastSequence = Number(turns.at(-1)?.sequence ?? acknowledgedSequence);
     const more = this.get<{ present: number }>(`
       SELECT 1 AS present FROM turn_usage
-      WHERE sequence > ? AND started_at >= ? LIMIT 1
-    `, lastSequence, safeCutoff);
+      WHERE sequence > ? LIMIT 1
+    `, lastSequence);
     return { turns, acknowledged_sequence: acknowledgedSequence, has_more: Boolean(more?.present) };
   }
 

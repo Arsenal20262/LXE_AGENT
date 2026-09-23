@@ -9,6 +9,7 @@ const RETIRED_SHANGMAN_VARIABLES = [
   "LXE_SHANGMAN_PASSWORD",
   "LXE_SHANGMAN_BASIC_USERNAME",
   "LXE_SHANGMAN_BASIC_PASSWORD",
+  "LXE_SHANGMAN_BASIC_AUTH",
 ] as const;
 
 export function withoutRetiredAgentTraceEnvironment(source: Environment): Environment {

@@ -25,7 +25,8 @@ const numberedLinePrefix = (lineNumber: number): string =>
 /**
  * Selects a numbered line range from bounded source chunks. Text before the
  * requested range is discarded, and a selected line is retained only up to
- * the output budget. The iterator is closed as soon as the range is complete.
+ * the output budget. After a complete range, look ahead only far enough to
+ * distinguish another line from EOF before offering a continuation offset.
  */
 export async function scanNumberedTextChunks(
   chunks: AsyncIterable<Uint8Array>,
@@ -41,6 +42,8 @@ export async function scanNumberedTextChunks(
   let currentLineHasContent = false;
   let currentLineStarted = false;
   let currentLineBodyStart = 0;
+  let pendingCarriageReturn = false;
+  let rangeComplete = false;
 
   const selected = (): boolean => lineNumber >= startLine;
 
@@ -51,7 +54,11 @@ export async function scanNumberedTextChunks(
       body += value;
       return true;
     }
-    body += value.slice(0, remaining);
+    // Do not split a UTF-16 surrogate pair in an oversized first-line preview.
+    const end = remaining > 0
+      && /[\uD800-\uDBFF]/u.test(value[remaining - 1]!)
+      && /[\uDC00-\uDFFF]/u.test(value[remaining]!) ? remaining - 1 : remaining;
+    body += value.slice(0, end);
     return false;
   };
 
@@ -74,28 +81,31 @@ export async function scanNumberedTextChunks(
   const completeLine = (): NumberedTextRangeResult | undefined => {
     if (selected()) {
       if (!startSelectedLine()) return budgetStopResult();
-      if (body.endsWith("\r")) body = body.slice(0, -1);
       collectedLines += 1;
     }
     lineNumber += 1;
     currentLineHasContent = false;
     currentLineStarted = false;
-    if (collectedLines >= maxLines || body.length >= charBudget) {
-      return { body, hasMore: true, nextOffset: lineNumber };
-    }
+    rangeComplete = collectedLines >= maxLines || body.length >= charBudget;
     return undefined;
   };
 
   const consume = (text: string): NumberedTextRangeResult | undefined => {
     let cursor = 0;
     while (cursor < text.length) {
+      if (rangeComplete) return { body, hasMore: true, nextOffset: lineNumber };
       const newline = text.indexOf("\n", cursor);
       const end = newline === -1 ? text.length : newline;
-      const segment = text.slice(cursor, end);
+      let segment = (pendingCarriageReturn ? "\r" : "") + text.slice(cursor, end);
+      pendingCarriageReturn = false;
       if (segment.length > 0) currentLineHasContent = true;
+      // Delay a final CR so CRLF split across chunks does not consume budget.
+      if (segment.endsWith("\r")) {
+        pendingCarriageReturn = newline === -1;
+        segment = segment.slice(0, -1);
+      }
       if (selected()) {
         if (!startSelectedLine() || !appendBounded(segment)) return budgetStopResult();
-        if (newline === -1 && body.length >= charBudget) return budgetStopResult();
       }
       if (newline === -1) return undefined;
       const completed = completeLine();
@@ -117,9 +127,16 @@ export async function scanNumberedTextChunks(
     const stopped = consume(decoderTail);
     if (stopped) return stopped;
   }
+  if (pendingCarriageReturn && selected() && !appendBounded("\r")) return budgetStopResult();
   if (currentLineHasContent) {
     const completed = completeLine();
-    if (completed) return { body: completed.body, hasMore: false };
+    if (completed) return completed;
+  }
+  const totalLines = lineNumber - 1;
+  // Reading an empty file from its default offset is valid; there is no phantom
+  // extra line after a terminal newline in a nonempty file.
+  if (startLine > totalLines && !(totalLines === 0 && startLine === 1)) {
+    throw new Error(`Offset ${startLine} is beyond end of file (${totalLines} lines total)`);
   }
   return { body, hasMore: false };
 }
