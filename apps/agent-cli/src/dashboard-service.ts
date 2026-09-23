@@ -322,6 +322,9 @@ export class DashboardService {
   async call<O extends AgentDashboardRpcOperation>(
     call: AgentDashboardRpcCall<O>,
   ): Promise<DashboardRpcResult<O>> {
+    if (["skills.list", "skills.content", "skills.reference", "skills.user.list", "skills.user.content"].includes(call.operation)) {
+      await this.skillCatalog.refreshForUse();
+    }
     const handler = this.handlers[call.operation] as (
       input: DashboardRpcSpec[O]["input"],
     ) => DashboardRpcResult<O> | Promise<DashboardRpcResult<O>>;

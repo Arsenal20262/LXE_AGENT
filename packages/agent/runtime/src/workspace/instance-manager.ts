@@ -321,6 +321,7 @@ export class WorkspaceInstanceManager {
     const instance = this.instanceFor(workspace);
     const view = this.viewFor(instance, workspace);
     try {
+      await this.options.skillCatalog.refreshForUse();
       const changedGlobally = await this.refreshGlobal(true);
       if (changedGlobally) this.markAllDirty();
       return await this.reloadCurrentView(instance, view, true);
@@ -439,6 +440,7 @@ export class WorkspaceInstanceManager {
   }
 
   private async checkForChanges(view: WorkspaceView): Promise<void> {
+    await this.options.skillCatalog.refreshForUse();
     const changedGlobally = await this.refreshGlobal(false);
     if (changedGlobally) this.markAllDirty();
     const now = this.now();
@@ -473,9 +475,7 @@ export class WorkspaceInstanceManager {
     const checkedAt = this.now();
     const previousRevision = this.lastSkillRevision;
     if (force) this.options.beforeForceRefresh?.();
-    // Turn acquisition must see a just-saved skill even before the polling interval
-    // or filesystem watcher fires. refreshGlobal still single-flights concurrent turns.
-    this.options.skillCatalog.forceRefresh();
+    // Skill discovery belongs to turn acquisition and explicit reload, never watcher callbacks.
     this.lastSkillRevision = this.options.skillCatalog.revision();
     if (!force && this.globalInitialized && checkedAt < this.nextGlobalCheckAt) {
       return previousRevision !== this.lastSkillRevision;
@@ -623,14 +623,6 @@ export class WorkspaceInstanceManager {
     this.globalWatchersStarted = true;
     this.addWatcher(dirname(this.soulPath), false, (filename) =>
       !filename || filename.toLowerCase() === basename(this.soulPath).toLowerCase());
-    for (const root of this.options.skillCatalog.sourceRoots()) {
-      if (!existsSync(root)) continue;
-      if (!this.addWatcher(root, true)) this.addWatcher(root, false);
-    }
-    if (this.options.skillCatalog.statePath) {
-      const statePath = this.options.skillCatalog.statePath;
-      this.addWatcher(dirname(statePath), false, name => !name || basename(name) === basename(statePath));
-    }
     if (this.options.connectorStatePath) {
       const path = resolve(this.options.connectorStatePath);
       this.addWatcher(dirname(path), false, (filename) =>

@@ -16,7 +16,7 @@ const fixture = () => {
   const statePath = join(root, "var", "config", "skill-states.local.json");
   const changes: number[] = [];
   const catalog = new SkillCatalog(root, user, { repositorySkillsRoot: official, sharedSkillsRoot: shared,
-    statePath, refreshIntervalMs: 0, onChanged: revision => changes.push(revision) });
+    statePath, onChanged: revision => changes.push(revision) });
   return { root, official, user, shared, catalog, statePath, changes, files: new UserSkillFiles(catalog, join(root, "var")) };
 };
 const write = (root: string, folder: string, name = folder, extra = "") => {
@@ -29,6 +29,7 @@ test("official, managed and shared precedence is independent of enabled state", 
   const { official, user, shared, catalog, files } = fixture();
   const original = write(shared, "weekly"); write(user, "weekly"); write(official, "official");
   write(shared, "official");
+  catalog.forceRefresh();
   expect(catalog.list().map(item => [item.name, item.source])).toEqual([["official", "repository"], ["weekly", "user"]]);
   const [entry] = files.list();
   const disabled = files.setEnabled(entry!.id, entry!.version, false);
@@ -45,6 +46,7 @@ test("broken and duplicate external entries remain manageable without poisoning 
   const invalid = write(user, "broken"); writeFileSync(invalid, "---\nname: [\n---\n");
   write(user, "copy-a", "duplicate"); write(user, "copy-b", "duplicate");
   write(shared, "collision", "collision", "commands: [lxeskill owned]\n");
+  catalog.forceRefresh();
   expect(catalog.list().map(item => item.name)).toEqual(["official", "valid"]);
   expect(files.list()).toHaveLength(4);
   const broken = files.list().find(item => item.name === "broken")!;
@@ -52,6 +54,7 @@ test("broken and duplicate external entries remain manageable without poisoning 
   expect(broken.available).toBe(false);
   expect(broken.unavailable_reason).toContain(invalid);
   write(user, "broken");
+  catalog.forceRefresh();
   expect(catalog.get("broken")).toBeDefined();
   expect(catalog.get("collision")).toBeUndefined();
 });
@@ -59,11 +62,13 @@ test("broken and duplicate external entries remain manageable without poisoning 
 test("state survives restart and editing, stale versions cannot toggle or delete, deletion is recoverable", () => {
   const { root, official, user, shared, catalog, statePath, files } = fixture();
   const path = write(user, "weekly");
+  catalog.forceRefresh();
   const first = files.list()[0]!;
   const disabled = files.setEnabled(first.id, first.version, false);
   writeFileSync(path, readFileSync(path, "utf8") + "new instructions\n");
   expect(() => files.delete(disabled.id, disabled.version)).toThrow("Skill changed");
   const restarted = new SkillCatalog(root, user, { repositorySkillsRoot: official, sharedSkillsRoot: shared, statePath });
+  restarted.forceRefresh();
   expect(restarted.get("weekly")).toBeUndefined();
   const current = files.list()[0]!;
   expect(current.enabled).toBe(false);
@@ -72,6 +77,7 @@ test("state survives restart and editing, stale versions cannot toggle or delete
   expect(files.list()).toEqual([]);
   expect(readFileSync(join(removed.recycled_path, "SKILL.md"), "utf8")).toContain("new instructions");
   renameSync(removed.recycled_path, dirname(path));
+  catalog.forceRefresh();
   expect(files.list()[0]?.id).toBe(first.id);
   expect(files.list()[0]?.enabled).toBe(false);
   const restored = files.list()[0]!;
@@ -84,9 +90,11 @@ test("resources refresh versions and notifications; file access stays within the
   const path = write(user, "weekly");
   mkdirSync(join(dirname(path), "assets"));
   const resource = join(dirname(path), "assets", "template.txt"); writeFileSync(resource, "first");
+  catalog.forceRefresh();
   const first = files.list()[0]!;
   const before = changes.length;
   writeFileSync(resource, "updated resource");
+  catalog.forceRefresh();
   const updated = files.list()[0]!;
   expect(updated.version).not.toBe(first.version);
   expect(changes.length).toBeGreaterThan(before);
@@ -103,6 +111,7 @@ test("permission filters do not hide management entries or grant new command own
   const { user, files, catalog } = fixture();
   write(user, "restricted", "restricted", "type: amazon_fba\n");
   const policy = { allowedTypes: new Set(["default"]) };
+  catalog.forceRefresh();
   const entry = files.list(policy)[0]!;
   expect(entry.enabled).toBe(true); expect(entry.available).toBe(false);
   expect(files.setEnabled(entry.id, entry.version, true, policy).available).toBe(false);
@@ -114,6 +123,7 @@ test("canonical source aliases are deduplicated before conflicts", () => {
   write(user, "weekly");
   const alias = join(root, "alias"); symlinkSync(user, alias, process.platform === "win32" ? "junction" : "dir");
   const catalog = new SkillCatalog(root, user, { repositorySkillsRoot: official, sharedSkillsRoot: alias });
+  catalog.forceRefresh();
   expect(catalog.list()).toHaveLength(1); expect(catalog.entries()).toHaveLength(1);
 });
 
@@ -133,9 +143,10 @@ test("an overridden discovery root cannot discover recycled entries", () => {
   const user = join(root, "var");
   const trash = join(user, "trash", "skills");
   const catalog = new SkillCatalog(root, user, { repositorySkillsRoot: official, sharedSkillsRoot: false,
-    excludedRoots: [trash], refreshIntervalMs: 0 });
+    excludedRoots: [trash] });
   const files = new UserSkillFiles(catalog, user);
   write(user, "weekly");
+  catalog.forceRefresh();
   const skill = files.list()[0]!;
   files.delete(skill.id, skill.version);
   expect(files.list()).toEqual([]); expect(catalog.list()).toEqual([]);

@@ -55,8 +55,6 @@ export interface SkillCatalogEntry {
 }
 
 export interface SkillCatalogOptions {
-  refreshIntervalMs?: number;
-  now?: () => number;
   repositorySkillsRoot?: string;
   /** false is useful for isolated hosts and tests. */
   sharedSkillsRoot?: string | false;
@@ -180,7 +178,6 @@ export const parseSkillManifest = (path: string, source: SkillManifest["source"]
   };
 };
 
-const DEFAULT_REFRESH_INTERVAL_MS = 1_000;
 const MAX_SNAPSHOT_CACHE_ENTRIES = 32;
 
 interface CachedSkillCatalogSnapshot {
@@ -221,12 +218,10 @@ export class SkillCatalog {
   private signature = "";
   private generation = 0;
   private initialized = false;
-  private nextRefreshAt = 0;
+  private pendingRefresh: Promise<boolean> | undefined;
   private manifests: SkillManifest[] = [];
   private manifestsByName = new Map<string, SkillManifest>();
   private readonly snapshotCache = new Map<string, CachedSkillCatalogSnapshot>();
-  private readonly refreshIntervalMs: number;
-  private readonly now: () => number;
   private readonly repositorySkillsRoot: string;
   private catalogDiagnostics: SkillCatalogDiagnostic[] = [];
   private catalogEntries: SkillCatalogEntry[] = [];
@@ -245,24 +240,30 @@ export class SkillCatalog {
     this.excludedRoots = options.excludedRoots ?? [];
     this.onChanged = options.onChanged;
     this.repositorySkillsRoot = resolve(options.repositorySkillsRoot ?? join(projectRoot, "skills"));
-    this.refreshIntervalMs = Math.max(0, Math.trunc(
-      options.refreshIntervalMs ?? DEFAULT_REFRESH_INTERVAL_MS,
-    ));
-    this.now = options.now ?? (() => performance.now());
   }
 
   list(options: SkillPromptOptions = {}): SkillManifest[] {
     return this.cachedSnapshot(options).manifests.map((manifest) => structuredClone(manifest));
   }
 
-  /** Performs the throttled source check used by workspace turn acquisition. */
-  refreshIfNeeded(): boolean {
-    return this.refresh();
+  /** Explicit use boundary: concurrent consumers share a scan, later uses always re-read. */
+  refreshForUse(): Promise<boolean> {
+    if (this.pendingRefresh) return this.pendingRefresh;
+    const pending = new Promise<boolean>((resolveRefresh, rejectRefresh) => {
+      setImmediate(() => {
+        try { resolveRefresh(this.forceRefresh()); }
+        catch (error) { rejectRefresh(error); }
+      });
+    }).finally(() => {
+      if (this.pendingRefresh === pending) this.pendingRefresh = undefined;
+    });
+    this.pendingRefresh = pending;
+    return pending;
   }
 
   /** Re-reads every SKILL.md even when its cheap filesystem fingerprint is unchanged. */
   forceRefresh(): boolean {
-    return this.refresh(true);
+    return this.refresh();
   }
 
   revision(): number {
@@ -275,17 +276,14 @@ export class SkillCatalog {
   }
 
   entries(): SkillCatalogEntry[] {
-    this.refresh();
     return structuredClone(this.catalogEntries);
   }
 
   diagnostics(): SkillCatalogDiagnostic[] {
-    this.refresh();
     return this.catalogDiagnostics.map((diagnostic) => structuredClone(diagnostic));
   }
 
   get(name: string, options: SkillPromptOptions = {}): SkillManifest | undefined {
-    this.refresh();
     const manifest = this.manifestsByName.get(name.trim());
     return manifest && allowedBy(manifest, options) ? structuredClone(manifest) : undefined;
   }
@@ -308,7 +306,6 @@ export class SkillCatalog {
     options: SkillPromptOptions,
     workspace: SkillWorkspaceContext | string = this.projectRoot,
   ): CachedSkillCatalogSnapshot {
-    this.refresh();
     const resolvedWorkspace = skillWorkspaceContext(workspace);
     const key = JSON.stringify([optionsKey(options), resolvedWorkspace.directory, resolvedWorkspace.worktree]);
     const existing = this.snapshotCache.get(key);
@@ -370,9 +367,7 @@ export class SkillCatalog {
     ].join("\n");
   }
 
-  private refresh(force = false): boolean {
-    const checkedAt = this.now();
-    if (!force && this.initialized && checkedAt < this.nextRefreshAt) return false;
+  private refresh(): boolean {
     const repositoryRoot = this.repositorySkillsRoot;
     if (!existsSync(repositoryRoot) || !statSync(repositoryRoot).isDirectory()) {
       throw new SkillCatalogError(`repository Skill directory is missing: ${repositoryRoot}`);
@@ -466,7 +461,6 @@ export class SkillCatalog {
       }
     }
     const signature = createHash("sha256").update(JSON.stringify(entries)).digest("hex");
-    this.nextRefreshAt = checkedAt + this.refreshIntervalMs;
     if (this.initialized && signature === this.signature) return false;
     this.manifests = selected.filter(entry => entry.enabled && !entry.diagnostics.length)
       .map(entry => entry.manifest!).sort((a, b) => a.name.localeCompare(b.name));
@@ -485,5 +479,7 @@ export class SkillCatalog {
 }
 
 export function buildSkillIndexPrompt(projectRoot: string, options: SkillPromptOptions = {}): string {
-  return new SkillCatalog(projectRoot).buildPrompt(options);
+  const catalog = new SkillCatalog(projectRoot);
+  catalog.forceRefresh();
+  return catalog.buildPrompt(options);
 }

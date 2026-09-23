@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import {
   mkdtempSync,
   mkdirSync,
@@ -47,7 +47,7 @@ const setup = (options: {
     "---\nname: demo\ntype: default\ndescription: Demo workflow\n---\n# Demo\n",
     "utf8",
   );
-  const catalog = new SkillCatalog(resourceRoot, join(root, "missing-user"), { refreshIntervalMs: options.checkIntervalMs ?? 0, sharedSkillsRoot: false });
+  const catalog = new SkillCatalog(resourceRoot, join(root, "missing-user"), { sharedSkillsRoot: false });
   const connectorStatePath = join(root, "connector-state.json");
   if (options.connectorPolicy) writeFileSync(connectorStatePath, '{"version":1}', "utf8");
   const manager = new WorkspaceInstanceManager({
@@ -229,9 +229,11 @@ describe("WorkspaceInstanceManager", () => {
 
   test("debounces watcher invalidation and reloads existing views automatically", async () => {
     const listeners: Array<(filename: string) => void> = [];
-    const { manager, worktree, workspace } = setup({
+    const watched: string[] = [];
+    const { manager, worktree, workspace, catalog, resourceRoot } = setup({
       debounceMs: 0,
       watchPath: (_path, _options, listener) => {
+        watched.push(_path);
         listeners.push(listener);
         return { close: () => undefined, unref: () => undefined };
       },
@@ -240,6 +242,8 @@ describe("WorkspaceInstanceManager", () => {
     writeFileSync(path, "Watcher before", "utf8");
     const before = await manager.acquire(workspace());
     const generation = before.snapshot.generation;
+    expect(watched).not.toContain(join(resourceRoot, "skills"));
+    const scan = spyOn(catalog, "forceRefresh");
     before.release();
     writeFileSync(path, "Watcher after", "utf8");
     for (const listener of listeners) listener("AGENTS.md");
@@ -249,6 +253,8 @@ describe("WorkspaceInstanceManager", () => {
       await Bun.sleep(10);
     }
     expect(Number(manager.diagnostics().generation)).toBeGreaterThan(generation);
+    expect(scan).not.toHaveBeenCalled();
+    scan.mockRestore();
     const after = await manager.acquire(workspace());
     expect(after.snapshot.instructions_prompt).toContain("Watcher after");
     after.release();
@@ -342,14 +348,22 @@ describe("WorkspaceInstanceManager", () => {
 });
 
 
-test("the immediate next turn sees saved user skills before polls or watcher events", async () => {
+test("the immediate next turn sees saved skills while active leases keep their old snapshot", async () => {
   const { catalog, manager, workspace } = setup({ checkIntervalMs: 60_000,
     watchPath: () => ({ close() {}, unref() {} }) });
-  const before = await manager.acquire(workspace()); before.release();
+  const before = await manager.acquire(workspace());
   const root = join(catalog.userSkillsRoot, "instant"); mkdirSync(root, { recursive: true });
   writeFileSync(join(root, "SKILL.md"), "---\nname: instant\ndescription: Freshly saved workflow\n---\nInstructions\n");
-  const after = await manager.acquire(workspace());
+  // A page read may refresh the catalog while the old task is still running.
+  await catalog.refreshForUse();
+  expect(before.snapshot.skills.names).not.toContain("instant");
+  const scan = spyOn(catalog, "forceRefresh");
+  const [after, concurrent] = await Promise.all([manager.acquire(workspace()), manager.acquire(workspace())]);
+  expect(scan).toHaveBeenCalledTimes(1);
+  scan.mockRestore();
   expect(after.snapshot.skills.names).toContain("instant");
   expect(after.snapshot.generation).toBeGreaterThan(before.snapshot.generation);
-  after.release();
+  expect(concurrent.snapshot.skills.names).toContain("instant");
+  expect(before.snapshot.skills.names).not.toContain("instant");
+  before.release(); after.release(); concurrent.release();
 });

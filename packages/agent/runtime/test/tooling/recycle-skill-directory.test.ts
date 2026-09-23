@@ -57,7 +57,8 @@ test.skipIf(!differentVolumes)("Windows recycles an overridden C-drive skill int
   const skillRoot = join(user, "sample"); mkdirSync(skillRoot);
   writeFileSync(join(skillRoot, "SKILL.md"), "---\nname: sample\ndescription: Cross-volume workflow\n---\nInstructions\n");
   const catalog = new SkillCatalog(data, user, { repositorySkillsRoot: official, sharedSkillsRoot: false,
-    statePath: join(data, "config", "skill-states.local.json"), refreshIntervalMs: 0 });
+    statePath: join(data, "config", "skill-states.local.json") });
+  catalog.forceRefresh();
   const files = new UserSkillFiles(catalog, data);
   const skill = files.list()[0]!;
   const disabled = files.setEnabled(skill.id, skill.version, false);

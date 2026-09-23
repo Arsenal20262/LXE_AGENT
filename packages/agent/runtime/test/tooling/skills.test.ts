@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import { cpSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { repositoryRoot } from "@lxe/core";
 import { tmpdir } from "node:os";
@@ -15,6 +15,38 @@ afterEach(() => {
 });
 
 describe("skill context", () => {
+  test("cached readers never touch disk; concurrent uses share a scan and failed refreshes can retry", async () => {
+    const root = mkdtempSync(join(tmpdir(), "lxe-skill-use-")); roots.push(root);
+    const directory = join(root, "skills", "demo"); mkdirSync(directory, { recursive: true });
+    const path = join(directory, "SKILL.md");
+    writeFileSync(path, "---\nname: demo\ndescription: First\n---\n", "utf8");
+    const catalog = new SkillCatalog(root, join(root, "user"), { sharedSkillsRoot: false });
+    const scan = spyOn(catalog, "forceRefresh");
+    try {
+      const first = catalog.refreshForUse();
+      expect(catalog.refreshForUse()).toBe(first);
+      await first;
+      expect(scan).toHaveBeenCalledTimes(1);
+      const snapshot = catalog.snapshot();
+      rmSync(directory, { recursive: true });
+      expect(catalog.list()).toHaveLength(1);
+      expect(catalog.entries()).toHaveLength(1);
+      expect(catalog.diagnostics()).toEqual([]);
+      expect(catalog.get("demo")?.description).toBe("First");
+      expect(catalog.snapshot()).toBe(snapshot);
+      expect(scan).toHaveBeenCalledTimes(1);
+      await catalog.refreshForUse();
+      expect(catalog.list()).toEqual([]);
+      expect(snapshot.names).toEqual(["demo"]);
+      mkdirSync(directory); writeFileSync(path, "broken", "utf8");
+      await expect(catalog.refreshForUse()).rejects.toThrow("missing YAML frontmatter");
+      expect(catalog.list()).toEqual([]);
+      writeFileSync(path, "---\nname: renamed\ndescription: Second\n---\n", "utf8");
+      await catalog.refreshForUse();
+      expect(catalog.snapshot().names).toEqual(["renamed"]);
+      expect(scan).toHaveBeenCalledTimes(4);
+    } finally { scan.mockRestore(); }
+  });
   test("loads Amazon and Southeast Asia replenishment skills under the existing permission outside the source checkout", () => {
     const root = mkdtempSync(join(tmpdir(), "lxe-replenishment-skills-"));
     roots.push(root);
@@ -24,6 +56,7 @@ describe("skill context", () => {
     expect(names).toHaveLength(15);
     for (const name of names) cpSync(join(source, name), join(root, "skills", name), { recursive: true });
     const catalog = new SkillCatalog(root, join(root, "missing-user"), { sharedSkillsRoot: false });
+    catalog.forceRefresh();
     const skills = catalog.list({ allowedTypes: new Set(["replenishment"]) });
     expect(skills).toHaveLength(15);
     expect(skills.every(skill => skill.type === "replenishment")).toBe(true);
@@ -82,6 +115,7 @@ describe("skill context", () => {
     );
 
     const catalog = new SkillCatalog(root, join(root, "missing-user"), { sharedSkillsRoot: false });
+    catalog.forceRefresh();
     expect(catalog.list().map((skill) => skill.name)).toEqual(["demo", "nested"]);
   });
 
@@ -100,6 +134,7 @@ describe("skill context", () => {
     );
 
     const catalog = new SkillCatalog(resourceRoot, join(resourceRoot, "missing-user"), { sharedSkillsRoot: false });
+    catalog.forceRefresh();
     const normalizedSkillPath = skillPath.replaceAll("\\", "/");
     expect(catalog.buildPrompt({}, workspaceRoot)).toContain(`Instructions: ${normalizedSkillPath}`);
     expect(catalog.buildPrompt({}, workspaceRoot)).not.toContain("Instructions: skills/demo/SKILL.md");
@@ -117,6 +152,7 @@ describe("skill context", () => {
       "utf8",
     );
     const catalog = new SkillCatalog(worktree, join(worktree, "missing-user"), { sharedSkillsRoot: false });
+    catalog.forceRefresh();
     const prompt = catalog.buildPrompt({}, {
       directory,
       worktree,
@@ -136,7 +172,8 @@ describe("skill context", () => {
       "references:", "  - path: references/help.md", "---", "# Demo", "",
     ].join("\n"), "utf8");
     writeFileSync(join(userRoot, "demo", "SKILL.md"), "---\nname: demo\ndescription: User version\n---\n", "utf8");
-    const catalog = new SkillCatalog(root, userRoot, { refreshIntervalMs: 0, sharedSkillsRoot: false });
+    const catalog = new SkillCatalog(root, userRoot, { sharedSkillsRoot: false });
+    catalog.forceRefresh();
     expect(catalog.get("demo")?.description).toBe("Repository version");
     expect(catalog.get("demo")?.references).toEqual([{ path: "references/help.md", description: "" }]);
     expect(catalog.diagnostics()).toEqual([expect.objectContaining({
@@ -150,13 +187,14 @@ describe("skill context", () => {
       "---", "name: demo", "type: default", "description: Repository version updated",
       "references:", "  - path: references/help.md", "---", "# Demo", "",
     ].join("\n"), "utf8");
+    catalog.forceRefresh();
     expect(catalog.get("demo")?.description).toBe("Repository version updated");
 
     mkdirSync(join(root, "skills", "broken"), { recursive: true });
     writeFileSync(join(root, "skills", "broken", "SKILL.md"), [
       "---", "name: broken", "references:", "  - path: ../outside.md", "---", "",
     ].join("\n"), "utf8");
-    expect(() => catalog.list()).toThrow("skill reference escapes its root");
+    expect(() => catalog.forceRefresh()).toThrow("skill reference escapes its root");
   });
 
   test("reads plural commands, accepts legacy command, and rejects duplicate ownership", () => {
@@ -170,17 +208,18 @@ describe("skill context", () => {
     writeFileSync(join(root, "skills", "legacy", "SKILL.md"), [
       "---", "name: legacy", "command: scripts.legacy", "---", "",
     ].join("\n"), "utf8");
-    const catalog = new SkillCatalog(root, join(root, "missing-user"), { refreshIntervalMs: 0, sharedSkillsRoot: false });
+    const catalog = new SkillCatalog(root, join(root, "missing-user"), { sharedSkillsRoot: false });
+    catalog.forceRefresh();
     expect(catalog.get("plural")?.commands).toEqual(["scripts.one", "scripts.two"]);
     expect(catalog.get("legacy")?.commands).toEqual(["scripts.legacy"]);
     mkdirSync(join(root, "skills", "conflict"), { recursive: true });
     writeFileSync(join(root, "skills", "conflict", "SKILL.md"), [
       "---", "name: conflict", "commands: [scripts.two]", "---", "",
     ].join("\n"), "utf8");
-    expect(() => catalog.list()).toThrow("duplicate skill command scripts.two");
+    expect(() => catalog.forceRefresh()).toThrow("duplicate skill command scripts.two");
   });
 
-  test("reuses immutable filtered snapshots until the lazy refresh window expires", () => {
+  test("reuses immutable filtered snapshots until an explicit refresh", () => {
     const root = mkdtempSync(join(tmpdir(), "lxe-skills-snapshot-"));
     roots.push(root);
     const skillPath = join(root, "skills", "demo", "SKILL.md");
@@ -188,12 +227,10 @@ describe("skill context", () => {
     writeFileSync(skillPath, [
       "---", "name: demo", "type: default", "description: Original", "---", "# Demo", "",
     ].join("\n"), "utf8");
-    let now = 10_000;
     const catalog = new SkillCatalog(root, join(root, "missing-user"), {
-      refreshIntervalMs: 1_000,
       sharedSkillsRoot: false,
-      now: () => now,
     });
+    catalog.forceRefresh();
 
     const original = catalog.snapshot();
     expect(original.names).toEqual(["demo"]);
@@ -209,7 +246,7 @@ describe("skill context", () => {
     expect(catalog.snapshot()).toBe(original);
     expect(catalog.get("demo")?.description).toBe("Original");
 
-    now += 1_000;
+    catalog.forceRefresh();
     const updated = catalog.snapshot();
     expect(updated).not.toBe(original);
     expect(updated.modules).toEqual({ demo: "updated" });
@@ -228,6 +265,7 @@ describe("skill context", () => {
       "---", "name: second", "type: internal", "description: Second", "---", "",
     ].join("\n"), "utf8");
     const catalog = new SkillCatalog(root, join(root, "missing-user"), { sharedSkillsRoot: false });
+    catalog.forceRefresh();
 
     const allowed = catalog.snapshot({ allowedTypes: new Set(["default"]) });
     const disabled = catalog.snapshot({
@@ -254,21 +292,20 @@ describe("skill context", () => {
     const skillPath = join(root, "skills", "demo", "SKILL.md");
     mkdirSync(join(root, "skills", "demo"), { recursive: true });
     writeFileSync(skillPath, "---\nname: demo\ndescription: Valid\n---\n", "utf8");
-    let now = 0;
     const catalog = new SkillCatalog(root, join(root, "missing-user"), {
-      refreshIntervalMs: 1_000,
       sharedSkillsRoot: false,
-      now: () => now,
     });
+    catalog.forceRefresh();
     const valid = catalog.snapshot();
 
     writeFileSync(skillPath, "# missing frontmatter and deliberately longer\n", "utf8");
-    now = 1_000;
-    expect(() => catalog.snapshot()).toThrow("skill is missing YAML frontmatter");
+    expect(() => catalog.forceRefresh()).toThrow("skill is missing YAML frontmatter");
     expect(valid.names).toEqual(["demo"]);
     expect(valid.prompt).toContain("Valid");
 
     writeFileSync(skillPath, "---\nname: demo\ndescription: Recovered\n---\n", "utf8");
+    expect(catalog.snapshot()).toBe(valid);
+    catalog.forceRefresh();
     expect(catalog.snapshot().prompt).toContain("Recovered");
   });
 
@@ -278,6 +315,7 @@ describe("skill context", () => {
     mkdirSync(join(root, "skills", "demo"), { recursive: true });
     writeFileSync(join(root, "skills", "demo", "SKILL.md"), "---\nname: demo\ndescription: Demo\n---\n", "utf8");
     const catalog = new SkillCatalog(root, join(root, "missing-user"), { sharedSkillsRoot: false });
+    catalog.forceRefresh();
     const firstOptions = { disabledNames: new Set(["unused-0"]) };
     const first = catalog.snapshot(firstOptions);
     for (let index = 1; index <= 32; index += 1) {
@@ -295,13 +333,15 @@ describe("skill context", () => {
     mkdirSync(join(userRoot, "broken"), { recursive: true });
     writeFileSync(join(root, "skills", "official", "SKILL.md"), "---\nname: official\n---\n", "utf8");
     writeFileSync(userSkillPath, "x".repeat(MAX_SKILL_MANIFEST_BYTES + 1), "utf8");
-    const catalog = new SkillCatalog(root, userRoot, { refreshIntervalMs: 0, sharedSkillsRoot: false });
+    const catalog = new SkillCatalog(root, userRoot, { sharedSkillsRoot: false });
+    catalog.forceRefresh();
 
     expect(catalog.list().map(item => item.name)).toEqual(["official"]);
     expect(catalog.diagnostics()[0]?.message).toBe(`skill manifest exceeds ${MAX_SKILL_MANIFEST_BYTES} bytes: ${userSkillPath}`);
 
     writeFileSync(userSkillPath, "---\nname: [\n---\n", "utf8");
     expect(catalog.list().map(item => item.name)).toEqual(["official"]);
+    catalog.forceRefresh();
     expect(catalog.diagnostics()[0]?.message).toContain(`skill YAML is invalid: ${userSkillPath}`);
   });
 });

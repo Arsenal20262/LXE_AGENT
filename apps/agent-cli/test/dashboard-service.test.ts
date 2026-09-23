@@ -1,8 +1,8 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { SqliteRuntimeStore, ToolRegistry, type RuntimeProviderManager } from "@lxe/runtime";
+import { SkillCatalog, SqliteRuntimeStore, ToolRegistry, type RuntimeProviderManager } from "@lxe/runtime";
 import type { AgentDashboardRpcCall, UserSkillPayload } from "@lxe/desktop-protocol";
 import {
   DASHBOARD_TOOL_RESULT_PAGE_PREVIEW_BYTES,
@@ -18,6 +18,36 @@ afterEach(() => {
 });
 
 describe("DashboardService", () => {
+  test("refreshes explicit skill reads once per concurrent group, including external edits and stale deletes", async () => {
+    const root = mkdtempSync(join(tmpdir(), "lxe-skills-dashboard-")); roots.push(root);
+    const official = join(root, "skills"), user = join(root, "user");
+    mkdirSync(official); mkdirSync(join(user, "demo"), { recursive: true });
+    const path = join(user, "demo", "SKILL.md");
+    writeFileSync(path, "---\nname: demo\ndescription: First\n---\n# First", "utf8");
+    const catalog = new SkillCatalog(root, user, { sharedSkillsRoot: false });
+    const store = new SqliteRuntimeStore(join(root, "agent.sqlite3"), { legacyWorkspace: workspaceFor(root) });
+    const service = new DashboardService({ stateRoot: root, llmConfigRoot: join(root, "llm"),
+      skillsRoot: official, userSkillsRoot: user, environment: {}, store, tools: new ToolRegistry(),
+      mcpConfig: { servers: [] }, skillCatalog: catalog });
+    const scan = spyOn(catalog, "forceRefresh");
+    try {
+      const [all, managed] = await Promise.all([
+        service.call({ operation: "skills.list", input: {} }),
+        service.call({ operation: "skills.user.list", input: {} }),
+      ]);
+      expect(all.items).toHaveLength(1); expect(scan).toHaveBeenCalledTimes(1);
+      const original = managed.items[0]!;
+      writeFileSync(path, "---\nname: demo\ndescription: Second\n---\n# Second", "utf8");
+      const detail = await service.call({ operation: "skills.user.content", input: { id: original.id } });
+      expect(detail.content).toContain("# Second"); expect(scan).toHaveBeenCalledTimes(2);
+      await expect(service.call({ operation: "skills.user.delete", input: { id: original.id, version: original.version } }))
+        .rejects.toThrow("Skill changed");
+      writeFileSync(path, "---\nname: renamed\ndescription: Renamed\n---\n", "utf8");
+      expect((await service.call({ operation: "skills.list", input: {} })).items.map(item => item.name)).toEqual(["renamed"]);
+      rmSync(path);
+      expect((await service.call({ operation: "skills.list", input: {} })).items).toEqual([]);
+    } finally { scan.mockRestore(); await store.stop(); }
+  });
   test("bounds Dashboard tool result previews without mutating transcript data", () => {
     const large = `HEAD-${"表".repeat(700_000)}-TAIL`;
     const detail = {

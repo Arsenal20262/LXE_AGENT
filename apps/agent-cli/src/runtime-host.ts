@@ -212,20 +212,14 @@ export function createAgentRuntimeHost(
     execEnv: ({ skillNames }) => ({ LXESKILL_SKILL_SCOPE: skillNames.join(",") }),
     ...(options.onBackgroundTaskChanged ? { onExecUpdate: options.onBackgroundTaskChanged } : {}),
   });
-  let skillRefreshTimer: ReturnType<typeof setInterval> | undefined;
   const runtimeServices: Array<{
     start(registry: ToolRegistry): Promise<void>;
     stop(): Promise<void>;
   }> = [processes, lxeSkillRuntime, {
     async start() {
-      skillCatalog.refreshIfNeeded();
-      skillRefreshTimer = setInterval(() => {
-        try { skillCatalog.refreshIfNeeded(); }
-        catch (error) { logger.warn("skill_catalog_refresh_failed", { error }); }
-      }, 1_000);
-      skillRefreshTimer.unref?.();
+      await skillCatalog.refreshForUse();
     },
-    async stop() { if (skillRefreshTimer) clearInterval(skillRefreshTimer); },
+    async stop() {},
   }];
   registerToolSearch(tools);
   const mcpConfigPath = String(environment.LXE_MCP_CONFIG_PATH ?? "").trim()

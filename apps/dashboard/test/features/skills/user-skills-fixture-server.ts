@@ -32,8 +32,8 @@ writeSkill(user, "disabled-demo", "Disabled workflow");
 writeFileSync(join(weekly, "assets", "binary.bin"), Buffer.from([0, 1, 2]));
 writeFileSync(join(weekly, "assets", "long.txt"), "x".repeat(270 * 1024));
 const broken = writeSkill(user, "broken", ""); writeFileSync(join(broken, "SKILL.md"), "---\nname: [\n---\n");
-const catalog = new SkillCatalog(dataRoot, user, { repositorySkillsRoot: official, sharedSkillsRoot: shared, refreshIntervalMs: 0,
-  statePath: join(dataRoot, "config", "skill-states.local.json"), excludedRoots: [join(dataRoot, "trash", "skills")] });
+const catalog = new SkillCatalog(dataRoot, user, { repositorySkillsRoot: official, sharedSkillsRoot: shared, statePath: join(dataRoot, "config", "skill-states.local.json"), excludedRoots: [join(dataRoot, "trash", "skills")] });
+catalog.forceRefresh();
 const files = new UserSkillFiles(catalog, dataRoot);
 const disabled = files.list().find(skill => skill.name === "disabled-demo")!;
 files.setEnabled(disabled.id, disabled.version, false);
@@ -43,6 +43,7 @@ const server = await createServer({ root: resolve("apps/dashboard"), server: { h
       try {
         let body = ""; for await (const chunk of req) body += chunk;
         const call = parseDashboardRpcCall(JSON.parse(body)); let result: unknown;
+        await catalog.refreshForUse();
         switch (call.operation) {
           case "skills.list": { const items = catalog.list(); result = { items, total: items.length }; break; }
           case "skills.content": {

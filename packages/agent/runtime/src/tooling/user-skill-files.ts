@@ -10,7 +10,8 @@ const contains = (root: string, path: string): boolean => {
   return child !== "" && !isAbsolute(child) && child !== ".." && !child.startsWith(`..${sep}`);
 };
 
-/** Dashboard file operations only. This service is not a model tool. */
+/** Dashboard file operations only. Reads use the caller's refreshed catalog;
+ * mutations revalidate on disk before changing anything. This is not a model tool. */
 export class UserSkillFiles {
   constructor(private readonly catalog: SkillCatalog, private readonly dataRoot: string) {}
 
@@ -20,7 +21,7 @@ export class UserSkillFiles {
   }
 
   content(id: string, options: SkillPromptOptions = {}, file = "SKILL.md") {
-    const entry = this.entry(id);
+    const entry = this.entry(id, undefined, false);
     const root = dirname(entry.location);
     const safe = safeSkillReference(root, file);
     const bytes = readFileSync(join(root, safe));
@@ -68,8 +69,8 @@ export class UserSkillFiles {
     return { id, deleted: true, recycled_path: destination };
   }
 
-  private entry(id: string, version?: string): SkillCatalogEntry {
-    this.catalog.forceRefresh();
+  private entry(id: string, version?: string, refresh = true): SkillCatalogEntry {
+    if (refresh) this.catalog.forceRefresh();
     const entry = this.catalog.entries().find(item => item.id === id && item.source === "user");
     if (!entry) throw new Error(`User skill not found: ${id}`);
     const root = dirname(entry.location);

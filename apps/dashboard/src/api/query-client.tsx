@@ -87,7 +87,9 @@ export async function applyDashboardInvalidation(
       }
       continue;
     }
-    tasks.push(queryClient.invalidateQueries({ queryKey: domainKeys[domain] }));
+    tasks.push(queryClient.invalidateQueries({ queryKey: domainKeys[domain],
+      ...(domain === "skills" ? { refetchType: "none" as const } : {}),
+    }));
   }
   await Promise.all(tasks);
 }

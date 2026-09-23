@@ -1278,7 +1278,7 @@ test("existing file and exec tools create, validate, discover and edit personal 
   const root = mkdtempSync(join(tmpdir(), "lxe-creator-flow-")); roots.push(root);
   const user = join(root, "中文 skills"), official = join(root, "official"); mkdirSync(official);
   const catalog = new SkillCatalog(root, user, { repositorySkillsRoot: official, sharedSkillsRoot: false,
-    statePath: join(root, "config", "skill-states.local.json"), refreshIntervalMs: 0 });
+    statePath: join(root, "config", "skill-states.local.json") });
   const files = new UserSkillFiles(catalog, root);
   const registry = new ToolRegistry(); const processes = registerCodingTools(registry, { userSkillsRoot: user });
   const callContext = context(projectRoot);
@@ -1294,10 +1294,12 @@ test("existing file and exec tools create, validate, discover and edit personal 
         await registry.execute("write", { file_path: join(directory, "scripts", "render.py"),
           content: 'from pathlib import Path\nprint((Path(__file__).parent.parent / "assets/template.txt").read_text(encoding="utf-8").format(value="sample"))\n' }, callContext);
       }
+      catalog.forceRefresh();
       expect(catalog.list()).toHaveLength(name === "plain" ? 0 : 1);
       await registry.execute("write", { file_path: path,
         content: `---\nname: ${name}\ndescription: Reusable report workflow\n---\n# Instructions\nUse the provided records.\n` }, callContext);
       expect(await execute(`python "${script("quick_validate")}" "${directory}"`)).toContain('valid: true');
+      catalog.forceRefresh();
       expect(catalog.get(name)?.source).toBe("user");
       if (name === "templated") expect(await execute(`python "${join(directory, "scripts", "render.py")}"`)).toContain("Report: sample");
     }

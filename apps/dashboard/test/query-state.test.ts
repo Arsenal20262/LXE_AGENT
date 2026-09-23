@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
+import { focusManager, QueryObserver } from "@tanstack/react-query";
 import type {
   DashboardRpcCall,
   DashboardRpcOperation,
@@ -18,6 +19,7 @@ import { dashboardQueryKeys } from "../src/api/query-keys";
 import {
   ACTIVE_DATA_STALE_TIME_MS,
   flattenSessionPages,
+  SKILL_QUERY_OPTIONS,
 } from "../src/api/queries";
 import type { SessionListPayload, SessionPayload } from "../src/api/payloads";
 
@@ -50,6 +52,35 @@ const page = (items: SessionPayload[], total = items.length, offset = 0): Sessio
 });
 
 describe("Dashboard Query state", () => {
+  test("skills refresh on entry and detail revisit, never on focus or a changed notification", async () => {
+    const client = createDashboardQueryClient(); client.mount();
+    let calls = 0;
+    const listKey = dashboardQueryKeys.skills.list;
+    const options = { ...SKILL_QUERY_OPTIONS, queryKey: listKey, queryFn: async () => ++calls };
+    const observer = new QueryObserver(client, options);
+    let unsubscribe = observer.subscribe(() => {});
+    const settled = async () => {
+      for (let i = 0; i < 100 && observer.getCurrentResult().isFetching; i++) await Bun.sleep(1);
+      expect(observer.getCurrentResult().isFetching).toBe(false);
+    };
+    try {
+      await settled(); expect(calls).toBe(1);
+      await applyDashboardInvalidation(client, { revision: 1, domains: ["skills"], session_ids: [] });
+      expect(client.getQueryState(listKey)?.isInvalidated).toBe(true);
+      focusManager.setFocused(false); focusManager.setFocused(true);
+      await Bun.sleep(10); expect(calls).toBe(1);
+      observer.setOptions({ ...options, enabled: false });
+      observer.setOptions({ ...options, enabled: true });
+      await settled(); expect(calls).toBe(2);
+      const content = { ...options, queryKey: dashboardQueryKeys.skills.content("demo") };
+      observer.setOptions(content); await settled(); expect(calls).toBe(3);
+      observer.setOptions({ ...content, queryKey: dashboardQueryKeys.skills.reference("demo", "help.md") });
+      await settled(); expect(calls).toBe(4);
+      observer.setOptions(content); await settled(); expect(calls).toBe(5);
+      unsubscribe(); unsubscribe = observer.subscribe(() => {});
+      await settled(); expect(calls).toBe(6);
+    } finally { unsubscribe(); client.unmount(); client.clear(); focusManager.setFocused(undefined); }
+  });
   test("uses stable keys and the configured cache policy", () => {
     expect(dashboardQueryKeys.sessions.list("  order  ")).toEqual(["sessions", "list", "order"]);
     expect(dashboardQueryKeys.sessions.detail("s-1", "cursor-2"))

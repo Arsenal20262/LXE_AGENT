@@ -44,6 +44,16 @@ export const STATS_REFRESH_INTERVAL_MS = 30_000;
 export const CATALOG_STALE_TIME_MS = 5 * 60_000;
 export const GATEWAY_LIFETIME_STALE_TIME_MS = Number.POSITIVE_INFINITY;
 
+// Skills are refreshed at use boundaries, never by focus, timers, or retry loops.
+export const SKILL_QUERY_OPTIONS = {
+  staleTime: 0,
+  refetchOnMount: "always",
+  refetchOnWindowFocus: false,
+  refetchOnReconnect: false,
+  refetchInterval: false,
+  retry: false,
+} as const;
+
 export function queryError(error: unknown): string {
   return error instanceof Error ? error.message : error ? String(error) : "";
 }
@@ -378,10 +388,10 @@ export function useConnectorsQuery(enabled = true) {
 
 export function useSkillsQuery(enabled = true) {
   return useQuery({
+    ...SKILL_QUERY_OPTIONS,
     queryKey: dashboardQueryKeys.skills.list,
     queryFn: () => callDashboard({ operation: "skills.list", input: {} }),
     enabled,
-    staleTime: CATALOG_STALE_TIME_MS,
   });
 }
 
@@ -405,19 +415,19 @@ export function useToolsetsQuery(enabled = true) {
 
 export function useSkillContentQuery(name: string, enabled = true) {
   return useQuery({
+    ...SKILL_QUERY_OPTIONS,
     queryKey: dashboardQueryKeys.skills.content(name),
     queryFn: () => callDashboard({ operation: "skills.content", input: { name } }),
     enabled: enabled && Boolean(name),
-    staleTime: GATEWAY_LIFETIME_STALE_TIME_MS,
   });
 }
 
 export function useSkillReferenceQuery(name: string, path: string, enabled = true) {
   return useQuery({
+    ...SKILL_QUERY_OPTIONS,
     queryKey: dashboardQueryKeys.skills.reference(name, path),
     queryFn: () => callDashboard({ operation: "skills.reference", input: { name, path } }),
     enabled: enabled && Boolean(name) && Boolean(path),
-    staleTime: GATEWAY_LIFETIME_STALE_TIME_MS,
   });
 }
 
@@ -478,12 +488,12 @@ export function useSessionStatus(sessionIds:string[],ready:boolean,display:Conve
 
 
 export function useUserSkillsQuery() {
-  return useQuery({ queryKey: dashboardQueryKeys.skills.userList,
+  return useQuery({ ...SKILL_QUERY_OPTIONS, queryKey: dashboardQueryKeys.skills.userList,
     queryFn: () => callDashboard({ operation: "skills.user.list", input: {} }) });
 }
 
 export function useUserSkillContentQuery(id: string, path: string) {
-  return useQuery({ queryKey: dashboardQueryKeys.skills.userContent(id, path),
+  return useQuery({ ...SKILL_QUERY_OPTIONS, queryKey: dashboardQueryKeys.skills.userContent(id, path),
     queryFn: () => callDashboard({ operation: "skills.user.content", input: { id, path } }) });
 }
 
@@ -492,6 +502,7 @@ export function useUserSkillMutation(onRecycled: (id: string, path: string) => v
   return useMutation({
     mutationFn: (skill: UserSkillPayload) => callDashboard({ operation: "skills.user.delete", input: { id: skill.id, version: skill.version } }),
     onSuccess: result => { if (result) onRecycled(result.id, result.recycled_path); },
+    // Explicit mutation completion refreshes the visible list, including newly unshadowed skills.
     onSettled: () => client.invalidateQueries({ queryKey: dashboardQueryKeys.skills.all }),
   });
 }
