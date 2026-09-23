@@ -21,10 +21,6 @@ import type {
   DesktopSyntheticPerformerSourceSelection,
   DesktopSyntheticPerformerTask,
   DesktopSyntheticPerformerTaskInput,
-  DesktopYacangExecuteInput,
-  DesktopYacangExecution,
-  DesktopYacangPreview,
-  DesktopYacangPreviewInput,
 } from "@lxe/desktop-protocol";
 import { IPC_CHANNELS } from "../ipc-channels";
 import { readClipboardFilePaths } from "./clipboard-files";
@@ -40,8 +36,6 @@ import {
   validateSyntheticPerformerId,
   validateSyntheticPerformerSourceKind,
   validateSyntheticPerformerTaskInput,
-  validateYacangExecuteInput,
-  validateYacangPreviewInput,
 } from "./ipc-validation";
 
 export interface DesktopIpcApplication {
@@ -74,8 +68,6 @@ export interface DesktopIpcApplication {
   getSyntheticPerformerTask(): DesktopSyntheticPerformerTask | null;
   cancelSyntheticPerformerTask(taskId: string): Promise<DesktopSyntheticPerformerTask | null>;
   syntheticPerformerOutputPath(taskId: string): string;
-  previewYacangExport(input: DesktopYacangPreviewInput): Promise<DesktopYacangPreview>;
-  executeYacangExport(input: DesktopYacangExecuteInput): Promise<DesktopYacangExecution>;
   listInputAssets(): Promise<DesktopInputAssetSlot[]>;
   inputAssetSlotDirectory(slot: string): Promise<string>;
   registerConversationFiles(paths: string[]): DesktopInputAttachmentPayload[];
@@ -160,10 +152,6 @@ export function registerDesktopIpc(application: DesktopIpcApplication): () => vo
     application.saveLocalModelCredential(validateLocalModelCredentialInput(input)));
   ipcMain.handle(IPC_CHANNELS.deleteLocalModelCredential, (_event, provider: unknown) =>
     application.deleteLocalModelCredential(validateModelProvider(provider)));
-  ipcMain.handle(IPC_CHANNELS.previewYacangExport, (_event, input: unknown) =>
-    application.previewYacangExport(validateYacangPreviewInput(input)));
-  ipcMain.handle(IPC_CHANNELS.executeYacangExport, (_event, input: unknown) =>
-    application.executeYacangExport(validateYacangExecuteInput(input)));
   ipcMain.handle(IPC_CHANNELS.selectSyntheticPerformerSources, async (_event, rawKind: unknown) => {
     const kind = validateSyntheticPerformerSourceKind(rawKind);
     const selection = await dialog.showOpenDialog({

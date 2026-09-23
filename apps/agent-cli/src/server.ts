@@ -315,15 +315,16 @@ export class AgentProtocolServer {
             payload: { tool_call_id: toolCallId, task },
           });
         },
-        onZhihuiTmsProgress: (progress) => {
+        onToolProgress: (progress) => {
           if (!progress.sessionId || !progress.turnId || !progress.toolCallId) return;
           return this.publish({
-            type: "zhihui_tms.progress",
+            type: "tool.progress",
             thread_id: progress.sessionId,
             turn_id: progress.turnId,
             payload: {
               exec_id: progress.execId,
               tool_call_id: progress.toolCallId,
+              stage: progress.stage,
               message: progress.message,
             },
           });

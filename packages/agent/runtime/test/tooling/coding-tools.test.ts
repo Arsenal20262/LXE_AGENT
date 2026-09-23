@@ -809,16 +809,15 @@ describe("native coding tools", () => {
   test("exec forwards host env so lxeskill enforces the injected skill scope", async () => {
     const root = projectRoot;
     const registry = new ToolRegistry();
-    const received: Array<{ skillNames: readonly string[]; runtimeRequirements: readonly string[] }> = [];
+    const received: Array<{ skillNames: readonly string[] }> = [];
     const processes = registerCodingTools(registry, {
       businessCommands: new Map([["lxeskill list", []]]),
       businessCommandCatalog: [{
         command: "lxeskill list",
         ownerSkills: [],
-        runtimeRequirements: ["pending_sensitive_input"],
       }],
-      execEnv: ({ skillNames, runtimeRequirements }) => {
-        received.push({ skillNames, runtimeRequirements });
+      execEnv: ({ skillNames }) => {
+        received.push({ skillNames });
         return { LXESKILL_SKILL_SCOPE: skillNames.join(",") };
       },
     });
@@ -830,7 +829,6 @@ describe("native coding tools", () => {
     expect(listed).toContain("auth refresh");
     expect(received).toEqual([{
       skillNames: ["replenishment-store-resolve"],
-      runtimeRequirements: ["pending_sensitive_input"],
     }]);
     await processes.stop();
   });

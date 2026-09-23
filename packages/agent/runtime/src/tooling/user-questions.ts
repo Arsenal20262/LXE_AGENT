@@ -3,7 +3,6 @@ import {
   parseUserQuestions, parseUserQuestionSubmission, validateUserQuestionAnswers,
   type JsonObject, type PendingUserQuestion, type SubmitUserQuestionAnswer, type UserQuestion, type UserQuestionAnswer,
 } from "@lxe/protocol";
-import type { PendingSensitiveInput } from "@lxe/protocol";
 import { ToolExecutionError, type ToolDefinition, type ToolRegistry } from "./registry";
 
 type CallContext = Parameters<ToolDefinition["execute"]>[1];
@@ -18,72 +17,16 @@ interface Pending {
   reject(error: Error): void;
   dispose(): void;
 }
-interface PendingInput {
-  request: PendingSensitiveInput;
-  signal: AbortSignal;
-  resolve(value: string): void;
-  reject(error: Error): void;
-  dispose(): void;
-}
 const failure = (message: string) => new ToolExecutionError("failed_precondition", message);
 
 /** Process-local owner. UI remounts query it; a new process cannot revive its requests. */
 export class UserQuestionService {
   private readonly pending = new Map<string, Pending>();
   private readonly answered = new Map<string, { request: PendingUserQuestion; answers: UserQuestionAnswer[]; signal: AbortSignal }>();
-  private readonly pendingInputs = new Map<string, PendingInput>();
   constructor(private readonly changed: (sessionId: string) => void) {}
 
   snapshot(): PendingUserQuestion[] {
     return [...this.pending.values()].map(entry => structuredClone(entry.request));
-  }
-
-  pendingInputSnapshot(sessionId?: string): PendingSensitiveInput | undefined {
-    const values = [...this.pendingInputs.values()];
-    return structuredClone(values.find(entry => !sessionId || entry.request.session_id === sessionId)?.request);
-  }
-
-  async waitForPendingInput(request: PendingSensitiveInput, signal: AbortSignal): Promise<string> {
-    signal.throwIfAborted();
-    if (this.pending.has(request.session_id) || this.pendingInputForSession(request.session_id)) {
-      throw failure("This session already has a pending interaction");
-    }
-    if (this.pendingInputs.has(request.request_id) || request.expires_at <= Date.now()) {
-      throw failure("This pending input is no longer available");
-    }
-    return await new Promise<string>((resolve, reject) => {
-      let settled = false;
-      const settle = (callback: () => void) => {
-        if (settled) return;
-        settled = true;
-        this.pendingInputs.delete(request.request_id);
-        clearTimeout(expire);
-        signal.removeEventListener("abort", abort);
-        callback();
-        this.changed(request.session_id);
-      };
-      const abort = () => {
-        settle(() => reject(failure("Sensitive input cancelled before an answer was accepted")));
-      };
-      const expire = setTimeout(() => {
-        settle(() => reject(failure("Sensitive input expired before an answer was accepted")));
-      }, Math.max(1, request.expires_at - Date.now()));
-      this.pendingInputs.set(request.request_id, { request: structuredClone(request), signal, resolve: value => settle(() => resolve(value)), reject,
-        dispose: () => { clearTimeout(expire); signal.removeEventListener("abort", abort); } });
-      signal.addEventListener("abort", abort, { once: true });
-      this.changed(request.session_id);
-    });
-  }
-
-  submitPendingInput(input: { session_id: string; request_id: string; value: string }): { accepted: true; request_id: string } {
-    const value = input.value.trim();
-    if (!value || value.length > 128 || /[\u0000-\u001f\u007f]/u.test(value)) throw failure("Sensitive input must be non-empty bounded text");
-    const entry = this.pendingInputs.get(input.request_id);
-    if (!entry || entry.request.session_id !== input.session_id || entry.signal.aborted) throw failure("This pending input is no longer available");
-    this.pendingInputs.delete(input.request_id);
-    entry.dispose();
-    entry.resolve(value);
-    return { accepted: true, request_id: input.request_id };
   }
 
   async ask(input: JsonObject, context: CallContext): Promise<{ answers: UserQuestionAnswer[] }> {
@@ -99,7 +42,7 @@ export class UserQuestionService {
     sessionId: string; turnId: string; toolCallId: string; signal: AbortSignal;
   }): Promise<UserQuestionAnswer[]> {
     context.signal.throwIfAborted();
-    if (this.pending.has(context.sessionId) || this.pendingInputForSession(context.sessionId)) {
+    if (this.pending.has(context.sessionId)) {
       throw failure("This session already has a pending interaction");
     }
     const request: PendingUserQuestion = {
@@ -152,26 +95,12 @@ export class UserQuestionService {
       entry.reject(failure("User question ended because its session or runtime closed"));
       this.changed(sessionId);
     }
-    for (const [id, input] of this.pendingInputs) {
-      if (input.request.session_id !== sessionId) continue;
-      this.pendingInputs.delete(id);
-      input.dispose();
-      input.reject(failure("Sensitive input ended because its session or runtime closed"));
-      this.changed(sessionId);
-    }
     for (const [id, value] of this.answered) if (value.request.session_id === sessionId) this.answered.delete(id);
   }
 
   async stop(): Promise<void> {
     for (const sessionId of [...this.pending.keys()]) this.forgetSession(sessionId);
     this.answered.clear();
-    for (const [id, entry] of this.pendingInputs) {
-      this.pendingInputs.delete(id); entry.dispose(); entry.reject(failure("Sensitive input ended because its session or runtime closed"));
-    }
-  }
-
-  private pendingInputForSession(sessionId: string): PendingInput | undefined {
-    return [...this.pendingInputs.values()].find(entry => entry.request.session_id === sessionId);
   }
 }
 

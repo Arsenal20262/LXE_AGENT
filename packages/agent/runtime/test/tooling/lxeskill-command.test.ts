@@ -10,24 +10,22 @@ import {
 import { buildToolDisplayStep } from "../../src/tooling/tool-display";
 
 describe("lxeskill command recognition", () => {
-  test("loads only declared platform-neutral runtime requirements", () => {
+  test("rejects retired runtime requirements", () => {
     const root = mkdtempSync(join(tmpdir(), "lxe-command-catalog-"));
     const validPath = join(root, "valid.json");
     const invalidPath = join(root, "invalid.json");
     try {
       writeFileSync(validPath, JSON.stringify({ protocol_version: "1", entries: [
-        { name: "sensitive", command_path: ["demo", "run"], visibility: "business", owner_skills: [], runtime_requirements: ["pending_sensitive_input"] },
         { name: "ordinary", command_path: ["demo", "preview"], visibility: "business", owner_skills: [] },
       ] }), "utf8");
       writeFileSync(invalidPath, JSON.stringify({ protocol_version: "1", entries: [
-        { name: "invalid", command_path: ["demo", "run"], visibility: "business", owner_skills: [], runtime_requirements: ["unknown"] },
+        { name: "invalid", command_path: ["demo", "run"], visibility: "business", owner_skills: [], runtime_requirements: ["pending_sensitive_input"] },
       ] }), "utf8");
 
       expect(loadLxeSkillCommandCatalog(validPath)).toEqual([
-        expect.objectContaining({ name: "sensitive", runtimeRequirements: ["pending_sensitive_input"] }),
-        expect.objectContaining({ name: "ordinary", runtimeRequirements: [] }),
+        expect.objectContaining({ name: "ordinary" }),
       ]);
-      expect(() => loadLxeSkillCommandCatalog(invalidPath)).toThrow("invalid runtime requirement");
+      expect(() => loadLxeSkillCommandCatalog(invalidPath)).toThrow("unsupported runtime requirement");
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
@@ -89,7 +87,6 @@ describe("lxeskill command recognition", () => {
       visibility: "maintenance",
       ownerSkills: ["ziniao-browser"],
       attributionSkill: "ziniao-browser",
-      runtimeRequirements: [],
     });
     expect(entries.find((entry) => entry.name === "mabang_download_fba_delivery_csv"))
       .toMatchObject({

@@ -79,8 +79,13 @@ def test_execute_catalog_path_delivers_fixture_workbook(monkeypatch, tmp_path: P
         exit_code = lxeskill_cli._main(["tms", "philippines", "products-export", "execute", *ARGUMENTS])
         records = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line]
     finally:
+        monkeypatch.undo()
         activate_project_workspace()
     assert exit_code == 0
+    progress = [record for record in records if record.get("type") == "progress"]
+    assert progress
+    assert all(record["command"] == "tms philippines products-export execute" for record in progress)
+    assert all(record.get("stage") and record.get("message", "").startswith("智汇 TMS：") for record in progress)
     result = records[-1]
     assert result["ok"] is True
     assert result["data"] == {
@@ -125,6 +130,7 @@ def test_execute_catalog_path_reports_partial_delivery_as_structured_failure(mon
         exit_code = lxeskill_cli._main(["tms", "philippines", "products-export", "execute", *ARGUMENTS])
         records = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line]
     finally:
+        monkeypatch.undo()
         activate_project_workspace()
 
     assert exit_code == lxeskill_cli.EXIT_BUSINESS

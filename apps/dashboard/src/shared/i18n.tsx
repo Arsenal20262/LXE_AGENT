@@ -22,7 +22,6 @@ export const ZH_TEXT = {
   skillDisplayName: (name: string) => skillDisplayName(name, "zh"),
   sessionStatus: {waiting_input:"等待回答",running:"运行中",stopping:"正在停止",queued:"排队中",completed:"已完成，尚未查看",error:"执行失败，尚未查看",cancelled:"已停止",idle:"暂无未查看结果",unknown:"上次运行结果未确认",unavailable:"状态暂不可用",syncError:"状态同步失败"},
   userQuestions: {waiting:"等待回答",received:"回答已接收",done:"完成",retry:"重试提交",skip:"跳过",skipQuestion:"跳过当前问题",skipped:"已跳过",submitting:"正在提交…",stop:"停止本次任务",stopping:"正在停止…",pagination:"问题分页",previous:"上一题",next:"下一题",multiple:"可多选，也可以补充文字",custom:"自己的回答",customPlaceholder:"填写自己的回答…",freeText:"回答"},
-  pendingSensitiveInput: {eyebrow:"安全校验",title:"请输入图片中的文字",hint:"当前任务需要一次人工安全校验。输入图片中的文字后继续。",imageAlt:"安全校验图片",inputLabel:"图片文字",submit:"确认并继续",submitting:"正在提交…",accepted:"已提交",acceptedHint:"正在继续原任务。",noStorage:"输入不会保存到会话或浏览器存储。"},
   language: {
     label: "语言",
     zh: "中文",
@@ -916,7 +915,6 @@ export const UI_TEXT: Record<Language, UiText> = {
     skillDisplayName: (name: string) => skillDisplayName(name, "en"),
     sessionStatus: {waiting_input:"Waiting for answer",running:"Running",stopping:"Stopping",queued:"Queued",completed:"Completed, not viewed",error:"Failed, not viewed",cancelled:"Stopped",idle:"No unviewed results",unknown:"Previous run result unconfirmed",unavailable:"Status unavailable",syncError:"Status sync failed"},
     userQuestions: {waiting:"Waiting for answer",received:"Answer received",done:"Done",retry:"Retry submission",skip:"Skip",skipQuestion:"Skip this question",skipped:"Skipped",submitting:"Submitting…",stop:"Stop this task",stopping:"Stopping…",pagination:"Question pages",previous:"Previous question",next:"Next question",multiple:"Choose any and optionally add text",custom:"Your own answer",customPlaceholder:"Write your own answer…",freeText:"Answer"},
-    pendingSensitiveInput: {eyebrow:"Security check",title:"Enter the text shown in the image",hint:"The current task needs a one-time manual security check. Enter the text shown in the image to continue.",imageAlt:"Security check image",inputLabel:"Image text",submit:"Confirm and continue",submitting:"Submitting…",accepted:"Submitted",acceptedHint:"The original task is continuing.",noStorage:"The input is not saved to the session or browser storage."},
     language: {
       label: "Language",
       zh: "中文",

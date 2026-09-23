@@ -1,7 +1,7 @@
 import type { JsonObject } from "@lxe/protocol";
 import type { ExecShellAdapter } from "../exec-shell";
 import type { LxeSkillRuntimeStatus } from "../../operations/lxeskill-runtime";
-import type { LxeSkillCommandConfirmation, LxeSkillRuntimeRequirement } from "../lxeskill-command";
+import type { LxeSkillCommandConfirmation } from "../lxeskill-command";
 
 export interface LxeSkillRecoveryCommand {
   command: string;
@@ -9,16 +9,16 @@ export interface LxeSkillRecoveryCommand {
   ownerSkills: readonly string[];
   attributionSkill?: string;
   confirmation?: LxeSkillCommandConfirmation;
-  runtimeRequirements?: readonly LxeSkillRuntimeRequirement[];
 }
 
 export type ProcessStatus = "running" | "completed" | "failed" | "killed";
 
-export interface ZhihuiTmsProgressEvent {
+export interface ToolProgressEvent {
   execId: string;
   sessionId: string;
   turnId: string;
   toolCallId: string;
+  stage: string;
   message: string;
 }
 
@@ -31,7 +31,7 @@ export interface CodingToolOptions {
   maxOutputBytes?: number;
   /** Called once when an exec that already yielded reaches a terminal state. */
   onExecComplete?: (snapshot: JsonObject) => Promise<void> | void;
-  onZhihuiTmsProgress?: (event: ZhihuiTmsProgressEvent) => Promise<void> | void;
+  onToolProgress?: (event: ToolProgressEvent) => Promise<void> | void;
   ripgrepPath?: string | null;
   fdPath?: string | null;
   businessCommands?: ReadonlyMap<string, readonly string[]>;
@@ -39,7 +39,6 @@ export interface CodingToolOptions {
   execShell?: ExecShellAdapter;
   execEnv?: (context: {
     skillNames: readonly string[];
-    runtimeRequirements: readonly LxeSkillRuntimeRequirement[];
     sessionId: string;
     turnId: string;
   }) => Record<string, string>;

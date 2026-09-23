@@ -1,6 +1,6 @@
 import type { DesktopStreamMutation, DisplayMetrics, ToolStep, TurnProcessPart } from "@lxe/protocol";
-import { parseUserQuestionSubmission, type PendingUserQuestion, type PendingSensitiveInput, type SubmitUserQuestionAnswer } from "@lxe/protocol/user-questions";
-export type { PendingUserQuestion, PendingSensitiveInput, UserQuestion, UserQuestionAnswer, SubmitUserQuestionAnswer } from "@lxe/protocol/user-questions";
+import { parseUserQuestionSubmission, type PendingUserQuestion, type SubmitUserQuestionAnswer } from "@lxe/protocol/user-questions";
+export type { PendingUserQuestion, UserQuestion, UserQuestionAnswer, SubmitUserQuestionAnswer } from "@lxe/protocol/user-questions";
 
 import { validateSessionStatusRequest, type SessionStatusSnapshot } from "@lxe/protocol/session-status";
 export type { TurnProcessPart } from "@lxe/protocol";
@@ -472,9 +472,8 @@ export type StatsOverviewPayload = {
 export type DashboardRpcEmptyInput = Record<string, never>;
 
 export interface DashboardRpcSpec {
-  "sessions.questions": { input: { session_id?: string }; result: { items: PendingUserQuestion[]; pending_input?: PendingSensitiveInput } };
+  "sessions.questions": { input: { session_id?: string }; result: { items: PendingUserQuestion[] } };
   "sessions.answer": { input: SubmitUserQuestionAnswer; result: { accepted: true; request_id: string } };
-  "sessions.pending_input.answer": { input: { session_id: string; request_id: string; value: string }; result: { accepted: true; request_id: string } };
   "sessions.list": {
     input: { query?: string; limit?: number; offset?: number };
     result: SessionListPayload;
@@ -613,7 +612,6 @@ export class DashboardRpcError extends Error {
 
 const MAX_INPUT_BYTES = 1_000_000;
 const MAX_TEXT_LENGTH = 8_192;
-const MAX_PENDING_INPUT_VALUE_LENGTH = 128;
 
 const rpcError = (message: string): never => {
   throw new DashboardRpcError("invalid_request", message);
@@ -705,17 +703,6 @@ export function parseDashboardRpcCall(value: unknown): DashboardRpcCall {
       exactKeys(input, ["session_id", "request_id", "answers"], `${operation}.input`);
       try { return { operation, input: parseUserQuestionSubmission(input) }; }
       catch (error) { return rpcError(error instanceof Error ? error.message : String(error)); }
-    case "sessions.pending_input.answer":
-      exactKeys(input, ["session_id", "request_id", "value"], `${operation}.input`);
-      {
-        const value = textValue(input.value, `${operation}.value`)!;
-        if (value.length > MAX_PENDING_INPUT_VALUE_LENGTH) rpcError(`${operation}.value is too long`);
-        return { operation, input: {
-          session_id: textValue(input.session_id, `${operation}.session_id`)!,
-          request_id: textValue(input.request_id, `${operation}.request_id`)!,
-          value,
-        } };
-      }
     case "sessions.list":
       exactKeys(input, ["query", "limit", "offset"], `${operation}.input`);
       return { operation, input: {

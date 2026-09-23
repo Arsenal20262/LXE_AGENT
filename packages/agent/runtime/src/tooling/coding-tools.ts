@@ -4,5 +4,5 @@ export type {
   CodingToolOptions,
   LxeSkillRecoveryCommand,
   ProcessStatus,
-  ZhihuiTmsProgressEvent,
+  ToolProgressEvent,
 } from "./coding/public-types";

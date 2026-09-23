@@ -76,7 +76,7 @@ interface InternalActivity {
 }
 
 type BackgroundTaskChangedEvent = Extract<AgentEvent, { type: "background_task.changed" }>;
-type ZhihuiTmsProgressEvent = Extract<AgentEvent, { type: "zhihui_tms.progress" }>;
+type ToolProgressEvent = Extract<AgentEvent, { type: "tool.progress" }>;
 
 export interface LocalConversationControllerOptions {
   storage: LocalConversationStorage;
@@ -106,7 +106,7 @@ export class LocalConversationController {
   private readonly turns = new Map<string, InternalTurn>();
   private readonly sessions = new Map<string, InternalActivity>();
   private readonly backgroundCompletions = new Map<string, BackgroundTaskChangedEvent>();
-  private readonly zhihuiProgress = new Map<string, ZhihuiTmsProgressEvent>();
+  private readonly toolProgress = new Map<string, ToolProgressEvent>();
 
   constructor(private readonly options: LocalConversationControllerOptions) {
     this.id = options.id ?? (() => randomUUID().replaceAll("-", ""));
@@ -344,20 +344,20 @@ export class LocalConversationController {
   }
 
   handleAgentEvent(event: AgentEvent): void {
-    if (event.type === "zhihui_tms.progress") {
+    if (event.type === "tool.progress") {
       const turn = this.turns.get(clean(event.turn_id));
       if (!turn || turn.sessionId !== clean(event.thread_id)) return;
       const key = `${clean(event.thread_id)}\u0000${clean(event.turn_id)}\u0000${event.payload.tool_call_id}`;
       if (this.backgroundCompletions.has(key)) return;
-      this.zhihuiProgress.set(key, event);
-      if (this.applyZhihuiProgress(turn)) this.publish(event.thread_id);
+      this.toolProgress.set(key, event);
+      if (this.applyToolProgress(turn)) this.publish(event.thread_id);
       return;
     }
     if (event.type === "background_task.changed") {
       const turn = this.turns.get(clean(event.turn_id));
       if (!turn || turn.sessionId !== clean(event.thread_id)) return;
       const key = backgroundCompletionKey(event);
-      this.zhihuiProgress.delete(key);
+      this.toolProgress.delete(key);
       this.backgroundCompletions.set(key, event);
       if (this.applyBackgroundCompletions(turn)) {
         this.publish(event.thread_id);
@@ -392,7 +392,7 @@ export class LocalConversationController {
     } else {
       return;
     }
-    this.applyZhihuiProgress(turn);
+    this.applyToolProgress(turn);
     this.applyBackgroundCompletions(turn);
     this.publish(request.session_id);
   }
@@ -459,7 +459,7 @@ export class LocalConversationController {
       display_metrics: metrics,
     };
     turn.streamEmitId = emitId;
-    const progressChanged = this.applyZhihuiProgress(turn);
+    const progressChanged = this.applyToolProgress(turn);
     const completionChanged = this.applyBackgroundCompletions(turn);
     this.options.onStreamBatch?.({
       session_id: sessionId,
@@ -476,7 +476,7 @@ export class LocalConversationController {
     this.sessions.clear();
     this.turns.clear();
     this.backgroundCompletions.clear();
-    this.zhihuiProgress.clear();
+    this.toolProgress.clear();
   }
 
   forgetSession(sessionId: string): void {
@@ -561,11 +561,11 @@ export class LocalConversationController {
     activity.latestTurnId = undefined;
   }
 
-  private applyZhihuiProgress(turn: InternalTurn): boolean {
+  private applyToolProgress(turn: InternalTurn): boolean {
     const stream = turn.payload.stream;
     if (!stream) return false;
     let changed = false;
-    for (const event of this.zhihuiProgress.values()) {
+    for (const event of this.toolProgress.values()) {
       if (clean(event.thread_id) !== turn.sessionId || clean(event.turn_id) !== turn.payload.turn_id) continue;
       const update = (step: ToolStep): boolean => {
         if (step.id !== event.payload.tool_call_id || step.name !== "exec" || step.status !== "running") return false;
@@ -624,8 +624,8 @@ export class LocalConversationController {
     for (const key of this.backgroundCompletions.keys()) {
       if (key.startsWith(prefix)) this.backgroundCompletions.delete(key);
     }
-    for (const key of this.zhihuiProgress.keys()) {
-      if (key.startsWith(prefix)) this.zhihuiProgress.delete(key);
+    for (const key of this.toolProgress.keys()) {
+      if (key.startsWith(prefix)) this.toolProgress.delete(key);
     }
   }
 }

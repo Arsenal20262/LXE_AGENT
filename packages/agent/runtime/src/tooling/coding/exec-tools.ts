@@ -260,7 +260,6 @@ export function createExecTools(dependencies: ExecToolDependencies): ToolDefinit
           if (!accepted) return { content: [{ type: "text", text: JSON.stringify({ status: "cancelled", command: invocation.command }) }] };
         }
         const command = execShell.normalizeCommand(context.workspace.worktree, rawCommand);
-        const zhihuiProgress = invocation?.commandId === "tms philippines products-export execute";
         const payload = await processes.execute({
           command,
           cwd: paths.resolveExecutableCwd(context.workspace, input.cwd ?? "."),
@@ -270,12 +269,11 @@ export function createExecTools(dependencies: ExecToolDependencies): ToolDefinit
           yieldMs,
           signal: context.handle.signal,
           toolCallId: context.tool_call_id ?? "",
-          trackZhihuiProgress: zhihuiProgress,
+          ...(invocation ? { progressCommand: invocation.commandId } : {}),
           ...(context.turn_id === undefined ? {} : { turnId: context.turn_id }),
           ...(options.execEnv ? {
             env: options.execEnv({
               skillNames: context.skill_names ?? [],
-              runtimeRequirements: commandDefinition?.runtimeRequirements ?? [],
               sessionId: context.session_id,
               turnId: context.turn_id ?? "",
             }),

@@ -265,20 +265,10 @@ export class DashboardService {
   } | undefined;
 
   private readonly handlers: AgentDashboardRpcHandlers = {
-    "sessions.questions": input => {
-      const pendingInput = input.session_id ? this.options.questions?.pendingInputSnapshot(input.session_id) : undefined;
-      return {
-        items: this.options.questions?.snapshot() ?? [],
-        ...(pendingInput ? { pending_input: pendingInput } : {}),
-      };
-    },
+    "sessions.questions": () => ({ items: this.options.questions?.snapshot() ?? [] }),
     "sessions.answer": input => {
       if (!this.options.questions) return rpcError("unavailable", "User questions are unavailable");
       return this.options.questions.submit(input);
-    },
-    "sessions.pending_input.answer": input => {
-      if (!this.options.questions) return rpcError("unavailable", "Sensitive input is unavailable");
-      return this.options.questions.submitPendingInput(input);
     },
     "sessions.list": (input) => this.sessions(input) as DashboardRpcResult<"sessions.list">,
     "sessions.detail": (input) => this.session(input) as Promise<DashboardRpcResult<"sessions.detail">>,

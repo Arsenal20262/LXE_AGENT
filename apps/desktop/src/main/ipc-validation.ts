@@ -7,8 +7,6 @@ import type {
   DesktopSetupInput,
   DesktopSyntheticPerformerSourceKind,
   DesktopSyntheticPerformerTaskInput,
-  DesktopYacangExecuteInput,
-  DesktopYacangPreviewInput,
 } from "@lxe/desktop-protocol";
 import { parseDashboardRpcCall } from "@lxe/desktop-protocol";
 
@@ -38,22 +36,6 @@ export function validateSyntheticPerformerId(value: unknown): string {
     throw new Error("Synthetic performer identifier is invalid");
   }
   return identifier;
-}
-
-export function validateYacangPreviewInput(value: unknown): DesktopYacangPreviewInput {
-  const input = objectValue(value, "Yacang preview input");
-  if (Object.keys(input).some((key) => key !== "request_text")) throw new Error("Yacang preview input has unsupported fields");
-  const requestText = boundedText(input.request_text, "Yacang request text", 8_192);
-  if (!requestText) throw new Error("Yacang request text is required");
-  return { request_text: requestText };
-}
-
-export function validateYacangExecuteInput(value: unknown): DesktopYacangExecuteInput {
-  const input = objectValue(value, "Yacang execution input");
-  if (Object.keys(input).some((key) => key !== "preview_id" && key !== "confirmed")) throw new Error("Yacang execution input has unsupported fields");
-  const previewId = boundedText(input.preview_id, "Yacang preview identifier", 128);
-  if (!/^[A-Za-z0-9-]+$/u.test(previewId) || input.confirmed !== true) throw new Error("Yacang execution confirmation is invalid");
-  return { preview_id: previewId, confirmed: true };
 }
 
 export function validateSyntheticPerformerSourceKind(

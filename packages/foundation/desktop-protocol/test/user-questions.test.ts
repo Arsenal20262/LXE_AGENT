@@ -7,7 +7,6 @@ test("question reads, answers and change notifications cross the shared IPC/JSON
     { operation: "sessions.questions" as const, input: { session_id: "s" } },
     { operation: "sessions.answer" as const, input: { session_id: "s", request_id: "request", answers: [{ id: "q", selected: ["a"] }] } },
     { operation: "sessions.answer" as const, input: { session_id: "s", request_id: "request", answers: [{ id: "q", selected: [] }] } },
-    { operation: "sessions.pending_input.answer" as const, input: { session_id: "s", request_id: "opaque", value: "A7x9" } },
   ];
   for (const call of calls) {
     expect(parseDashboardRpcCall(call)).toEqual(call);
@@ -17,18 +16,10 @@ test("question reads, answers and change notifications cross the shared IPC/JSON
   expect(decodeAgentEvent(encodeAgentEvent(event))).toEqual(event);
 });
 
-test("pending input answers accept only bounded local interaction fields", () => {
-  const call = {
-    operation: "sessions.pending_input.answer" as const,
-    input: { session_id: "s", request_id: "opaque", value: " A7x9 " },
-  };
-  expect(parseDashboardRpcCall(call)).toEqual({
-    operation: call.operation,
-    input: { session_id: "s", request_id: "opaque", value: "A7x9" },
-  });
+test("retired sensitive input operations are unavailable", () => {
   expect(() => parseDashboardRpcCall({
-    operation: call.operation,
-    input: { ...call.input, value: " " },
+    operation: "sessions.pending_input.answer" as never,
+    input: { session_id: "s", request_id: "opaque", value: "A7x9" },
   })).toThrow();
   expect(() => parseDashboardRpcCall({
     operation: "sessions.shangman_captcha.answer" as never,

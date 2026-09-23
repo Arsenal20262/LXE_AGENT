@@ -568,16 +568,16 @@ describe("LocalConversationController", () => {
     h.controller.dispose();
   });
 
-  test("shows Zhihui progress on the matching live exec, including early events, then terminal result", async () => {
+  test("shows business progress on the matching live exec, including early events, then terminal result", async () => {
     const h = harness(["turn-1", "message-1", "route-1"]);
     h.storage.sessions.set("session-1", {
       session_id: "session-1", source: { platform: "desktop", chat_id: "session-1" }, workspace: testWorkspace,
     });
     await h.controller.send({ session_id: "session-1", text: "export" });
     const progress = {
-      type: "zhihui_tms.progress" as const,
+      type: "tool.progress" as const,
       thread_id: "session-1", turn_id: "turn-1",
-      payload: { exec_id: `exec_${"a".repeat(32)}`, tool_call_id: "tool-exec-1", message: "智汇 TMS：正在登录" },
+      payload: { exec_id: `exec_${"a".repeat(32)}`, tool_call_id: "tool-exec-1", stage: "login_started", message: "正在登录" },
     };
     h.controller.handleAgentEvent(progress);
     h.controller.handleOutbound({
@@ -598,19 +598,19 @@ describe("LocalConversationController", () => {
       },
     });
     let stream = h.controller.activity("session-1").active?.stream;
-    expect(stream?.tool_steps[0]?.result_block?.content).toBe("智汇 TMS：正在登录");
+    expect(stream?.tool_steps[0]?.result_block?.content).toBe("正在登录");
     expect(stream?.process_parts[0]).toMatchObject({ type: "tool", tool_step: {
-      result_block: { content: "智汇 TMS：正在登录" },
+      result_block: { content: "正在登录" },
     } });
     h.controller.handleAgentEvent({ ...progress, thread_id: "other-session",
       payload: { ...progress.payload, message: "智汇 TMS：错误会话" } });
     h.controller.handleAgentEvent({ ...progress,
       payload: { ...progress.payload, tool_call_id: "other-tool", message: "智汇 TMS：错误工具" } });
     expect(h.controller.activity("session-1").active?.stream?.tool_steps[0]?.result_block?.content)
-      .toBe("智汇 TMS：正在登录");
-    h.controller.handleAgentEvent({ ...progress, payload: { ...progress.payload, message: "智汇 TMS：登录成功" } });
+      .toBe("正在登录");
+    h.controller.handleAgentEvent({ ...progress, payload: { ...progress.payload, stage: "authenticated", message: "登录成功" } });
     stream = h.controller.activity("session-1").active?.stream;
-    expect(stream?.tool_steps[0]?.result_block?.content).toBe("智汇 TMS：登录成功");
+    expect(stream?.tool_steps[0]?.result_block?.content).toBe("登录成功");
     h.controller.handleAgentEvent({ type: "background_task.changed", thread_id: "session-1", turn_id: "turn-1",
       payload: { tool_call_id: "tool-exec-1", task: {
         exec_id: progress.payload.exec_id, session_id: "session-1", origin_turn_id: "turn-1",

@@ -79,8 +79,8 @@ describe("JSON-RPC boundary", () => {
         command: "echo ok", cwd: "/work", started_at: 1, ended_at: 2, duration_sec: 1,
         exit_code: 0, truncated: false, output_tail: "ok",
       } } },
-      { type: "zhihui_tms.progress", ...scope, payload: {
-        exec_id: `exec_${"a".repeat(32)}`, tool_call_id: "tool", message: "智汇 TMS：正在登录",
+      { type: "tool.progress", ...scope, payload: {
+        exec_id: `exec_${"a".repeat(32)}`, tool_call_id: "tool", stage: "login_started", message: "正在登录",
       } },
       { type: "managed_llm.authentication_failed", payload: { provider: "test", model: "model", credential_revision: "a".repeat(64) } },
       { type: "session.changed", thread_id: "s", payload: { changes: ["messages"] } },

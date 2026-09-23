@@ -855,12 +855,15 @@ describe("TypeScriptAgentRuntime", () => {
       module: "replenishment",
     }]);
     expect(store.metrics[0]?.executions).toEqual([]);
+    expect(store.metrics[0]?.first_selected_skill).toBe("replenishment-store-resolve");
     expect(store.metrics[1]?.tools).toContainEqual(expect.objectContaining({
       name: "lxeskill:replenish store resolve",
       calls: 2,
       errors: 1,
     }));
     expect(store.metrics[1]?.activations).toEqual([]);
+    expect(store.metrics[1]).toMatchObject({ first_selected_skill: "replenishment-store-resolve", wrong_skill_reads: 0 });
+    expect(Number(store.metrics[1]?.time_to_exec_ms)).toBeGreaterThanOrEqual(0);
     expect(store.metrics[1]?.executions).toEqual([
       expect.objectContaining({
         skill: "replenishment-store-resolve",
@@ -1873,6 +1876,13 @@ describe("TypeScriptAgentRuntime", () => {
         name: "report.xlsx",
       }),
     ]);
+    expect(store.metrics[0]).toMatchObject({
+      first_selected_skill: "", wrong_skill_reads: 0, time_to_exec_ms: null,
+      llm_calls: 2, tool_calls: 1,
+    });
+    expect(Number(store.metrics[0]?.tool_result_size_bytes)).toBeGreaterThan(0);
+    expect(Number(store.metrics[0]?.time_to_file_delivery_ms)).toBeGreaterThanOrEqual(0);
+    expect(store.metrics[0]?.total_turn_ms).toBe(store.metrics[0]?.elapsed_ms);
     expect(changes).toContain("artifacts");
     await runtime.stop();
   });

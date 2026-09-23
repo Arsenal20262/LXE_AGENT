@@ -238,9 +238,10 @@ export type BackgroundTaskChangedPayload = {
   task: ExecTaskSnapshotPayload;
 };
 
-export type ZhihuiTmsProgressPayload = {
+export type ToolProgressPayload = {
   exec_id: string;
   tool_call_id: string;
+  stage: string;
   message: string;
 };
 
@@ -281,10 +282,10 @@ export type AgentEvent =
       payload: BackgroundTaskChangedPayload;
     }
   | {
-      type: "zhihui_tms.progress";
+      type: "tool.progress";
       thread_id: string;
       turn_id: string;
-      payload: ZhihuiTmsProgressPayload;
+      payload: ToolProgressPayload;
     }
   | {
       type: "managed_llm.authentication_failed";
@@ -675,11 +676,6 @@ export interface DesktopInputAssetSlot {
   previous: DesktopInputAssetVersion | null;
 }
 
-export interface DesktopYacangPreviewInput { request_text: string; }
-export interface DesktopYacangExecuteInput { preview_id: string; confirmed: true; }
-export interface DesktopYacangPreview { preview_id: string; plan: Record<string, unknown>; production_enabled: boolean; }
-export interface DesktopYacangExecution { result: Record<string, unknown>; }
-
 export interface LxeDesktopBridge {
   dashboard: DashboardTransport;
   desktop: {
@@ -727,8 +723,6 @@ export interface LxeDesktopBridge {
     onSyntheticPerformerTaskChanged(
       listener: (task: DesktopSyntheticPerformerTask) => void,
     ): () => void;
-    previewYacangExport(input: DesktopYacangPreviewInput): Promise<DesktopYacangPreview>;
-    executeYacangExport(input: DesktopYacangExecuteInput): Promise<DesktopYacangExecution>;
     onCloudStateChanged(listener: (state: DesktopCloudState) => void): () => void;
     onConversationEvent(listener: (event: DesktopConversationEvent) => void): () => void;
     onSessionStatus(listener: (snapshot: SessionStatusSnapshot) => void): () => void;
@@ -768,7 +762,7 @@ const agentEventTypes = new Set<AgentEvent["type"]>([
   "typing.changed",
   "agent.wake",
   "background_task.changed",
-  "zhihui_tms.progress",
+  "tool.progress",
   "managed_llm.authentication_failed",
   "session.changed",
   "system.ready",
@@ -778,7 +772,7 @@ const agentEventTypes = new Set<AgentEvent["type"]>([
   "turn.completed",
   "turn.failed",
 ]);
-const zhihuiProgressText = /^智汇 TMS：(?:正在登录|登录成功|第\d+页读取\d+条，累计\d+条|第\d+页已请求导出\d+条|开始下载\d+页|第\d+\/\d+页已保存，\d+行|\d+页已合并，\d+行)$/u;
+const unsafeProgressText = /[\u0000-\u001f\u007f]|https?:\/\/|\b(?:bearer|token|password|cookie|authorization|secret|api[_ -]?key)\b|[A-Za-z0-9_-]{40,}/iu;
 
 const isAgentCommand = (value: string): value is AgentCommand =>
   agentCommands.has(value as AgentCommand);
@@ -947,7 +941,7 @@ export function decodeAgentEvent(notification: AgentNotification): AgentEvent {
       throw new JsonRpcError(-32602, "skills.changed.revision must be a positive integer");
     }
   }
-  const scoped = ["item.completed", "conversation.stream.delta", "typing.changed", "background_task.changed", "zhihui_tms.progress", "thread.started", "turn.started", "turn.completed", "turn.failed", "session.changed"];
+  const scoped = ["item.completed", "conversation.stream.delta", "typing.changed", "background_task.changed", "tool.progress", "thread.started", "turn.started", "turn.completed", "turn.failed", "session.changed"];
   if (scoped.includes(String(object.type))) {
     for (const field of object.type === "thread.started" || object.type === "session.changed" ? ["thread_id"] : ["thread_id", "turn_id"]) {
       if (typeof object[field] !== "string" || !String(object[field]).trim()) {
@@ -1034,16 +1028,17 @@ export function decodeAgentEvent(notification: AgentNotification): AgentEvent {
         throw new Error("agent protocol background_task.changed payload is invalid");
       }
     }
-    if (object.type === "zhihui_tms.progress") {
+    if (object.type === "tool.progress") {
       const payload = objectValue(object.payload)!;
       if (typeof object.thread_id !== "string" || !object.thread_id.trim()
         || typeof object.turn_id !== "string" || !object.turn_id.trim()
-        || Object.keys(payload).sort().join("\0") !== ["exec_id", "message", "tool_call_id"].join("\0")
+        || Object.keys(payload).sort().join("\0") !== ["exec_id", "message", "stage", "tool_call_id"].join("\0")
         || typeof payload.exec_id !== "string" || !/^exec_[a-f0-9]{32}$/u.test(payload.exec_id)
         || typeof payload.tool_call_id !== "string" || !payload.tool_call_id.trim()
-        || typeof payload.message !== "string" || payload.message.length > 120
-        || !zhihuiProgressText.test(payload.message)) {
-        throw new Error("agent protocol zhihui_tms.progress payload is invalid");
+        || typeof payload.stage !== "string" || !/^[a-z][a-z0-9_]{0,63}$/u.test(payload.stage)
+        || typeof payload.message !== "string" || !payload.message.trim() || payload.message.length > 120
+        || unsafeProgressText.test(payload.message)) {
+        throw new Error("agent protocol tool.progress payload is invalid");
       }
     }
     if (object.type === "conversation.stream.delta") {

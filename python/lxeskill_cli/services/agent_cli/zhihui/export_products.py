@@ -144,8 +144,26 @@ def _run(
     client: Any = None
 
     def emit(event: dict[str, Any]) -> None:
-        if on_event is not None:
-            on_event(event)
+        if on_event is None:
+            return
+        stage = event.get("stage")
+        page = event.get("page")
+        page_records = event.get("page_records")
+        total_records = event.get("total_records")
+        total_pages = event.get("total_pages")
+        rows = event.get("rows")
+        messages = {
+            "login_started": "智汇 TMS：正在登录",
+            "authenticated": "智汇 TMS：登录成功",
+            "listed": f"智汇 TMS：第{page}页读取{page_records}条，累计{total_records}条",
+            "exported": f"智汇 TMS：第{page}页已请求导出{page_records}条",
+            "delivery_started": f"智汇 TMS：开始下载{total_pages}页",
+            "downloaded": f"智汇 TMS：第{page}/{total_pages}页已保存，{rows}行",
+            "merged": f"智汇 TMS：{total_pages}页已合并，{rows}行",
+        }
+        message = messages.get(stage)
+        if message is not None:
+            on_event({**event, "message": message})
 
     try:
         with interprocess_lock(_account_lock_path(account), timeout_seconds=0):

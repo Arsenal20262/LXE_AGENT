@@ -4,8 +4,8 @@ import { createLogger, runWithLogContext } from "@lxe/core";
 import type { JsonObject, WorkspaceContext } from "@lxe/protocol";
 import type { ExecShellAdapter } from "../exec-shell";
 import { ProcessOutputStore, sweepSpillDirectory } from "../process-output";
-import type { ProcessStatus, ZhihuiTmsProgressEvent } from "./public-types";
-import { ZhihuiProgressDecoder } from "./zhihui-progress";
+import type { ProcessStatus, ToolProgressEvent } from "./public-types";
+import { ProgressEnvelopeDecoder } from "./progress-envelope";
 
 interface ProcessEntry {
   id: string;
@@ -54,7 +54,7 @@ export class CodingProcessManager {
   private readonly admissionTails = new Map<string, Promise<void>>();
   private readonly logger = createLogger("runtime.coding_process");
   private nextRecency = 0;
-  onZhihuiTmsProgress: ((event: ZhihuiTmsProgressEvent) => Promise<void> | void) | undefined;
+  onToolProgress: ((event: ToolProgressEvent) => Promise<void> | void) | undefined;
 
   constructor(private readonly options: {
     maxOutputBytes: number;
@@ -109,7 +109,7 @@ export class CodingProcessManager {
     yieldMs: number;
     signal: AbortSignal;
     toolCallId: string;
-    trackZhihuiProgress?: boolean;
+    progressCommand?: string;
     turnId?: string;
     env?: Record<string, string>;
   }): Promise<JsonObject> {
@@ -142,7 +142,7 @@ export class CodingProcessManager {
     workspace: WorkspaceContext;
     signal: AbortSignal;
     toolCallId: string;
-    trackZhihuiProgress?: boolean;
+    progressCommand?: string;
     turnId?: string;
     env?: Record<string, string>;
   }): { entry: ProcessEntry } | { failure: JsonObject } {
@@ -240,8 +240,8 @@ export class CodingProcessManager {
     runWithLogContext(this.logContext(entry), () => {
       this.logger.info("process_started", this.processFields(entry));
     });
-    const progressDecoder = request.trackZhihuiProgress && this.onZhihuiTmsProgress
-      ? new ZhihuiProgressDecoder() : undefined;
+    const progressDecoder = request.progressCommand && this.onToolProgress
+      ? new ProgressEnvelopeDecoder(request.progressCommand) : undefined;
     const createPump = (
       stream: ReadableStream<Uint8Array>,
       source: "stdout" | "stderr",
@@ -253,17 +253,17 @@ export class CodingProcessManager {
           if (chunk.done) break;
           if (entry.acceptingOutput) entry.output.append(source, chunk.value);
           if (source === "stdout" && progressDecoder && entry.acceptingOutput) {
-            for (const message of progressDecoder.push(chunk.value)) {
+            for (const progress of progressDecoder.push(chunk.value)) {
               try {
-                await this.onZhihuiTmsProgress?.({
+                await this.onToolProgress?.({
                   execId: entry.id,
                   sessionId: entry.sessionId,
                   turnId: entry.turnId,
                   toolCallId: entry.toolCallId,
-                  message,
+                  ...progress,
                 });
               } catch (error) {
-                this.logger.warn("zhihui_progress_publish_failed", { task_id: entry.id, error });
+                this.logger.warn("tool_progress_publish_failed", { task_id: entry.id, error });
               }
             }
           }

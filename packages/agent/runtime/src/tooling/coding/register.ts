@@ -33,7 +33,7 @@ export function registerCodingTools(
     shell: execShell,
   });
   processes.onComplete = options.onExecComplete;
-  processes.onZhihuiTmsProgress = options.onZhihuiTmsProgress;
+  processes.onToolProgress = options.onToolProgress;
 
   for (const tool of createFileTools({
     paths,
