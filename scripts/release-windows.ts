@@ -1,10 +1,11 @@
 // Keep this entry point dependency-free: it installs frozen dependencies before loading build tools.
-import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, rmSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { join, resolve, relative } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { VERSION, verifyCandidate, writeJsonAtomic, type ReleaseCandidate } from "./release-candidate";
+
+import { cleanupCandidates } from "./release-retention";
 
 type Action = "build" | "publish";
 interface Source { commit: string; dirty: boolean }
@@ -91,6 +92,7 @@ export async function runWorkflow(action: Action, ports: WorkflowPorts): Promise
         matches(record, commit, intent());
         state = { schema_version: 1, status: "ready", source_commit: commit, candidate };
         writeJsonAtomic(currentPath, state);
+        cleanupCandidates(directory, record.build_id, log);
         log(`Ready to publish: ${record.version} / ${record.build_id}\nRun bun run release:publish after checking the installer.`);
       } catch (error) {
         writeJsonAtomic(currentPath, { ...state, status: "failed", error: String(error) });

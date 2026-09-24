@@ -5,6 +5,7 @@ import {execFileSync} from "node:child_process";
 import COS from "cos-nodejs-sdk-v5";
 
 import {VERSION,sha512,verifyCandidate,writeJsonAtomic} from "./release-candidate";
+import {cleanupCandidates,lockCandidateFiles,recordPublished} from "./release-retention";
 export {VERSION,sha512} from "./release-candidate";
 export function compareVersions(a:string,b:string):number{
  if(!VERSION.test(a)||!VERSION.test(b))throw new Error("Invalid version");
@@ -40,11 +41,15 @@ export async function main(args=process.argv.slice(2),ports?:{cos:unknown;lockRo
    built_at:new Date().toISOString(),platform:"windows-x64",file_name,object_key:"artifacts/"+intent.version+"/"+build_id+"/"+file_name,
    size:statSync(artifact).size,sha512:await sha512(artifact),notes:intent.notes});
   if(process.env.LXE_RELEASE_CANDIDATE_RESULT)writeJsonAtomic(process.env.LXE_RELEASE_CANDIDATE_RESULT,{candidate:join("dist","desktop-candidates",build_id,"candidate.json")});
-  console.log("Candidate saved: "+join(dir,"candidate.json"));return;
+  console.log("Candidate saved: "+join(dir,"candidate.json"));
+  if(!process.env.LXE_RELEASE_CANDIDATE_RESULT)cleanupCandidates(resolve(dir,".."),build_id);
+  return;
  }
  if(action!=="publish"&&action!=="pause")throw new Error("Use select, candidate, publish <candidate.json>, or pause");
  const lock=join(ports?.lockRoot||process.env.LOCALAPPDATA||root,"LXE","release","publish.lock");mkdirSync(resolve(lock,".."),{recursive:true});
  try{mkdirSync(lock);}catch{throw new Error("Publisher locked: "+lock);}
+ let unlockCandidate:(()=>void)|undefined;
+ let publishedLocal:{directory:string;build_id:string}|undefined;
  try{
   if(!ports)console.log("Reading publisher credentials...");
   const credentials=ports?null:JSON.parse((await Bun.stdin.text()).replace(/^\uFEFF/,""));
@@ -56,7 +61,9 @@ export async function main(args=process.argv.slice(2),ports?:{cos:unknown;lockRo
   const before=await get(channelKey);
   if(action==="pause"){if(!before)throw new Error("No channel published");await put(channelKey,{...before,paused:true});console.log("Stable channel paused");return;}
   if(!arg||basename(arg)!=="candidate.json")throw new Error("Pass selected candidate.json");
-  const candidatePath=resolve(arg),record=await verifyCandidate(candidatePath),dir=resolve(candidatePath,"..");
+  const candidatePath=resolve(arg),dir=resolve(candidatePath,"..");
+  unlockCandidate=lockCandidateFiles(resolve(dir,".."));
+  const record=await verifyCandidate(candidatePath);
   const file=join(dir,record.file_name);
   console.log("Verified candidate "+record.version+" / "+record.build_id+"...");
   if(before?.release){
@@ -88,8 +95,15 @@ export async function main(args=process.argv.slice(2),ports?:{cos:unknown;lockRo
   if(JSON.stringify(await get(channelKey))!==JSON.stringify(before))throw new Error("Channel changed; review and retry");
   console.log("Activating stable update channel...");
   await put(channelKey,{schema_version:1,paused:false,release:{version:record.version,build_id:record.build_id}});
+  try{
+   recordPublished(resolve(dir,".."),record);
+   publishedLocal={directory:resolve(dir,".."),build_id:record.build_id};
+  }catch(error){console.warn("Published remotely, but local success recording failed; cleanup skipped: "+String(error));}
   console.log("Published "+record.version+" / "+record.build_id);
- }finally{rmSync(lock,{recursive:true});}
+ }finally{
+  try{unlockCandidate?.();}finally{rmSync(lock,{recursive:true});}
+ }
+ if(publishedLocal)cleanupCandidates(publishedLocal.directory,publishedLocal.build_id);
 }
 // Keep the CLI alive while Windows PowerShell is delivering piped credentials.
 if(import.meta.main)await main().catch(error=>{

@@ -20,7 +20,7 @@ export interface ReleaseCandidate {
   built_at: string; platform: "windows-x64"; file_name: string; object_key: string;
   size: number; sha512: string; notes: string;
 }
-export async function verifyCandidate(path: string): Promise<ReleaseCandidate> {
+export function readCandidate(path: string): ReleaseCandidate {
   const record = JSON.parse(readFileSync(path, "utf8")) as ReleaseCandidate;
   if (record.schema_version !== 1 || !VERSION.test(record.version) || record.platform !== "windows-x64"
     || !/^[a-f0-9]{40}$/.test(record.source_commit) || !/^[a-zA-Z0-9_-]{1,100}$/.test(record.build_id)
@@ -33,7 +33,11 @@ export async function verifyCandidate(path: string): Promise<ReleaseCandidate> {
   if (record.file_name !== name || record.object_key !== `artifacts/${record.version}/${record.build_id}/${name}`) {
     throw new Error("Invalid candidate path");
   }
-  const file = join(dirname(path), name);
+  return record;
+}
+export async function verifyCandidate(path: string): Promise<ReleaseCandidate> {
+  const record = readCandidate(path);
+  const file = join(dirname(path), record.file_name);
   if (statSync(file).size !== record.size || await sha512(file) !== record.sha512) {
     throw new Error("Candidate installer changed");
   }

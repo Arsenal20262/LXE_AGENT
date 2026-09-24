@@ -55,10 +55,13 @@ for (const failedStep of ["install", "sync", "desktop:tools:fd", "verify:source"
   test(`failed ${failedStep} invalidates the old candidate and stops all later stages`, async () => {
     const f = fixture(); try {
       await runWorkflow("build", f.ports); f.calls.length = 0;
+      f.logs.length = 0;
       const original = f.ports.run!;
       f.ports.run = async (command, env) => { if (command.includes(failedStep)) throw new Error(`actual ${failedStep} failure`); await original(command, env); };
       await expect(runWorkflow("build", f.ports)).rejects.toThrow(`actual ${failedStep} failure`);
       expect(f.state().status).toBe("failed");
+      expect(existsSync(f.file)).toBe(true);
+      expect(f.logs.some(line => line.startsWith("Local cleanup"))).toBe(false);
       const count = f.calls.length;
       await expect(runWorkflow("publish", f.ports)).rejects.toThrow("No ready current candidate");
       expect(f.calls.length).toBe(count);
@@ -133,6 +136,14 @@ test("atomic writes replace existing state without leaving temporary files", () 
     mkdirSync(f.directory, { recursive: true });
     writeJsonAtomic(f.current, { status: "building" }); writeJsonAtomic(f.current, { status: "ready" });
     expect(f.state().status).toBe("ready"); expect(readdirSync(f.directory)).toEqual(["current.json"]);
+  } finally { f.cleanup(); }
+});
+test("cleanup failure does not invalidate a successful build", async () => {
+  const f = fixture(); try {
+    mkdirSync(f.directory, { recursive: true }); writeFileSync(join(f.directory, "last-published.json"), "corrupt");
+    await runWorkflow("build", f.ports);
+    expect(f.state().status).toBe("ready"); expect(existsSync(f.file)).toBe(true);
+    expect(f.logs.join("\n")).toContain("Local cleanup skipped:");
   } finally { f.cleanup(); }
 });
 test("unsupported platforms stop before creating release state", async () => {

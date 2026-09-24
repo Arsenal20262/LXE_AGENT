@@ -1,8 +1,9 @@
 import {expect,test} from "bun:test";
-import {mkdtempSync,writeFileSync,readFileSync,mkdirSync,rmSync} from "node:fs";
+import {mkdtempSync,writeFileSync,readFileSync,mkdirSync,rmSync,existsSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {main,sha512} from "./desktop-release";
+import {lockCandidateFiles} from "./release-retention";
 const CHANNEL="channels/stable/windows-x64.json";
 class FakeCos {
  objects=new Map<string,string>();
@@ -25,10 +26,37 @@ test("channel is the final commit; interrupted publication retries without rebui
  const root=mkdtempSync(join(tmpdir(),"lxe-publication-"));const cos=new FakeCos(),ports={cos,lockRoot:root};
  try{const path=await candidate(root,"one");cos.failChannel=true;
  await expect(main(["publish",path],ports)).rejects.toThrow("interrupted");
+ expect(existsSync(join(root,"one","publication.json"))).toBe(true);
+ expect(existsSync(join(root,"last-published.json"))).toBe(false);
  expect(cos.objects.has(CHANNEL)).toBe(false);expect(cos.uploaded).toBe(1);
  cos.failChannel=false;await main(["publish",path],ports);expect(cos.uploaded).toBe(1);
+ expect(JSON.parse(readFileSync(join(root,"last-published.json"),"utf8")).build_id).toBe("one");
  expect(JSON.parse(cos.objects.get(CHANNEL)!).release.build_id).toBe("one");
  await main(["publish",path],ports);expect(cos.uploaded).toBe(1);
+ }finally{rmSync(root,{recursive:true});}
+});
+test("only successful publication triggers local pruning and rotates the protected published candidate",async()=>{
+ const root=mkdtempSync(join(tmpdir(),"lxe-publication-"));const cos=new FakeCos(),ports={cos,lockRoot:root};
+ const file=(id:string)=>join(root,id,"LXE-Agent-0.2.17-windows-x64.exe");
+ try{
+ const first=await candidate(root,"build-0");await main(["publish",first],ports);
+ for(let n=1;n<6;n++)await candidate(root,`build-${n}`,n===5?"0.2.18":"0.2.17");
+ const next=join(root,"build-5","candidate.json");cos.failChannel=true;
+ await expect(main(["publish",next],ports)).rejects.toThrow("interrupted");
+ expect(existsSync(file("build-0"))).toBe(true);expect(existsSync(file("build-1"))).toBe(true);
+ expect(JSON.parse(readFileSync(join(root,"last-published.json"),"utf8")).build_id).toBe("build-0");
+ cos.failChannel=false;await main(["publish",next],ports);
+ expect(existsSync(file("build-0"))).toBe(false);expect(existsSync(file("build-1"))).toBe(false);
+ expect(existsSync(file("build-3"))).toBe(true);
+ expect(existsSync(join(root,"build-0","candidate.json"))).toBe(true);
+ expect(existsSync(join(root,"build-0","publication.json"))).toBe(true);
+ }finally{rmSync(root,{recursive:true});}
+});
+test("publisher respects the local installer lock before uploading",async()=>{
+ const root=mkdtempSync(join(tmpdir(),"lxe-publication-"));const cos=new FakeCos();
+ try{const path=await candidate(root,"one"),unlock=lockCandidateFiles(root);
+ await expect(main(["publish",path],{cos,lockRoot:root})).rejects.toThrow("locked");
+ expect(cos.uploaded).toBe(0);unlock();
  }finally{rmSync(root,{recursive:true});}
 });
 test("unpublished version may be rebuilt, published version is frozen, pause preserves high water mark",async()=>{
