@@ -78,7 +78,9 @@ forbidText("packages/agent/runtime/src/engine/runtime.ts", /job\.raw_data\.syste
 requireText("apps/desktop/src/main.ts", /registerDashboardProtocol/, "packaged Renderer must load through the Electron app protocol");
 requireText("package.json", /"desktop:preview"\s*:\s*"[^\"]*bun run dashboard:build && bun run --cwd apps\/desktop preview"/, "workspace must expose the production Renderer preview");
 requireText("package.json", /"desktop:pack:win"\s*:\s*"[^"]*-PackageTarget Unpacked"/, "workspace must expose the Windows unpacked verification route");
-requireText("package.json", /"verify:platform:win"\s*:\s*"[^"]*desktop:dist:win"/, "Windows release verification must retain the complete NSIS route");
+requireText("package.json", /"verify:platform:win"\s*:\s*"bun run release:build"/, "Windows release verification must use the complete release workflow");
+requireText("package.json", /"release:build"\s*:\s*"bun scripts\/release-windows\.ts build"/, "Windows release build must use the release workflow");
+requireText("scripts/release-windows.ts", /await stage\("Verify source", \[bun, "run", "verify:source"\]\)[\s\S]+await stage\("Build NSIS candidate", \[bun, "run", "desktop:dist:win"\]/, "Windows release workflow must verify source before building NSIS");
 requireText("apps/desktop/package.json", /"preview"\s*:\s*"bun run build && bun src\/preview\.ts"/, "desktop package must build Main and Preload before preview");
 requireText("apps/desktop/package.json", /"pack:win"\s*:\s*"electron-builder [^"]*--dir --x64 [^"]*dist\/desktop-unpacked"/, "desktop package must keep unpacked output separate from release artifacts");
 requireText("apps/desktop/src/preview.ts", /LXE_DESKTOP_PREVIEW\s*=\s*"1"/, "preview launcher must select the internal preview mode");

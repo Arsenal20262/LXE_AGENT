@@ -5,7 +5,7 @@ import {execFileSync} from "node:child_process";
 import COS from "cos-nodejs-sdk-v5";
 
 import {VERSION,sha512,verifyCandidate,writeJsonAtomic} from "./release-candidate";
-export {sha512} from "./release-candidate";
+export {VERSION,sha512} from "./release-candidate";
 export function compareVersions(a:string,b:string):number{
  if(!VERSION.test(a)||!VERSION.test(b))throw new Error("Invalid version");
  const x=a.split(".").map(Number),y=b.split(".").map(Number);
