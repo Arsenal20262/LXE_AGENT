@@ -1,18 +1,16 @@
-import {createHash,randomUUID} from "node:crypto";
-import {createReadStream,copyFileSync,existsSync,mkdirSync,readFileSync,writeFileSync,rmSync,statSync} from "node:fs";
+import {randomUUID} from "node:crypto";
+import {copyFileSync,existsSync,mkdirSync,readFileSync,writeFileSync,rmSync,statSync} from "node:fs";
 import {join,resolve,basename} from "node:path";
 import {execFileSync} from "node:child_process";
 import COS from "cos-nodejs-sdk-v5";
 
-export const VERSION=/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+import {VERSION,sha512,verifyCandidate,writeJsonAtomic} from "./release-candidate";
+export {sha512} from "./release-candidate";
 export function compareVersions(a:string,b:string):number{
  if(!VERSION.test(a)||!VERSION.test(b))throw new Error("Invalid version");
  const x=a.split(".").map(Number),y=b.split(".").map(Number);
  for(let i=0;i<3;i++)if(x[i]!==y[i])return x[i]!<y[i]!?-1:1;
  return 0;
-}
-export async function sha512(file:string):Promise<string>{
- const hash=createHash("sha512");for await(const part of createReadStream(file))hash.update(part);return hash.digest("base64");
 }
 const root=resolve(import.meta.dir,".."),intentPath=join(root,"config","desktop-release.json");
 const json=(path:string)=>JSON.parse(readFileSync(path,"utf8"));
@@ -41,6 +39,7 @@ export async function main(args=process.argv.slice(2),ports?:{cos:unknown;lockRo
   write(join(dir,"candidate.json"),{schema_version:1,version:intent.version,build_id,source_commit:selected.source_commit,
    built_at:new Date().toISOString(),platform:"windows-x64",file_name,object_key:"artifacts/"+intent.version+"/"+build_id+"/"+file_name,
    size:statSync(artifact).size,sha512:await sha512(artifact),notes:intent.notes});
+  if(process.env.LXE_RELEASE_CANDIDATE_RESULT)writeJsonAtomic(process.env.LXE_RELEASE_CANDIDATE_RESULT,{candidate:join("dist","desktop-candidates",build_id,"candidate.json")});
   console.log("Candidate saved: "+join(dir,"candidate.json"));return;
  }
  if(action!=="publish"&&action!=="pause")throw new Error("Use select, candidate, publish <candidate.json>, or pause");
@@ -57,13 +56,9 @@ export async function main(args=process.argv.slice(2),ports?:{cos:unknown;lockRo
   const before=await get(channelKey);
   if(action==="pause"){if(!before)throw new Error("No channel published");await put(channelKey,{...before,paused:true});console.log("Stable channel paused");return;}
   if(!arg||basename(arg)!=="candidate.json")throw new Error("Pass selected candidate.json");
-  const candidatePath=resolve(arg),record=json(candidatePath),dir=resolve(candidatePath,"..");
-  if(!VERSION.test(record.version)||record.platform!=="windows-x64"||!/^[a-f0-9]{40}$/.test(record.source_commit)||!/^[a-zA-Z0-9_-]{1,100}$/.test(record.build_id))throw new Error("Invalid candidate identity");
-  const file_name="LXE-Agent-"+record.version+"-windows-x64.exe";
-  if(record.file_name!==file_name||record.object_key!=="artifacts/"+record.version+"/"+record.build_id+"/"+file_name)throw new Error("Invalid candidate path");
-  const file=join(dir,file_name);
-  console.log("Verifying candidate "+record.version+" / "+record.build_id+"...");
-  if(await sha512(file)!==record.sha512||statSync(file).size!==record.size)throw new Error("Candidate installer changed");
+  const candidatePath=resolve(arg),record=await verifyCandidate(candidatePath),dir=resolve(candidatePath,"..");
+  const file=join(dir,record.file_name);
+  console.log("Verified candidate "+record.version+" / "+record.build_id+"...");
   if(before?.release){
    const order=compareVersions(record.version,before.release.version);
    if(order<0)throw new Error("Refusing channel downgrade");

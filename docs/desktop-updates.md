@@ -9,14 +9,26 @@
 在 Windows 仓库根目录运行：
 
 ```powershell
-bun run desktop:dist:win
+git pull --ff-only
+bun run release:build
+bun run release:publish
 ```
 
-生成的 `dist/desktop-candidates/<build-id>/candidate.json` 记录源码提交、独立构建编号、大小和 SHA-512，旁边保存固定安装包。构建失败、测试不通过后，可以修改源码、提交并重打同一未发布版本。每次构建获得新编号。候选构建要求干净工作区，构建期间源码提交也不能变化。
+`release:build` 检查干净源码和版本说明，安装冻结的 Bun/Python 依赖、准备 fd，执行一次完整源码验证，再生成一次 NSIS 安装包。它不拉取、提交或推送 Git，也不自动递增版本。
+
+每次构建开始，`dist/desktop-candidates/current.json` 先变为 `building`，使旧候选不可被默认发布。只有整个流程成功才变为 `ready`，保存源码提交和候选相对路径；失败为 `failed`，中断可能保留 `building`。这些状态都不会自动回退发布旧包。历史包和记录继续保留。
+
+生成的 `dist/desktop-candidates/<build-id>/candidate.json` 记录源码提交、独立构建编号、大小和 SHA-512，旁边保存固定安装包。未发布版本可修改源码、提交后重打；每次获得新构建编号。
 
 ## 发布与暂停
 
-测试通过后，指定已经验证的候选包：
+检查安装包后运行 `release:publish`。它核对当前工作区干净、源码提交/版本/说明与当前候选一致，以及安装包大小和 SHA-512；随后显示版本、时间、提交、说明、大小。输入 `y` 才上传并激活正式渠道，其他输入取消，非交互终端拒绝发布。确认后再次校验，避免等待期间发生变化。
+
+构建后再次修改代码或 `git pull` 得到新提交，默认发布要求重新构建。上传失败可重试同一命令；收到 `Published ...` 才确认发布成功。发布不会删除当前候选，重复发布同一构建沿用既有幂等规则。
+
+同一工作区用 `dist/desktop-candidates/workflow.lock` 防止两个新入口并发。异常退出遗留锁时，先确认构建或发布进程已经停止，再手动移除该锁；不要在另一流程仍运行时删除。
+
+旧入口仍有明确用途：`verify:platform:win` 是 `release:build` 的兼容别名；`desktop:dist:win` 只打包，不更新默认待发布记录。需要显式选择历史候选包时使用高级入口（仍遵守渠道版本冻结和文件校验）：
 
 ```powershell
 .\scripts\publish-desktop-windows.ps1 -Candidate 'D:\projects\LXE_AGENT\dist\desktop-candidates\<build-id>\candidate.json'

@@ -22,7 +22,7 @@ describe("Windows desktop packaging routes", () => {
     expect(workspaceScripts.verify).toBe("bun run verify:source");
     expect(workspaceScripts["verify:platform"]).toBe("bun run verify:source");
     expect(releaseVerification).toBe(
-      "bun scripts/assert-host-platform.ts win32 x64 && bun run desktop:tools:fd && bun run verify:source && bun run desktop:dist:win",
+      "bun run release:build",
     );
     expect(workspaceScripts["verify:platform:mac"]).toBe(
       "bun scripts/assert-host-platform.ts darwin && bun run desktop:tools:mac && bun run verify:source && bun scripts/verify-desktop-macos-media.ts",
@@ -38,7 +38,8 @@ describe("Windows desktop packaging routes", () => {
 
     expect(workspaceScripts["desktop:pack:win"]).toContain("-PackageTarget Unpacked");
     expect(workspaceScripts["desktop:dist:win"]).not.toContain("-PackageTarget Unpacked");
-    expect(workspaceScripts["verify:platform:win"]).toContain("desktop:dist:win");
+    expect(workspaceScripts["release:build"]).toBe("bun scripts/release-windows.ts build");
+    expect(workspaceScripts["release:publish"]).toBe("bun scripts/release-windows.ts publish");
     expect(workspaceScripts["verify:platform:win"]).not.toContain("desktop:pack:win");
 
     expect(desktopScripts["pack:win"]).toContain("--dir --x64");

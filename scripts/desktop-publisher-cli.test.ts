@@ -25,13 +25,14 @@ test("publisher CLI consumes piped input, reports invalid JSON and releases its 
 
 for(const success of [false,true])test.skipIf(process.platform!=="win32")(
  `PowerShell publisher ${success?"accepts explicit completion":"rejects silent exit code zero"}`,async()=>{
-  const root=mkdtempSync(join(tmpdir(),"lxe-publisher-wrapper-"));
+  const root=mkdtempSync(join(tmpdir(),"lxe publisher wrapper "));
   try{
    const candidate=join(root,"candidate.json");writeFileSync(candidate,"{}");
    const setup=`$ErrorActionPreference='Stop';
 $dir=Join-Path $env:LOCALAPPDATA 'LXE\\release'; New-Item -ItemType Directory -Path $dir -Force | Out-Null;
 [System.Management.Automation.PSCredential]::new('dummy',(ConvertTo-SecureString 'dummy' -AsPlainText -Force)) | Export-Clixml (Join-Path $dir 'cos-credential.xml');
-function bun { $input | Out-Null; ${success?"Write-Output 'Published 0.2.18 / fixture';":""} $global:LASTEXITCODE=0; }
+function bun { $received = ($input | Out-String) | ConvertFrom-Json;
+if ($received.secretId -ne 'dummy' -or $received.secretKey -ne 'dummy') { throw 'Credential pipe mismatch'; } ${success?"Write-Output 'Published 0.2.18 / fixture';":""} $global:LASTEXITCODE=0; }
 try { & ${psQuote(wrapper)} -Candidate ${psQuote(candidate)}; exit 0 } catch { [Console]::Error.WriteLine($_.Exception.Message); exit 1 }`;
    const child=Bun.spawn(["powershell","-NoLogo","-NoProfile","-Command",setup],{env:{...process.env,LOCALAPPDATA:root},stdout:"pipe",stderr:"pipe"});
    const [stdout,stderr,code]=await Promise.all([new Response(child.stdout).text(),new Response(child.stderr).text(),child.exited]);

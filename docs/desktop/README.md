@@ -181,10 +181,11 @@ bun run desktop:dist:win
 在正式发布前先做一次源码验证，再构造一次 NSIS 产物：
 
 ```powershell
-bun run verify:platform:win
+bun run release:build
+bun run release:publish
 ```
 
-两条 Windows 打包路线共用同一包装器：准备或复用可直接发布的运行时，只构建一次当前 wheel overlay、`agent-cli.exe`、Dashboard 与 Electron，再由 electron-builder 从模块各自的生产目录直接组装 `win-unpacked`，不经过统一的大型资源 staging，也不在包装器中提前重复校验 Builder 配置。每个阶段都会输出耗时，正式路线另外生成 NSIS；产物位于 `dist/desktop/`，安装程序命名为 `LXE-Agent-<version>-windows-x64.exe`。版本来自 Git 忽略的 `config/desktop-version.local.json`：Unpacked 复用当前版本，NSIS 成功并完成资源检查后才推进版本；仓库 `package.json` 保持占位版本 `0.1.0`。`verify:platform:win` 先检查平台并准备 fd，再执行一次 `verify:source` 和一次 `desktop:dist:win`。
+两条 Windows 打包路线共用同一包装器：准备或复用可直接发布的运行时，只构建一次当前 wheel overlay、`agent-cli.exe`、Dashboard 与 Electron，再由 electron-builder 从模块各自的生产目录直接组装 `win-unpacked`，不经过统一的大型资源 staging，也不在包装器中提前重复校验 Builder 配置。每个阶段都会输出耗时，正式路线另外生成 NSIS；产物位于 `dist/desktop/`，安装程序命名为 `LXE-Agent-<version>-windows-x64.exe`。正式 NSIS 版本和说明来自已提交的 `config/desktop-release.json`，不自动递增；Unpacked 仍使用独立的本地开发版本。`release:build` 同步冻结依赖、准备 fd、执行一次完整验证和一次打包，记录当前候选；`release:publish` 校验当前源码及安装包，展示详情，输入 `y` 后发布。`verify:platform:win` 是构建入口的兼容别名。完整规则见 [Windows 更新与发布](../desktop-updates.md)。
 
 首次联网构建准备锁定的 Node、Python、uv、ripgrep、fd、ExifTool 和 WireGuard；校验规则以各准备脚本为准。有效缓存可用于离线重建，员工安装和激活阶段无需下载 WireGuard。缓存、wheel overlay、资源裁剪和验收统一见 [打包手册](packaging-pipeline.md)。
 

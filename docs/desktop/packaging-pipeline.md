@@ -18,13 +18,14 @@
 | 准备 Windows 私有运行环境 | `bun run desktop:runtime:win` | 可重复使用的 Node、Python、浏览器等受管 Runtime |
 | 快速检查真实打包目录 | `bun run desktop:pack:win` | `dist/desktop-unpacked/win-unpacked/LXE Agent.exe` |
 | 生成 Windows 安装程序 | `bun run desktop:dist:win` | `dist/desktop/LXE-Agent-<version>-windows-x64.exe` |
-| 做一次正式发布验证 | `bun run verify:platform:win` | 先准备 fd，再完整检查源码，最后生成一次 NSIS 安装程序 |
+| 构建正式候选 | `bun run release:build` | 同步冻结依赖、准备 fd、完整验证、生成 NSIS 并记录当前候选 |
+| 发布当前候选 | `bun run release:publish` | 校验当前候选，输入 y 后发布 |
 
 平时最常用的是三条：
 
 - 改代码时用 `bun run desktop:dev`。
 - 想确认真实打包目录时用 `bun run desktop:pack:win`。
-- 准备发布时用 `bun run verify:platform:win`。
+- 准备发布时用 `bun run release:build`；`verify:platform:win` 是其兼容别名。
 
 目前正式打包只支持 **Windows x64**。macOS 可以运行源码版、预览版和工作台媒体标签，但不生成正式 DMG。
 
@@ -34,22 +35,11 @@ Mac 第一次运行 `desktop:dev` 或 `desktop:preview` 时，会自动下载约
 
 ### 正式打包时选择版本
 
-仓库中的 `apps/desktop/package.json` 固定保留占位版本 `0.1.0`，不会在本地打包时改写。Windows 打包版本保存在当前电脑的 `config/desktop-version.local.json`；该文件由脚本自动创建并被 Git 忽略，未来可以由云端版本服务替代。
+正式安装包的版本和更新说明来自已提交的 `config/desktop-release.json`。构建不会自动加版本，也不会修改仓库的占位版本；通过 `LXE_DESKTOP_PRODUCT_VERSION` 注入 electron-builder。源码和说明必须已提交，构建中不得改变。
 
-`desktop:dist:win` 在开始构建前读取本地文件中的最后成功版本，并给出自动增加修订号后的版本：
+日常发布使用 `bun run release:build` 和 `bun run release:publish`：前者同步冻结依赖、验证和打包并记录当前候选；后者校验并展示候选后等待输入 `y` 发布。构建失败或中断不回退旧包，源码变化后需重新构建。详见 [Windows 更新与发布](../desktop-updates.md)。
 
-```text
-Current desktop version: 0.1.0
-Automatically bump patch version to 0.1.1? [Y/n]:
-```
-
-直接按回车或输入 `y`，就会使用 `0.1.1`。这里的自动升级只增加最后一段，例如 `0.1.9 → 0.1.10`。
-
-输入 `n` 可以手动填写纯数字 `x.y.z`。手动版本可以等于当前版本，方便上一次构建失败后用原版本重试；也可以高于当前版本，但不能降级。
-
-选中的版本通过 `LXE_DESKTOP_PRODUCT_VERSION` 注入当前打包进程，electron-builder 会把它写入应用元数据和安装包文件名。只有 NSIS 安装包生成并通过资源检查后，脚本才把版本记为本地最后成功版本；构建失败不会消耗版本号。
-
-`desktop:pack:win` 是快速 Unpacked 路线，不询问也不递增版本，但会使用同一份本地版本；如果本地文件尚不存在，两条路线都会先以 `0.1.0` 创建它。`verify:platform:win` 会先完成源码验证，随后进入 `desktop:dist:win` 时再询问版本。
+`desktop:dist:win` 保留为独立 NSIS 打包入口，生成候选但不更新默认待发布记录。`desktop:pack:win` 是开发用 Unpacked 路线，仍使用本地开发版本选择文件，不属于正式发布流程。
 
 ## “构建”“打包”“安装”“启动”不是一回事
 
@@ -407,10 +397,10 @@ flowchart LR
 它本身不先执行全部源码测试。正式发布时应使用：
 
 ```powershell
-bun run verify:platform:win
+bun run release:build
 ```
 
-这个命令先检查 Windows x64 平台并执行 `desktop:tools:fd`，再执行一次 `verify:source`，最后执行一次 `desktop:dist:win`。这样全新工作区也能在真实 `find` 测试开始前获得 fd，不必提前准备整套 Node、Python 和浏览器；完整 Runtime 仍在打包阶段准备，同一批生产代码只构建一次。
+这个命令先检查 Windows x64 平台和干净源码，同步冻结依赖并执行 `desktop:tools:fd`，再执行一次 `verify:source`，最后执行一次 `desktop:dist:win` 并记录当前候选。这样全新工作区也能在真实 `find` 测试开始前获得 fd，不必提前准备整套 Node、Python 和浏览器；完整 Runtime 仍在打包阶段准备，同一批生产代码只构建一次。
 
 ## 当前自动门禁和人工边界
 
