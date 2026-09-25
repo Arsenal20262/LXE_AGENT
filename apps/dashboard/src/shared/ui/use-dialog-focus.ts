@@ -32,8 +32,10 @@ export function useDialogFocus<T extends HTMLElement>(
     const previouslyFocused = document.activeElement instanceof HTMLElement
       ? document.activeElement
       : null;
+    const focusableControls = () => Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
+      .filter((control) => !control.matches(":disabled") && control.getClientRects().length > 0);
     const focusFirstControl = () => {
-      const firstControl = dialog.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
+      const firstControl = focusableControls()[0];
       (firstControl || dialog).focus();
     };
     const frame = window.requestAnimationFrame(focusFirstControl);
@@ -47,8 +49,7 @@ export function useDialogFocus<T extends HTMLElement>(
       }
       if (event.key !== "Tab") return;
 
-      const controls = Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
-        .filter((control) => control.getClientRects().length > 0);
+      const controls = focusableControls();
       if (!controls.length) {
         event.preventDefault();
         dialog.focus();

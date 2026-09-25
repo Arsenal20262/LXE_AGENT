@@ -1647,7 +1647,7 @@ export function SessionDetailView({
         pageError={loadOlderError || display?.error || error} retryLatest={!loadOlderError}
         empty={loading || display?.loadState === "loading" ? <EmptyState label={t.sessionDetail.loading} />
           : error || display?.error ? <EmptyState label={t.common.errorPrefix(t.sessionDetail.errorLabel, display?.error || error)} />
-          : newConversation ? <ConversationWelcome /> : <div className="conversation-empty" role="status">{t.sessionDetail.empty}</div>}
+          : newConversation ? <ConversationWelcome enabled={runtimeReady} /> : <div className="conversation-empty" role="status">{t.sessionDetail.empty}</div>}
         renderRow={(row) => <UnifiedConversationRow row={row} expanded={row.kind === "process" ? process.states.get(row.id)?.expanded ?? false : expandedRows.get(row.id) ?? false} onToggle={row.kind === "process" ? process.toggle : toggleRow}
           onOpenFile={onOpenFile} onRevealFile={onRevealFile} onOpenAttachment={onOpenAttachment} attachmentSessionId={display?.sessionId || session?.session_id} />} />
       <div className="conversation-composer-dock">

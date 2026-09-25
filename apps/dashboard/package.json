@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "typecheck": "tsc -b",
+    "typecheck": "tsc -b && tsc --project test/behavior/tsconfig.json",
     "build": "tsc -b && vite build"
   },
   "dependencies": {

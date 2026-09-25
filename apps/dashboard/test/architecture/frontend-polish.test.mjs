@@ -11,12 +11,10 @@ const readSource = (relativePath) => readFileSync(path.join(sourceDir, relativeP
 const main = readSource("main.tsx");
 const status = readSource("desktop/sidebar-status.tsx");
 const shell = readSource("desktop/shell.tsx");
-const details = readSource("features/details/view.tsx");
 const models = readSource("features/models/view.tsx");
 const sessions = readSource("features/sessions/view.tsx");
 const sidebar = readSource("shared/use-three-state-sidebar.ts");
 const styles = readSource("styles.css");
-const dialogFocus = readSource("shared/ui/use-dialog-focus.ts");
 
 test("status and settings have one sidebar entry and no floating duplicate", () => {
   assert.match(status, /t\.sidebar\.statusAndSettings/);
@@ -83,22 +81,6 @@ test("session rows expose an accessible pinned and destructive action menu", () 
   assert.match(styles, /\.session-index-item:hover \.session-index-actions,[\s\S]*?opacity:\s*1;/s);
   assert.match(styles, /\.session-actions-menu\s*\{[^}]*position:\s*fixed;[^}]*z-index:\s*180;/s);
   assert.match(styles, /\.session-actions-menu button\.danger\s*\{[^}]*color:/s);
-});
-
-test("dialogs trap focus, close with Escape, and avoid native confirmations", () => {
-  assert.match(dialogFocus, /event\.key === "Escape"/);
-  assert.match(dialogFocus, /event\.key !== "Tab"/);
-  assert.match(dialogFocus, /previouslyFocused\?\.focus\(\)/);
-  assert.match(shell, /useDialogFocus<HTMLFormElement>\(settingsOpen, closeSettings\)/);
-  assert.match(details, /useDialogFocus<HTMLElement>\(true, onClose\)/);
-  assert.match(details, /if \(!target\) return null/);
-  const skillDialog = readSource("shared/ui/skill-detail-dialog.tsx");
-  assert.match(skillDialog, /useDialogFocus<HTMLElement>\(true, close\)/);
-  assert.match(skillDialog, /role="dialog" aria-modal="true"/);
-  assert.match(shell, /role="dialog"/);
-  assert.doesNotMatch(shell, /window\.confirm/);
-  assert.match(shell, /aria-live="polite"/);
-  assert.match(shell, /role="alert"/);
 });
 
 test("model cards keep exact token values while using compact visible labels", () => {

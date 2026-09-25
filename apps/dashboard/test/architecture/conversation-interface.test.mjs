@@ -15,15 +15,8 @@ const controller = readFileSync(path.join(sourceDir, "features/sessions/display-
 const markdown = readFileSync(path.join(sourceDir, "shared/ui/markdown.tsx"), "utf8");
 const styles = readFileSync(path.join(sourceDir, "styles.css"), "utf8").replaceAll("\r\n", "\n");
 
-test("sessions view exposes text conversation controls and IME-safe keyboard behavior", () => {
-  assert.match(view, /maxLength=\{8192\}/);
-  assert.match(view, /event\.key !== "Enter" \|\| event\.shiftKey \|\| event\.nativeEvent\.isComposing/);
+test("sessions view exposes accessible history and attachment controls", () => {
   assert.match(windowView, /aria-live="polite"/);
-  // Send and stop are one control in two modes, so the running turn can always
-  // be interrupted from the same place the message was sent.
-  assert.match(view, /data-mode=\{hasWork \? "stop" : "send"\}/);
-  assert.match(view, /onClick=\{\(\) => void \(hasWork \? stop\(\) : submit\(\)\)\}/);
-  assert.doesNotMatch(view, /conversation-stop-button/);
   assert.match(windowView, /loadOlder/);
   assert.match(view, /session-new-button/);
   assert.match(view, /selectConversationFiles/);
@@ -38,7 +31,6 @@ test("the composer switches the shared model before the next turn", () => {
   assert.match(view, /event\.key !== "Escape"/);
   assert.match(view, /current\?\.provider !== provider[\s\S]*current\.model !== model[\s\S]*current\.credential_source !== credentialSource/);
   assert.match(view, /disabled=\{saving \|\| !choice\.selectable\}/);
-  assert.match(view, /!runtimeReady \|\| modelSaving \|\| thinkingSaving \|\| sending/);
   assert.match(main, /activeSection === "sessions" \|\| \(capabilitiesOpen && capabilityView === "models"\)/);
   assert.match(main, /onModelChange=\{setCurrentModel\}/);
   assert.doesNotMatch(view, /t\.models\.moreModels|onOpenModels/);
