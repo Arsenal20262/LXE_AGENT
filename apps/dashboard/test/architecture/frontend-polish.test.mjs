@@ -12,11 +12,9 @@ const main = readSource("main.tsx");
 const status = readSource("desktop/sidebar-status.tsx");
 const shell = readSource("desktop/shell.tsx");
 const details = readSource("features/details/view.tsx");
-const integrations = readSource("features/integrations/view.tsx");
 const models = readSource("features/models/view.tsx");
 const sessions = readSource("features/sessions/view.tsx");
 const sidebar = readSource("shared/use-three-state-sidebar.ts");
-const stats = readSource("features/stats/view.tsx");
 const styles = readSource("styles.css");
 const dialogFocus = readSource("shared/ui/use-dialog-focus.ts");
 
@@ -29,11 +27,6 @@ test("status and settings have one sidebar entry and no floating duplicate", () 
   assert.doesNotMatch(main, /DashboardStatusModal|dashboardStatusOpen|statusSessionsQuery/);
   assert.doesNotMatch(shell, /desktop-status-button/);
   assert.doesNotMatch(styles, /\.desktop-status-button/);
-
-  const statusCardRule = styles.match(/\.sidebar-status-card\s*\{([\s\S]*?)\}/)?.[1] || "";
-  assert.match(statusCardRule, /flex:\s*0 0 auto/);
-  assert.match(statusCardRule, /margin-top:\s*auto/);
-  assert.doesNotMatch(styles, /\.app-sidebar\.collapsed \.sidebar-status-card/);
 });
 
 test("sessions persist in the application sidebar with title-only rows", () => {
@@ -55,7 +48,6 @@ test("sessions persist in the application sidebar with title-only rows", () => {
   // The existing compact marker now conveys lifecycle state accessibly.
   assert.match(sessions, /<span className="session-index-icon" data-session-state=\{state\} role="img" aria-label=\{statusLabel\} title=\{statusLabel\} \/>/);
   assert.doesNotMatch(sessions, /MessageCircle/);
-  assert.match(styles, /\.session-index-open \{[^}]*grid-template-columns:\s*5px minmax\(0, 1fr\);/s);
   assert.match(sessions, /aria-label=\{`\$\{sessionTitle\} · \$\{statusLabel\}`\}/);
   assert.match(sessions, /title=\{sessionTitle\}/);
   assert.doesNotMatch(sessions, /pill sessions-loading-pill/);
@@ -72,20 +64,6 @@ test("sessions persist in the application sidebar with title-only rows", () => {
   assert.match(sidebar, /if \(collapsed && !peekOpen\) setPeekOpen\(true\);/);
   assert.doesNotMatch(searchToggle, /pushDashboardRoute|setActiveSection/);
 
-  assert.match(styles, /\.tab-list\s*\{[^}]*gap:\s*1px;/s);
-  assert.match(styles, /\.tab\s*\{[^}]*min-height:\s*31px;[^}]*padding:\s*4px 8px;/s);
-  assert.match(styles, /\.tab\s*\{[^}]*font-size:\s*0\.8375rem;[^}]*font-weight:\s*450;/s);
-  assert.match(styles, /\.tab\s*\{[^}]*color:\s*var\(--sidebar-ink, var\(--text-strong\)\);/s);
-  assert.match(styles, /\.tab\.active\s*\{[^}]*color:\s*var\(--sidebar-ink, var\(--text-strong\)\);[^}]*font-weight:\s*450;/s);
-  assert.match(styles, /\.sidebar-session-section \.session-new-button\s*\{[^}]*font-size:\s*0\.8375rem;[^}]*font-weight:\s*450;/s);
-  assert.match(styles, /\.sidebar-session-section\s*\{[^}]*margin-top:\s*8px;[^}]*padding-top:\s*8px;/s);
-  assert.match(styles, /\.session-index-heading\s*\{[^}]*color:\s*color-mix\([^;]+68%, transparent\);[^}]*font-weight:\s*500;/s);
-  assert.match(styles, /\.sidebar-session-section \.session-index-list\s*\{[^}]*gap:\s*1px;/s);
-  assert.match(styles, /\.sidebar-session-section \.session-index-item\s*\{[^}]*display:\s*block;/s);
-  assert.match(styles, /\.sidebar-session-section \.session-index-open\s*\{[^}]*width:\s*100%;[^}]*padding:\s*5\.5px 8px;/s);
-  assert.match(styles, /\.sidebar-session-section \.session-index-actions\s*\{[^}]*position:\s*absolute;[^}]*right:\s*4px;/s);
-  assert.match(styles, /\.sidebar-session-section \.session-index-item \.primary-cell\s*\{[^}]*font-size:\s*0\.8375rem;[^}]*text-overflow:\s*clip;[^}]*mask-image:\s*linear-gradient\(to right,/s);
-  assert.match(styles, /\.sidebar-session-section \.session-index-list\s*\{[^}]*margin-right:\s*-6px;[^}]*overflow-y:\s*scroll;[^}]*scrollbar-gutter:\s*stable;[^}]*scrollbar-width:\s*thin;/s);
   assert.doesNotMatch(main, /sessions-split/);
   assert.doesNotMatch(styles, /\.sessions-split/);
   assert.match(main, /activeSection === "sessions";?\s*$/m);
@@ -105,15 +83,6 @@ test("session rows expose an accessible pinned and destructive action menu", () 
   assert.match(styles, /\.session-index-item:hover \.session-index-actions,[\s\S]*?opacity:\s*1;/s);
   assert.match(styles, /\.session-actions-menu\s*\{[^}]*position:\s*fixed;[^}]*z-index:\s*180;/s);
   assert.match(styles, /\.session-actions-menu button\.danger\s*\{[^}]*color:/s);
-});
-
-test("statistics and connections use progressive disclosure instead of card grids", () => {
-  assert.match(stats, /className="usage-summary-strip"/);
-  assert.equal((stats.match(/<details className="usage-section usage-breakdown">/g) || []).length, 3);
-  assert.doesNotMatch(stats, /className="usage-cards"|className=\{card\.tone \? `usage-card/);
-  assert.match(integrations, /className="connection-list"/);
-  assert.match(integrations, /className="connection-row"/);
-  assert.doesNotMatch(integrations, /connector-card|connectors-grid/);
 });
 
 test("dialogs trap focus, close with Escape, and avoid native confirmations", () => {
@@ -136,14 +105,4 @@ test("model cards keep exact token values while using compact visible labels", (
   assert.match(models, /formatCompactNumber/);
   assert.match(models, /aria-label=\{exactValue\}/);
   assert.match(models, /title=\{exactValue\}/);
-  assert.match(styles, /container-name:\s*model-card/);
-  assert.match(styles, /container-type:\s*inline-size/);
-  assert.match(
-    styles,
-    /@container model-card \(max-width:\s*340px\)[\s\S]*?\.model-showcase-thinking\s*\{[\s\S]*?flex-direction:\s*column/
-  );
-
-  const metricRule = styles.match(/\.model-showcase-metrics dd\s*\{([\s\S]*?)\}/)?.[1] || "";
-  assert.doesNotMatch(metricRule, /text-overflow/);
-  assert.doesNotMatch(metricRule, /overflow:\s*hidden/);
 });

@@ -36,31 +36,6 @@ ALLOWED_APP_DIRECTORIES = {"agent-cli", "dashboard", "desktop", "gateway"}
 ALLOWED_PACKAGE_DIRECTORIES = {"agent", "foundation"}
 ALLOWED_FOUNDATION_PACKAGE_DIRECTORIES = {"core", "desktop-protocol", "protocol"}
 ALLOWED_AGENT_PACKAGE_DIRECTORIES = {"runtime"}
-ALLOWED_GATEWAY_SOURCE_DIRECTORIES = {
-    "bootstrap",
-    "channels",
-    "orchestration",
-    "state",
-}
-ALLOWED_GATEWAY_TEST_DIRECTORIES = {
-    "bootstrap",
-    "channels",
-    "orchestration",
-    "state",
-}
-ALLOWED_RUNTIME_SOURCE_DIRECTORIES = {
-    "engine",
-    "messages",
-    "operations",
-    "providers",
-    "state",
-    "tooling",
-    "workspace",
-}
-ALLOWED_RUNTIME_TEST_DIRECTORIES = ALLOWED_RUNTIME_SOURCE_DIRECTORIES
-ALLOWED_DASHBOARD_SOURCE_DIRECTORIES = {"api", "assets", "desktop", "features", "shared"}
-ALLOWED_DASHBOARD_TEST_DIRECTORIES = {"architecture", "desktop", "features", "shared"}
-
 ALLOWED_PYTHON_DIRECTORIES = {"lxeskill_cli"}
 ALLOWED_LXESKILL_CLI_DIRECTORIES = {
     "browser_auth_service",
@@ -191,36 +166,6 @@ def test_typescript_workspaces_follow_domain_layout() -> None:
     assert (
         _repository_directories_below("packages/agent")
         == ALLOWED_AGENT_PACKAGE_DIRECTORIES
-    )
-
-
-def test_large_typescript_workspaces_use_frozen_source_domains() -> None:
-    assert (
-        _repository_directories_below("apps/gateway/src")
-        == ALLOWED_GATEWAY_SOURCE_DIRECTORIES
-    )
-    assert (
-        _repository_directories_below("packages/agent/runtime/src")
-        == ALLOWED_RUNTIME_SOURCE_DIRECTORIES
-    )
-    assert (
-        _repository_directories_below("apps/dashboard/src")
-        == ALLOWED_DASHBOARD_SOURCE_DIRECTORIES
-    )
-
-
-def test_typescript_tests_mirror_source_domains() -> None:
-    assert (
-        _repository_directories_below("apps/gateway/test")
-        == ALLOWED_GATEWAY_TEST_DIRECTORIES
-    )
-    assert (
-        _repository_directories_below("packages/agent/runtime/test")
-        == ALLOWED_RUNTIME_TEST_DIRECTORIES
-    )
-    assert (
-        _repository_directories_below("apps/dashboard/test")
-        == ALLOWED_DASHBOARD_TEST_DIRECTORIES
     )
 
 

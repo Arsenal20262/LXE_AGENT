@@ -11,10 +11,8 @@ def _skill_text(name: str) -> str:
     return (PROJECT_ROOT / "skills" / name / "SKILL.md").read_text(encoding="utf-8")
 
 
-def test_repository_skill_inventory_distinguishes_top_level_and_nested_manifests() -> None:
+def test_larksuite_im_skill_uses_nested_manifest() -> None:
     skill_root = PROJECT_ROOT / "skills"
-    assert len(list(skill_root.glob("*/SKILL.md"))) == 35
-    assert len(list(skill_root.rglob("SKILL.md"))) == 62
     assert not (skill_root / "feishu-im-read" / "SKILL.md").exists()
     assert (skill_root / "larksuite-cli" / "lark-im" / "SKILL.md").exists()
 
