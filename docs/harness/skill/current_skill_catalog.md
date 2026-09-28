@@ -4,12 +4,12 @@ This page is a navigation inventory, not a second source of runtime prompt truth
 
 ## Inventory
 
-The repository currently contains 35 top-level workflow and default runtime skills:
+The repository currently contains 34 top-level workflow and default runtime skills:
 
 | Type | Count | Purpose |
 | --- | ---: | --- |
 | `amazon_fba` | 14 | shipment, customs, purchase, contract, and export-tax workflows |
-| `replenishment` | 16 | Amazon replenishment workflows and Southeast Asia data preparation with Shangman ERP, Yacang and Mabang TMS |
+| `replenishment` | 15 | Amazon replenishment workflows and Southeast Asia data preparation with Shangman ERP, Yacang and Mabang TMS |
 | `amazon_operations` | 2 | listing, keyword, competitor, and public-review analysis |
 | `default` | 2 | general workbook and custom Skill creation capabilities |
 | `ziniao_browser` | 1 | controlled Ziniao browser lifecycle and page operations |

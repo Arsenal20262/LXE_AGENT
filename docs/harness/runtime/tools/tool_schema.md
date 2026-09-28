@@ -155,4 +155,4 @@ Provider request 使用当前 step 的 snapshot。更新 schema 不迁移 transc
 
 ## 验证
 
-Tests 覆盖重复 name、direct/deferred exposure、skill activation、MCP naming、command catalog ownership和 schema snapshot 时机。
+Tests 覆盖重复 name、direct/deferred exposure、skill activation、MCP naming、command catalog ownership 和 schema snapshot 时机。
