@@ -50,7 +50,7 @@ Runtime package 提供执行核心，但不提供产品 composition root。真�
 
 ## 核心原则
 
-1. Runtime core 不持有 channel/出站平台 SDK，也不绕过 Gateway 直接发消息；Agent 主动访问飞书使用 `lark-cli` Skill。
+1. Runtime core 不持有 channel/出站平台 SDK，也不绕过 Gateway 直接发消息；Agent 主动访问飞书通过 `exec` 调用 `lark-cli`，操作说明可从 CLI 内嵌技能读取。
 2. 每次 provider request 使用闭合、可预算的 canonical history。
 3. Context 压缩失败时保留原历史，不做静默删除。
 4. 工具业务执行和 artifact delivery 分开，发送失败不重跑工具。

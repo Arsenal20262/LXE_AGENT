@@ -80,7 +80,6 @@ describe("desktop resource scope", () => {
     const approved = tracked.filter((path) => approvedSkillFile(repositoryRoot, path));
     expect(approved.some((path) => path.endsWith("/SKILL.md"))).toBe(true);
     expect(approved).toContain("skills/dws/references/global-reference.md");
-    expect(approved).not.toContain("skills/larksuite-cli/UPSTREAM.md");
     expect(approved.some((path) => path.endsWith("_test.py"))).toBe(false);
     validateSelectedSkills(repositoryRoot, approved);
   });

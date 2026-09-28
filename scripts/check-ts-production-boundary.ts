@@ -206,7 +206,7 @@ requirePath("apps/agent-cli/src/runtime-host.ts", "agent-cli must own its Runtim
 requirePath("apps/agent-cli/src/dashboard-service.ts", "agent-cli must own Agent Dashboard queries");
 forbidPath("apps/agent-cli/src/feishu-tools.ts", "built-in Feishu message tools must remain retired in favor of lark-cli");
 forbidPath("skills/feishu-im-read/SKILL.md", "the retired feishu-im-read Skill must not re-enter the build");
-requirePath("skills/larksuite-cli/lark-im/SKILL.md", "lark-cli IM operations must remain available");
+forbidPath("skills/larksuite-cli", "Lark CLI skills must come from the installed CLI instead of a vendored copy");
 requirePath("packages/foundation/core/src/machine-identity.ts", "Core must own the shared machine identity implementation");
 forbidPath("packages/foundation/protocol/schemas/worker-envelope.schema.json", "the worker envelope contract must be deleted");
 forbidPath("packages/agent/runtime/src/tooling/script-tools.ts", "the retired script-tool runner must be deleted");

@@ -14,9 +14,10 @@ The repository currently contains 34 top-level workflow and default runtime skil
 | `default` | 3 | general connector, workbook and custom Skill creation capabilities |
 | `ziniao_browser` | 1 | controlled Ziniao browser lifecycle and page operations |
 
-Counts describe top-level repository skills before per-agent permission and connector filtering. The
-bundled Lark CLI contributes another 27 nested connector-specific Skill manifests, so recursive runtime
-discovery sees 61 repository manifests in total.
+Counts describe top-level repository skills before per-agent permission and connector filtering.
+The repository no longer vendors the Lark CLI skill pack. For CLI versions with embedded skills,
+use `lark-cli skills list` and `lark-cli skills read <name>` to read the documentation shipped with
+the installed CLI. Separately installed user/shared skills are not included in this inventory.
 
 ## Amazon FBA
 

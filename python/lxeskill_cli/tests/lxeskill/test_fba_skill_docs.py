@@ -11,12 +11,6 @@ def _skill_text(name: str) -> str:
     return (PROJECT_ROOT / "skills" / name / "SKILL.md").read_text(encoding="utf-8")
 
 
-def test_larksuite_im_skill_uses_nested_manifest() -> None:
-    skill_root = PROJECT_ROOT / "skills"
-    assert not (skill_root / "feishu-im-read" / "SKILL.md").exists()
-    assert (skill_root / "larksuite-cli" / "lark-im" / "SKILL.md").exists()
-
-
 def test_ziniao_is_independent_and_shipment_owns_only_four_stages() -> None:
     catalog = load_catalog()
     assert catalog["ziniao_browser"]["owner_skills"] == ["ziniao-browser"]

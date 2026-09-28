@@ -8,7 +8,7 @@ Runtime tool subsystem 把模型可见 schema、实际 handler、exposure policy
 
 - Native direct tools：Runtime 内置的 read/write/edit/grep/find/ls/send_files/exec/wait 等能力。
 - Desktop interaction：`ask_user_question` 只对真实来源为桌面的当前回合开放，返回答案后继续同一工具调用。
-- 飞书远程渠道：Gateway 保留入站、回复、typing、附件与重连；Agent 主动读写飞书统一通过 `lark-cli` Skill，不再注册 Bot 专用原生读取工具。
+- 飞书远程渠道：Gateway 保留入站、回复、typing、附件与重连；Agent 主动读写飞书统一通过 `exec` 调用 `lark-cli`，不再注册 Bot 专用原生读取工具。支持内嵌技能的 CLI 可用 `lark-cli skills list/read` 查询配套说明，仓库不再保存技能副本。
 - MCP tools：从 enabled server 动态发现，可 direct 或 deferred。
 - Skill-owned tools：只有允许的 skill 被激活后才暴露。
 - `tool_search`：搜索 deferred definition 并更新 exposure state。
@@ -42,7 +42,7 @@ Runtime tool subsystem 把模型可见 schema、实际 handler、exposure policy
 - [`mcp.ts`](/packages/agent/runtime/src/tooling/mcp.ts)：MCP config、连接和工具注册。
 - [`skills.ts`](/packages/agent/runtime/src/tooling/skills.ts)：skill catalog 与 prompt。
 - [`runtime-host.ts`](/apps/agent-cli/src/runtime-host.ts)：产品级工具、MCP、Workspace 和 CLI scope 装配。
-- [`lark-im/SKILL.md`](/skills/larksuite-cli/lark-im/SKILL.md)：主动读取、搜索和发送飞书消息的统一入口。
+- `lark-cli skills read lark-im`：读取当前 CLI 内嵌的飞书消息操作说明；命令参数以当前 CLI 的 `--help` 为准。
 
 ## Exposure 模型
 
