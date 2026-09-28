@@ -4,18 +4,19 @@ This page is a navigation inventory, not a second source of runtime prompt truth
 
 ## Inventory
 
-The repository currently contains 34 top-level workflow and default runtime skills:
+The repository currently contains 35 top-level workflow and default runtime skills:
 
 | Type | Count | Purpose |
 | --- | ---: | --- |
 | `amazon_fba` | 14 | shipment, customs, purchase, contract, and export-tax workflows |
-| `replenishment` | 14 | Amazon replenishment workflows and Southeast Asia data preparation with Shangman ERP, Yacang and Mabang TMS |
+| `replenishment` | 16 | Amazon replenishment workflows and Southeast Asia data preparation with Shangman ERP, Yacang and Mabang TMS |
 | `amazon_operations` | 2 | listing, keyword, competitor, and public-review analysis |
-| `default` | 3 | general connector, workbook and custom Skill creation capabilities |
+| `default` | 2 | general workbook and custom Skill creation capabilities |
 | `ziniao_browser` | 1 | controlled Ziniao browser lifecycle and page operations |
 
 Counts describe top-level repository skills before per-agent permission and connector filtering.
-The repository no longer vendors the Lark CLI skill pack. For CLI versions with embedded skills,
+The repository no longer vendors the Lark CLI or DingTalk (`dws`) skill packs. CLI runtime dependencies
+are managed separately from this skill inventory. For Lark CLI versions with embedded skills,
 use `lark-cli skills list` and `lark-cli skills read <name>` to read the documentation shipped with
 the installed CLI. Separately installed user/shared skills are not included in this inventory.
 
@@ -76,7 +77,6 @@ LXE formally maintains these modules' command and failure contracts. Their resul
 
 ## Default Skills
 
-- `dws`: DingTalk Workspace operations, subject to local connector visibility.
 - `minimax-xlsx`: general workbook creation and transformation utilities.
 - `skill-creator`: create or edit reusable user skills through conversation and existing file/exec tools.
 
