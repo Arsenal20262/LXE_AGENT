@@ -142,7 +142,6 @@ describe("Windows desktop packaging routes", () => {
     expect(runtimePreparation).not.toContain("Finalize-LxePublishRuntime");
     expect(runtimePreparation).not.toContain("$forbiddenDirectoryNames");
     expect(runtimePreparation).not.toContain("$lowerName -match");
-    expect(runtimePreparation).not.toContain("node_modules\\dingtalk-workspace-cli\\assets");
     expect(runtimePreparation).not.toContain("playwright\\driver\\node.exe");
     expect(runtimePreparation).not.toContain("$packagedLocales");
     expect(runtimePreparation).toContain('"scripts/prepare-desktop-runtime.ps1"');

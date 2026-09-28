@@ -121,7 +121,6 @@ const playwrightEmbeddedNodeSource = join(
 );
 for (const path of [
   join(nodeRoot, "node.exe"),
-  join(nodeRoot, "node_modules", "dingtalk-workspace-cli"),
   join(nodeRoot, "node_modules", "@larksuite", "cli"),
   join(nodeRoot, "node_modules", "@larksuite", "whiteboard-cli"),
   join(pythonRoot, "python.exe"),

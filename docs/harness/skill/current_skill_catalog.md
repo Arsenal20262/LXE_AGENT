@@ -15,8 +15,8 @@ The repository currently contains 34 top-level workflow and default runtime skil
 | `ziniao_browser` | 1 | controlled Ziniao browser lifecycle and page operations |
 
 Counts describe top-level repository skills before per-agent permission and skill filtering.
-The repository no longer vendors the Lark CLI or DingTalk (`dws`) skill packs. CLI runtime dependencies
-are managed separately from this skill inventory. For Lark CLI versions with embedded skills,
+The repository no longer vendors the Lark CLI skill pack or bundles DingTalk CLI and its skills.
+Lark CLI runtime dependencies are managed separately from this skill inventory. For versions with embedded skills,
 use `lark-cli skills list` and `lark-cli skills read <name>` to read the documentation shipped with
 the installed CLI. Separately installed user/shared skills are not included in this inventory.
 

@@ -97,14 +97,14 @@ LXE Agent 不是只有一个 Electron 页面。它同时包含 TypeScript、Pyth
 - ripgrep 和 fd。
 - ExifTool，用来读取和写入图片、视频元数据。
 - WireGuard 安装包和受控配置脚本。
-- 安装在私有 Node 中的 DWS、Lark 和 Whiteboard CLI。
+- 安装在私有 Node 中的 Lark 和 Whiteboard CLI。
 
 这里的“私有”是指它们跟着 LXE Agent 一起分发，只供 LXE Agent 的子进程使用，不依赖用户电脑是否提前安装，也不会修改系统 `PATH`。
 
 需要特别区分两套 Node：
 
 - Electron 自带的 Node 和 Chromium，用来运行 Electron Main、Preload 和页面。
-- `resources/runtime/node` 中的私有 Node，用来运行 DWS、Lark、Whiteboard 等命令行工具。
+- `resources/runtime/node` 中的私有 Node，用来运行 Lark、Whiteboard 等命令行工具。
 
 ### 5. Python 项目代码
 
@@ -368,7 +368,7 @@ flowchart LR
     PRELOAD --> UI["Dashboard Renderer"]
     MAIN <-->|"NDJSON"| AGENT["agent-cli.exe"]
     AGENT --> PY["私有 Python<br/>lxeskill"]
-    AGENT --> NODE["私有 Node<br/>DWS、Lark、Whiteboard"]
+    AGENT --> NODE["私有 Node<br/>Lark、Whiteboard"]
     AGENT --> TOOLS["ripgrep / fd 等工具"]
     MAIN --> AUTH["马帮认证窗口 / 受控服务"]
     MAIN --> MEDIA["工作台媒体任务<br/>私有 Python → ExifTool"]

@@ -11,7 +11,7 @@ LXE Agent 是面向跨境电商运营团队的本地 AI 自动化助手。它把
 - 提供 FBA 与补货工作流，覆盖马帮、紫鸟、报关、发票、采购和退税等场景。
 - 在 Dashboard 中查看会话、任务、Skills、工具、模型、集成、统计和运行状态。
 - 保存本地会话、JSONL transcript、任务和使用量记录，便于追踪执行过程。
-- 支持 LXE Skills、MCP、Lark CLI、DingTalk CLI 和 Data Server 等扩展能力。
+- 支持 LXE Skills、MCP、Lark CLI 和 Data Server 等扩展能力。
 - 安装包自带 Node.js、Python 和命令行工具；桌面马帮认证使用 Electron 窗口，紫鸟业务使用用户配置的紫鸟客户端。
 
 ## 使用方式
