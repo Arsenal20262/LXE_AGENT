@@ -4,7 +4,6 @@ import {
   existsSync,
   mkdirSync,
   statSync,
-  writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
 
@@ -15,6 +14,4 @@ export function bootstrapDesktopState(mcpDefaultPath: string, dataRoot: string):
   if (!existsSync(mcpTarget) && existsSync(mcpDefaultPath) && statSync(mcpDefaultPath).isFile()) {
     copyFileSync(mcpDefaultPath, mcpTarget, constants.COPYFILE_EXCL);
   }
-  const connectorState = join(configRoot, "connector-states.local.json");
-  if (!existsSync(connectorState)) writeFileSync(connectorState, "{}\n", "utf8");
 }

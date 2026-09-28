@@ -34,7 +34,6 @@ import {
   flattenSessionPages,
   queryError,
   useCommandsQuery,
-  useConnectorsQuery,
   useCurrentModelQuery,
   useModelsQuery,
   useConversationActivityQuery,
@@ -69,7 +68,6 @@ import {
 } from "./shared/appearance";
 import type {
   ApiList,
-  ConnectorPayload,
   ModelPayload,
   McpServerPayload,
   SessionPayload,
@@ -77,7 +75,7 @@ import type {
 } from "./api/payloads";
 import type { DetailTarget } from "./shared/ui/detail-target";
 import { DetailModal } from "./features/details/view";
-import { ConnectionsView } from "./features/integrations/view";
+import { McpServicesView } from "./features/integrations/view";
 import { DashboardHome } from "./features/home/view";
 import { applyDesktopStreamBatch } from "./features/sessions/live-stream";
 import { ModelsView } from "./features/models/view";
@@ -246,9 +244,6 @@ function App({
       && (activeSection === "sessions" || (capabilitiesOpen && capabilityView === "models")),
   );
   const currentModelQuery = useCurrentModelQuery(dashboardRuntimeReady);
-  const connectorsQuery = useConnectorsQuery(
-    dashboardRuntimeReady && capabilitiesOpen && capabilityView === "connections",
-  );
   const skillsQuery = useSkillsQuery(
     dashboardRuntimeReady && capabilitiesOpen && capabilityView === "skills",
   );
@@ -596,49 +591,6 @@ function App({
     },
   });
 
-  const connectorMutation = useMutation<
-    ConnectorPayload,
-    unknown,
-    ConnectorPayload,
-    { connectors?: ApiList<ConnectorPayload> }
-  >({
-    mutationFn: (connector) => callDashboard({
-      operation: "connectors.update",
-      input: { id: connector.id, enabled: !connector.enabled },
-    }),
-    onMutate: async (connector) => {
-      setError("");
-      await queryClient.cancelQueries({ queryKey: dashboardQueryKeys.connectors.all });
-      const connectors = queryClient.getQueryData<ApiList<ConnectorPayload>>(
-        dashboardQueryKeys.connectors.all,
-      );
-      const nextEnabled = !connector.enabled;
-      queryClient.setQueryData<ApiList<ConnectorPayload> | undefined>(
-        dashboardQueryKeys.connectors.all,
-        (current) => current ? {
-          ...current,
-          items: current.items.map((item) => item.id === connector.id ? {
-            ...item,
-            enabled: nextEnabled,
-            userDisabled: !nextEnabled,
-            everConnected: item.everConnected || nextEnabled,
-          } : item),
-        } : current,
-      );
-      return { connectors };
-    },
-    onError: (cause, _connector, context) => {
-      queryClient.setQueryData(dashboardQueryKeys.connectors.all, context?.connectors);
-      setError(queryError(cause));
-    },
-    onSettled: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.connectors.all }),
-        queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.skills.all }),
-      ]);
-    },
-  });
-
   const mcpMutation = useMutation<
     McpServerPayload,
     unknown,
@@ -714,10 +666,6 @@ function App({
     modelMutation.mutate({ provider, model: modelName, credentialSource, optimistic });
   }
 
-  function toggleConnector(connector: ConnectorPayload) {
-    if (!connectorMutation.isPending) connectorMutation.mutate(connector);
-  }
-
   function toggleMcpServer(server: McpServerPayload) {
     if (!mcpMutation.isPending) mcpMutation.mutate(server);
   }
@@ -746,7 +694,7 @@ function App({
         : activeSection === "capabilities" && capabilityView === "skills"
           ? [skillsQuery, commandsQuery]
           : activeSection === "capabilities" && capabilityView === "connections"
-            ? [connectorsQuery, toolsetsQuery]
+            ? [toolsetsQuery]
             : [];
   const activeRefreshing = dashboardRuntimeReady
     && activeQueries.some((current) => current.isFetching && !current.isPending);
@@ -1049,16 +997,11 @@ function App({
                 ) : null}
                 {capabilityView === "connections" ? (
                   !dashboardRuntimeReady ? <EmptyState label={t.conversation.unavailable} />
-                    : connectorsQuery.isPending && toolsetsQuery.isPending ? <EmptyState label={t.common.loading} />
-                    : <ConnectionsView
-                        connectorError={!connectorsQuery.data ? queryError(connectorsQuery.error) : ""}
-                        connectors={connectorsQuery.data?.items ?? []}
+                    : toolsetsQuery.isPending ? <EmptyState label={t.common.loading} />
+                    : <McpServicesView
                         mcpError={!toolsetsQuery.data ? queryError(toolsetsQuery.error) : ""}
                         mcpSavingId={mcpMutation.isPending ? mcpMutation.variables?.name || "" : ""}
                         mcpToolset={mcpToolset}
-                        savingId={connectorMutation.isPending ? connectorMutation.variables?.id || "" : ""}
-                        onConfigureCredentials={onOpenDesktopSettings}
-                        onToggle={toggleConnector}
                         onToggleMcpServer={toggleMcpServer}
                       />
                 ) : null}

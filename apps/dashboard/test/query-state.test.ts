@@ -172,7 +172,6 @@ describe("Dashboard Query state", () => {
         "stats",
         "channels",
         "models",
-        "connectors",
         "skills",
         "tools",
       ],

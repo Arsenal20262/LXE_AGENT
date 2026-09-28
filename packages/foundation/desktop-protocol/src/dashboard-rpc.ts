@@ -330,18 +330,6 @@ export type CliCommandPayload = {
   ownerSkills: string[];
 };
 
-export type ConnectorPayload = {
-  id: string;
-  name: string;
-  description: string;
-  kind: string;
-  enabled: boolean;
-  everConnected: boolean;
-  userDisabled: boolean;
-  skill_names: string[];
-  skill_count: number;
-};
-
 export type ToolPayload = {
   name: string;
   raw_name: string;
@@ -543,8 +531,6 @@ export interface DashboardRpcSpec {
     result: SkillReferenceContentPayload;
   };
   "commands.list": { input: DashboardRpcEmptyInput; result: ApiList<CliCommandPayload> };
-  "connectors.list": { input: DashboardRpcEmptyInput; result: ApiList<ConnectorPayload> };
-  "connectors.update": { input: { id: string; enabled: boolean }; result: ConnectorPayload };
   "toolsets.list": { input: DashboardRpcEmptyInput; result: ApiList<ToolsetPayload> };
   "mcp.servers.list": { input: DashboardRpcEmptyInput; result: McpServerListPayload };
   "mcp.servers.update": { input: { name: string; enabled: boolean }; result: McpServerPayload };
@@ -803,7 +789,6 @@ export function parseDashboardRpcCall(value: unknown): DashboardRpcCall {
     case "skills.user.list":
     case "skills.list":
     case "commands.list":
-    case "connectors.list":
     case "toolsets.list":
     case "mcp.servers.list":
     case "channels.health":
@@ -829,12 +814,6 @@ export function parseDashboardRpcCall(value: unknown): DashboardRpcCall {
       return { operation, input: {
         name: textValue(input.name, `${operation}.name`)!,
         path: textValue(input.path, `${operation}.path`)!,
-      } };
-    case "connectors.update":
-      exactKeys(input, ["id", "enabled"], `${operation}.input`);
-      return { operation, input: {
-        id: textValue(input.id, `${operation}.id`)!,
-        enabled: booleanValue(input.enabled, `${operation}.enabled`),
       } };
     case "mcp.servers.update":
       exactKeys(input, ["name", "enabled"], `${operation}.input`);

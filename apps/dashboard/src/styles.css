@@ -1915,11 +1915,6 @@ button {
   gap: 12px;
 }
 
-.connection-section + .connection-section {
-  padding-top: 20px;
-  border-top: 1px solid var(--border);
-}
-
 .connection-section-heading {
   display: flex;
   align-items: flex-end;
@@ -1938,12 +1933,6 @@ button {
   margin-top: 3px;
   color: var(--muted);
   font-size: 0.75rem;
-}
-
-.connection-section-note {
-  color: var(--muted);
-  font-size: 0.6875rem;
-  line-height: 1.5;
 }
 
 .connection-list {
@@ -4059,11 +4048,6 @@ h1 {
   text-align: center;
 }
 
-.connector-icon {
-  background: var(--info-soft);
-  color: var(--info);
-}
-
 .chevron {
   margin-left: auto;
   color: var(--muted-light);
@@ -4081,7 +4065,7 @@ h1 {
   -webkit-line-clamp: 2;
 }
 
-.connector-toggle {
+.mcp-toggle {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -4099,25 +4083,25 @@ h1 {
   transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease, opacity 0.16s ease;
 }
 
-.connector-toggle.on {
+.mcp-toggle.on {
   border-color: var(--border);
   background: var(--surface-muted);
   color: var(--text-soft);
 }
 
-.connector-toggle:hover:not(:disabled),
-.connector-toggle:focus-visible:not(:disabled) {
+.mcp-toggle:hover:not(:disabled),
+.mcp-toggle:focus-visible:not(:disabled) {
   border-color: var(--accent);
   background: var(--accent-muted);
   color: var(--accent-strong);
 }
 
-.connector-toggle:focus-visible {
+.mcp-toggle:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
-.connector-toggle:disabled {
+.mcp-toggle:disabled {
   cursor: progress;
   opacity: 0.64;
 }
@@ -4138,7 +4122,7 @@ h1 {
     grid-row: 1;
   }
 
-  .connector-toggle {
+  .mcp-toggle {
     grid-column: 2;
     grid-row: 2;
   }

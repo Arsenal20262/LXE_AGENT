@@ -142,7 +142,6 @@ export function createAgentRuntimeHost(
         .catch(error => logger.warn("skills_notification_failed", { error }));
     },
   });
-  const connectorStatePath = join(options.dataRoot, "config", "connector-states.local.json");
   const commandCatalogPath = options.lxeskillCatalogPath;
   const cliCommands = existsSync(commandCatalogPath)
     ? loadLxeSkillCommandCatalog(commandCatalogPath)
@@ -238,7 +237,6 @@ export function createAgentRuntimeHost(
     store,
     tools,
     mcpConfig,
-    connectorStatePath,
     execSnapshots: (sessionId) => processes.snapshots(sessionId),
     terminateSession: (sessionId) => processes.terminateSession(sessionId),
     setMcpEnabled: async (serverName, enabled) => {
@@ -260,17 +258,8 @@ export function createAgentRuntimeHost(
   workspaceInstances = new WorkspaceInstanceManager({
     createSearch: root => new WorkspaceSearchService(root, environment.LXE_FD_PATH ? { fdPath: environment.LXE_FD_PATH } : {}),
     soulPath: options.agentSoulPath,
-    connectorStatePath,
     skillCatalog,
-    skillOptions: () => {
-      const policy = dashboardService.runtimeConnectorPolicy();
-      return {
-        allowedTypes: allowedSkillTypes,
-        disabledNames: policy.disabledSkillNames,
-      };
-    },
-    disabledConnectorIds: () => dashboardService.runtimeConnectorPolicy().disabledConnectorIds,
-    beforeForceRefresh: () => dashboardService.invalidateRuntimeConfigCache(),
+    skillOptions: () => ({ allowedTypes: allowedSkillTypes }),
   });
   const providerDescriptor = providerManager.acquire().descriptor;
   const runtime = new TypeScriptAgentRuntime({

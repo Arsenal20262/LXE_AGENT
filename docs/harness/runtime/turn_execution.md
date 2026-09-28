@@ -12,11 +12,11 @@ Turn 是 Runtime 的一次用户可观察执行单元。它从一个 `AgentJob` 
 
 - 当前 provider generation 与 descriptor。
 - system prompt 和允许的 skill 集合。
-- tool exposure 初始条件与 connector policy。
+- tool exposure 初始条件与 skill 权限。
 - model/context window 和 CardKit display 设置。
 - session、response route、turn id 与 trace scope。
 
-Dashboard 的模型/thinking、MCP、connector 或 skill 状态变化不会改写正在执行的 turn。provider 热切换从下一 turn 生效；turn 内 tool search/skill activation 只改变后续 step schemas。
+Dashboard 的模型/thinking、MCP 或 skill 状态变化不会改写正在执行的 turn。provider 热切换从下一 turn 生效；turn 内 tool search/skill activation 只改变后续 step schemas。
 
 ## 初始化
 

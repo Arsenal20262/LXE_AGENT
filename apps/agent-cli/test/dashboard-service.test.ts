@@ -18,6 +18,43 @@ afterEach(() => {
 });
 
 describe("DashboardService", () => {
+  test("ignores legacy CLI connector state across all skill sources while retaining skill permissions", async () => {
+    const root = mkdtempSync(join(tmpdir(), "lxe-retired-connectors-"));
+    roots.push(root);
+    const official = join(root, "skills"), user = join(root, "user"), shared = join(root, "shared");
+    for (const [base, name, type] of [
+      [official, "lark-im", "default"],
+      [user, "dws", "default"],
+      [shared, "lark-meeting", "default"],
+      [shared, "dingtalk-chat", "default"],
+      [official, "restricted", "amazon_fba"],
+    ]) {
+      mkdirSync(join(base!, name!), { recursive: true });
+      writeFileSync(join(base!, name!, "SKILL.md"), `---\nname: ${name}\ntype: ${type}\ndescription: CLI fixture\n---\n# ${name}\n`);
+    }
+    const config = join(root, "config", "connector-states.local.json");
+    mkdirSync(join(root, "config"));
+    writeFileSync(config, JSON.stringify({ enabled: [], userDisabled: ["feishu", "dingtalk"] }));
+    const store = new SqliteRuntimeStore(join(root, "agent.sqlite3"), { legacyWorkspace: workspaceFor(root) });
+    const service = new DashboardService({ stateRoot: root, llmConfigRoot: join(root, "llm"),
+      skillsRoot: official, userSkillsRoot: user, sharedSkillsRoot: shared,
+      environment: { LXE_CONNECTOR_STATE_PATH: config }, store, tools: new ToolRegistry(),
+      mcpConfig: { servers: [] }, allowedSkillTypes: new Set(["default"]) });
+    const names = async () => (await service.call({ operation: "skills.list", input: {} })).items.map(item => item.name).sort();
+    try {
+      expect(await names()).toEqual(["dingtalk-chat", "dws", "lark-im", "lark-meeting"]);
+      writeFileSync(config, "obsolete malformed config");
+      expect(await names()).toEqual(["dingtalk-chat", "dws", "lark-im", "lark-meeting"]);
+      expect(await service.call({ operation: "skills.content", input: { name: "lark-im" } }))
+        .toMatchObject({ name: "lark-im", content: expect.stringContaining("# lark-im") });
+      const managed = await service.call({ operation: "skills.user.list", input: {} });
+      const dws = managed.items.find(item => item.name === "dws")!;
+      expect(dws).toBeDefined();
+      await service.call({ operation: "skills.user.setEnabled", input: { id: dws.id, version: dws.version, enabled: false } });
+      expect(await names()).toEqual(["dingtalk-chat", "lark-im", "lark-meeting"]);
+    } finally { await store.stop(); }
+  });
+
   test("refreshes explicit skill reads once per concurrent group, including external edits and stale deletes", async () => {
     const root = mkdtempSync(join(tmpdir(), "lxe-skills-dashboard-")); roots.push(root);
     const official = join(root, "skills"), user = join(root, "user");
@@ -119,7 +156,7 @@ describe("DashboardService", () => {
     });
   });
 
-  test("serves the production session, skill, connector, tool, and stats contracts", async () => {
+  test("serves the production session, skill, tool, and stats contracts", async () => {
     const root = mkdtempSync(join(tmpdir(), "lxe-dashboard-api-"));
     roots.push(root);
     mkdirSync(join(root, "skills", "demo", "references"), { recursive: true });
@@ -323,7 +360,6 @@ describe("DashboardService", () => {
         enabledTools: new Set(), disabledTools: new Set(), exposure: "deferred",
       }] },
       mcpStatus: () => ({ connected: true, error: "", toolCount: 7, tools: [{ rawName: "read", modelName: "mcp__inventory__read" }] }),
-      connectorStatePath: join(root, "config", "connectors.json"),
       terminateSession: async (sessionId) => { terminatedSessions.push(sessionId); },
       execSnapshots: sessionId => [{ exec_id: "live-exec", tool_call_id: "live-call", session_id: sessionId,
         origin_turn_id: "live-turn", revision: 3, status: "running", output_tail: "recovered preview" }],
@@ -710,18 +746,6 @@ describe("DashboardService", () => {
       credentialSource: "cloud",
     });
 
-    const connectors = await call({ operation: "connectors.list", input: {} }) as { total: number; items: Array<Record<string, unknown>> };
-    expect(connectors.total).toBe(2);
-    expect(connectors.items[0]).toMatchObject({ id: "feishu", enabled: false });
-    expect(service.runtimeConnectorPolicy()).toEqual({
-      disabledSkillNames: expect.any(Set),
-      disabledConnectorIds: new Set(["dingtalk", "feishu"]),
-    });
-    expect(service.runtimeConnectorPolicy().disabledSkillNames).toContain("lark-im");
-    expect(await call({ operation: "connectors.update", input: { id: "feishu", enabled: true } }))
-      .toMatchObject({ id: "feishu", enabled: true, everConnected: true });
-    expect(service.runtimeConnectorPolicy().disabledConnectorIds).toEqual(new Set(["dingtalk"]));
-    expect(service.runtimeConnectorPolicy().disabledSkillNames).not.toContain("lark-im");
     expect(await call({ operation: "sessions.pin", input: { session_id: "session-one", pinned: true } }))
       .toMatchObject({ session_id: "session-one", pinned_at: expect.any(Number) });
     await expect(call({ operation: "sessions.pin", input: { session_id: "missing", pinned: true } }))

@@ -32,7 +32,6 @@ const setup = (options: {
   debounceMs?: number;
   watchPath?: WorkspaceInstanceManagerOptions["watchPath"];
   idleTtlMs?: number;
-  connectorPolicy?: { disabled: Set<string> };
   allowedTypes?: Set<string>;
 } = {}) => {
   const root = mkdtempSync(join(tmpdir(), "lxe-workspace-instance-"));
@@ -48,8 +47,6 @@ const setup = (options: {
     "utf8",
   );
   const catalog = new SkillCatalog(resourceRoot, join(root, "missing-user"), { sharedSkillsRoot: false });
-  const connectorStatePath = join(root, "connector-state.json");
-  if (options.connectorPolicy) writeFileSync(connectorStatePath, '{"version":1}', "utf8");
   const manager = new WorkspaceInstanceManager({
     soulPath: join(resourceRoot, "SOUL.md"),
     skillCatalog: catalog,
@@ -57,10 +54,6 @@ const setup = (options: {
     checkIntervalMs: options.checkIntervalMs ?? 0,
     debounceMs: options.debounceMs ?? 60_000,
     sweepIntervalMs: 0,
-    ...(options.connectorPolicy ? {
-      connectorStatePath,
-      disabledConnectorIds: () => options.connectorPolicy!.disabled,
-    } : {}),
     ...(options.idleTtlMs === undefined ? {} : { idleTtlMs: options.idleTtlMs }),
     ...(options.maxInstances === undefined ? {} : { maxInstances: options.maxInstances }),
     ...(options.now ? { now: options.now } : {}),
@@ -71,7 +64,7 @@ const setup = (options: {
     directory,
     worktree: rootPath,
   });
-  return { root, resourceRoot, worktree, catalog, connectorStatePath, manager, workspace };
+  return { root, resourceRoot, worktree, catalog, manager, workspace };
 };
 
 const replaceKeepingTimes = (path: string, content: string): void => {
@@ -192,8 +185,7 @@ describe("WorkspaceInstanceManager", () => {
   });
 
   test("force reload rereads global content and invalidates every directory view", async () => {
-    const connectorPolicy = { disabled: new Set<string>() };
-    const { manager, resourceRoot, worktree, connectorStatePath, workspace } = setup({ connectorPolicy });
+    const { manager, resourceRoot, worktree, workspace } = setup();
     const directory = join(worktree, "packages", "app");
     const nestedBefore = await manager.acquire(workspace(directory));
     const rootBefore = await manager.acquire(workspace());
@@ -205,15 +197,12 @@ describe("WorkspaceInstanceManager", () => {
       join(resourceRoot, "skills", "demo", "SKILL.md"),
       "---\nname: demo\ntype: default\ndescription: Other process\n---\n# Demo\n",
     );
-    replaceKeepingTimes(connectorStatePath, '{"version":2}');
-    connectorPolicy.disabled.add("feishu");
 
     const rootReload = await manager.reload(workspace(), "test_global_force");
     const nestedAfter = await manager.acquire(workspace(directory));
     expect(rootReload.changed).toBe(true);
     expect(nestedAfter.snapshot.soul).toBe("Be adaptable.");
     expect(nestedAfter.snapshot.skills.prompt).toContain("Other process");
-    expect(nestedAfter.snapshot.skills.disabledConnectorIds).toEqual(["feishu"]);
     expect(nestedAfter.snapshot.generation).toBeGreaterThan(nestedBefore.snapshot.generation);
     nestedAfter.release();
   });

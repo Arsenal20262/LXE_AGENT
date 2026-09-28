@@ -10,7 +10,7 @@ Turn 开始固定：
 
 - provider generation 与 context window。
 - system prompt 文本。
-- bot policy、connector filter 与初始 skill 列表。
+- bot policy 与初始 skill 列表。
 - session/turn/route 和 trace scope。
 
 Step 开始动态读取 `ToolExposureState.schemas()`。因此 `tool_search`、MCP exposure 和 skill activation 可以影响下一 step，但 provider model 或 system prompt 不会在 turn 中途变化。
@@ -60,7 +60,7 @@ Exposure state 只返回当前可调用 definition：
 - direct native tools 默认可见。
 - deferred tools 必须被 `tool_search` 暴露。
 - owner skill tools 必须先激活允许的 skill。
-- disabled connector/MCP tools 不进入 schemas。
+- disabled MCP tools 不进入 schemas。
 
 Budget 与实际 provider request 使用同一个 schema snapshot，防止预算漂移。
 

@@ -33,9 +33,7 @@ export interface WorkspaceSnapshot {
   readonly soul: string;
 }
 
-export interface WorkspaceSkillSnapshot extends SkillCatalogSnapshot {
-  readonly disabledConnectorIds?: readonly string[];
-}
+export type WorkspaceSkillSnapshot = SkillCatalogSnapshot;
 
 export interface WorkspaceLease {
   readonly workspace: WorkspaceContext;
@@ -56,9 +54,6 @@ export interface WorkspaceInstanceManagerOptions {
   soulPath: string;
   skillCatalog: SkillCatalog;
   skillOptions?: () => SkillPromptOptions;
-  disabledConnectorIds?: () => ReadonlySet<string>;
-  beforeForceRefresh?: () => void;
-  connectorStatePath?: string;
   checkIntervalMs?: number;
   debounceMs?: number;
   idleTtlMs?: number;
@@ -223,7 +218,6 @@ const skillSnapshotSignature = (snapshot: WorkspaceSkillSnapshot): string =>
     JSON.stringify(snapshot.names),
     JSON.stringify(snapshot.modules),
     JSON.stringify(snapshot.locations ?? {}),
-    JSON.stringify(snapshot.disabledConnectorIds ?? []),
   );
 
 export class WorkspaceInstanceManager {
@@ -240,7 +234,6 @@ export class WorkspaceInstanceManager {
   private soul = "";
   private soulFingerprint = "";
   private soulSignature = "";
-  private connectorFingerprint = "";
   private globalInitialized = false;
   private lastSkillRevision = 0;
   private nextGlobalCheckAt = 0;
@@ -474,7 +467,6 @@ export class WorkspaceInstanceManager {
   private async loadGlobal(force: boolean): Promise<boolean> {
     const checkedAt = this.now();
     const previousRevision = this.lastSkillRevision;
-    if (force) this.options.beforeForceRefresh?.();
     // Skill discovery belongs to turn acquisition and explicit reload, never watcher callbacks.
     this.lastSkillRevision = this.options.skillCatalog.revision();
     if (!force && this.globalInitialized && checkedAt < this.nextGlobalCheckAt) {
@@ -493,17 +485,9 @@ export class WorkspaceInstanceManager {
       this.soulSignature = signature;
       this.soulFingerprint = fingerprint;
     }
-    let connectorChanged = false;
-    if (this.options.connectorStatePath) {
-      const nextConnectorFingerprint = cheapFileFingerprint(resolve(this.options.connectorStatePath));
-      connectorChanged = force || (this.globalInitialized
-        && Boolean(this.connectorFingerprint)
-        && nextConnectorFingerprint !== this.connectorFingerprint);
-      this.connectorFingerprint = nextConnectorFingerprint;
-    }
     this.globalInitialized = true;
     this.nextGlobalCheckAt = checkedAt + this.checkIntervalMs;
-    return soulChanged || connectorChanged || previousRevision !== this.lastSkillRevision;
+    return soulChanged || previousRevision !== this.lastSkillRevision;
   }
 
   private reloadView(
@@ -517,17 +501,10 @@ export class WorkspaceInstanceManager {
       const documents = await loadInstructions(view.workspace);
       const fingerprint = instructionFingerprint(view.workspace);
       const prompt = instructionsPrompt(documents);
-      const catalogSnapshot = this.options.skillCatalog.snapshot(
+      const skills = this.options.skillCatalog.snapshot(
         this.options.skillOptions?.() ?? {},
         view.workspace,
       );
-      const disabledConnectorIds = Object.freeze(
-        [...(this.options.disabledConnectorIds?.() ?? [])].sort((left, right) => left.localeCompare(right)),
-      );
-      const skills: WorkspaceSkillSnapshot = Object.freeze({
-        ...catalogSnapshot,
-        ...(disabledConnectorIds.length > 0 ? { disabledConnectorIds } : {}),
-      });
       const signature = sha256(this.soul, prompt, skillSnapshotSignature(skills));
       const changed = !view.snapshot || signature !== view.signature;
       view.instructionFingerprint = fingerprint;
@@ -623,11 +600,6 @@ export class WorkspaceInstanceManager {
     this.globalWatchersStarted = true;
     this.addWatcher(dirname(this.soulPath), false, (filename) =>
       !filename || filename.toLowerCase() === basename(this.soulPath).toLowerCase());
-    if (this.options.connectorStatePath) {
-      const path = resolve(this.options.connectorStatePath);
-      this.addWatcher(dirname(path), false, (filename) =>
-        !filename || filename.toLowerCase() === basename(path).toLowerCase());
-    }
   }
 
   private addWatcher(

@@ -35,7 +35,6 @@ const domainKeys: Record<Exclude<DesktopDashboardDataDomain, "sessions">, readon
   stats: dashboardQueryKeys.stats.all,
   channels: dashboardQueryKeys.channelHealth.all,
   models: dashboardQueryKeys.models.all,
-  connectors: dashboardQueryKeys.connectors.all,
   skills: dashboardQueryKeys.skills.all,
   tools: dashboardQueryKeys.tools.all,
 };
@@ -45,7 +44,6 @@ const allDomains = new Set<DesktopDashboardDataDomain>([
   "stats",
   "channels",
   "models",
-  "connectors",
   "skills",
   "tools",
 ]);

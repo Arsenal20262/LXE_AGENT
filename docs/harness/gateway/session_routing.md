@@ -78,7 +78,7 @@ steering 是 session 级开关。启用时，纯文本消息优先注入 active 
 
 这些变化从下一 turn 生效；正在运行的 turn 使用启动时固定的 exposure snapshot。
 
-Desktop Cloud 读取并验证设备权限，Gateway 只传递允许的 Skill 类型，不实例化 `SkillCatalog` 或 `ToolRegistry`。`agent-cli` 中的 `AgentRuntimeHost` 负责把 allowed types 与 connector state 转成 Workspace skill scope、工具 exposure 和 `LXESKILL_SKILL_SCOPE`。
+Desktop Cloud 读取并验证设备权限，Gateway 只传递允许的 Skill 类型，不实例化 `SkillCatalog` 或 `ToolRegistry`。`agent-cli` 中的 `AgentRuntimeHost` 负责把 allowed types 与 Skill 启用状态 转成 Workspace skill scope、工具 exposure 和 `LXESKILL_SKILL_SCOPE`。
 
 ## 失败语义
 

@@ -37,7 +37,6 @@ export interface ToolExposureOptions {
   platform?: string;
   allowedSkills?: ReadonlySet<string>;
   skillLocations?: Readonly<Record<string, string>>;
-  disabledConnectors?: ReadonlySet<string>;
   onSkillActivated?: (skillName: string) => Promise<void> | void;
 }
 
@@ -192,7 +191,7 @@ export class ToolExposureState {
     const name = skillName.trim();
     if (!name || this.activatedSkills.has(name)) return;
     if (this.options.allowedSkills && !this.options.allowedSkills.has(name)) {
-      throw new Error(`skill is not allowed for this bot or connector: ${name}`);
+      throw new Error(`skill is not allowed in this turn: ${name}`);
     }
     this.activatedSkills.add(name);
     for (const definition of this.registry.definitionsSnapshot()) {
@@ -213,7 +212,6 @@ export class ToolExposureState {
 
   private allowed(definition: NormalizedToolDefinition): boolean {
     if (definition.platforms && !definition.platforms.includes(this.options.platform ?? "")) return false;
-    if (definition.connectorName && this.options.disabledConnectors?.has(definition.connectorName)) return false;
     if (definition.ownerSkills.length > 0 && this.options.allowedSkills) {
       return definition.ownerSkills.some((skill) => this.options.allowedSkills?.has(skill));
     }

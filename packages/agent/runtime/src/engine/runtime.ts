@@ -429,9 +429,6 @@ export class TypeScriptAgentRuntime implements AgentRuntime {
         ...exposureOptions,
         platform: String(job.source.platform ?? "").trim(),
         ...(skillSnapshot ? { allowedSkills: new Set(skillNames), skillLocations: skillSnapshot.locations } : {}),
-        ...(skillSnapshot?.disabledConnectorIds
-          ? { disabledConnectors: new Set(skillSnapshot.disabledConnectorIds) }
-          : {}),
         onSkillActivated: async (name) => {
           skillActivations.set(name, { skill: name, module: skillModule(name) });
           await exposureOptions?.onSkillActivated?.(name);

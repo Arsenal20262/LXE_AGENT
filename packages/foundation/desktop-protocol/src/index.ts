@@ -437,7 +437,6 @@ export type DesktopDashboardDataDomain =
   | "stats"
   | "channels"
   | "models"
-  | "connectors"
   | "skills"
   | "tools";
 

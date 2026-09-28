@@ -25,9 +25,6 @@ export const dashboardQueryKeys = {
     list: ["models", "list"] as const,
     current: ["models", "current"] as const,
   },
-  connectors: {
-    all: ["connectors"] as const,
-  },
   skills: {
     all: ["skills"] as const,
     list: ["skills", "list"] as const,

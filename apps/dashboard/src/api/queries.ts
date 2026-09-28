@@ -23,7 +23,6 @@ import type {
   ApiList,
   ChannelHealthList,
   CliCommandPayload,
-  ConnectorPayload,
   ModelPayload,
   SessionDetailPayload,
   SessionListPayload,
@@ -372,15 +371,6 @@ export function useCurrentModelQuery(enabled = true) {
   return useQuery({
     queryKey: dashboardQueryKeys.models.current,
     queryFn: () => callDashboard({ operation: "models.current", input: {} }),
-    enabled,
-    staleTime: CATALOG_STALE_TIME_MS,
-  });
-}
-
-export function useConnectorsQuery(enabled = true) {
-  return useQuery({
-    queryKey: dashboardQueryKeys.connectors.all,
-    queryFn: () => callDashboard({ operation: "connectors.list", input: {} }),
     enabled,
     staleTime: CATALOG_STALE_TIME_MS,
   });

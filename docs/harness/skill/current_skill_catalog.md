@@ -14,7 +14,7 @@ The repository currently contains 35 top-level workflow and default runtime skil
 | `default` | 2 | general workbook and custom Skill creation capabilities |
 | `ziniao_browser` | 1 | controlled Ziniao browser lifecycle and page operations |
 
-Counts describe top-level repository skills before per-agent permission and connector filtering.
+Counts describe top-level repository skills before per-agent permission and skill filtering.
 The repository no longer vendors the Lark CLI or DingTalk (`dws`) skill packs. CLI runtime dependencies
 are managed separately from this skill inventory. For Lark CLI versions with embedded skills,
 use `lark-cli skills list` and `lark-cli skills read <name>` to read the documentation shipped with
@@ -89,7 +89,6 @@ LXE formally maintains these modules' command and failure contracts. Their resul
 The visible catalog for one turn can be smaller than this page because runtime applies:
 
 - server-verified device skill-type filtering;
-- local connector enable/disable state;
 - explicit disabled-skill configuration;
 - catalog validation and duplicate rejection.
 

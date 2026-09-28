@@ -27,7 +27,7 @@ function UserSkillPreview({ skill, close, onUse, onRecycled }: {
     notice={<>
       {!skill.available ? <p role="status">{!skill.enabled ? t.userSkills.disabled : t.userSkills.unavailable}</p> : null}
       {skill.unavailable_reason && skill.unavailable_reason !== "disabled" ? <p className="user-skill-error">{
-        skill.unavailable_reason === "permission_or_connector" ? t.userSkills.permission : skill.unavailable_reason
+        skill.unavailable_reason === "permission" ? t.userSkills.permission : skill.unavailable_reason
       }</p> : null}
       {mutation.isError ? <p role="alert">{queryError(mutation.error)}</p> : null}
     </>}

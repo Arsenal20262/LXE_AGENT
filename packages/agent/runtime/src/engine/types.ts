@@ -218,7 +218,6 @@ export interface RuntimeSkillSnapshot {
   readonly prompt: string;
   readonly modules: Readonly<Record<string, string>>;
   readonly locations?: Readonly<Record<string, string>>;
-  readonly disabledConnectorIds?: readonly string[];
 }
 
 export interface RuntimeStore {

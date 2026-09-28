@@ -13,7 +13,6 @@ export type {
   ChannelHealthList,
   ChannelHealthPayload,
   CliCommandPayload,
-  ConnectorPayload,
   DashboardContentTruncationPayload,
   DesktopConversationActivityPayload,
   DesktopConversationEvent,

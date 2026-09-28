@@ -2,13 +2,9 @@ import { execDisplayUpdate } from "./exec-display";
 import { withManagedModels, managedCredentialFor, type ManagedLlmState, type ManagedTarget } from "@lxe/core";
 import {
   existsSync,
-  mkdirSync,
   readFileSync,
-  renameSync,
-  statSync,
-  writeFileSync,
 } from "node:fs";
-import { dirname, extname, join, relative, resolve, sep } from "node:path";
+import { extname, join, relative, resolve, sep } from "node:path";
 import {
   DashboardRpcError,
   type AgentDashboardRpcCall,
@@ -54,7 +50,6 @@ interface DashboardServiceOptions {
   store: SqliteRuntimeStore;
   tools: ToolRegistry;
   mcpConfig: McpConfig;
-  connectorStatePath?: string;
   execSnapshots?: (sessionId: string) => JsonObject[];
   terminateSession?: (sessionId: string) => Promise<void> | void;
   setMcpEnabled?: (serverName: string, enabled: boolean) => Promise<void> | void;
@@ -71,29 +66,6 @@ interface DashboardServiceOptions {
   cliCommands?: LxeSkillCommandDefinition[];
   reloadWorkspace?: (sessionId: string) => Promise<JsonObject>;
 }
-
-const connectorDefinitions = [
-  {
-    id: "feishu",
-    name: "Feishu / Lark CLI",
-    description: "Controls the official lark-cli skill pack.",
-    kind: "cli",
-    skill_names: [
-      "lark-approval", "lark-apps", "lark-attendance", "lark-base", "lark-calendar", "lark-contact",
-      "lark-doc", "lark-drive", "lark-event", "lark-im", "lark-mail", "lark-markdown", "lark-minutes",
-      "lark-note", "lark-okr", "lark-openapi-explorer", "lark-shared", "lark-sheets", "lark-skill-maker",
-      "lark-slides", "lark-task", "lark-vc", "lark-vc-agent", "lark-whiteboard", "lark-wiki",
-      "lark-workflow-meeting-summary", "lark-workflow-standup-report",
-    ],
-  },
-  {
-    id: "dingtalk",
-    name: "DingTalk Workspace CLI",
-    description: "Controls the official dws skill.",
-    kind: "cli",
-    skill_names: ["dws"],
-  },
-] as const;
 
 const text = (value: unknown): string => String(value ?? "").trim();
 const optionalFlag = (value: unknown): boolean | undefined => {
@@ -251,14 +223,8 @@ function rpcError(code: ConstructorParameters<typeof DashboardRpcError>[0], mess
 }
 
 export class DashboardService {
-  private readonly connectorStatePath: string;
   private readonly skillCatalog: SkillCatalog;
   private readonly userSkillFiles: UserSkillFiles;
-  private connectorStateCache: {
-    fingerprint: string;
-    state: { enabled: string[]; everConnected: string[]; userDisabled: string[] };
-  } | undefined;
-
   private readonly handlers: AgentDashboardRpcHandlers = {
     "sessions.questions": () => ({ items: this.options.questions?.snapshot() ?? [] }),
     "sessions.answer": input => {
@@ -282,8 +248,6 @@ export class DashboardService {
     "skills.content": (input) => this.skillContent(input.name) as DashboardRpcResult<"skills.content">,
     "skills.reference": (input) => this.skillReference(input.name, input.path) as DashboardRpcResult<"skills.reference">,
     "commands.list": () => this.listPayload(this.options.cliCommands ?? []) as DashboardRpcResult<"commands.list">,
-    "connectors.list": () => this.listPayload(this.connectors()) as DashboardRpcResult<"connectors.list">,
-    "connectors.update": (input) => this.updateConnector(input) as Promise<DashboardRpcResult<"connectors.update">>,
     "toolsets.list": () => this.listPayload(this.toolsets()) as DashboardRpcResult<"toolsets.list">,
     "mcp.servers.list": () => this.mcpServers() as DashboardRpcResult<"mcp.servers.list">,
     "mcp.servers.update": (input) => this.updateMcp(input) as Promise<DashboardRpcResult<"mcp.servers.update">>,
@@ -307,9 +271,6 @@ export class DashboardService {
   };
 
   constructor(private readonly options: DashboardServiceOptions) {
-    this.connectorStatePath = options.connectorStatePath
-      ?? (text(options.environment.LXE_CONNECTOR_STATE_PATH)
-        || join(options.stateRoot, "config", "connector-states.local.json"));
     this.skillCatalog = options.skillCatalog ?? new SkillCatalog(options.stateRoot, options.userSkillsRoot, {
       repositorySkillsRoot: options.skillsRoot,
       ...(options.sharedSkillsRoot === undefined ? {} : { sharedSkillsRoot: options.sharedSkillsRoot }),
@@ -390,32 +351,11 @@ export class DashboardService {
   }
 
   private skillOptions() {
-    return { disabledNames: this.disabledSkillNames(),
-      ...(this.options.allowedSkillTypes ? { allowedTypes: this.options.allowedSkillTypes } : {}) };
+    return this.options.allowedSkillTypes ? { allowedTypes: this.options.allowedSkillTypes } : {};
   }
 
   private skills(): SkillManifest[] {
     return this.skillCatalog.list(this.skillOptions());
-  }
-
-  disabledSkillNames(): Set<string> {
-    return this.runtimeConnectorPolicy().disabledSkillNames;
-  }
-
-  disabledConnectorIds(): Set<string> {
-    return this.runtimeConnectorPolicy().disabledConnectorIds;
-  }
-
-  runtimeConnectorPolicy(): { disabledSkillNames: Set<string>; disabledConnectorIds: Set<string> } {
-    const disabled = this.connectors().filter((item) => !item.enabled);
-    return {
-      disabledSkillNames: new Set(disabled.flatMap((item) => item.skill_names)),
-      disabledConnectorIds: new Set(disabled.map((item) => String(item.id))),
-    };
-  }
-
-  invalidateRuntimeConfigCache(): void {
-    this.connectorStateCache = undefined;
   }
 
   private skillContent(name: string): JsonObject {
@@ -449,67 +389,6 @@ export class DashboardService {
       ...(diagnostics.length ? { diagnostics } : {}),
       ...(includeContent ? { content: manifest.content } : {}),
     };
-  }
-
-  private connectorState(): { enabled: string[]; everConnected: string[]; userDisabled: string[] } {
-    let fingerprint = "missing";
-    try {
-      const info = statSync(this.connectorStatePath);
-      fingerprint = `${info.size}:${info.mtimeMs}`;
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-    }
-    if (this.connectorStateCache?.fingerprint === fingerprint) {
-      return structuredClone(this.connectorStateCache.state);
-    }
-    try {
-      const state = object(JSON.parse(readFileSync(this.connectorStatePath, "utf8")));
-      const known = new Set(connectorDefinitions.map((item) => item.id));
-      const ids = (value: unknown): string[] => Array.isArray(value)
-        ? value.map(text).filter((item) => known.has(item as typeof connectorDefinitions[number]["id"]))
-        : [];
-      const parsed = { enabled: ids(state.enabled), everConnected: ids(state.everConnected), userDisabled: ids(state.userDisabled) };
-      this.connectorStateCache = { fingerprint, state: parsed };
-      return structuredClone(parsed);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-      const empty = { enabled: [], everConnected: [], userDisabled: [] };
-      this.connectorStateCache = { fingerprint, state: empty };
-      return structuredClone(empty);
-    }
-  }
-
-  private connectors(): Array<JsonObject & { enabled: boolean; skill_names: string[] }> {
-    const state = this.connectorState();
-    return connectorDefinitions.map((definition) => ({
-      ...definition,
-      skill_names: [...definition.skill_names],
-      skill_count: definition.skill_names.length,
-      enabled: state.enabled.includes(definition.id),
-      everConnected: state.everConnected.includes(definition.id),
-      userDisabled: state.userDisabled.includes(definition.id),
-    }));
-  }
-
-  private async updateConnector(input: DashboardRpcSpec["connectors.update"]["input"]): Promise<JsonObject> {
-    const { id, enabled } = input;
-    if (!connectorDefinitions.some((item) => item.id === id)) rpcError("not_found", "connector not found");
-    const state = this.connectorState();
-    const update = (items: string[], include: boolean): string[] => [...new Set(include
-      ? [...items, id]
-      : items.filter((item) => item !== id))].sort();
-    const next = {
-      version: 1,
-      enabled: update(state.enabled, enabled),
-      everConnected: update(state.everConnected, enabled || state.everConnected.includes(id)),
-      userDisabled: update(state.userDisabled, !enabled),
-    };
-    mkdirSync(dirname(this.connectorStatePath), { recursive: true });
-    const temporary = `${this.connectorStatePath}.tmp`;
-    writeFileSync(temporary, `${JSON.stringify(next, null, 2)}\n`, "utf8");
-    renameSync(temporary, this.connectorStatePath);
-    this.connectorStateCache = undefined;
-    return this.connectors().find((item) => item.id === id)!;
   }
 
   private toolsets(): JsonObject[] {

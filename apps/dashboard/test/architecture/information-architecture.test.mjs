@@ -49,7 +49,6 @@ test("pages enable only the server queries required by their active views", () =
     main,
     /useModelsQuery\(\s*dashboardRuntimeReady\s*&& \(activeSection === "sessions" \|\| \(capabilitiesOpen && capabilityView === "models"\)\),?\s*\)/,
   );
-  assert.match(main, /useConnectorsQuery\(\s*dashboardRuntimeReady && capabilitiesOpen && capabilityView === "connections"/);
   assert.match(main, /capabilityView === "tools" \|\| capabilityView === "connections"/);
   assert.match(main, /useCurrentModelQuery\(dashboardRuntimeReady\)/);
   assert.doesNotMatch(main, /backgroundTasksQuery/);
@@ -57,7 +56,7 @@ test("pages enable only the server queries required by their active views", () =
 
 test("MCP tools and servers have one semantic home each", () => {
   assert.doesNotMatch(tools, /toolset\.name !== "mcp"/);
-  assert.match(integrations, /export function ConnectionsView/);
+  assert.match(integrations, /export function McpServicesView/);
   assert.match(integrations, /mcpToolset\?\.servers/);
   assert.doesNotMatch(integrations, /mcpToolset\?\.tools/);
 });

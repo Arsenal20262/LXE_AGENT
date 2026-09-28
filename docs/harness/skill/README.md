@@ -4,7 +4,7 @@ Runtime skill prompts live in repository `skills/*/SKILL.md`, managed user skill
 
 ## Discovery And Precedence
 
-`packages/agent/runtime/src/tooling/skills.ts` scans all three sources and deduplicates canonical paths. Name precedence is repository → managed user → shared. Conflicts resolve before enabled-state, device-permission and connector filtering: disabling a winner never exposes its same-name fallback. Invalid, duplicate or command-conflicting external entries have per-entry diagnostics; invalid official resources still fail strictly.
+`packages/agent/runtime/src/tooling/skills.ts` scans all three sources and deduplicates canonical paths. Name precedence is repository → managed user → shared. Conflicts resolve before enabled-state and device-permission filtering: disabling a winner never exposes its same-name fallback. Invalid, duplicate or command-conflicting external entries have per-entry diagnostics; invalid official resources still fail strictly.
 
 `LXE_USER_SKILLS_ROOT` overrides the managed user directory consistently in Desktop and standalone CLI. Shared files are never migrated or rewritten automatically. The resolved managed path is published as `environment_context.user_skills_root`, so creators do not guess installation paths. Files saved elsewhere are not discovered automatically.
 
@@ -27,7 +27,7 @@ Discovery is not the same as model activation.
 
 1. Runtime discovers and validates the catalog.
 2. The server-verified device permission snapshot filters skills by allowed type.
-3. Connector state can hide optional connector-owned skills.
+3. Explicit skill enable/disable settings apply independently of CLI availability.
 4. The prompt receives compact metadata for only the available skills.
 5. The model reads a skill's `SKILL.md` when it chooses that workflow. Activation matches the canonical manifest path in the current snapshot; an unrelated draft or a same-name folder cannot activate it.
 6. Owner-gated deferred tools from the activated skill become available on the next step.
@@ -74,5 +74,5 @@ When adding or renaming a skill:
 3. register each business command in the catalog with explicit ownership and schema;
 4. update workflow-map routing when the user intent changes;
 5. update catalog/count tests and this inventory if categories change;
-6. test device-permission and connector filtering where applicable;
+6. test device-permission and skill enabled-state filtering where applicable;
 7. avoid copying the full prompt into `docs/`.

@@ -51,7 +51,7 @@ Definition 注册与模型可见是两个不同阶段。Registry 保存所有可
 - `exposure=direct` 且 policy 允许的工具立即可见。
 - `exposure=deferred` 的工具先隐藏，命中 `tool_search` 后可见。
 - 有 `ownerSkills` 的工具要求至少一个 owner skill 已激活。
-- connector/MCP disabled state 可以继续过滤 definition。
+- MCP 服务的启用状态由 MCP manager 管理；CLI 不再有独立的连接开关或技能过滤。
 
 平台过滤依据本轮任务来源，不根据会话最初来自哪里判断。Exposure state 在 turn 内持久，schema 每 step 重新捕获。新暴露的工具从下一 provider request 生效。
 

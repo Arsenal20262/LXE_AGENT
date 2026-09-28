@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { bootstrapDesktopState } from "../src/main/migration";
@@ -12,12 +12,12 @@ function fixture() {
   writeFileSync(source, defaults);
   return { source, data, defaults, target: join(data, "config/mcp_servers.local.yaml") };
 }
-test("initializes the native disabled default and connector state only when missing", () => {
+test("initializes the native disabled default without creating retired connector state", () => {
   const f = fixture(); bootstrapDesktopState(f.source, f.data);
   expect(readFileSync(f.target, "utf8")).toBe(f.defaults);
   expect(f.defaults).toContain("X-LXE-Client: cli");
   expect(f.defaults).toContain("enabled: false");
-  expect(readFileSync(join(f.data, "config/connector-states.local.json"), "utf8")).toBe("{}\n");
+  expect(existsSync(join(f.data, "config/connector-states.local.json"))).toBe(false);
 });
 test("does not convert old company credentials or overwrite local settings", () => {
   const f = fixture(); mkdirSync(join(f.data, "config"), { recursive: true });

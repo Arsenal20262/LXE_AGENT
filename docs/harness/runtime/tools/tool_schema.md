@@ -123,7 +123,7 @@ fd 不在首次搜索时下载，也不回退旧遍历器。源码开发先运�
 
 ## ExposureState
 
-每个 turn 根据 bot policy、connector state 和允许 skill 创建 exposure state。`schemas()` 只返回：
+每个 turn 根据 bot policy 和允许 skill 创建 exposure state。`schemas()` 只返回：
 
 1. policy 未禁用的 definition。
 2. direct 或已通过 search 暴露的 definition。
@@ -155,4 +155,4 @@ Provider request 使用当前 step 的 snapshot。更新 schema 不迁移 transc
 
 ## 验证
 
-Tests 覆盖重复 name、direct/deferred exposure、skill activation、MCP naming、command catalog ownership、connector filter 和 schema snapshot 时机。
+Tests 覆盖重复 name、direct/deferred exposure、skill activation、MCP naming、command catalog ownership和 schema snapshot 时机。

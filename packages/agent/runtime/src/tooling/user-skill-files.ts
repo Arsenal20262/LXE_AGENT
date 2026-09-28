@@ -89,7 +89,7 @@ export class UserSkillFiles {
       description: manifest?.description ?? "", commands: manifest?.commands ?? [], references: manifest?.references ?? [],
       enabled: entry.enabled, available: available.has(skillPathKey(entry.location)),
       unavailable_reason: entry.diagnostics.map(item => item.message).join("\n")
-        || (!entry.enabled ? "disabled" : !available.has(skillPathKey(entry.location)) ? "permission_or_connector" : ""),
+        || (!entry.enabled ? "disabled" : !available.has(skillPathKey(entry.location)) ? "permission" : ""),
       diagnostics: entry.diagnostics };
   }
 }

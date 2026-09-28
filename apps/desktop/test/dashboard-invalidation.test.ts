@@ -124,7 +124,6 @@ describe("Dashboard invalidation bridge", () => {
   test("maps successful mutation operations to their related domains", () => {
     expect(dashboardDomainsForMutation("models.update")).toEqual(["models"]);
     expect(dashboardDomainsForMutation("models.thinking.update")).toEqual(["models"]);
-    expect(dashboardDomainsForMutation("connectors.update")).toEqual(["connectors", "skills"]);
     expect(dashboardDomainsForMutation("mcp.servers.update")).toEqual(["tools"]);
     expect(dashboardDomainsForMutation("sessions.send")).toEqual(["sessions"]);
     expect(dashboardDomainsForMutation("sessions.stop")).toEqual(["sessions"]);

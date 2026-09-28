@@ -10,7 +10,6 @@ export const ALL_DASHBOARD_DATA_DOMAINS: readonly DesktopDashboardDataDomain[] =
   "stats",
   "channels",
   "models",
-  "connectors",
   "skills",
   "tools",
 ];
@@ -53,8 +52,6 @@ export function dashboardDomainsForMutation(operation: DashboardRpcOperation): D
     case "models.update":
     case "models.thinking.update":
       return ["models"];
-    case "connectors.update":
-      return ["connectors", "skills"];
     case "mcp.servers.update":
       return ["tools"];
     case "sessions.send":

@@ -102,8 +102,15 @@ describe("desktop IPC validation", () => {
       .toThrow("input must be an object");
     expect(() => validateDashboardRpcCall({ operation: "models.update", input: { provider: 42 } }))
       .toThrow("provider must be a string");
-    expect(() => validateDashboardRpcCall({ operation: "connectors.update", input: { id: "feishu" } }))
+    expect(() => validateDashboardRpcCall({ operation: "mcp.servers.update", input: { name: "inventory" } }))
       .toThrow("enabled must be a boolean");
+  });
+
+  test("rejects retired CLI connector operations", () => {
+    for (const operation of ["connectors.list", "connectors.update"]) {
+      expect(() => validateDashboardRpcCall({ operation, input: {} }))
+        .toThrow("unsupported Dashboard RPC operation");
+    }
   });
 
   test("accepts only bounded setup fields", () => {

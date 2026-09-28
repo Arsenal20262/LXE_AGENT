@@ -1003,7 +1003,6 @@ describe("TypeScriptAgentRuntime", () => {
       names: ["first"] as readonly string[],
       prompt: "prompt:first",
       modules: { first: "module:first" } as Readonly<Record<string, string>>,
-      disabledConnectorIds: ["second-connector"] as readonly string[],
     };
     let snapshotCalls = 0;
     let releaseFirst!: () => void;
@@ -1043,7 +1042,6 @@ describe("TypeScriptAgentRuntime", () => {
       names: ["second"],
       prompt: "prompt:second",
       modules: { second: "module:second" },
-      disabledConnectorIds: ["first-connector"],
     };
     const secondTurn = runtime.runTurn({
       ...job(), job_id: "j2", message_id: "m2", session_id: "s2", response_route_id: "",
@@ -1055,10 +1053,10 @@ describe("TypeScriptAgentRuntime", () => {
 
     expect(snapshotCalls).toBe(2);
     expect(requests).toContainEqual({
-      system: "prompt:first", tools: ["first_tool", "first_connector_tool"],
+      system: "prompt:first", tools: ["first_tool", "first_connector_tool", "second_connector_tool"],
     });
     expect(requests).toContainEqual({
-      system: "prompt:second", tools: ["second_tool", "second_connector_tool"],
+      system: "prompt:second", tools: ["second_tool", "first_connector_tool", "second_connector_tool"],
     });
   });
 
