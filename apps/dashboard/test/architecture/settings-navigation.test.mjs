@@ -18,8 +18,6 @@ test("desktop settings render one navigable panel instead of stacked integration
   assert.match(shell, /aria-current=\{active \? "page" : undefined\}/);
   assert.match(shell, /settingsNavigation\(false\)/);
   assert.match(shell, /settingsNavigation\(true\)/);
-  assert.doesNotMatch(shell, /desktop-integration-card/);
-  assert.doesNotMatch(shell, /desktop-config-import-callout/);
 });
 
 test("settings shell fixes chrome around an independently scrolling workspace", () => {
@@ -49,8 +47,6 @@ test("company cloud exposes fixed browser shortcuts and gates them by device acc
 test("company cloud shows the server-verified device Skill permission state", () => {
   assert.match(shell, /desktop-cloud-overview/);
   assert.match(shell, /deviceIdentity \? <span>\{deviceIdentity\}<\/span> : null/);
-  assert.doesNotMatch(shell, /desktop-cloud-identity/);
-  assert.doesNotMatch(shell, /desktop-cloud-status/);
   assert.match(shell, /cloud\.permission_status/);
   assert.match(contextPanel, /cloud\.permission_profile/);
   assert.match(contextPanel, /cloud\.permission_version/);

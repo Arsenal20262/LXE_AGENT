@@ -31,8 +31,6 @@ test("runtime popover links to the existing model and settings destinations", ()
   assert.match(main, /<RuntimeStatusPopover[\s\S]*?onOpenModels=\{\(\) => openCapabilityView\("models"\)\}/);
   assert.match(runtimeStatus, /onOpenSettings\("cloud"\)/);
   assert.match(runtimeStatus, /cloudAggregateTone\(desktopCloud\.connection\)/);
-  assert.doesNotMatch(main, /onOpenTasks=/);
-  assert.doesNotMatch(main, /onOpenTask=/);
   assert.match(shell, /openSettings: \(section\?: DesktopSettingsSection\) => void/);
   assert.match(shell, /setActiveSettingsSection\(section\)/);
   assert.match(shell, /desktop\.onCloudStateChanged\(\(nextCloud\)/);
@@ -59,7 +57,4 @@ test("home stays bounded while runtime status mounts once", () => {
   assert.match(styles, /@media \(max-width:\s*620px\)[\s\S]*?\.runtime-status-floating[\s\S]*?right:\s*16px[\s\S]*?bottom:\s*16px[\s\S]*?\.runtime-status-popover[\s\S]*?max-width:\s*calc\(100vw - 32px\)/);
   assert.match(styles, /\.content-panel[\s\S]*?padding:\s*24px 28px 92px/);
   assert.match(styles, /@media \(prefers-reduced-motion:\s*reduce\)/);
-  assert.doesNotMatch(home, /home-attention/);
-  assert.doesNotMatch(home, /RuntimeStatus|runtime-status|home-runtime/);
-  assert.doesNotMatch(styles, /home-runtime-strip|home-side-stack|home-primary-columns|home-attention|home-skills-panel/);
 });

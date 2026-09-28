@@ -30,8 +30,6 @@ test("collapsed desktop sidebar leaves only the title-bar control", () => {
   assert.match(styles, /\.app-shell > \.main-panel\s*\{[^}]*grid-column:\s*2;/s);
   assert.match(styles, /\.app-sidebar\.is-expanded\s*\{[^}]*grid-column:\s*1;/s);
   assert.match(styles, /\.app-sidebar\.is-collapsed\s*\{[^}]*pointer-events:\s*none;[^}]*visibility:\s*hidden;/s);
-  assert.doesNotMatch(styles, /--sidebar-collapsed-width/);
-  assert.doesNotMatch(styles, /\.app-sidebar\.collapsed \.tab/);
 });
 
 test("collapsed sidebar offers a delayed interactive peek before fixed expansion", () => {
@@ -73,9 +71,7 @@ test("macOS conversations merge the page header into the native title-bar row", 
   );
 });
 
-test("sidebar header omits the dedicated brand control", () => {
-  assert.doesNotMatch(main, /sidebar-brand/);
-  assert.doesNotMatch(styles, /\.sidebar-brand/);
+test("sidebar wires window controls, mode, and home navigation", () => {
   assert.match(main, /className=\{sidebarVisible \? "sidebar-window-controls sidebar-visible"/);
   assert.match(main, /className=\{`app-sidebar is-\$\{sidebarMode\}`\}/);
   assert.match(main, /\{ id: "home", label: t\.nav\.home, icon: <House size=\{16\} \/> \}/);

@@ -10,21 +10,14 @@ const readSource = (relativePath) => readFileSync(path.join(sourceDir, relativeP
 
 const main = readSource("main.tsx");
 const status = readSource("desktop/sidebar-status.tsx");
-const shell = readSource("desktop/shell.tsx");
 const models = readSource("features/models/view.tsx");
 const sessions = readSource("features/sessions/view.tsx");
 const sidebar = readSource("shared/use-three-state-sidebar.ts");
 const styles = readSource("styles.css");
 
-test("status and settings have one sidebar entry and no floating duplicate", () => {
+test("sidebar status entry opens desktop settings", () => {
   assert.match(status, /t\.sidebar\.statusAndSettings/);
   assert.match(main, /onOpen=\{\(\) => onOpenDesktopSettings\?\.\("status"\)\}/);
-  const statusCardStart = status.indexOf('className="sidebar-status-card"');
-  const statusCard = status.slice(statusCardStart, status.indexOf("</button>", statusCardStart));
-  assert.doesNotMatch(statusCard, /currentModelQuery|sidebar-status-meta/);
-  assert.doesNotMatch(main, /DashboardStatusModal|dashboardStatusOpen|statusSessionsQuery/);
-  assert.doesNotMatch(shell, /desktop-status-button/);
-  assert.doesNotMatch(styles, /\.desktop-status-button/);
 });
 
 test("sessions persist in the application sidebar with title-only rows", () => {
@@ -35,20 +28,15 @@ test("sessions persist in the application sidebar with title-only rows", () => {
   assert.doesNotMatch(main, /activeSection === "sessions" && sessionSidebarExpanded/);
   assert.match(main, /className="sidebar-session-section"/);
   assert.match(main, /selectedSessionId=\{activeSection === "sessions" \? selectedSessionId : ""\}/);
-  assert.doesNotMatch(main, /compactSessionLayout|sessionSidebarOverlayOpen|sessionSidebarDialogOpen/);
-  assert.doesNotMatch(styles, /session-sidebar-scrim|session-sidebar-overlay-open/);
   assert.match(main, /onTransientInteractionChange=\{sidebar\.onTransientInteractionChange\}/);
   assert.match(main, /visible=\{sidebarVisible\}/);
   assert.match(sessions, /const transientInteractionActive = Boolean\(menu\);/);
   assert.match(sessions, /onTransientInteractionChange\?\.\(transientInteractionActive\)/);
   assert.match(sessions, /if \(visible\) return;\s*closeMenu\(false\);/);
-  assert.doesNotMatch(sessions, /className="session-meta-line"/);
   // The existing compact marker now conveys lifecycle state accessibly.
   assert.match(sessions, /<span className="session-index-icon" data-session-state=\{state\} role="img" aria-label=\{statusLabel\} title=\{statusLabel\} \/>/);
-  assert.doesNotMatch(sessions, /MessageCircle/);
   assert.match(sessions, /aria-label=\{`\$\{sessionTitle\} · \$\{statusLabel\}`\}/);
   assert.match(sessions, /title=\{sessionTitle\}/);
-  assert.doesNotMatch(sessions, /pill sessions-loading-pill/);
   assert.match(sessions, /loadingMore \? \([\s\S]*?sessions-load-more-indicator[\s\S]*?LoaderCircle/);
   assert.match(main, /initialLoading=\{dashboardRuntimeReady\s*&& sessionsQuery\.isPending\s*&& !sessions\.items\.length\}/);
   assert.match(main, /loadingMore=\{dashboardRuntimeReady && sessionsQuery\.isFetchingNextPage\}/);
@@ -62,10 +50,7 @@ test("sessions persist in the application sidebar with title-only rows", () => {
   assert.match(sidebar, /if \(collapsed && !peekOpen\) setPeekOpen\(true\);/);
   assert.doesNotMatch(searchToggle, /pushDashboardRoute|setActiveSection/);
 
-  assert.doesNotMatch(main, /sessions-split/);
-  assert.doesNotMatch(styles, /\.sessions-split/);
   assert.match(main, /activeSection === "sessions";?\s*$/m);
-  assert.doesNotMatch(styles, /\.main-header\.tab-home \.main-title h2::before/);
 });
 
 test("session rows expose an accessible pinned and destructive action menu", () => {

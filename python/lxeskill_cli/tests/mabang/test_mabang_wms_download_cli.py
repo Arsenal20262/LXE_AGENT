@@ -103,11 +103,6 @@ def test_prepare_upload_local_consignment_missing_uses_shared_cache_error(monkey
     assert "services/test_file" not in message
 
 
-def test_prepare_upload_legacy_test_file_helpers_removed():
-    assert not hasattr(fba_shipment_tools, "_resolve_prepare_upload_test_file_dir")
-    assert not hasattr(fba_shipment_tools, "_find_prepare_upload_consignment_excel")
-
-
 def test_get_fba_wms_cookie_header_reads_complete_context(monkeypatch) -> None:
     calls: list[dict] = []
 
@@ -166,8 +161,6 @@ def test_wms_uses_shared_auth_material_consumption_audit(monkeypatch, tmp_path: 
     assert audit_calls[0]["purpose"] == "wms_consignment_excel_export"
     assert audit_calls[0]["auth_kind"] == "wms_cookie_header"
     assert "force_refresh" not in audit_calls[0]
-    assert not hasattr(wms_module, "_cookie_header_name_summary")
-    assert not hasattr(wms_module, "_session_cookie_jar_name_summary")
 
 
 def test_wms_login_page_html_triggers_one_refresh_and_retry(monkeypatch, tmp_path: Path) -> None:

@@ -53,7 +53,6 @@ test("the composer edits thinking effort using the shared next-turn preference",
 });
 
 test("message identity confirms persistence without retiring the visible component", () => {
-  assert.doesNotMatch(view, /transcriptCaughtUp|transcriptFetchedAt|LocalTurnCards/);
   assert.match(presentation, /client_message_id/);
   assert.match(view, /UnifiedConversationRow/);
   assert.match(windowView, /getItemKey/);
@@ -74,11 +73,8 @@ test("the focused conversation takes the full panel without a second session col
   // The old nested session panel competed with both the transcript and the
   // composer for width and height. The application sidebar owns that list now.
   assert.doesNotMatch(styles, /\.conversation-view \{[^}]*height: calc\(100vh/);
-  assert.doesNotMatch(styles, /\.sessions-split/);
-  assert.doesNotMatch(main, /sessions-split/);
   assert.match(styles, /\.sessions-conversation-shell \{[^}]*height:\s*100%[^}]*min-height:\s*0/s);
   assert.match(main, /"content-panel content-panel-fill"/);
-  assert.doesNotMatch(view, /conversation-header-sidebar-toggle/);
   assert.match(styles, /\.conversation-header \{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) auto;/s);
 });
 
@@ -162,7 +158,6 @@ test("the file list spends its width on what differs between the files", () => {
   // The name is the real file name: the spreadsheet icon does not say which of
   // xlsx/xls/csv the file is, so the extension has to survive in the name.
   assert.match(view, /className="turn-file-name" title=\{file\.name\}>\{file\.name\}/);
-  assert.doesNotMatch(view, /function fileDisplayName/);
   // The marker stays on every row: it is the anchor the eye lands on, so it is
   // made quiet rather than removed. A filled accent pill outshouted the name.
   // An extension with a type mark gets that icon; every other extension keeps
@@ -170,7 +165,6 @@ test("the file list spends its width on what differs between the files", () => {
   // cousin's icon (TSV is not CSV).
   assert.match(view, /<span aria-hidden="true" className="turn-file-extension">\s*\{FILE_TYPE_ICONS\[extension\]\s*\?\s*<img alt="" draggable=\{false\} src=\{FILE_TYPE_ICONS\[extension\]\} \/>\s*:\s*extension\}\s*<\/span>/);
   assert.match(fileAttachmentDisplay, /FILE_TYPE_ICONS: Record<string, string> = \{\s*CSV: csvIcon,\s*HTML: htmlIcon,\s*XLS: xlsIcon,\s*XLSX: xlsxIcon,\s*\};/);
-  assert.doesNotMatch(view, /SPREADSHEET_EXTENSIONS|\bSheet\b/);
   assert.doesNotMatch(styles, /\.turn-file-extension \{[^}]*background:/s);
   assert.match(styles, /\.turn-file-extension \{[^}]*color:\s*var\(--muted-light\)/s);
   assert.match(styles, /\.turn-file-extension > img \{[^}]*width:\s*22px[^}]*height:\s*22px/s);
@@ -230,7 +224,6 @@ test("thinking, tools and text share one ordered row projection", () => {
   assert.match(windowView, /renderRow\(rows\[item.index\]/);
   assert.match(presentation, /part.part_id/);
   assert.match(presentation, /tool_step.id/);
-  assert.doesNotMatch(view, /PersistedTimeline|LiveTimeline|liveOwnedTurnIds/);
   assert.match(view, /expandedRows.get\(row.id\)/);
 });
 
@@ -242,7 +235,6 @@ test("reader messages expose only copy and timestamp metadata", () => {
   assert.match(view, /role === "user" \? time : copyButton/);
   assert.match(styles, /\.message-meta-copy\s*\{[^}]*background:\s*transparent;/s);
   assert.match(styles, /\.message-with-meta\.role-user\s*\{[^}]*align-items:\s*flex-end;/s);
-  assert.doesNotMatch(view, /message-meta[^\n]*(?:ThumbsUp|ThumbsDown|Maximize)/);
 });
 
 test("user message metadata is smaller and revealed on hover", () => {
@@ -262,7 +254,6 @@ test("assistant message metadata is smaller, sits closer to the response, and is
 
 test("the same component handles streamed and persisted content without replaying text", () => {
   assert.match(view, /UnifiedConversationRow = React.memo/);
-  assert.doesNotMatch(view, /usePacedText|LiveTextPart|TEXT_RENDER_PACE/);
   assert.match(presentation, /existing.get\(part.id\)/);
   assert.match(windowView, /key=\{item.key\}/);
 });

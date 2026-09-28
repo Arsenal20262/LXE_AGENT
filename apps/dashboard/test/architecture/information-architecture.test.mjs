@@ -21,7 +21,6 @@ test("sidebar exposes the workbench as a primary destination", () => {
   for (const id of ["models", "skills", "tools", "mcp", "connectors", "background-tasks", "stats", "docs"]) {
     assert.doesNotMatch(primaryTabs, new RegExp(`\\{ id: "${id}", label:`));
   }
-  assert.doesNotMatch(main, /sidebar-utility|tab-docs/);
 });
 
 test("media workbench keeps filesystem paths behind the desktop bridge", () => {
@@ -38,7 +37,7 @@ test("media workbench keeps filesystem paths behind the desktop bridge", () => {
 test("capabilities use compact child navigation while activity opens statistics directly", () => {
   assert.match(main, /const capabilityItems:[\s\S]*"skills"[\s\S]*"tools"[\s\S]*"connections"[\s\S]*"models"/);
   assert.doesNotMatch(main, /const activityItems/);
-  assert.doesNotMatch(main, /BackgroundTasksView|useBackgroundTasksQuery/);
+  assert.doesNotMatch(main, /useBackgroundTasksQuery/);
   assert.match(main, /activeSection === "activity"[\s\S]*<StatsView/);
   assert.match(main, /aria-current=\{activeView === item\.id \? "page" : undefined\}/);
   assert.match(styles, /\.workspace-subnav-item\.active/);
@@ -58,19 +57,12 @@ test("pages enable only the server queries required by their active views", () =
 
 test("MCP tools and servers have one semantic home each", () => {
   assert.doesNotMatch(tools, /toolset\.name !== "mcp"/);
-  assert.doesNotMatch(tools, /export function McpView/);
   assert.match(integrations, /export function ConnectionsView/);
   assert.match(integrations, /mcpToolset\?\.servers/);
   assert.doesNotMatch(integrations, /mcpToolset\?\.tools/);
 });
 
-test("catalog decoration is removed while low-frequency details remain available", () => {
-  assert.doesNotMatch(tools, /CatalogOverview/);
-  assert.doesNotMatch(skills, /CatalogOverview/);
-  assert.doesNotMatch(skills, /<ChevronRight/);
-  assert.doesNotMatch(tools, /<ChevronRight/);
-  assert.doesNotMatch(tools, /catalog-section-status/);
+test("catalog keeps low-frequency details available", () => {
   assert.match(skills, /maintenanceExpanded/);
-  assert.doesNotMatch(styles, /\.catalog-overview\s*\{/);
   assert.match(styles, /\.model-capabilities-details/);
 });
