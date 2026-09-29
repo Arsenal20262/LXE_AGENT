@@ -72,7 +72,7 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
   ].filter(Boolean).join("\n\n");
   const volatile = [
     options.larkCliAvailable
-      ? "当前运行环境已内置控制飞书专用的 `lark-cli`。处理飞书相关需求时，通过 `exec` 运行 `lark-cli --help` 或 `lark-cli skills list` 了解能力。"
+      ? "The current runtime environment includes `lark-cli`, a CLI dedicated to Feishu/Lark operations. For Feishu/Lark requests, use `exec` to run `lark-cli --help` or `lark-cli skills list` to discover its capabilities."
       : "",
     options.skillPrompt.trim(),
     options.workspaceInstructions?.trim() ?? "",
