@@ -7,8 +7,7 @@
     "archive_root": "node-v22.22.2-win-x64",
     "npm_version": "10.9.7",
     "packages": {
-      "@larksuite/cli": "1.0.58",
-      "@larksuite/whiteboard-cli": "0.2.11"
+      "@larksuite/cli": "1.0.58"
     }
   },
   "python": {

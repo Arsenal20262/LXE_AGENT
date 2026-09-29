@@ -5,7 +5,6 @@
   "description": "Pinned private Node.js runtime dependencies for the LXE Windows desktop package.",
   "dependencies": {
     "@larksuite/cli": "1.0.58",
-    "@larksuite/whiteboard-cli": "0.2.11",
     "npm": "10.9.7"
   }
 }
