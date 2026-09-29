@@ -4,7 +4,6 @@
   "private": true,
   "description": "Pinned private Node.js runtime dependencies for the LXE Windows desktop package.",
   "dependencies": {
-    "@larksuite/cli": "1.0.58",
     "npm": "10.9.7"
   }
 }

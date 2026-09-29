@@ -28,6 +28,7 @@ interface BuilderFileSet {
 
 interface BuilderConfiguration extends DesktopBuilderConfiguration {
   extraResources?: BuilderFileSet[];
+  afterPack?: string;
 }
 
 const repositoryRoot = resolve(import.meta.dirname, "..");
@@ -113,6 +114,7 @@ const {
   uvExecutable,
   ripgrepExecutable,
   fdExecutable,
+  larkCliExecutable,
   exifToolRoot,
 } = runtimeInputs;
 const playwrightEmbeddedNodeSource = join(
@@ -121,7 +123,7 @@ const playwrightEmbeddedNodeSource = join(
 );
 for (const path of [
   join(nodeRoot, "node.exe"),
-  join(nodeRoot, "node_modules", "@larksuite", "cli"),
+  larkCliExecutable,
   join(pythonRoot, "python.exe"),
   playwrightEmbeddedNodeSource,
   ripgrepExecutable,
@@ -209,6 +211,8 @@ const extraResources: BuilderFileSet[] = [
     to: `${scopeEntry("runtime-python").target}/Lib/site-packages`,
     filter: ["**/*"],
   },
+  exactFileSet(larkCliExecutable, `${scopeEntry("runtime-tools").target}/lark-cli.exe`),
+  exactFileSet(join(larkCliExecutable, "..", "lark-cli-LICENSE.txt"), "legal/lark-cli-LICENSE.txt"),
   exactFileSet(fdExecutable, `${scopeEntry("runtime-tools").target}/fd.exe`),
   exactFileSet(ripgrepExecutable, `${scopeEntry("runtime-tools").target}/rg.exe`),
   {
@@ -244,6 +248,7 @@ const builderConfigPath = join(repositoryRoot, "apps", "desktop", "electron-buil
 const builderConfig = Bun.YAML.parse(readFileSync(builderConfigPath, "utf8")) as BuilderConfiguration;
 applyDesktopProductVersion(builderConfig, environment.LXE_DESKTOP_PRODUCT_VERSION);
 builderConfig.extraResources = extraResources;
+builderConfig.afterPack = join(repositoryRoot, "scripts", "verify-packaged-lark.cjs");
 writeFileSync(generatedBuilderConfig, `${JSON.stringify(builderConfig, null, 2)}\n`, "utf8");
 
 console.log(`Prepared direct desktop publish inputs in ${publishRoot}`);

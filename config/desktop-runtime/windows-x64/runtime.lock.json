@@ -6,9 +6,7 @@
     "archive_url": "https://nodejs.org/dist/v22.22.2/node-v22.22.2-win-x64.zip",
     "archive_root": "node-v22.22.2-win-x64",
     "npm_version": "10.9.7",
-    "packages": {
-      "@larksuite/cli": "1.0.58"
-    }
+    "packages": {}
   },
   "python": {
     "version": "3.12.10"

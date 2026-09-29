@@ -396,6 +396,7 @@ function Get-LxeLockFingerprint {
     $relativePaths = @(
         "config/desktop-runtime/windows-x64/runtime.lock.json",
         "config/desktop-runtime/fd.lock.json",
+        "config/desktop-runtime/lark-cli.lock.json",
         "config/desktop-runtime/windows-x64/node/package.json",
         "config/desktop-runtime/windows-x64/node/package-lock.json",
         "pyproject.toml",
@@ -474,6 +475,8 @@ function Assert-LxeRuntimeMarker {
         "uv\uv.exe",
         "tools\rg.exe",
         "tools\fd.exe",
+        "tools\lark-cli.exe",
+        "tools\lark-cli-LICENSE.txt",
         "tools\.fd.json",
         "tools\exiftool\exiftool.exe"
     )) {
@@ -505,6 +508,33 @@ function Find-LxeManagedPython {
         }
     }
     return $null
+}
+
+function Install-LxeLarkCli {
+    param(
+        [Parameter(Mandatory = $true)][string]$Root,
+        [Parameter(Mandatory = $true)][string]$WorkRoot
+    )
+
+    $asset = $script:LarkCliLock.platforms.'win32-x64'
+    $archive = Get-LxeCachedArchive -Label "Lark CLI $($script:LarkCliLock.version)" -Url $asset.archive_url
+    if ((Get-LxeFileSha256 -Path $archive) -ne $asset.archive_sha256) {
+        Remove-Item -LiteralPath $archive -Force
+        if ($script:Offline) { throw "Cached Lark CLI archive checksum mismatch in offline mode" }
+        $archive = Get-LxeCachedArchive -Label "Lark CLI $($script:LarkCliLock.version)" -Url $asset.archive_url
+        if ((Get-LxeFileSha256 -Path $archive) -ne $asset.archive_sha256) { throw "Lark CLI archive checksum mismatch" }
+    }
+    $extracted = Join-Path $WorkRoot "lark-cli"
+    Expand-LxeArchiveFresh -Archive $archive -Destination $extracted
+    $binary = Join-Path $extracted "lark-cli.exe"
+    $license = Join-Path $extracted "LICENSE"
+    foreach ($file in @($binary, $license)) {
+        if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { throw "Lark CLI release file is missing: $file" }
+    }
+    $tools = Join-Path $Root "tools"
+    New-Item -ItemType Directory -Path $tools -Force | Out-Null
+    Copy-Item -LiteralPath $binary -Destination (Join-Path $tools "lark-cli.exe") -Force
+    Copy-Item -LiteralPath $license -Destination (Join-Path $tools "lark-cli-LICENSE.txt") -Force
 }
 
 function Install-LxeNodeRuntime {
@@ -691,6 +721,8 @@ function Install-LxeUvRipgrepAndExifTool {
         binary_sha256 = Get-LxeFileSha256 -Path $fdDestination
     } | ConvertTo-Json) + "`n")
 
+    Install-LxeLarkCli -Root $Root -WorkRoot $WorkRoot
+
     $exifToolArchive = Get-LxeCachedArchive -Label "ExifTool $($script:RuntimeLock.exiftool.version)" -Url $script:RuntimeLock.exiftool.archive_url
     $exifToolExtract = Join-Path $WorkRoot "exiftool"
     Expand-LxeArchiveFresh -Archive $exifToolArchive -Destination $exifToolExtract
@@ -736,6 +768,7 @@ function Write-LxeRuntimeDescriptor {
             uv_path = Join-Path $Root "uv\uv.exe"
             rg_path = Join-Path $Root "tools\rg.exe"
             fd_path = Join-Path $Root "tools\fd.exe"
+            lark_cli_path = Join-Path $Root "tools\lark-cli.exe"
             exiftool_root = Join-Path $Root "tools\exiftool"
         }
     }
@@ -811,6 +844,7 @@ $script:RuntimeLockPath = Join-Path $script:RepositoryRoot "config\desktop-runti
 $script:NodeManifestPath = Join-Path $script:RepositoryRoot "config\desktop-runtime\windows-x64\node\package.json"
 $script:NodePackageLockPath = Join-Path $script:RepositoryRoot "config\desktop-runtime\windows-x64\node\package-lock.json"
 $script:FdLock = Get-Content -LiteralPath (Join-Path $script:RepositoryRoot "config\desktop-runtime\fd.lock.json") -Raw -Encoding UTF8 | ConvertFrom-Json
+$script:LarkCliLock = Get-Content -LiteralPath (Join-Path $script:RepositoryRoot "config\desktop-runtime\lark-cli.lock.json") -Raw -Encoding UTF8 | ConvertFrom-Json
 $script:RuntimeLock = Get-Content -LiteralPath $script:RuntimeLockPath -Raw -Encoding UTF8 | ConvertFrom-Json
 if ([int]$script:RuntimeLock.schema_version -ne 1 -or [string]$script:RuntimeLock.platform -ne "win32-x64") {
     throw "Unsupported desktop runtime lock: $script:RuntimeLockPath"

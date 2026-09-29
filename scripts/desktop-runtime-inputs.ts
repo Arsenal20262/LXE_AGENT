@@ -5,6 +5,7 @@ import { join, resolve } from "node:path";
 export const desktopRuntimeLockInputPaths = [
   "config/desktop-runtime/windows-x64/runtime.lock.json",
   "config/desktop-runtime/fd.lock.json",
+  "config/desktop-runtime/lark-cli.lock.json",
   "config/desktop-runtime/windows-x64/node/package.json",
   "config/desktop-runtime/windows-x64/node/package-lock.json",
   "pyproject.toml",
@@ -19,6 +20,7 @@ const runtimeInputFields = [
   ["LXE_DESKTOP_UV_PATH", "uv_path"],
   ["LXE_DESKTOP_RG_PATH", "rg_path"],
   ["LXE_DESKTOP_FD_PATH", "fd_path"],
+  ["LXE_DESKTOP_LARK_CLI_PATH", "lark_cli_path"],
   ["LXE_DESKTOP_EXIFTOOL_ROOT", "exiftool_root"],
 ] as const;
 
@@ -30,6 +32,7 @@ export interface DesktopRuntimeInputs {
   uvExecutable: string;
   ripgrepExecutable: string;
   fdExecutable: string;
+  larkCliExecutable: string;
   exifToolRoot: string;
 }
 
@@ -131,6 +134,7 @@ export const resolveDesktopRuntimeInputs = (
     uvExecutable: values.uv_path,
     ripgrepExecutable: values.rg_path,
     fdExecutable: values.fd_path,
+    larkCliExecutable: values.lark_cli_path,
     exifToolRoot: values.exiftool_root,
   };
 };

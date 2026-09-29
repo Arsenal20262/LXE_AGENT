@@ -1,0 +1,9 @@
+{
+  "version": "1.0.96",
+  "platforms": {
+    "win32-x64": {
+      "archive_url": "https://github.com/larksuite/cli/releases/download/v1.0.96/lark-cli-1.0.96-windows-amd64.zip",
+      "archive_sha256": "efd31a894c8b427d209727cb9e140a8b62c7955f404a6e7004e623fc687d42fa"
+    }
+  }
+}

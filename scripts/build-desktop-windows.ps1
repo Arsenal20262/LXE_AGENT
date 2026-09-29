@@ -119,6 +119,7 @@ $runtimeEnvironment = @{
     LXE_DESKTOP_UV_PATH = [string]$descriptor.inputs.uv_path
     LXE_DESKTOP_RG_PATH = [string]$descriptor.inputs.rg_path
     LXE_DESKTOP_FD_PATH = [string]$descriptor.inputs.fd_path
+    LXE_DESKTOP_LARK_CLI_PATH = [string]$descriptor.inputs.lark_cli_path
     LXE_DESKTOP_EXIFTOOL_ROOT = [string]$descriptor.inputs.exiftool_root
 }
 foreach ($entry in $runtimeEnvironment.GetEnumerator()) {
@@ -131,6 +132,7 @@ $effectiveNodeRoot = [Environment]::GetEnvironmentVariable("LXE_DESKTOP_NODE_ROO
 $effectivePythonRoot = [Environment]::GetEnvironmentVariable("LXE_DESKTOP_PYTHON_ROOT")
 $effectiveUvPath = [Environment]::GetEnvironmentVariable("LXE_DESKTOP_UV_PATH")
 $effectiveFdPath = [Environment]::GetEnvironmentVariable("LXE_DESKTOP_FD_PATH")
+$effectiveLarkCliPath = [Environment]::GetEnvironmentVariable("LXE_DESKTOP_LARK_CLI_PATH")
 $effectiveRipgrepPath = [Environment]::GetEnvironmentVariable("LXE_DESKTOP_RG_PATH")
 $effectiveExifToolRoot = [Environment]::GetEnvironmentVariable("LXE_DESKTOP_EXIFTOOL_ROOT")
 foreach ($requiredPath in @(
@@ -139,6 +141,7 @@ foreach ($requiredPath in @(
     $effectiveUvPath,
     $effectiveRipgrepPath,
     $effectiveFdPath,
+    $effectiveLarkCliPath,
     (Join-Path $effectiveExifToolRoot "exiftool.exe"),
     (Join-Path $effectiveExifToolRoot "exiftool_files")
 )) {

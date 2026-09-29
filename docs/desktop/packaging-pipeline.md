@@ -97,14 +97,14 @@ LXE Agent 不是只有一个 Electron 页面。它同时包含 TypeScript、Pyth
 - ripgrep 和 fd。
 - ExifTool，用来读取和写入图片、视频元数据。
 - WireGuard 安装包和受控配置脚本。
-- 安装在私有 Node 中的 Lark 和 Whiteboard CLI。
+- 独立的 Lark CLI 可执行文件，内嵌飞书技能说明。
 
 这里的“私有”是指它们跟着 LXE Agent 一起分发，只供 LXE Agent 的子进程使用，不依赖用户电脑是否提前安装，也不会修改系统 `PATH`。
 
 需要特别区分两套 Node：
 
 - Electron 自带的 Node 和 Chromium，用来运行 Electron Main、Preload 和页面。
-- `resources/runtime/node` 中的私有 Node，用来运行 Lark、Whiteboard 等命令行工具。
+- `resources/runtime/node` 中的私有 Node，供需要 Node 的外部脚本或库使用；飞书主 CLI 直接运行独立 EXE。
 
 ### 5. Python 项目代码
 
@@ -160,7 +160,7 @@ bun run desktop:runtime:win
 
 日常执行 `desktop:pack:win` 或 `desktop:dist:win` 时，公共打包脚本也会自动准备或复用这套 Runtime，一般不需要提前单独运行。
 
-固定版本与下载输入以 [`runtime.lock.json`](../../config/desktop-runtime/windows-x64/runtime.lock.json)、[`fd.lock.json`](../../config/desktop-runtime/fd.lock.json) 和准备脚本为准。运行时默认位于 `build/desktop-runtime/win32-x64`，缓存位于 `build/desktop-runtime-cache/win32-x64`；可通过 `LXE_DESKTOP_RUNTIME_ROOT`、`LXE_DESKTOP_CACHE_ROOT` 或脚本的 `-RuntimeRoot`、`-CacheRoot` 指定不同目录，显式参数优先。目录必须分开且不能互相嵌套，不修改系统 Python 或源码 `.venv`。
+固定版本与下载输入以 [`runtime.lock.json`](../../config/desktop-runtime/windows-x64/runtime.lock.json)、[`fd.lock.json`](../../config/desktop-runtime/fd.lock.json)、[`lark-cli.lock.json`](../../config/desktop-runtime/lark-cli.lock.json) 和准备脚本为准。运行时默认位于 `build/desktop-runtime/win32-x64`，缓存位于 `build/desktop-runtime-cache/win32-x64`；可通过 `LXE_DESKTOP_RUNTIME_ROOT`、`LXE_DESKTOP_CACHE_ROOT` 或脚本的 `-RuntimeRoot`、`-CacheRoot` 指定不同目录，显式参数优先。目录必须分开且不能互相嵌套，不修改系统 Python 或源码 `.venv`。
 
 已有完整缓存时，可从仓库根执行离线 Unpacked 构建：
 
@@ -266,6 +266,10 @@ preload.cjs
 
 ### extraResources 放运行时和产品资源
 
+飞书 CLI 从官方固定版本的 Windows x64 ZIP 下载，核对锁文件中的 SHA256 后解压，将 `lark-cli.exe` 准备到 `build/desktop-runtime/win32-x64/tools/`。`extraResources` 直接复制该程序到 `resources/runtime/tools/`，许可证复制到 `resources/legal/lark-cli-LICENSE.txt`。不再通过 npm 安装飞书，也不复制整个 `node_modules` 来携带它。
+
+electron-builder 的 `afterPack` 在资源复制完成、生成安装器之前，清除系统工具 PATH 并运行包内飞书 CLI，检查固定版本、技能列表和 `lark-doc` 内嵌说明；缺失或执行失败会中止打包。这些检查不登录、不调用飞书业务 API。Windows 打包需要在 Windows 主机执行。
+
 主要目录如下：
 
 ```text
@@ -279,6 +283,7 @@ resources/
 │   └── tools/
 │       ├── rg.exe
 │       ├── fd.exe
+│       ├── lark-cli.exe
 │       └── exiftool/
 │           ├── exiftool.exe
 │           └── exiftool_files/
@@ -368,7 +373,8 @@ flowchart LR
     PRELOAD --> UI["Dashboard Renderer"]
     MAIN <-->|"NDJSON"| AGENT["agent-cli.exe"]
     AGENT --> PY["私有 Python<br/>lxeskill"]
-    AGENT --> NODE["私有 Node<br/>Lark、Whiteboard"]
+    AGENT --> NODE["私有 Node"]
+    AGENT --> LARK["lark-cli.exe<br/>内嵌飞书技能"]
     AGENT --> TOOLS["ripgrep / fd 等工具"]
     MAIN --> AUTH["马帮认证窗口 / 受控服务"]
     MAIN --> MEDIA["工作台媒体任务<br/>私有 Python → ExifTool"]

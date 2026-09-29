@@ -37,7 +37,7 @@ Main 与 `agent-cli` 使用 NDJSON 协议通信：每行是一个完整 JSON 消
 
 Windows 安装包在 ASAR 外携带固定版本的运行资源，包括：
 
-- Node.js 22 与 Lark、Whiteboard CLI。
+- Node.js 22，以及独立的 Lark CLI 可执行文件；不预装 Whiteboard CLI。
 - Python 3.12.10、生产依赖和当前源码构建的 LXE wheel。
 - Playwright 控制库与 Selenium 所需 Python 依赖；马帮桌面认证使用 Electron 窗口，不再附带独立 Chromium。
 - ripgrep、fd、ExifTool 与编译后的 `agent-cli.exe`。
