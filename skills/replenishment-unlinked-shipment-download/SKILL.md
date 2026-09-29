@@ -1,6 +1,6 @@
 ---
 name: replenishment-unlinked-shipment-download
-description: 按马帮 Amazon FBA 店铺名下载未关联货件原生导出文件，并基于本次下载文件生成未关联货件快照，覆盖 WMS待配货、WMS待装箱、待关联货件。用户要求测试下载未关联货件、下载未关联货件原始文件、检查备货缺失货件数据时使用。
+description: 按 Amazon 店铺下载 WMS待配货、WMS待装箱、待关联货件的马帮原生文件，并生成备货扣减快照。用于店铺未关联货件查询、下载及完整备货的数据采集；指定 SP 单号下载单张发货单时使用 fba-shipment-delivery-csv-download。
 type: replenishment
 commands:
   - lxeskill replenish shipments unlinked-download
@@ -8,39 +8,54 @@ references:
   - references/results.md
 ---
 
-# 下载 Amazon 未关联货件并保存快照
+# 下载 Amazon 未关联货件并生成扣减快照
 
-## 执行与错误
+## 范围与输入
 
-- 通过 `exec` 调用本 Skill 声明的 CLI；不手工拼 API、不猜 ID 或凭据、不直接执行 Python 业务模块。
-- 只把最后一条 `type="result"` 当作 terminal：先看 `ok`，业务字段读 `data`，附件读 `files`；失败保留 `error.message` 和相关 `data.context`，不把业务示例当成完整 terminal。
-- 命令返回运行中/session running 时等待同一会话，不重复启动下载或导出。
-- 只有 `data.auth_refresh_required=true` 才按 `lxeskill auth refresh` 的恢复流程刷新一次，再重试失败步骤；为 false 或缺失时停止并保留诊断，不凭错误文本中的 401/403 或 ID 猜测认证失败。
-- 店铺歧义展示真实候选供选择；绑定冲突、分页异常、数据服务权限错误停止。文件占用时提示关闭对应文件后重试，不删除目标。
-- 业务执行中不修改安装目录脚本、依赖或历史报表绕过错误；用户另行要求源码修复时按开发任务处理。
-- 完整备货任务按 `replenishment-workflow-map` 连续推进；单步请求只执行指定步骤，缺前置数据时说明缺什么及下一步，不自行扩展为完整备货。
-- 单步文件任务成功后调用 `send_files(paths=<terminal.files>)`；完整任务的中间文件保留，到最终计算完成才发送最终 terminal `files`。没有附件时不猜路径。发送成功才说已交付，发送失败只重试交付，不重跑业务。
+这里的“未关联货件”包含 **WMS待配货、WMS待装箱、待关联货件** 三个状态。页面上“待关联货件”为 0，不代表另外两个状态也为空；各状态可以有不同数量。
 
-## 使用与命令
+- 输入为规范店铺名；已有明确名称时直接使用，模糊名称读取 `replenishment-store-resolve`，有歧义时展示真实候选供选择。
+- 单步查询或下载只完成本步骤。完整备货任务按 `replenishment-workflow-map` 继续，不在生成快照后提前结束。
+- 用户仅询问流程或已有结果时直接解释，不因此启动新下载。
 
-查询马帮 `WMS待配货`、`WMS待装箱`、`待关联货件` 三个状态，下载本轮原生文件并生成扣减快照。
+## 执行
+
+通过 `exec` 调用：
 
 ```text
 lxeskill replenish shipments unlinked-download --store-name "<规范店铺名>"
 ```
 
-模糊名称先读 `replenishment-store-resolve`，不猜店铺 ID。导出需要轮询，等待原会话，不重复启动。
+一次调用已包含三个状态的分页计数、有数据状态的批量导出、任务轮询、原生文件下载和 XLSX 快照生成。原生文件可能是 CSV，保留其格式；无需自行转换、逐张 SP 下载或另算商品明细。不要手工拼 API、猜 ID/凭据或直接执行 Python 业务模块。
 
-## 三种结果
+命令仍在运行时等待同一执行会话，不因日志暂时没有进展而重复启动。只把最后一条 `type="result"` 当作终态；进度日志不是最终结果。先看 `ok`，业务结果读 `data`，交付路径读 `files`。
 
-- `terminal.ok=true` 且 `data.snapshot.confirmed_empty=false`：快照已生成，计算时使用本次 `snapshot.snapshot_xlsx_path` 扣减；简述未关联总数量。
-- `terminal.ok=true` 且 `data.snapshot.confirmed_empty=true`：三个状态均查询成功且记录数全为零。已保存确认零货件快照，正常进入计算扣减 0；不要再次下载，也不能说“未取得快照”。
-- `terminal.ok=false`、缺状态、缺快照或快照生成失败：完整任务停止正式建议，不按零货件计算、不改用旧快照；保留实际错误。有 `data.download_result` 表示原生下载已完成但快照阶段失败，不等于查询全失败。
+## 结果判断
 
-## 后续与交付
+成功需同时满足 `ok=true`、三个状态结果完整、`data.snapshot` 存在且有 `snapshot_xlsx_path` 和布尔值 `confirmed_empty`。缺项、`snapshot=null` 或 `ok=false` 都不能当作可用快照。
 
-- 完整任务记录本轮快照路径，切换计算 Skill，显式传入 `--unlinked-shipments-snapshot`；先确认与本轮源表同店、同日，不改日期绕过。
-- 单步任务发送 terminal files；说明已生成可用于扣减的快照，不宣称已经完成备货计算。
-- 汇总、明细两个业务 Sheet 保留，确认零货件时只有表头，不伪造商品行。隐藏核验信息记录查询店铺、时间、三个状态及版本，不删除。
-- 旧版返回 `snapshot=null` 不能当作已确认零货件，不反复下载；保留结果并说明当前版本未提供可用快照。
-- 返回示例与核验字段按需读 [references/results.md](references/results.md)。
+| 字段 | 含义 |
+|---|---|
+| `data.status_results[].total` | CLI 分页统计的该状态发货单张数，不依赖马帮响应提供同名字段 |
+| `data.snapshot.total_unlinked_quantity` | 快照汇总的商品件数，用于后续备货扣减 |
+| `data.snapshot.msku_count` / `detail_count` | MSKU 数量 / 商品明细行数，不是发货单张数 |
+
+- `confirmed_empty=false`：本轮存在发货单且已生成快照；允许某个状态为 0。使用 CLI 的件数汇总，不拿单据张数或列表中的部分商品明细代替。
+- `confirmed_empty=true`：三个状态均查询成功且单据张数全为 0，已生成有效的零货件快照。正常进入计算扣减 0，不重复下载。不能仅凭商品件数为 0 自行推断此标记。
+- 返回字段互相矛盾时保留原结果并停止正式计算，不自行修正或补齐。
+
+## 交付与后续
+
+- 单步任务成功后，用终态 `files` 一次调用 `send_files(paths=<terminal.files>)`。发送成功才说已交付；发送失败仅重试交付，不重新导出。没有路径时不猜文件位置。
+- 完整备货任务保留本轮快照，按流程进入计算 Skill，显式传入 `--unlinked-shipments-snapshot`；与本轮源表同店、同日，以 CLI 核验为准。中间文件保留，最终发送计算结果的 `files`。
+- 回复店铺、三个状态的发货单张数、快照中的 MSKU 数和商品件数。说明这是备货扣减输入，不能宣称已完成备货建议，也不手工再扣一次。
+
+## 失败与恢复
+
+- 说明日志或终态能确认的失败阶段，保留 `error.message` 和可用的 `data.context`。没有证据时不归因于马帮故障、认证过期或零货件，也不把“稍后重试”当作已确认的解决办法。
+- `data.download_result` 存在表示原生下载已完成、快照阶段失败；它不是成功快照，也不代表查询全失败。没有该字段时，不推断所有状态均未查询或没有任何文件落盘。
+- 失败、状态缺失或快照不可用时，停止正式备货建议；保留已成功产物，不按零计算、不回退旧快照、不修改历史文件日期或核验信息。
+- 本命令内部已处理一次认证刷新重试。终态失败后不凭错误文本或单独的 `recovery.command` 再刷新；仅当 `data.auth_refresh_required=true` 且本轮尚未执行认证恢复时，按 `lxeskill auth refresh` 流程恢复一次并重试。标记为 false 或缺失时保留诊断，不叠加认证重试。
+- 文件占用时提示关闭占用文件后再试，不删除目标。业务执行中不改脚本、依赖或报表绕过错误；源码修复作为另行授权的开发任务处理。
+
+需要核对混合状态、全零、快照失败的返回形状或快照内部结构时，读取 [返回参考](references/results.md)。
