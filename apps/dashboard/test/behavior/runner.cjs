@@ -2,6 +2,8 @@
 const { app, BrowserWindow } = require("electron");
 const assert = require("node:assert/strict");
 const [suite, profile, url] = process.argv.slice(2);
+// DOM/input regression tests must also run in remote Windows sessions without a GPU.
+app.disableHardwareAcceleration();
 app.setPath("userData", profile);
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 const passed = [];

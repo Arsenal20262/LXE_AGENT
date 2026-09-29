@@ -13,6 +13,8 @@ bun run --cwd apps/dashboard typecheck
 
 每次先构建测试入口，再用随机本机端口提供静态页面。Electron 使用临时用户目录，
 页面中的 RPC 与桌面桥接由内存 fixture 提供，其他网络请求会使测试失败。
+测试 runner 使用软件渲染，避免远程 Windows 会话的 GPU 初始化影响 DOM 和输入断言；
+不改变正式应用的硬件加速设置。启动参数中的页面 URL 放在最后，兼容 Electron 的 Windows 参数检查。
 结束时清理进程、服务器、构建产物与临时用户目录。
 
 三个测试组共 13 个场景：
