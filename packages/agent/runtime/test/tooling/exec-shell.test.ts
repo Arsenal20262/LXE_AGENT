@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { win32 } from "node:path";
+import { win32, join } from "node:path";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import {
   DEFAULT_EXEC_YIELD_MS,
   DEFAULT_WAIT_YIELD_MS,
@@ -12,6 +14,30 @@ import {
 } from "../../src/tooling/exec-shell";
 
 describe("ExecShellAdapter", () => {
+  test("detects executables on exec's managed and inherited PATH and notices removal", () => {
+    const root = mkdtempSync(join(tmpdir(), "lxe-cli-detection-"));
+    const tools = join(root, "managed tools");
+    mkdirSync(tools);
+    const executable = join(tools, process.platform === "win32" ? "lark-cli.exe" : "lark-cli");
+    const shell = new ExecShellAdapter({ environment: { PATH: root, LXE_MANAGED_PATH: tools } });
+    try {
+      expect(shell.hasExecutable("lark-cli", root)).toBe(false);
+      writeFileSync(executable, "#!/bin/sh\nexit 0\n");
+      chmodSync(executable, 0o755);
+      expect(shell.hasExecutable("lark-cli", root)).toBe(true);
+      expect(new ExecShellAdapter({ environment: { PATH: tools } }).hasExecutable("lark-cli", root)).toBe(true);
+      expect(new ExecShellAdapter({ environment: { PATH: root } }).hasExecutable("lark-cli", root)).toBe(false);
+      if (process.platform !== "win32") {
+        chmodSync(executable, 0o644);
+        expect(shell.hasExecutable("lark-cli", root)).toBe(false);
+      }
+      rmSync(executable);
+      expect(shell.hasExecutable("lark-cli", root)).toBe(false);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   for (const platform of ["darwin", "linux"] as const) {
     test(`uses /bin/sh and POSIX paths on ${platform}`, () => {
       const shell = new ExecShellAdapter({ platform, environment: { PATH: "/usr/bin:/bin" } });

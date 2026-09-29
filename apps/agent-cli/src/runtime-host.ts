@@ -296,6 +296,7 @@ export function createAgentRuntimeHost(
       workspaceInstructions: context.workspaceSnapshot?.instructions_prompt ?? "",
       datasets: cliDatasets,
       artifactRoot: join(options.dataRoot, "artifacts"),
+      larkCliAvailable: execShell.hasExecutable("lark-cli", context.workspace.worktree, context.workspace.directory),
     }),
     services: runtimeServices,
   });

@@ -54,6 +54,8 @@ export interface BuildSystemPromptOptions {
   datasets?: readonly LxeSkillDataset[];
   /** Absolute artifact root the directories above resolve against. */
   artifactRoot?: string;
+  /** Whether lark-cli resolves in the current exec environment. */
+  larkCliAvailable?: boolean;
 }
 
 export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
@@ -69,6 +71,9 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
     buildDataDirectories(options.datasets ?? []),
   ].filter(Boolean).join("\n\n");
   const volatile = [
+    options.larkCliAvailable
+      ? "当前运行环境已内置控制飞书专用的 `lark-cli`。处理飞书相关需求时，通过 `exec` 运行 `lark-cli --help` 或 `lark-cli skills list` 了解能力。"
+      : "",
     options.skillPrompt.trim(),
     options.workspaceInstructions?.trim() ?? "",
     [

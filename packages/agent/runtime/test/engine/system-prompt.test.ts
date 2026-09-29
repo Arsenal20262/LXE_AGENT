@@ -2,6 +2,20 @@ import { describe, expect, test } from "bun:test";
 import { buildSystemPrompt, SYSTEM_PROMPT_CACHE_BREAKPOINT } from "../../src/engine/system-prompt";
 
 describe("system prompt builder", () => {
+  test("advertises Lark only when available, outside the stable cache prefix", () => {
+    const options = {
+      platform: "desktop", provider: "test", model: "test", skillPrompt: "",
+      workspace: { directory: "/workspace", worktree: "/workspace" },
+    };
+    for (const available of [undefined, false, true]) {
+      const prompt = buildSystemPrompt({ ...options, ...(available === undefined ? {} : { larkCliAvailable: available }) });
+      const [stable, volatile] = prompt.split(SYSTEM_PROMPT_CACHE_BREAKPOINT);
+      expect(stable).not.toContain("lark-cli");
+      expect(volatile!.includes("lark-cli skills list")).toBe(available === true);
+      expect(volatile!.includes("lark-cli --help")).toBe(available === true);
+    }
+  });
+
   test("keeps stable policy before the cache boundary and runtime context after it", () => {
     const prompt = buildSystemPrompt({
       soul: "Careful agent.",

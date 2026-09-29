@@ -291,6 +291,14 @@ export class ExecShellAdapter {
     };
   }
 
+  /** Resolve against the same environment as exec, including the managed tools directory. */
+  hasExecutable(command: string, root: string, cwd = root): boolean {
+    const environment = this.childEnvironment(root, {
+      sessionId: "", turnId: "", responseRouteId: "", execSessionId: "",
+    });
+    return Bun.which(command, { cwd, PATH: environment.PATH ?? "" }) !== null;
+  }
+
   async terminate(process_: SpawnedProcess, force: boolean): Promise<void> {
     if (this.platform === "win32") {
       const which = this.options.which ?? ((command: string) => Bun.which(command));
