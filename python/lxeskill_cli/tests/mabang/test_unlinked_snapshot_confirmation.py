@@ -61,10 +61,10 @@ def test_duplicate_statuses_fail(tmp_path):
         build(tmp_path, result)
 
 
-@pytest.mark.parametrize("total", [None, False, True, -1, 0.1, "0.1", "NaN", "", "-1"])
-def test_status_total_does_not_turn_invalid_values_into_zero(total):
+@pytest.mark.parametrize("data", [None, [], {}, {"total": 0}, {"data": None}, {"data": {}}])
+def test_status_list_does_not_turn_invalid_shapes_into_zero(data):
     with pytest.raises(ship.UnlinkedShipmentError):
-        ship._list_total({"data": {"total": total}})
+        ship._list_ids({"data": data}, context="test")
 
 
 def test_mixed_query_persists_real_quantities(tmp_path):

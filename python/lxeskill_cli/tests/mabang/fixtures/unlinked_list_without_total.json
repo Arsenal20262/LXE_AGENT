@@ -1,0 +1,51 @@
+{
+  "captured_on": "2026-09-29",
+  "note": "Read-only live getBatchDeliveryList responses with page=1/prePage=1. Projection keeps pagination-relevant fields and omits logistics options and product/business details; no total exists in the source responses.",
+  "cases": [
+    {
+      "status_name": "WMS待配货",
+      "response": {
+        "code": 200,
+        "msg": "success",
+        "data": {
+          "data": [
+            {
+              "id": 150660,
+              "delivery_no": "SP260923011",
+              "delivery_status": 6
+            }
+          ],
+          "lockConfig": false
+        }
+      }
+    },
+    {
+      "status_name": "WMS待装箱",
+      "response": {
+        "code": 200,
+        "msg": "success",
+        "data": {
+          "data": [
+            {
+              "id": 150488,
+              "delivery_no": "SP260917013",
+              "delivery_status": 9
+            }
+          ],
+          "lockConfig": false
+        }
+      }
+    },
+    {
+      "status_name": "待关联货件",
+      "response": {
+        "code": 200,
+        "msg": "success",
+        "data": {
+          "data": [],
+          "lockConfig": false
+        }
+      }
+    }
+  ]
+}

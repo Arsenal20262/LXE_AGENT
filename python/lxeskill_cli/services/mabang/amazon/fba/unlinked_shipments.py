@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from services.mabang import config as mabang_settings
+from services.mabang.official_api import diagnostic
 from services.mabang.export_common import clean_text as _clean_text
 from services.mabang.export_common import configured_text as _configured_text
 from shared.infra.net import erp_http_session, external_http_session
@@ -34,6 +35,8 @@ from .batch_delivery import (
 logger = get_logger(__name__)
 
 DEFAULT_SHOP_COUNTRY_URL = "https://api-private.mabangerp.com/fba/api/v1/shop/shopCountry"
+SHIPMENT_LIST_PAGE_SIZE = 20
+SHIPMENT_LIST_MAX_PAGES = 1000
 DEFAULT_OUTPUT_DIR = dataset_dir("replenish_unlinked_shipments")
 DEFAULT_SNAPSHOT_DIR = dataset_dir("replenish_unlinked_shipments_snapshots")
 SOURCE = "mabang_fba_unlinked_shipments"
@@ -743,16 +746,27 @@ async def resolve_shop_option(store_name: str) -> ShopOption:
     return pick_shop_option(store_name, await fetch_shop_options())
 
 
-def _list_total(payload: dict[str, Any]) -> int:
+def _list_ids(payload: dict[str, Any], *, context: str) -> list[int]:
+    """Read delivery IDs; the live list response does not provide a total."""
     data = payload.get("data")
-    if not isinstance(data, dict):
-        raise UnlinkedShipmentError("未关联货件列表数据格式异常")
-    total = data.get("total")
-    if isinstance(total, str) and re.fullmatch(r"\d+", total.strip()):
-        total = int(total.strip())
-    if type(total) is not int or total < 0:
-        raise UnlinkedShipmentError(f"未关联货件列表缺少有效整数 total: {data.get('total')!r}")
-    return total
+    rows = data.get("data") if isinstance(data, dict) else None
+    if not isinstance(rows, list):
+        raise UnlinkedShipmentError(f"{context} 列表 data.data 必须为数组; response={diagnostic(payload)}")
+    if len(rows) > SHIPMENT_LIST_PAGE_SIZE:
+        raise UnlinkedShipmentError(
+            f"{context} 返回条数 {len(rows)} 超过 prePage={SHIPMENT_LIST_PAGE_SIZE}; response={diagnostic(payload)}"
+        )
+    ids: list[int] = []
+    for index, row in enumerate(rows):
+        value = row.get("id") if isinstance(row, dict) else None
+        if isinstance(value, str) and re.fullmatch(r"\d+", value.strip()):
+            value = int(value.strip())
+        if type(value) is not int or value <= 0:
+            raise UnlinkedShipmentError(
+                f"{context} 第 {index + 1} 条记录缺少有效正整数 id; record={diagnostic(row)}"
+            )
+        ids.append(value)
+    return ids
 
 
 async def fetch_status_total(
@@ -761,10 +775,25 @@ async def fetch_status_total(
 ) -> int:
     active_token = await get_fba_free_token(purpose="fba_unlinked_shipments_status_total")
     api_url = _configured_text("FBA_DELIVERY_LIST_API_URL", DEFAULT_BATCH_DELIVERY_LIST_URL)
-    payload = _status_payload(spec, store_id, page=1, pre_page=1)
-    async with erp_http_session.post(api_url, json=payload, headers=_request_headers(active_token)) as resp:
-        response = await _read_api_json(resp, action=f"查询{spec.status_name}发货单")
-    return _list_total(response)
+    seen: set[int] = set()
+    for page in range(1, SHIPMENT_LIST_MAX_PAGES + 1):
+        context = f"查询{spec.status_name}发货单(store_id={store_id}, page={page})"
+        payload = _status_payload(spec, store_id, page=page, pre_page=SHIPMENT_LIST_PAGE_SIZE)
+        async with erp_http_session.post(api_url, json=payload, headers=_request_headers(active_token)) as resp:
+            response = await _read_api_json(resp, action=context)
+        ids = _list_ids(response, context=context)
+        for delivery_id in ids:
+            if delivery_id in seen:
+                raise UnlinkedShipmentError(f"{context} 分页记录重复: id={delivery_id}; ids={diagnostic(ids)}")
+            seen.add(delivery_id)
+        logger.info("[UnlinkedShipments] %s page=%d records=%d accumulated=%d", spec.status_name, page, len(ids), len(seen))
+        # Continue past short pages: only an explicit empty list ends the query.
+        if not ids:
+            return len(seen)
+    raise UnlinkedShipmentError(
+        f"查询{spec.status_name}发货单(store_id={store_id}) 达到分页上限 {SHIPMENT_LIST_MAX_PAGES}，"
+        f"仍未取得空页，已读取 {len(seen)} 条；查询未完成"
+    )
 
 
 async def create_unlinked_export_task(

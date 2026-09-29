@@ -220,6 +220,107 @@ def test_status_payloads_match_delivery_order_tabs() -> None:
     }
 
 
+def _paged_list(*ids: int | str) -> dict:
+    return {"code": 200, "msg": "success", "data": {"data": [{"id": value} for value in ids]}}
+
+
+def _mock_list_session(monkeypatch, payloads: list[dict]) -> _FakeSession:
+    session = _FakeSession([_FakeResponse(payload) for payload in payloads])
+    monkeypatch.setattr(ship, "erp_http_session", session)
+
+    async def token(**kwargs):
+        return "test-token"
+
+    monkeypatch.setattr(ship, "get_fba_free_token", token)
+    return session
+
+
+def test_status_total_counts_live_response_projection_without_total(monkeypatch):
+    fixture = json.loads((Path(__file__).parent / "fixtures/unlinked_list_without_total.json").read_text())
+    assert len(fixture["cases"]) == len(ship.UNLINKED_SHIPMENT_STATUS_SPECS)
+    for case, spec in zip(fixture["cases"], ship.UNLINKED_SHIPMENT_STATUS_SPECS):
+        assert case["status_name"] == spec.status_name
+        payload = case["response"]
+        assert "total" not in payload["data"]
+        rows = payload["data"]["data"]
+        session = _mock_list_session(monkeypatch, [payload, _paged_list()] if rows else [payload])
+        assert asyncio.run(ship.fetch_status_total(spec, 2021264354)) == len(rows)
+        assert len(session.calls) == (2 if rows else 1)
+
+
+def test_status_total_reads_all_pages_through_empty_page_and_preserves_filters(monkeypatch):
+    session = _mock_list_session(monkeypatch, [
+        _paged_list(*range(1, 21)), _paged_list("21", 22), _paged_list(23), _paged_list(),
+    ])
+    assert asyncio.run(ship.fetch_status_total(ship.UNLINKED_SHIPMENT_STATUS_SPECS[0], 123)) == 23
+    assert [call["json"] for call in session.calls] == [
+        {"status": 6, "is_batch_create": 1, "delivery_type": 2, "store": [123], "page": page, "prePage": 20}
+        for page in range(1, 5)
+    ]
+
+
+@pytest.mark.parametrize("pages", [
+    [_paged_list(1, 1)], [_paged_list(1, 2), _paged_list(2, 3)],
+    [_paged_list(1), _paged_list("1")],
+])
+def test_status_total_rejects_duplicate_records_in_or_across_pages(monkeypatch, pages):
+    _mock_list_session(monkeypatch, pages)
+    with pytest.raises(ship.UnlinkedShipmentError, match="分页记录重复.*id="):
+        asyncio.run(ship.fetch_status_total(ship.UNLINKED_SHIPMENT_STATUS_SPECS[0], 123))
+
+
+@pytest.mark.parametrize("row", [None, [], {}, {"id": True}, {"id": 0}, {"id": -1}, {"id": 1.5}, {"id": "1.5"}])
+def test_status_total_rejects_invalid_records(monkeypatch, row):
+    _mock_list_session(monkeypatch, [{"code": 200, "data": {"data": [row]}}])
+    with pytest.raises(ship.UnlinkedShipmentError, match="page=1.*有效正整数 id.*record="):
+        asyncio.run(ship.fetch_status_total(ship.UNLINKED_SHIPMENT_STATUS_SPECS[0], 123))
+
+
+@pytest.mark.parametrize("failure", [
+    {"code": 500, "msg": "upstream query failed"},
+    {"code": 200, "data": {"total": 0}},
+])
+def test_status_total_does_not_return_partial_count_after_failure(monkeypatch, failure):
+    _mock_list_session(monkeypatch, [_paged_list(1), failure])
+    with pytest.raises(ship.MabangBusinessError, match="page=2"):
+        asyncio.run(ship.fetch_status_total(ship.UNLINKED_SHIPMENT_STATUS_SPECS[1], 123))
+
+
+def test_status_total_preserves_transport_failure(monkeypatch):
+    session = _mock_list_session(monkeypatch, [_paged_list(1)])
+    original_post = session.post
+
+    def post(url, **kwargs):
+        if kwargs["json"]["page"] == 2:
+            raise TimeoutError("actual upstream timeout")
+        return original_post(url, **kwargs)
+
+    session.post = post
+    with pytest.raises(TimeoutError, match="actual upstream timeout"):
+        asyncio.run(ship.fetch_status_total(ship.UNLINKED_SHIPMENT_STATUS_SPECS[0], 123))
+
+
+def test_status_total_rejects_page_limit_and_oversized_pages(monkeypatch):
+    monkeypatch.setattr(ship, "SHIPMENT_LIST_MAX_PAGES", 2)
+    _mock_list_session(monkeypatch, [_paged_list(1), _paged_list(2)])
+    with pytest.raises(ship.UnlinkedShipmentError, match="达到分页上限 2.*查询未完成"):
+        asyncio.run(ship.fetch_status_total(ship.UNLINKED_SHIPMENT_STATUS_SPECS[0], 123))
+    _mock_list_session(monkeypatch, [_paged_list(*range(1, 22))])
+    with pytest.raises(ship.UnlinkedShipmentError, match="超过 prePage=20"):
+        asyncio.run(ship.fetch_status_total(ship.UNLINKED_SHIPMENT_STATUS_SPECS[0], 123))
+
+
+def test_status_list_error_keeps_redacted_explicitly_truncated_response():
+    payload = {"code": 200, "data": {"token": "private-token", "actual_error": "query broken", "detail": "x" * 5000}}
+    with pytest.raises(ship.UnlinkedShipmentError) as error:
+        ship._list_ids(payload, context="page=2")
+    message = str(error.value)
+    assert "query broken" in message
+    assert "private-token" not in message
+    assert "[REDACTED]" in message
+    assert "[truncated" in message
+
+
 def test_create_unlinked_export_task_sends_taskreport_payload(monkeypatch) -> None:
     fake_session = _FakeSession(
         [
