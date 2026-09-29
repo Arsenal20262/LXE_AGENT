@@ -31,7 +31,8 @@ for (const suite of ["dialog", "composer", "readiness"] as const) {
     delete env.ELECTRON_RUN_AS_NODE;
     const child = Bun.spawn([
       require(resolve(import.meta.dirname, "../../../desktop/node_modules/electron")),
-      resolve(import.meta.dirname, "runner.cjs"), url, suite, profile,
+      // Electron on Windows rejects arguments after a URL; keep the URL last.
+      resolve(import.meta.dirname, "runner.cjs"), suite, profile, url,
     ], { env, stdout: "pipe", stderr: "pipe" });
     const timer = setTimeout(() => child.kill(), 45_000);
     try {

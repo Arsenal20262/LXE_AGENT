@@ -1,7 +1,7 @@
 // Local Electron renderer only; this never connects to a store browser.
 const { app, BrowserWindow } = require("electron");
 const assert = require("node:assert/strict");
-const [url, suite, profile] = process.argv.slice(2);
+const [suite, profile, url] = process.argv.slice(2);
 app.setPath("userData", profile);
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 const passed = [];
