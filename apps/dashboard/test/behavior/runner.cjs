@@ -11,7 +11,8 @@ const errors = [];
 
 app.whenReady().then(async () => {
   const win = new BrowserWindow({ width: 1200, height: 900, show: false,
-    webPreferences: { contextIsolation: true, nodeIntegration: false, backgroundThrottling: false } });
+    // Hidden Windows windows throttle animation frames even with backgroundThrottling disabled.
+    webPreferences: { offscreen: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false } });
   // Do not permit accidental external requests from fixtures or production UI.
   win.webContents.session.webRequest.onBeforeRequest((details, callback) => {
     const local = details.url.startsWith(new URL(url).origin + "/") || /^(data:|blob:)/.test(details.url);
