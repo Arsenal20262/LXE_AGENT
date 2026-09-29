@@ -1,3 +1,4 @@
+import { UsagePanel } from "./usage-panel";
 import { ErpSettingsTabs } from "./erp-settings-tabs";
 import { DeviceContextPanel } from "./device-context-panel";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode, type RefObject } from "react";
@@ -19,6 +20,7 @@ import {
   ShieldCheck,
   Store,
   Trash2,
+  Wallet,
   X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -170,6 +172,7 @@ function DesktopSettingsNavigation({
         {item("appearance", t.desktop.sectionTitles.appearance, t.desktop.fontSizeStatus(fontSizeLabel(t.desktop, fontSize)), Palette)}
         {item("cloud", t.desktop.sectionTitles.cloud, cloud.device_context ? t.desktop.cloud.permission.status[cloud.permission_status] : t.desktop.cloudStates[cloud.connection], Cloud)}
         {item("base", t.desktop.sectionTitles.base, desktopSettingsSectionStatus(t.desktop, "base", setup), Settings2)}
+        {item("usage", t.desktop.sectionTitles.usage, t.desktop.usage.availableBalance, Wallet)}
         <p className="desktop-settings-nav-group">{t.desktop.integrationsGroup}</p>
         {item("ziniao", t.desktop.sectionTitles.ziniao, desktopSettingsSectionStatus(t.desktop, "ziniao", setup), Globe)}
         {item("erp", t.desktop.sectionTitles.erp, desktopSettingsSectionStatus(t.desktop, "erp", setup), Store)}
@@ -1503,7 +1506,7 @@ export function DesktopShell({
     event.preventDefault();
     if (activeSettingsSection === "appearance"
       || activeSettingsSection === "cloud"
-      || activeSettingsSection === "status") return;
+      || activeSettingsSection === "status" || activeSettingsSection === "usage") return;
     if (form.logProfile === "diagnostic" && setup.logging.profile !== "diagnostic") {
       setConfirmation({ kind: "diagnostic" });
       return;
@@ -1573,7 +1576,7 @@ export function DesktopShell({
   const baseline = setupForm(setup);
   const editableSection: DesktopSettingsFormSection = activeSettingsSection === "status"
     || activeSettingsSection === "appearance"
-    || activeSettingsSection === "cloud"
+    || activeSettingsSection === "cloud" || activeSettingsSection === "usage"
     ? "base"
     : activeSettingsSection === "erp" ? activeErp : activeSettingsSection;
   const selectSettingsSection = (section: DesktopSettingsSection): void => {
@@ -1627,6 +1630,8 @@ export function DesktopShell({
       onThemeChange={onThemeChange}
       theme={theme}
     />
+  ) : activeSettingsSection === "usage" ? (
+    <UsagePanel desktop={desktop} headingRef={sectionHeadingRef} language={language} />
   ) : activeSettingsSection === "erp" ? (
     <ErpSettingsTabs active={activeErp} baseline={baseline} form={form} onSelect={setActiveErp}>
       {settingsFields}
@@ -1717,7 +1722,7 @@ export function DesktopShell({
             >
               {t.desktop.onboarding.defer}
             </button>
-            {activeSettingsSection !== "appearance" && activeSettingsSection !== "cloud" ? (
+            {activeSettingsSection !== "appearance" && activeSettingsSection !== "cloud" && activeSettingsSection !== "usage" ? (
               <button className="desktop-primary-button" disabled={saving || credentialBusy} type="submit">
                 {saving ? t.desktop.onboarding.starting : t.desktop.onboarding.submit}
               </button>
@@ -1798,7 +1803,7 @@ export function DesktopShell({
               </div>
               {activeSettingsSection !== "status"
                 && activeSettingsSection !== "appearance"
-                && activeSettingsSection !== "cloud" ? (
+                && activeSettingsSection !== "cloud" && activeSettingsSection !== "usage" ? (
                 <button className="desktop-primary-button" disabled={saving || credentialBusy} type="submit">
                   {saving ? t.desktop.settings.saving : t.desktop.settings.submit}
                 </button>

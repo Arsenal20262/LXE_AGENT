@@ -640,6 +640,14 @@ export interface DesktopInputAssetSlot {
   previous: DesktopInputAssetVersion | null;
 }
 
+export interface DesktopUsageBalance {
+  status: "ready" | "error" | "unconfigured";
+  source: CredentialSource | null;
+  balances: Array<{ currency: "CNY" | "USD"; total_balance: string }>;
+  updated_at: number | null;
+  error: string | null;
+}
+
 export interface LxeDesktopBridge {
   dashboard: DashboardTransport;
   desktop: {
@@ -664,6 +672,7 @@ export interface LxeDesktopBridge {
     getHealth(): Promise<DesktopHealth>;
     restartAgent(): Promise<DesktopHealth>;
     getSetupState(): Promise<DesktopSetupState>;
+    getUsageBalance(): Promise<DesktopUsageBalance>;
     saveSetup(input: DesktopSetupInput): Promise<DesktopSetupState>;
     saveLocalModelCredential(input: DesktopLocalModelCredentialInput): Promise<DesktopSetupState>;
     deleteLocalModelCredential(provider: DesktopModelProvider): Promise<DesktopSetupState>;

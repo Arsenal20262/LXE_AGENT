@@ -33,6 +33,7 @@ describe("preload bridge", () => {
       "getCloudState",
       "getHealth",
       "getSetupState",
+      "getUsageBalance",
       "getSyntheticPerformerTask",
       "listInputAssets",
       "onCloudStateChanged",
@@ -240,4 +241,14 @@ test("draft preview bridge forwards the registered ID and requested size only", 
     [IPC_CHANNELS.previewDraftConversationFile, "draft-1", "thumbnail"],
     [IPC_CHANNELS.previewDraftConversationFile, "draft-1", "expanded"],
   ]);
+});
+
+ test("balance bridge accepts no key or URL from the renderer", async () => {
+  const calls: unknown[][] = [];
+  const bridge = createDesktopBridge({
+    invoke: async <T>(...args: unknown[]) => { calls.push(args); return { status: "unconfigured" } as T; },
+    on: () => {}, removeListener: () => {},
+  }, "darwin");
+  expect(await bridge.desktop.getUsageBalance()).toEqual({ status: "unconfigured" });
+  expect(calls).toEqual([[IPC_CHANNELS.getUsageBalance]]);
 });

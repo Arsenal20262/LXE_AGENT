@@ -432,6 +432,26 @@ export class DesktopSetupService {
     this.repository.commit(config, secrets);
   }
 
+  deepSeekBalanceCredential(): import("../deepseek-balance").DeepSeekBalanceCredential {
+    const config = this.repository.readConfig();
+    const source = config.llm.credential_source;
+    if (source === "local") {
+      const auth = this.auth.snapshot();
+      if (auth.error) throw new Error(auth.error);
+      return { source, key: auth.keys.deepseek ?? null };
+    }
+    if (config.cloud.switch_in_progress) return { source, key: null };
+    const state = this.managedLlmState();
+    const targets = [config.llm.managed_target, ...state.models].filter(target => target.provider === "deepseek");
+    for (const target of targets) {
+      const credential = managedCredentialFor(state, target);
+      if (credential && managedLlmTargetSupported(this.llmConfigRoot, target, state)) {
+        return { source, key: credential.api_key };
+      }
+    }
+    return { source, key: null };
+  }
+
   managedLlmState(): ManagedLlmState {
     if (this.repository.readConfig().cloud.switch_in_progress) return singleManagedState(null);
     const secrets = this.repository.readSecrets();

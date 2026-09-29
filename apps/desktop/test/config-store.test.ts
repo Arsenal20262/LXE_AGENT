@@ -41,6 +41,28 @@ const legacyPermission = (
 });
 
 describe("DesktopConfigStore", () => {
+  test("balance credentials follow the selected source and respect revocation and cloud switches", () => {
+    const root = createRoot();
+    const store = new DesktopConfigStore(root, join(root, "workspace"), safeStorage, { platform: "win32" });
+    store.saveLocalModelCredential({ provider: "deepseek", api_key: "local-balance-fixture" });
+    expect(store.deepSeekBalanceCredential()).toEqual({ source: "local", key: "local-balance-fixture" });
+    store.saveCloudEnrollment({ deviceId: "0123456789abcdef0123456789abcdef", deviceName: "Balance fixture",
+      vpnIp: "10.88.0.8", dataServerUrl: "http://10.88.0.1:8000", tunnelName: "lxe-agent", apiKey: "device-fixture" });
+    const revision = "a".repeat(64);
+    store.saveManagedLlmCredential({ provider: "deepseek", model: "deepseek-v4-flash",
+      api_key: "cloud-balance-fixture", credential_revision: revision, fetched_at: 123, invalid_revision: "" });
+    store.saveRuntimePreference("deepseek", "deepseek-v4-flash", "high", "cloud");
+    expect(store.deepSeekBalanceCredential()).toEqual({ source: "cloud", key: "cloud-balance-fixture" });
+    store.beginCloudEnrollmentSwitch();
+    expect(store.deepSeekBalanceCredential()).toEqual({ source: "cloud", key: null });
+    store.abortCloudEnrollmentSwitch();
+    expect(store.deepSeekBalanceCredential().key).toBe("cloud-balance-fixture");
+    store.invalidateManagedLlmCredential(revision);
+    expect(store.deepSeekBalanceCredential()).toEqual({ source: "cloud", key: null });
+    store.saveRuntimePreference("deepseek", "deepseek-v4-flash", "high", "local");
+    expect(store.deepSeekBalanceCredential()).toEqual({ source: "local", key: "local-balance-fixture" });
+  });
+
   test("discards obsolete fallback settings while retaining enrollment configuration", () => {
     const root = createRoot();
     const configRoot = join(root, "config");

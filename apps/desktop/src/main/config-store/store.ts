@@ -81,6 +81,8 @@ export class DesktopConfigStore {
     this.setup.saveRuntimePreference(provider, model, thinkingLevel, credentialSource);
   }
 
+  deepSeekBalanceCredential() { return this.setup.deepSeekBalanceCredential(); }
+
   managedLlmState(): ManagedLlmState { return this.setup.managedLlmState(); }
 
   saveManagedLlmState(state: ManagedLlmState): void { this.setup.saveManagedLlmState(state); }

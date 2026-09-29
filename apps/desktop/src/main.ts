@@ -1,3 +1,4 @@
+import { DeepSeekBalanceService } from "./main/deepseek-balance";
 import { UpdateJournal } from "./main/update-journal";
 import { DesktopUpdateService, UpdateBusyError } from "./main/update-service";
 import { DesktopUpdateApi, ElectronUpdateInstaller } from "./main/update-electron";
@@ -220,6 +221,7 @@ async function bootstrap(): Promise<void> {
       llmConfigRoot: paths.llmConfigRoot,
     },
   );
+  const usageBalance = new DeepSeekBalanceService(() => config.deepSeekBalanceCredential());
   const broadcastHealth = (health: DesktopHealth): void => {
     for (const browserWindow of applicationWindows()) {
       if (!browserWindow.isDestroyed()) browserWindow.webContents.send(IPC_CHANNELS.statusChanged, health);
@@ -454,6 +456,7 @@ async function bootstrap(): Promise<void> {
       return health;
     },
     getSetupState: () => config.state(),
+    getUsageBalance: () => usageBalance.getBalance(),
     saveSetup: async (input: DesktopSetupInput): Promise<DesktopSetupState> => {
       const previousEnvironment = config.environment();
       const wasComplete = config.state().complete;

@@ -631,6 +631,7 @@ export const ZH_TEXT = {
       appearance: "外观",
       cloud: "公司云端",
       base: "模型设置",
+      usage: "额度",
       ziniao: "紫鸟自动化",
       mabang: "马帮",
       shangman: "上马 ERP",
@@ -638,6 +639,18 @@ export const ZH_TEXT = {
       yacang: "雅仓",
       feishu: "飞书",
       logging: "日志与排障"
+    },
+    usage: {
+      availableBalance: "可用余额",
+      cloud: "公司账户",
+      local: "个人账户",
+      refresh: "刷新",
+      loading: "查询中…",
+      unconfigured: "当前账户未配置 DeepSeek",
+      failed: "查询失败",
+      stale: "更新失败，显示上次余额",
+      details: "错误详情",
+      updatedAt: (time: string) => `更新于 ${time}`,
     },
     status: {
       description: "查看桌面核心组件、运行目录和当前后台状态。",
@@ -1479,6 +1492,7 @@ export const UI_TEXT: Record<Language, UiText> = {
         appearance: "Appearance",
         cloud: "Company cloud",
         base: "Model settings",
+        usage: "Usage",
         ziniao: "ZiNiao automation",
         mabang: "Mabang",
         shangman: "Shangman ERP",
@@ -1486,6 +1500,18 @@ export const UI_TEXT: Record<Language, UiText> = {
         yacang: "Yacang",
         feishu: "Feishu",
         logging: "Logs & diagnostics"
+      },
+      usage: {
+        availableBalance: "Available balance",
+        cloud: "Company account",
+        local: "Personal account",
+        refresh: "Refresh",
+        loading: "Loading…",
+        unconfigured: "DeepSeek is not configured for this account",
+        failed: "Could not load balance",
+        stale: "Refresh failed. Showing the last balance",
+        details: "Error details",
+        updatedAt: (time: string) => `Updated at ${time}`,
       },
       status: {
         description: "View the desktop core components, runtime directories, and current background status.",

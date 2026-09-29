@@ -46,6 +46,7 @@ export interface DesktopIpcApplication {
   getHealth(): DesktopHealth;
   restartAgent(): Promise<DesktopHealth>;
   getSetupState(): DesktopSetupState;
+  getUsageBalance(): Promise<import("@lxe/desktop-protocol").DesktopUsageBalance>;
   saveSetup(input: DesktopSetupInput): Promise<DesktopSetupState>;
   saveLocalModelCredential(input: DesktopLocalModelCredentialInput): Promise<DesktopSetupState>;
   deleteLocalModelCredential(provider: DesktopModelProvider): Promise<DesktopSetupState>;
@@ -146,6 +147,7 @@ export function registerDesktopIpc(application: DesktopIpcApplication): () => vo
   });
   ipcMain.handle(IPC_CHANNELS.getHealth, () => application.getHealth());
   ipcMain.handle(IPC_CHANNELS.restartAgent, () => application.restartAgent());
+  ipcMain.handle(IPC_CHANNELS.getUsageBalance, () => application.getUsageBalance());
   ipcMain.handle(IPC_CHANNELS.getSetupState, () => application.getSetupState());
   ipcMain.handle(IPC_CHANNELS.saveSetup, (_event, input: unknown) => application.saveSetup(validateSetupInput(input)));
   ipcMain.handle(IPC_CHANNELS.saveLocalModelCredential, (_event, input: unknown) =>

@@ -18,6 +18,7 @@ export const IPC_CHANNELS = {
   applyAppearance: "lxe:desktop:apply-appearance",
   getHealth: "lxe:desktop:get-health",
   restartAgent: "lxe:desktop:restart-agent",
+  getUsageBalance: "lxe:desktop:usage-balance",
   getSetupState: "lxe:desktop:get-setup-state",
   saveSetup: "lxe:desktop:save-setup",
   saveLocalModelCredential: "lxe:desktop:model-credential:save",

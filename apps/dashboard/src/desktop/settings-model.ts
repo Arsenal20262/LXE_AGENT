@@ -52,12 +52,13 @@ export type DesktopSettingsSection =
   | "appearance"
   | "cloud"
   | "base"
+  | "usage"
   | "ziniao"
   | "erp"
   | "feishu"
   | "logging";
 
-export type EditableDesktopSettingsSection = Exclude<DesktopSettingsSection, "status" | "appearance" | "cloud">;
+export type EditableDesktopSettingsSection = Exclude<DesktopSettingsSection, "status" | "appearance" | "cloud" | "usage">;
 
 export interface DesktopSettingsFormValue {
   localProvider: DesktopModelProvider;
@@ -134,7 +135,7 @@ export const desktopSettingsSectionIsDirty = (
   form: DesktopSettingsFormValue,
   baseline: DesktopSettingsFormValue,
 ): boolean => section !== "status" && section !== "cloud"
-  && section !== "appearance"
+  && section !== "appearance" && section !== "usage"
   && (section === "erp"
     ? ERP_INTEGRATIONS.some((name) => desktopSettingsSectionIsDirty(name, form, baseline))
     : SECTION_FIELDS[section].some((field) => form[field] !== baseline[field]));

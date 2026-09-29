@@ -55,6 +55,7 @@ export function createDesktopBridge(
       applyAppearance: (appearance) => ipc.invoke(IPC_CHANNELS.applyAppearance, appearance),
       getHealth: () => ipc.invoke(IPC_CHANNELS.getHealth),
       restartAgent: () => ipc.invoke(IPC_CHANNELS.restartAgent),
+      getUsageBalance: () => ipc.invoke(IPC_CHANNELS.getUsageBalance),
       getSetupState: () => ipc.invoke(IPC_CHANNELS.getSetupState),
       saveSetup: (input) => ipc.invoke(IPC_CHANNELS.saveSetup, input),
       saveLocalModelCredential: (input) => ipc.invoke(IPC_CHANNELS.saveLocalModelCredential, input),
