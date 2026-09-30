@@ -39,6 +39,8 @@ const pathsFor = (root: string): ExecRuntimePaths => ({
   llmConfigRoot: join(root, "config", "llm"),
   managedPythonPath: join(root, ".venv", "bin", "python"),
   managedPath: "",
+  officeNodePath: join(root, "node"),
+  officeCliPath: join(root, "office", "cli.js"),
   fdPath: join(root, "fd"),
 });
 

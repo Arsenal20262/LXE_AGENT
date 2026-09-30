@@ -15,6 +15,8 @@ export interface ExecRuntimePaths {
   lxeskillCatalogPath: string;
   llmConfigRoot: string;
   managedPythonPath: string;
+  officeNodePath: string;
+  officeCliPath: string;
   fdPath: string;
   managedPath: string;
 }
@@ -24,6 +26,7 @@ export interface ResolveExecRuntimePathsOptions {
   executablePath?: string;
   moduleDirectory?: string;
   platform?: NodeJS.Platform;
+  arch?: string;
 }
 
 const text = (value: unknown): string => String(value ?? "").trim();
@@ -73,6 +76,13 @@ export function resolveExecRuntimePaths(
   const managedPythonPath = packaged
     ? join(resourceRoot, "runtime", "python", platform === "win32" ? "python.exe" : "bin/python3")
     : join(layoutRoot, ".venv", platform === "win32" ? "Scripts/python.exe" : "bin/python");
+  const officeRuntimeRoot = packaged
+    ? join(resourceRoot, "runtime")
+    : join(layoutRoot, "build", "desktop-runtime", `${platform}-${options.arch ?? process.arch}`);
+  const officeNodePath = (!packaged && String(environment.LXE_OFFICE_NODE ?? "").trim())
+    || join(officeRuntimeRoot, "node", platform === "win32" ? "node.exe" : "node");
+  const officeCliPath = (!packaged && String(environment.LXE_OFFICE_CLI ?? "").trim())
+    || join(officeRuntimeRoot, "office", "node_modules", "@deepseek-ai", "libreoffice-kit", "lib", "cli.js");
   const managedDirectories = packaged
     ? [
         join(resourceRoot, "runtime", "node"),
@@ -95,6 +105,8 @@ export function resolveExecRuntimePaths(
       : join(layoutRoot, "python", "lxeskill_cli", "lxeskill", "catalog.json"),
     llmConfigRoot: join(resourceRoot, "config", "llm"),
     managedPythonPath,
+    officeNodePath,
+    officeCliPath,
     fdPath: packaged ? join(resourceRoot, "runtime", "tools", platform === "win32" ? "fd.exe" : "fd")
       : text(environment.LXE_FD_PATH) || join(layoutRoot, "build", "desktop-runtime", `${platform}-${process.arch}`, "tools", platform === "win32" ? "fd.exe" : "fd"),
     managedPath: existingDirectories(managedDirectories).join(delimiter),
@@ -121,6 +133,8 @@ export function execRuntimeEnvironment(
     LXE_MANAGED_PATH: paths.managedPath,
     LXE_FD_PATH: paths.fdPath,
     LXE_MANAGED_PYTHON: paths.managedPythonPath,
+    LXE_OFFICE_NODE: paths.officeNodePath,
+    LXE_OFFICE_CLI: paths.officeCliPath,
     TMP: temporaryRoot,
     TEMP: temporaryRoot,
     TMPDIR: temporaryRoot,

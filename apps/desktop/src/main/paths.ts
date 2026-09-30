@@ -20,6 +20,8 @@ export interface DesktopPaths {
   agentArguments: string[];
   lxeskillModulePath: string;
   managedPythonPath: string;
+  officeNodePath: string;
+  officeCliPath: string;
   exifToolPath: string;
   fdPath: string;
   managedPath: string;
@@ -81,6 +83,13 @@ export function resolveDesktopPaths(options: DesktopPathOptions): DesktopPaths {
         "exiftool",
         exifToolName,
       );
+  const officeRuntimeRoot = options.packaged
+    ? targetPath.join(options.resourcesPath, "runtime")
+    : targetPath.join(sourceRoot, "build", "desktop-runtime", `${platform}-${arch}`);
+  const officeNodePath = (!options.packaged && String(environment.LXE_OFFICE_NODE ?? "").trim())
+    || targetPath.join(officeRuntimeRoot, "node", platform === "win32" ? "node.exe" : "node");
+  const officeCliPath = (!options.packaged && String(environment.LXE_OFFICE_CLI ?? "").trim())
+    || targetPath.join(officeRuntimeRoot, "office", "node_modules", "@deepseek-ai", "libreoffice-kit", "lib", "cli.js");
   const managedDirectories = options.packaged
     ? [
         targetPath.join(options.resourcesPath, "runtime", "node"),
@@ -119,6 +128,8 @@ export function resolveDesktopPaths(options: DesktopPathOptions): DesktopPaths {
     agentArguments,
     lxeskillModulePath,
     managedPythonPath,
+    officeNodePath,
+    officeCliPath,
     exifToolPath,
     fdPath: options.packaged
       ? targetPath.join(options.resourcesPath, "runtime", "tools", `fd${executable}`)

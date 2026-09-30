@@ -48,6 +48,7 @@ describe("desktop resource size report", () => {
     expect(report.resources.runtime.total.bytes).toBe(153);
     expect(report.resources.runtime.node.node_modules.bytes).toBe(17);
     expect(report.resources.runtime.node.npm_cache.bytes).toBe(0);
+    expect(report.resources.runtime.office.bytes).toBe(0);
     expect(report.resources.runtime.python.playwright_driver_node.bytes).toBe(0);
     expect(report.resources.runtime.uv.bytes).toBe(0);
     expect(report.resources.runtime.tools.total.bytes).toBe(104);
@@ -61,6 +62,12 @@ describe("desktop resource size report", () => {
     expect(report.budgets.runtime.passed).toBe(true);
     expect(report.budgets.unpacked.passed).toBe(true);
     expect(() => assertDesktopResourceSizeBudgets(report)).not.toThrow();
+    mkdirSync(join(runtime, "office"));
+    writeFileSync(join(runtime, "office", "engine.exe"), Buffer.alloc(41));
+    const withOffice = createDesktopResourceSizeReport(root);
+    expect(withOffice.resources.runtime.office.bytes).toBe(41);
+    expect(withOffice.resources.runtime.total.bytes).toBe(194);
+    expect(withOffice.total.bytes).toBe(205);
     writeFileSync(join(runtime, "playwright", "chrome.exe"), Buffer.alloc(23));
     expect(() => assertDesktopResourceSizeBudgets(createDesktopResourceSizeReport(root))).toThrow("Standalone Chromium must not be packaged");
   });

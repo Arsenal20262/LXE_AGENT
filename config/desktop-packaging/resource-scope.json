@@ -50,6 +50,13 @@
       "platforms": ["win32-x64", "darwin-arm64", "darwin-x64"]
     },
     {
+      "id": "runtime-office",
+      "owner": "managed-office-runtime",
+      "source": { "kind": "managed-build", "name": "office" },
+      "target": "runtime/office",
+      "platforms": ["win32-x64"]
+    },
+    {
       "id": "runtime-python",
       "owner": "managed-python-runtime",
       "source": { "kind": "managed-build", "name": "python" },

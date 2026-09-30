@@ -4,14 +4,14 @@ This page is a navigation inventory, not a second source of runtime prompt truth
 
 ## Inventory
 
-The repository currently contains 34 top-level workflow and default runtime skills:
+The repository currently contains 36 top-level workflow and default runtime skills:
 
 | Type | Count | Purpose |
 | --- | ---: | --- |
 | `amazon_fba` | 14 | shipment, customs, purchase, contract, and export-tax workflows |
 | `replenishment` | 15 | Amazon replenishment workflows and Southeast Asia data preparation with Shangman ERP, Yacang and Mabang TMS |
 | `amazon_operations` | 2 | listing, keyword, competitor, and public-review analysis |
-| `default` | 2 | general workbook and custom Skill creation capabilities |
+| `default` | 4 | Office files and custom Skill creation capabilities |
 | `ziniao_browser` | 1 | controlled Ziniao browser lifecycle and page operations |
 
 Counts describe top-level repository skills before per-agent permission and skill filtering.
@@ -76,6 +76,12 @@ Start with `replenishment-workflow-map`. Snapshot and analysis skills prepare ex
 LXE formally maintains these modules' command and failure contracts. Their results come from Amazon public pages and an undocumented autocomplete endpoint, so agents must retain completeness and confidence diagnostics and must not describe the results as Amazon-authorized data. Review-page failures may preserve product-page rating aggregates as a partial result, but they must never be reported as evidence that a product has no reviews.
 
 ## Default Skills
+
+- `office-xlsx`: read, create, edit and check workbooks; recalculate formulas, render regions and export PDF with the bundled Office runtime.
+- `office-docx`: read, create, edit and check Word documents; render pages and export PDF.
+- `office-pptx`: read, create, edit and check slide decks; render slides and export PDF.
+
+Office uses `exec` → `shared.office`, plus existing `read` and `send_files`. It adds no `lxeskill` business commands. See [Office runtime](../../office-runtime.md).
 
 - `skill-creator`: create or edit reusable user skills through conversation and existing file/exec tools.
 

@@ -36,6 +36,7 @@ export interface DesktopResourceSizeReport {
     total: SizeSummary;
     runtime: {
       total: SizeSummary;
+      office: SizeSummary;
       node: {
         total: SizeSummary;
         node_modules: SizeSummary;
@@ -138,6 +139,7 @@ export const createDesktopResourceSizeReport = (unpackedRoot: string): DesktopRe
       total: summarizePath(resourcesRoot),
       runtime: {
         total: runtime,
+        office: summarizePath(join(runtimeRoot, "office")),
         node: {
           total: summarizePath(join(runtimeRoot, "node")),
           node_modules: summarizePath(join(runtimeRoot, "node", "node_modules")),

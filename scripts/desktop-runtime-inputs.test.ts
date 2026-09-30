@@ -30,7 +30,8 @@ const createRuntimeInputs = (root: string) => {
   const fdExecutable = join(root, "fd.exe");
   const larkCliExecutable = join(root, "lark-cli.exe");
   const exifToolRoot = join(root, "exiftool");
-  for (const directory of [nodeRoot, pythonRoot, exifToolRoot]) {
+  const officeRoot = join(root, "office");
+  for (const directory of [nodeRoot, pythonRoot, exifToolRoot, officeRoot]) {
     mkdirSync(directory, { recursive: true });
   }
   writeFileSync(uvExecutable, "uv", "utf8");
@@ -45,6 +46,7 @@ const createRuntimeInputs = (root: string) => {
     fdExecutable,
     larkCliExecutable,
     exifToolRoot,
+    officeRoot,
   };
 };
 
@@ -65,6 +67,7 @@ const writeDescriptor = (
       fd_path: inputs.fdExecutable,
       lark_cli_path: inputs.larkCliExecutable,
       exiftool_root: inputs.exifToolRoot,
+      office_root: inputs.officeRoot,
     },
   }), "utf8");
 };
@@ -120,6 +123,7 @@ describe("desktop runtime input resolution", () => {
         LXE_DESKTOP_FD_PATH: inputs.fdExecutable,
         LXE_DESKTOP_LARK_CLI_PATH: inputs.larkCliExecutable,
         LXE_DESKTOP_EXIFTOOL_ROOT: inputs.exifToolRoot,
+        LXE_DESKTOP_OFFICE_ROOT: inputs.officeRoot,
       },
     });
 

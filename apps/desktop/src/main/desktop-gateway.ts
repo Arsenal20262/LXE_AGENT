@@ -168,6 +168,8 @@ export class DesktopGateway {
       LXE_MANAGED_PATH: this.options.paths.managedPath,
       LXE_FD_PATH: this.options.paths.fdPath,
       LXE_MANAGED_PYTHON: this.options.paths.managedPythonPath,
+      LXE_OFFICE_NODE: this.options.paths.officeNodePath,
+      LXE_OFFICE_CLI: this.options.paths.officeCliPath,
       PYTHONDONTWRITEBYTECODE: "1",
       PYTHONNOUSERSITE: "1",
       ...this.options.authBrowserEnvironment?.(),

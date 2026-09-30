@@ -121,6 +121,7 @@ $runtimeEnvironment = @{
     LXE_DESKTOP_FD_PATH = [string]$descriptor.inputs.fd_path
     LXE_DESKTOP_LARK_CLI_PATH = [string]$descriptor.inputs.lark_cli_path
     LXE_DESKTOP_EXIFTOOL_ROOT = [string]$descriptor.inputs.exiftool_root
+    LXE_DESKTOP_OFFICE_ROOT = [string]$descriptor.inputs.office_root
 }
 foreach ($entry in $runtimeEnvironment.GetEnumerator()) {
     if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($entry.Key))) {
@@ -135,9 +136,11 @@ $effectiveFdPath = [Environment]::GetEnvironmentVariable("LXE_DESKTOP_FD_PATH")
 $effectiveLarkCliPath = [Environment]::GetEnvironmentVariable("LXE_DESKTOP_LARK_CLI_PATH")
 $effectiveRipgrepPath = [Environment]::GetEnvironmentVariable("LXE_DESKTOP_RG_PATH")
 $effectiveExifToolRoot = [Environment]::GetEnvironmentVariable("LXE_DESKTOP_EXIFTOOL_ROOT")
+$effectiveOfficeRoot = [Environment]::GetEnvironmentVariable("LXE_DESKTOP_OFFICE_ROOT")
 foreach ($requiredPath in @(
     $effectiveNodeRoot,
     $effectivePythonRoot,
+    $effectiveOfficeRoot,
     $effectiveUvPath,
     $effectiveRipgrepPath,
     $effectiveFdPath,

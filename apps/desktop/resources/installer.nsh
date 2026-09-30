@@ -1,3 +1,10 @@
+!ifndef BUILD_UNINSTALLER
+!include "${PROJECT_DIR}\resources\office-prerequisites.nsh"
+!macro customInstall
+  Call LxeOfficePrerequisites
+!macroend
+!endif
+
 !ifdef BUILD_UNINSTALLER
 
 !include "FileFunc.nsh"

@@ -8,11 +8,16 @@ export const desktopRuntimeLockInputPaths = [
   "config/desktop-runtime/lark-cli.lock.json",
   "config/desktop-runtime/windows-x64/node/package.json",
   "config/desktop-runtime/windows-x64/node/package-lock.json",
+  "config/desktop-runtime/office/package.json",
+  "config/desktop-runtime/office/bun.lock",
+  "config/desktop-runtime/office/vc-redist.lock.json",
+  "scripts/prepare-office-runtime.ts",
+  "scripts/office-runtime.cjs",
   "pyproject.toml",
   "scripts/prepare-desktop-runtime.ps1",
   "uv.lock",
 ] as const;
-const desktopRuntimePublishLayout = 3;
+const desktopRuntimePublishLayout = 4;
 
 const runtimeInputFields = [
   ["LXE_DESKTOP_NODE_ROOT", "node_root"],
@@ -22,6 +27,7 @@ const runtimeInputFields = [
   ["LXE_DESKTOP_FD_PATH", "fd_path"],
   ["LXE_DESKTOP_LARK_CLI_PATH", "lark_cli_path"],
   ["LXE_DESKTOP_EXIFTOOL_ROOT", "exiftool_root"],
+  ["LXE_DESKTOP_OFFICE_ROOT", "office_root"],
 ] as const;
 
 type RuntimeInputKey = (typeof runtimeInputFields)[number][1];
@@ -34,6 +40,7 @@ export interface DesktopRuntimeInputs {
   fdExecutable: string;
   larkCliExecutable: string;
   exifToolRoot: string;
+  officeRoot: string;
 }
 
 interface DesktopRuntimeDescriptor {
@@ -136,5 +143,6 @@ export const resolveDesktopRuntimeInputs = (
     fdExecutable: values.fd_path,
     larkCliExecutable: values.lark_cli_path,
     exifToolRoot: values.exiftool_root,
+    officeRoot: values.office_root,
   };
 };

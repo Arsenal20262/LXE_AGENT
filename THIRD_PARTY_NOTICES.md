@@ -132,3 +132,32 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+## Office skills and LibreOffice Kit
+
+The three `office-*` skills and `shared/office/check.py` are adapted from
+DeepSeek Harness, commit `639ed015397290b3745d163aafe02ffee4aa3f84`,
+`packages/skill/skill-office/assets`. Copyright (c) 2026 DeepSeek.
+The upstream MIT license is retained in each skill and `shared/office/LICENSE`.
+Source: https://github.com/deepseek-ai/deepseek-harness
+
+LXE bundles `@deepseek-ai/libreoffice-kit` 0.1.3 and its version-matched native
+engine (Windows x64 and macOS development 0.1.3). Kit and LibreOffice are
+MPL-2.0; engine dependencies have their own notices. The complete upstream
+`licenses/`, `sources/`, `prebuilds.json`, NOTICE files and program resources
+remain under `runtime/office/node_modules/@deepseek-ai/` in the Windows app.
+Source recipes identify the exact LibreOffice revision and patches; the package
+source and license references are retained unchanged.
+Package: https://www.npmjs.com/package/@deepseek-ai/libreoffice-kit
+LibreOffice source: https://github.com/LibreOffice/core
+
+Windows installations also include Microsoft's unmodified Visual C++ v14 x64
+Redistributable, pinned by URL, version and SHA-256 in
+`config/desktop-runtime/office/vc-redist.lock.json`. Microsoft license terms
+are embedded in that installer. The application installs it locally if the
+required runtime is absent or older; Office operations do not download it.
+Source: https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist
+
+Python Office dependencies include python-docx 1.2.0 (MIT), python-pptx 1.0.2
+(MIT), lxml (BSD-3-Clause) and XlsxWriter (BSD-2-Clause). Their distribution
+metadata and license files remain in the packaged Python site-packages.

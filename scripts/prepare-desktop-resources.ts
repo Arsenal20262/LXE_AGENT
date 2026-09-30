@@ -116,7 +116,9 @@ const {
   fdExecutable,
   larkCliExecutable,
   exifToolRoot,
+  officeRoot,
 } = runtimeInputs;
+runRequiredBuildCommand("verify Office runtime", [process.execPath, join(repositoryRoot, "scripts", "prepare-office-runtime.ts"), "--verify-only", "--destination", officeRoot, "--node", join(nodeRoot, "node.exe")]);
 const playwrightEmbeddedNodeSource = join(
   pythonRoot,
   ...playwrightEmbeddedNodeRelativePath.split("/"),
@@ -201,6 +203,10 @@ const wireGuardResourceRoot = join(repositoryRoot, "apps", "desktop", "resources
 const extraResources: BuilderFileSet[] = [
   exactFileSet(join(repositoryRoot, "apps", "desktop", "resources", "app-update.yml"), "app-update.yml"),
   { from: nodeRoot, to: scopeEntry("runtime-node").target, filter: ["**/*"] },
+  { from: officeRoot, to: scopeEntry("runtime-office").target, filter: ["**/*"] },
+  // electron-builder's resource filter always omits a root node_modules.
+  // Copy its contents from an explicit source so the complete Kit closure ships.
+  { from: join(officeRoot, "node_modules"), to: `${scopeEntry("runtime-office").target}/node_modules`, filter: ["**/*"] },
   {
     from: pythonRoot,
     to: scopeEntry("runtime-python").target,
@@ -248,7 +254,7 @@ const builderConfigPath = join(repositoryRoot, "apps", "desktop", "electron-buil
 const builderConfig = Bun.YAML.parse(readFileSync(builderConfigPath, "utf8")) as BuilderConfiguration;
 applyDesktopProductVersion(builderConfig, environment.LXE_DESKTOP_PRODUCT_VERSION);
 builderConfig.extraResources = extraResources;
-builderConfig.afterPack = join(repositoryRoot, "scripts", "verify-packaged-lark.cjs");
+builderConfig.afterPack = join(repositoryRoot, "scripts", "verify-packaged-office.cjs");
 writeFileSync(generatedBuilderConfig, `${JSON.stringify(builderConfig, null, 2)}\n`, "utf8");
 
 console.log(`Prepared direct desktop publish inputs in ${publishRoot}`);

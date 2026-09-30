@@ -399,6 +399,11 @@ function Get-LxeLockFingerprint {
         "config/desktop-runtime/lark-cli.lock.json",
         "config/desktop-runtime/windows-x64/node/package.json",
         "config/desktop-runtime/windows-x64/node/package-lock.json",
+        "config/desktop-runtime/office/package.json",
+        "config/desktop-runtime/office/bun.lock",
+        "config/desktop-runtime/office/vc-redist.lock.json",
+        "scripts/prepare-office-runtime.ts",
+        "scripts/office-runtime.cjs",
         "pyproject.toml",
         "scripts/prepare-desktop-runtime.ps1",
         "uv.lock"
@@ -412,7 +417,7 @@ function Get-LxeLockFingerprint {
         }
         $lines += "$relativePath=$(Get-LxeFileSha256 -Path $absolutePath)"
     }
-    $lines += "desktop-runtime-publish-layout=3"
+    $lines += "desktop-runtime-publish-layout=4"
     return Get-LxeTextSha256 -Value (($lines -join "`n") + "`n")
 }
 
@@ -485,6 +490,7 @@ function Assert-LxeRuntimeMarker {
             throw "Managed runtime file is missing: $absolutePath"
         }
     }
+    Invoke-LxeNative -Label "Verify Office runtime" -FilePath (Get-Command bun -CommandType Application -ErrorAction Stop).Source -Arguments @((Join-Path $script:RepositoryRoot "scripts/prepare-office-runtime.ts"), "--verify-only", "--destination", (Join-Path $Root "office"), "--node", (Join-Path $Root "node\node.exe")) -TimeoutSeconds 120 -Quiet | Out-Null
     $fdPath = Join-Path $Root "tools\fd.exe"
     $fdMarker = Get-Content -LiteralPath (Join-Path $Root "tools\.fd.json") -Raw | ConvertFrom-Json
     if ($fdMarker.binary_sha256 -ne (Get-LxeFileSha256 -Path $fdPath)) { throw "Managed fd binary checksum mismatch" }
@@ -770,6 +776,7 @@ function Write-LxeRuntimeDescriptor {
             fd_path = Join-Path $Root "tools\fd.exe"
             lark_cli_path = Join-Path $Root "tools\lark-cli.exe"
             exiftool_root = Join-Path $Root "tools\exiftool"
+            office_root = Join-Path $Root "office"
         }
     }
     $descriptorJson = ($descriptor | ConvertTo-Json -Depth 6) + "`n"
@@ -920,6 +927,7 @@ try {
         Install-LxeUvRipgrepAndExifTool -Root $stagedRoot -WorkRoot $workRoot
         Install-LxeNodeRuntime -Destination (Join-Path $stagedRoot "node") -WorkRoot $workRoot
         Install-LxePythonRuntime -Destination (Join-Path $stagedRoot "python") -UvExecutable (Join-Path $stagedRoot "uv\uv.exe") -WorkRoot $workRoot
+        Invoke-LxeNative -Label "Prepare Office runtime" -FilePath (Get-Command bun -CommandType Application -ErrorAction Stop).Source -Arguments @((Join-Path $script:RepositoryRoot "scripts/prepare-office-runtime.ts"), "--destination", (Join-Path $stagedRoot "office"), "--node", (Join-Path $stagedRoot "node\node.exe")) -TimeoutSeconds 600 | Out-Null
         Write-LxeRuntimeMarker -Root $stagedRoot
         Save-LxeRuntimeImageCache -Source $stagedRoot -Destination $runtimeImageCache
     }
