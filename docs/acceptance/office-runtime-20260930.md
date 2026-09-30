@@ -28,20 +28,20 @@
 
 该测试发现当前 NSIS 的 `ExecShellWait` 不返回子进程退出码，导致安装已成功却被误判失败。实现改用 `ShellExecuteEx` 和 `GetExitCodeProcess`。真实编译运行 `apps/desktop/test/fixtures/office-prerequisite-exit-codes.nsi`，确认成功 `0`、失败 `42`、重启 `3010` 及缺少程序的 Win32 错误 `2` 均正确保留。
 
-修复后完整缺失场景的第二轮测试被 Windows 安装服务的待重启状态阻止：卸载日志为 `0x8007015e`、退出码 `3010`，VC++ 仍为已安装状态。已请求用户确认重启，不能把这一轮记为通过。
+修复后的第二轮测试被 Windows 安装服务的待重启状态阻止（`0x8007015e`、退出码 `3010`），没有记为通过。经用户确认并完成重启，第三轮完整测试通过：卸载退出 `0`，注册状态消失，原生转换失败；同一安装前置函数自动装回并退出 `0`，随后 PDF 转换退出 `0`。最终 VC++ 为已安装的 **14.51.36247.0**。原始 `missingFonts: ["Courier"]` 诊断保留，没有隐藏字体替代信息。
 
 ## 源码验证
 
 最终 rebase 无基线变化，执行一次 `bun run verify:source`，协议生成、TypeScript 边界和八个工作区的类型检查通过。Bun 全量为 1858 通过、5 跳过、1 失败；失败是旧测试要求整个安装脚本以卸载守卫开头，新增安装分支后该假设失效。修正为分别检查安装与卸载守卫，定向 5 项通过。
 
-继续执行此前被短路的 Python 全量阶段：1964 通过、4 跳过、1 失败。失败是 doctor 测试仍断言 34 个 skill，实际已为 36 个；更新数量断言后定向复测通过。两处均只调整测试预期，生产实现未变，因此没有重复整套测试。测试修正提交为 `f42e04db`。
+继续执行此前被短路的 Python 全量阶段：1964 通过、4 跳过、1 失败。失败是 doctor 测试仍断言 34 个 skill，实际已为 36 个；更新数量断言后该文件定向 46 项通过。两处均只调整测试预期，生产实现未变，因此没有重复整套测试。测试修正提交为 `f42e04db`。
 
 另外，三个 skill 均通过 frontmatter 校验，实际加载器在 `default` 权限下发现全部三个且未增加业务命令；项目 wheel 包含共享检查器和许可证；NSIS 真实退出码回归通过。
 
 ## 证据位置
 
 - Mac：`build/office-smoke/正式 0.1.3/` 内的 `report.json`、`diagnostics.json` 和文档产物。
-- Windows worktree：`build/office-smoke/candidate-0.1.3/`、`build/office-vc-acceptance/`、`build/office-vc-acceptance-v2/`。
+- Windows worktree：`build/office-smoke/candidate-0.1.3/`、`build/office-vc-acceptance/`、`build/office-vc-acceptance-v2/`、`build/office-vc-acceptance-v3/`（最终通过）。
 - Windows 包内验收产物：`C:\Users\Administrator\AppData\Local\Temp\lxe-office-验收 3ez2zoaa`。
 - Windows 应用包与体积报告：`dist/desktop-unpacked/`。
 - 全量源码验证日志：Mac `/tmp/lxe-office-verify-source.log`、`/tmp/lxe-office-verify-python.log`；Python 定向复测为 `/tmp/lxe-office-doctor-targeted.log`。
