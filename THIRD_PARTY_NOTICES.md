@@ -168,7 +168,7 @@ The spreadsheet parsers, read-only FortuneSheet/ExcelJS patches, and native file
 association helpers and legacy Office test fixtures are adapted from DeepSeek Harness (MIT, Copyright 2026
 DeepSeek). Source: https://github.com/deepseek-ai/deepseek-harness, revision
 `639ed015397290b3745d163aafe02ffee4aa3f84`. The full MIT text ships at
-`dashboard/legal/file-preview/DeepSeek-MIT.txt`. Patches are retained in `patches/`.
+`dashboard/legal/file-preview/DeepSeek-MIT.txt`. Patches are retained in `config/dependency-patches/`.
 
 Pinned preview dependencies are FortuneSheet core/react 1.0.4 (MIT, Copyright
 2022 Suzhou Ruilisi Technology Co., Ltd), ExcelJS 4.4.0 (MIT), SheetJS CE 0.20.3

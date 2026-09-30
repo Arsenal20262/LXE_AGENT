@@ -14,6 +14,14 @@
 - AppKit 返回真实默认应用 TextEdit、15 个关联应用及图标；指定 TextEdit、Electron shell 默认打开及文件定位成功，未知扩展名返回零个关联应用，伪造的失效应用被拒绝。
 - 生产 Dashboard 和桌面主进程构建通过；检查两个独立 Worker、PDF 字体/CMap/WASM 和原生 Shell 代码均已进入构建输出。
 
+## 仓库验证
+
+最终 rebase 后执行 `bun run verify:source`：协议生成检查、生产边界、全工作区类型检查通过；JS 为 1,877 通过 / 6 跳过。Python 为 1,964 通过 / 4 跳过，唯一失败是禁止新增根目录 `patches/`。
+
+已将补丁移到 `config/dependency-patches/`，锁文件仅修改三个补丁路径，依赖版本与补丁内容均未变化。修复后 frozen 安装成功，目录约束 8 项、解析 5 项及真实 Chromium 的 8 组界面场景复测通过。依据仓库测试流程，此处做定向复测，没有无变化地重复全量运行。
+
+最新生产 Dashboard / Electron 构建及资源完整性检查通过。原生 Windows 测试在 Mac 上明确跳过，不计为 Windows 验收。
+
 ## Windows x64
 
 尚未验收。目标 `PC-20240421FADR`（100.87.60.88）端口 22 可连接，但 SSH 在握手前被对端关闭，尚未进入 Windows 工作区或运行打包。连接恢复后执行同一组定向测试、内置运行环境真实转换、原生应用关联与离线打包验收。

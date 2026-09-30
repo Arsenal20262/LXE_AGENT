@@ -146,9 +146,9 @@
     },
   },
   "patchedDependencies": {
-    "@fortune-sheet/core@1.0.4": "patches/@fortune-sheet__core@1.0.4.patch",
-    "@fortune-sheet/react@1.0.4": "patches/@fortune-sheet__react@1.0.4.patch",
-    "exceljs@4.4.0": "patches/exceljs@4.4.0.patch",
+    "@fortune-sheet/core@1.0.4": "config/dependency-patches/@fortune-sheet__core@1.0.4.patch",
+    "@fortune-sheet/react@1.0.4": "config/dependency-patches/@fortune-sheet__react@1.0.4.patch",
+    "exceljs@4.4.0": "config/dependency-patches/exceljs@4.4.0.patch",
   },
   "packages": {
     "7zip-bin": ["7zip-bin@5.2.0", "", {}, "sha512-ukTPVhqG4jNzMro2qA9HSCSSVJN3aN7tlb+hfqYCt3ER0yWroeA2VR38MNrOHLQ/cVj+DaIMad0kFCtWWowh/A=="],
