@@ -1,3 +1,5 @@
+import { usePreviewSidebar } from "../file-preview/Sidebar";
+import { OpenFileButton } from "../file-preview/OpenFileButton";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Image as ImageIcon, LoaderCircle, X } from "lucide-react";
@@ -57,6 +59,7 @@ function ImageAttachment({ attachment, sessionId, ready }: {
 }) {
   const t = useUiText();
   const ref = useRef<HTMLDivElement>(null);
+  const panel = usePreviewSidebar();
   const [visible, setVisible] = useState(false);
   const [expanded, setExpanded] = useState(false);
   useEffect(() => {
@@ -72,7 +75,7 @@ function ImageAttachment({ attachment, sessionId, ready }: {
   return <div className="sent-image-item" ref={ref}>
     <button className="sent-image-tile" type="button" title={attachment.name} aria-label={t.conversation.openFile(attachment.name)}
       disabled={!ready || (!preview.url && !preview.error)}
-      onClick={() => setExpanded(true)}>
+      onClick={() => panel && sessionId ? void panel.open({ session_id: sessionId, kind: "attachment", id: attachment.attachment_id }, attachment.name) : setExpanded(true)}>
       {preview.url ? <img src={preview.url} alt={attachment.name} /> : <>
         {ready && !preview.error ? <LoaderCircle className="conversation-spinner" size={20} /> : <ImageIcon size={24} />}
         <span>{attachment.name}</span>
@@ -88,22 +91,23 @@ export function SentAttachmentList({ attachments, sessionId, ready = true, onOpe
   onOpen(id: string): Promise<void>;
 }) {
   const t = useUiText();
+  const panel = usePreviewSidebar();
   const { images, files } = partitionSentAttachments(attachments);
   const [error, setError] = useState("");
   const open = async (id: string) => {
     setError("");
-    try { await onOpen(id); } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
+    try { if (panel && sessionId) await panel.open({ session_id: sessionId, kind: "attachment", id }, attachments.find(a => a.attachment_id === id)?.name); else await onOpen(id); } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
   };
   return <div className="sent-attachments">
     {images.length ? <div className="sent-image-list">{images.map((attachment) =>
       <ImageAttachment key={attachment.attachment_id} attachment={attachment} sessionId={sessionId}
         ready={ready && !!sessionId} />)}</div> : null}
     {files.length ? <div className="sent-file-list">{files.map((attachment) =>
-      <button className="sent-file-card" type="button" key={attachment.attachment_id}
+      <div className="sent-file-with-actions" key={attachment.attachment_id}><button className="sent-file-card" type="button"
         title={t.conversation.openFile(attachment.name)} onClick={() => void open(attachment.attachment_id)}>
         <FileAttachmentIcon name={attachment.name} />
         <FileAttachmentInfo name={attachment.name} />
-      </button>)}</div> : null}
+      </button>{panel && sessionId && ready ? <OpenFileButton file={{ session_id: sessionId, kind: "attachment", id: attachment.attachment_id }} /> : null}</div>)}</div> : null}
     {error ? <div className="sent-attachment-error" role="alert">{t.conversation.openFileFailed(error)}</div> : null}
   </div>;
 }

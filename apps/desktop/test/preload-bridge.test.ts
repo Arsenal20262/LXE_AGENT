@@ -3,7 +3,7 @@ import { IPC_CHANNELS } from "../src/ipc-channels";
 import { createDesktopBridge, type IpcRendererPort } from "../src/preload-bridge";
 
 describe("preload bridge", () => {
-  test("exposes only the typed Dashboard and desktop whitelist", async () => {
+  test("exposes only the typed Dashboard, desktop and file whitelist", async () => {
     const invocations: Array<{ channel: string; arguments: unknown[] }> = [];
     const listeners = new Map<string, (event: unknown, ...arguments_: unknown[]) => void>();
     const ipc: IpcRendererPort = {
@@ -20,7 +20,7 @@ describe("preload bridge", () => {
       getPathForFile: (file) => `/private/drop/${file.name}`,
     });
 
-    expect(Object.keys(bridge).sort()).toEqual(["dashboard", "desktop"]);
+    expect(Object.keys(bridge).sort()).toEqual(["dashboard", "desktop", "files"]);
     expect(Object.keys(bridge.dashboard)).toEqual(["call"]);
     expect(Object.keys(bridge.desktop).sort()).toEqual([
       "getUpdateState", "checkForUpdate", "installUpdate",
@@ -251,4 +251,13 @@ test("draft preview bridge forwards the registered ID and requested size only", 
   }, "darwin");
   expect(await bridge.desktop.getUsageBalance()).toEqual({ status: "unconfigured" });
   expect(calls).toEqual([[IPC_CHANNELS.getUsageBalance]]);
+});
+
+test("file bridge has a separate binary channel and never serializes bytes into Dashboard RPC", async () => {
+  const calls: unknown[][] = [];
+  const ipc: IpcRendererPort = { invoke: async (channel, ...args) => { calls.push([channel, ...args]); return new Uint8Array([0, 255, 17]) as any; }, on: () => {}, removeListener: () => {} };
+  const bridge = createDesktopBridge(ipc, "darwin", { getPathForFile: () => "" });
+  expect(Object.keys(bridge.files).sort()).toEqual(["call", "read"]);
+  expect(await bridge.files.read("opaque-handle")).toEqual(new Uint8Array([0, 255, 17]));
+  expect(calls).toEqual([[IPC_CHANNELS.fileRead, "opaque-handle", undefined]]);
 });

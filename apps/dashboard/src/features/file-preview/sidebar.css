@@ -1,0 +1,347 @@
+.file-layout {
+  display:flex;
+  position:relative;
+  width:100%;
+  height:100%;
+  min-width:0;
+  min-height:0;
+  overflow:hidden}
+.file-layout-main {
+  flex:1;
+  min-width:0;
+  min-height:0;
+  display:flex}
+.file-layout-main>.conversation-view {
+  width:100%}
+.file-sidebar {
+  flex:0 0 var(--preview-width);
+  width:var(--preview-width);
+  min-width:0;
+  min-height:0;
+  display:flex;
+  flex-direction:column;
+  background:var(--bg,#fff);
+  border-left:1px solid var(--border,#ddd)}
+.file-layout.preview-full.has-preview .file-sidebar {
+  position:absolute;
+  inset:0;
+  width:100%;
+  z-index:30}
+.file-layout.preview-full.has-preview .file-layout-main {
+  visibility:hidden;
+  pointer-events:none}
+.file-preview-resizer {
+  width:5px;
+  flex:0 0 5px;
+  cursor:col-resize;
+  touch-action:none}
+.file-preview-resizer:hover,.file-preview-resizer:focus {
+  background:var(--accent,#6799db)}
+.file-header-actions {
+  display:flex;
+  gap:6px;
+  -webkit-app-region:no-drag}
+.file-header-actions button,.file-tab-strip>button,.file-document-toolbar>button {
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:6px;
+  border:0;
+  background:none;
+  color:inherit;
+  border-radius:6px}
+.file-header-actions button:hover,.file-tab-strip button:hover,.file-document-toolbar button:hover {
+  background:#8882}
+.file-tab-strip {
+  display:flex;
+  align-items:center;
+  height:42px;
+  flex-shrink:0;
+  border-bottom:1px solid var(--border,#ddd);
+  gap:4px;
+  padding:0 6px}
+.file-tabs {
+  display:flex;
+  overflow:auto;
+  flex:1;
+  min-width:0;
+  height:100%;
+  gap:3px}
+.file-tab {
+  display:flex;
+  align-items:center;
+  flex-shrink:0;
+  max-width:210px;
+  min-width:70px;
+  border-bottom:2px solid transparent}
+.file-tab.active {
+  border-bottom-color:var(--accent,#6799db);
+  background:#8881}
+.file-tab button {
+  border:0;
+  background:none;
+  color:inherit;
+  display:flex;
+  align-items:center;
+  gap:5px;
+  padding:8px 5px;
+  min-width:0}
+.file-tab [role=tab] {
+  flex:1}
+.file-tab span {
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap}
+.file-tab>button:last-child {
+  flex:none}
+.file-document,.file-tree {
+  display:flex;
+  flex-direction:column;
+  min-height:0;
+  flex:1}
+.file-document-toolbar {
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:8px 12px;
+  border-bottom:1px solid var(--border,#ddd);
+  flex-shrink:0;
+  min-height:42px}
+.file-document-toolbar>span {
+  flex:1;
+  overflow:hidden;
+  white-space:nowrap;
+  text-overflow:ellipsis;
+  font-size:12px}
+.file-document-content {
+  flex:1;
+  min-height:0;
+  overflow:auto;
+  position:relative}
+.file-preview-note {
+  font-size:12px;
+  line-height:1.5;
+  background:#ddab2420;
+  padding:6px 12px;
+  overflow-wrap:anywhere}
+.file-preview-error,.file-preview-empty,.file-preview-loading {
+  padding:20px;
+  font-size:13px}
+.file-preview-error pre {
+  white-space:pre-wrap;
+  overflow-wrap:anywhere}
+.file-tree-scroll {
+  overflow:auto;
+  flex:1;
+  padding:8px}
+.file-tree-level {
+  list-style:none;
+  margin:0;
+  padding-left:14px}
+.file-tree-scroll>.file-tree-level {
+  padding-left:0}
+.file-tree-level button {
+  display:flex;
+  align-items:center;
+  gap:6px;
+  min-width:0;
+  width:100%;
+  padding:5px 4px;
+  border:0;
+  text-align:left;
+  background:none;
+  color:inherit;
+  font-size:13px}
+.file-tree-level button:hover {
+  background:#8882}
+.file-tree-level button:disabled {
+  opacity:.45}
+.file-tree-level span {
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap}
+.file-tree-level [role=alert] {
+  font-size:12px;
+  overflow-wrap:anywhere;
+  color:#c33}
+.file-markdown,.file-text {
+  padding:18px;
+  min-height:100%;
+  font-size:14px}
+.file-markdown img {
+  max-width:100%}
+.file-text.wrap pre,.file-text.wrap code {
+  white-space:pre-wrap!important;
+  overflow-wrap:anywhere}
+.file-text label {
+  font-size:12px;
+  display:flex;
+  gap:5px;
+  margin-bottom:10px}
+.file-image {
+  padding:16px;
+  overflow:auto;
+  height:100%;
+  box-sizing:border-box}
+.file-image img {
+  display:block;
+  margin:0 auto}
+.file-preview-zoom {
+  position:sticky;
+  top:8px;
+  z-index:4;
+  display:flex;
+  justify-content:flex-end;
+  margin-bottom:12px;
+  pointer-events:none}
+.file-preview-zoom select {
+  pointer-events:auto;
+  background:var(--bg,#fff);
+  color:inherit;
+  border:1px solid #8885;
+  border-radius:7px;
+  padding:5px}
+.file-pdf {
+  padding:12px;
+  min-height:100%;
+  background:#8882;
+  box-sizing:border-box}
+.file-pdf-page {
+  position:relative;
+  width:max-content;
+  min-width:100px;
+  max-width:none;
+  margin:0 auto 12px;
+  background:white;
+  box-shadow:0 2px 8px #0002}
+.file-pdf-page canvas {
+  display:block}
+.file-pdf-text {
+  position:absolute;
+  inset:0;
+  overflow:hidden;
+  line-height:1;
+  text-align:initial;
+  text-size-adjust:none;
+  forced-color-adjust:none;
+  transform-origin:0 0}
+.file-pdf-text :is(span,br) {
+  color:transparent;
+  position:absolute;
+  white-space:pre;
+  cursor:text;
+  transform-origin:0% 0%}
+.file-pdf-text ::selection {
+  background:#288bff55}
+.file-excel {
+  display:flex;
+  flex-direction:column;
+  height:100%;
+  min-height:300px;
+  color:#222;
+  background:white}
+.file-excel-workbook {
+  flex:1;
+  min-height:0;
+  position:relative}
+.file-excel-workbook .fortune-container {
+  width:100%;
+  height:100%}
+.file-open-control {
+  position:relative;
+  flex:none;
+  max-width:200px;
+  font-size:12px}
+.file-open-split {
+  display:flex;
+  border:1px solid #8884;
+  border-radius:7px;
+  overflow:hidden}
+.file-open-split button {
+  border:0;
+  background:none;
+  color:inherit;
+  padding:7px;
+  display:flex;
+  align-items:center;
+  justify-content:center}
+.file-open-split button+button {
+  border-left:1px solid #8883;
+  padding:5px}
+.file-open-control img,.file-open-menu img {
+  width:16px;
+  height:16px;
+  object-fit:contain}
+.file-open-menu {
+  position:absolute;
+  min-width:220px;
+  max-width:min(360px,calc(100vw - 16px));
+  max-height:350px;
+  overflow:auto;
+  background:var(--bg,#fff);
+  color:var(--text,#222);
+  border:1px solid #8885;
+  box-shadow:0 6px 24px #0003;
+  border-radius:9px;
+  z-index:1000;
+  padding:5px}
+.file-open-menu button {
+  display:flex;
+  align-items:center;
+  gap:8px;
+  width:100%;
+  padding:8px;
+  border:0;
+  background:none;
+  color:inherit;
+  text-align:left}
+.file-open-menu button:hover {
+  background:#8882}
+.file-open-menu button:last-child {
+  border-top:1px solid #8883}
+.file-open-error {
+  display:block;
+  color:#c33;
+  max-width:170px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap}
+.file-open-menu [role=alert] {
+  white-space:pre-wrap;
+  overflow-wrap:anywhere;
+  padding:8px}
+.file-layout-error {
+  position:absolute;
+  bottom:12px;
+  right:16px;
+  max-width:420px;
+  background:var(--bg,#fff);
+  box-shadow:0 3px 15px #0003;
+  z-index:50;
+  padding:12px;
+  border:1px solid #c666;
+  border-radius:8px;
+  font-size:12px;
+  overflow-wrap:anywhere}
+.file-layout-error button {
+  float:right}
+.turn-file-item>.file-open-control {
+  align-self:center;
+  margin-right:8px}
+.turn-file-item:has(>.file-open-control) {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto}
+.sent-file-with-actions {
+  display:flex;
+  align-items:center;
+  gap:8px}
+.sent-file-with-actions>.sent-file-card {
+  flex:1;
+  min-width:0}
+
+:root[data-theme=dark] .file-sidebar,:root[data-theme=dark] .file-open-menu,:root[data-theme=dark] .file-layout-error,:root[data-theme=dark] .file-preview-zoom select {
+  background:#202225;
+  color:#e4e4e7}
+:root[data-theme=dark] .file-sidebar,:root[data-theme=dark] .file-document-toolbar,:root[data-theme=dark] .file-tab-strip {
+  border-color:#ffffff18}
+

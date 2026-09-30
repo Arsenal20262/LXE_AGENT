@@ -161,3 +161,22 @@ Source: https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist
 Python Office dependencies include python-docx 1.2.0 (MIT), python-pptx 1.0.2
 (MIT), lxml (BSD-3-Clause) and XlsxWriter (BSD-2-Clause). Their distribution
 metadata and license files remain in the packaged Python site-packages.
+
+## Desktop file previews
+
+The spreadsheet parsers, read-only FortuneSheet/ExcelJS patches, and native file
+association helpers and legacy Office test fixtures are adapted from DeepSeek Harness (MIT, Copyright 2026
+DeepSeek). Source: https://github.com/deepseek-ai/deepseek-harness, revision
+`639ed015397290b3745d163aafe02ffee4aa3f84`. The full MIT text ships at
+`dashboard/legal/file-preview/DeepSeek-MIT.txt`. Patches are retained in `patches/`.
+
+Pinned preview dependencies are FortuneSheet core/react 1.0.4 (MIT, Copyright
+2022 Suzhou Ruilisi Technology Co., Ltd), ExcelJS 4.4.0 (MIT), SheetJS CE 0.20.3
+(Apache-2.0), PapaParse 5.5.3 (MIT), fast-xml-parser 5.11.1 (MIT), fflate 0.8.3
+(MIT) and PDF.js 6.3.289 (Apache-2.0). Their license texts ship in
+`dashboard/legal/file-preview/`. FortuneSheet license source:
+https://github.com/ruilisi/fortune-sheet/blob/v1.0.4/LICENSE.
+
+PDF.js character maps, standard fonts, image-decoder WASM and their individual
+licenses are retained together in `dashboard/preview-pdf/`. All preview workers
+and resources are served from the packaged dashboard; no CDN is used.

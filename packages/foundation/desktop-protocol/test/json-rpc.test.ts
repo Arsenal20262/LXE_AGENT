@@ -23,6 +23,7 @@ const methods = {
   ensure_session: { request: { session_id: "session", source: {}, workspace: initialize.legacy_workspace } },
   append_pending_event: { session_id: "session", event: {} },
   has_pending_events: { session_id: "session" },
+  resolve_workspace_directory: { session_id: "session" },
   resolve_artifact: { session_id: "session", artifact_id: "file" },
   resolve_image_view: { session_id: "session", view_id: "view" },
   resolve_image_preview: { session_id: "session", kind: "attachment", id: "image" },
@@ -35,7 +36,7 @@ const methods = {
 describe("JSON-RPC boundary", () => {
   test("all command names remain reachable with their business payloads", () => {
     const names: Array<keyof AgentCommandPayloads> = Object.keys(methods) as Array<keyof AgentCommandPayloads>;
-    expect(names).toHaveLength(16);
+    expect(names).toHaveLength(17);
     for (const method of names) {
       const request = { jsonrpc: "2.0", id: method, method, params: methods[method] };
       expect(parseAgentCall(request)).toEqual(expect.objectContaining(request));

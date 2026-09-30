@@ -1,0 +1,41 @@
+import React, { useState } from "react";
+import { createRoot } from "react-dom/client";
+import { FilePreviewLayout, PreviewHeaderActions, usePreviewSidebar } from "../../../src/features/file-preview/Sidebar";
+import { setFileBridgeForTests } from "../../../src/features/file-preview/api";
+import type { DesktopFilesBridge, FileMetadata, SessionFileRef } from "@lxe/desktop-protocol";
+import "../../../src/styles.css";
+const calls: string[] = [], pending = new Map<string, string>();
+let version = "1";
+const pathOf = (ref: SessionFileRef) => ref.kind === "workspace" ? ref.path : ref.id;
+function metadata(ref: SessionFileRef): FileMetadata {
+  const path = pathOf(ref), extension = path.slice(path.lastIndexOf("."));
+  return { key: ref.session_id + path, name: path, extension, size: 100, version, source: "current_file", kind: extension === ".xlsx" || extension === ".csv" ? "excel" : extension === ".pdf" ? "pdf" : extension === ".png" ? "image" : extension === ".md" ? "markdown" : extension === ".html" ? "unsupported" : "text" };
+}
+setFileBridgeForTests({
+  call: async call => {
+    calls.push(call.operation);
+    const { input } = call;
+    if (call.operation === "stat") return metadata(call.input.ref);
+    if (call.operation === "applications") return [{ id: "editor", name: "Test Editor", default: true, icon: null }];
+    if (call.operation === "open") { calls.push(JSON.stringify(call.input)); return; }
+    if (call.operation === "list") return { entries: [{ name: "文档.md", path: "文档.md", kind: "file" }, { name: ".hidden", path: ".hidden", kind: "file" }], next: null };
+    if (call.operation === "release") { pending.delete(call.input.request_id); return; }
+    if (call.operation === "prepare") { pending.set(call.input.request_id, pathOf(call.input.ref)); return { handle: call.input.request_id, metadata: metadata(call.input.ref), missingFonts: [] }; }
+  },
+  read: async (handle, relative) => {
+    const name = relative ?? pending.get(handle);
+    if (!name) throw new Error("released handle");
+    const response = await fetch(`/fixtures/${encodeURIComponent(name)}`); if (!response.ok) throw new Error(`fixture missing ${name}`);
+    return new Uint8Array(await response.arrayBuffer());
+  },
+} as DesktopFilesBridge);
+function Controls({ session }: { session: string }) {
+  const panel = usePreviewSidebar()!;
+  return <div><PreviewHeaderActions />{["文档.md", "book.xlsx", "table.csv", "doc.pdf", "图.png", "page.html"].map((name, i) => <button id={`open-${i}`} key={name} onClick={() => void panel.open({ session_id: session, kind: "workspace", path: name })}>{name}</button>)}<textarea id="draft" defaultValue="keep this draft" /></div>;
+}
+function Fixture() {
+  const [session, setSession] = useState("first");
+  (window as any).previewFixture = { calls, pending, change: () => { version = String(Number(version) + 1); }, switchSession: () => setSession(s => s === "first" ? "second" : "first") };
+  return <FilePreviewLayout sessionId={session}><Controls session={session} /></FilePreviewLayout>;
+}
+createRoot(document.getElementById("root")!).render(<Fixture />);

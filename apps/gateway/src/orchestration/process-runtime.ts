@@ -355,6 +355,12 @@ export class ProcessAgentRuntime implements DirectAgentRuntime {
     return objectValue(await this.request("has_pending_events", { session_id: sessionId })).pending === true;
   }
 
+  async resolveWorkspaceDirectory(sessionId: string): Promise<string> {
+    const result = objectValue(await this.request("resolve_workspace_directory", { session_id: sessionId }));
+    if (result.found !== true || typeof result.path !== "string" || !result.path) throw new Error("Session workspace not found");
+    return result.path;
+  }
+
   async resolveArtifact(sessionId: string, artifactId: string): Promise<string | undefined> {
     const result = objectValue(await this.request("resolve_artifact", {
       session_id: sessionId,

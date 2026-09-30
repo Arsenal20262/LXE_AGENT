@@ -179,6 +179,10 @@ export class AgentProtocolServer {
         return { appended: true };
       case "has_pending_events":
         return { pending: await this.readyHost().hasPendingEvents(request.params.session_id) };
+      case "resolve_workspace_directory": {
+        const path = await this.readyHost().resolveWorkspaceDirectory?.(request.params.session_id);
+        return path ? { found: true, path } : { found: false };
+      }
       case "resolve_artifact": {
         const artifact = await this.readyHost().resolveArtifact(
           request.params.session_id,

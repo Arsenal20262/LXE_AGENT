@@ -47,6 +47,8 @@ Windows 构建与安装验收见 [打包手册](docs/desktop/packaging-pipeline.
 
 ## 文档
 
+- [文件预览侧栏](docs/file-preview.md)：支持格式、系统应用打开与工作区文件树。
+
 - [Desktop 技术手册](docs/desktop/README.md)：进程架构、私有运行时、配置、开发和打包。
 - [文档入口](docs/README.md)：使用手册、架构说明、有效决策和外部参考。
 - [当前 Skill 清单](docs/harness/skill/current_skill_catalog.md)：正在运行的业务能力目录。

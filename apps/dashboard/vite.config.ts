@@ -1,10 +1,11 @@
+import { pdfAssets } from "./vite/pdf-assets";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { singleReactRuntimeGuard } from "./vite/react-runtime-guard";
 import { rendererCspGuard } from "./vite/renderer-csp-guard";
 
 export default defineConfig({
-  plugins: [react(), singleReactRuntimeGuard(), rendererCspGuard()],
+  plugins: [pdfAssets(), react(), singleReactRuntimeGuard(), rendererCspGuard()],
   resolve: {
     dedupe: ["react", "react-dom"]
   },

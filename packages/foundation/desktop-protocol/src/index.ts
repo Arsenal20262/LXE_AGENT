@@ -1,3 +1,4 @@
+export type * from "./file-preview";
 import { parseManagedState, type ManagedLlmState } from "@lxe/core/managed-llm";
 import { parseJsonRpcEnvelope, parseJsonRpcJson, JsonRpcError,
   type JsonRpcId, type JsonRpcSuccess, type JsonRpcFailure, type JsonRpcResponse } from "./json-rpc";
@@ -40,7 +41,7 @@ export type DesktopDraftAttachmentPayload = DesktopInputAttachmentPayload & {
   reference_key?: string;
 };
 
-export const AGENT_PROTOCOL_VERSION = 24 as const;
+export const AGENT_PROTOCOL_VERSION = 25 as const;
 
 /** Bounded process preview, independent of model stream sequence and wait cursors. */
 export type ExecTaskSnapshotPayload = {
@@ -126,6 +127,7 @@ export type AgentCommandPayloads = {
   ensure_session: { request: SessionWorkspaceRequest };
   append_pending_event: { session_id: string; event: JsonObject };
   has_pending_events: { session_id: string };
+  resolve_workspace_directory: { session_id: string };
   resolve_artifact: { session_id: string; artifact_id: string };
   resolve_image_view: { session_id: string; view_id: string };
   resolve_image_preview: { session_id: string; kind: "attachment" | "image_view"; id: string };
@@ -649,6 +651,7 @@ export interface DesktopUsageBalance {
 }
 
 export interface LxeDesktopBridge {
+  files: import("./file-preview").DesktopFilesBridge;
   dashboard: DashboardTransport;
   desktop: {
     readonly platform: DesktopPlatform;
@@ -721,6 +724,7 @@ const agentCommands = new Set<AgentCommand>([
   "ensure_session",
   "append_pending_event",
   "has_pending_events",
+  "resolve_workspace_directory",
   "resolve_artifact",
   "resolve_image_view",
   "resolve_image_preview",
@@ -848,6 +852,9 @@ const validateRequestPayload = (command: AgentCommand, payload: Record<string, u
       requireWorkspace(objectValue(payload.request)?.workspace, `${command}.request.workspace`);
       break;
     case "has_pending_events":
+      requireText("session_id");
+      break;
+    case "resolve_workspace_directory":
       requireText("session_id");
       break;
     case "resolve_artifact":

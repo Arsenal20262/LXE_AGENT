@@ -1,5 +1,5 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": { "types": ["bun", "vite/client"] },
-  "include": ["./*.ts", "./*.tsx", "../../src/vite-env.d.ts"]
+  "include": ["./*.ts", "./*.tsx", "../features/file-preview/*.ts", "../features/file-preview/*.tsx", "../../src/vite-env.d.ts"]
 }

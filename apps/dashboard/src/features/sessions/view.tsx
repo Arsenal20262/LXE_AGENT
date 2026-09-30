@@ -1,3 +1,5 @@
+import { PreviewHeaderActions, usePreviewSidebar } from "../file-preview/Sidebar";
+import { OpenFileButton } from "../file-preview/OpenFileButton";
 import { UserQuestionGate } from "./user-questions";
 import type { PendingUserQuestion } from "@lxe/desktop-protocol";
 import type { DesktopDraftAttachmentPayload } from "@lxe/desktop-protocol";
@@ -529,10 +531,12 @@ function LiveToolOperationBody({ operation }: { operation: ToolOperation }) {
 }
 
 function TurnFileList({
+  sessionId,
   files,
   onOpenFile,
   onRevealFile,
 }: {
+  sessionId?: string;
   files: SessionArtifactPayload[];
   onOpenFile: (artifactId: string) => Promise<void>;
   onRevealFile: (artifactId: string) => Promise<void>;
@@ -562,7 +566,8 @@ function TurnFileList({
       });
     }
   };
-  const open = (artifactId: string) => run(artifactId, onOpenFile);
+  const panel = usePreviewSidebar();
+  const open = (artifactId: string) => run(artifactId, id => panel && sessionId ? panel.open({ session_id: sessionId, kind: "artifact", id }) : onOpenFile(id));
   const reveal = (artifactId: string) => run(artifactId, onRevealFile);
   // The type marker stays on every row even when the whole set shares a type:
   // it doubles as the anchor the eye lands on, and without it the list reads as
@@ -601,7 +606,7 @@ function TurnFileList({
               {/* A second action needs its own button - one cannot nest inside
                   the card's - and its own shape. An arrow would read as "open",
                   which is what the card already does. */}
-              <button
+              {panel && sessionId ? <OpenFileButton file={{ session_id: sessionId, kind: "artifact", id: file.artifact_id }} /> : <button
                 aria-label={t.conversation.revealFile(file.name)}
                 className="turn-file-reveal"
                 disabled={isOpening}
@@ -610,7 +615,7 @@ function TurnFileList({
                 type="button"
               >
                 <FolderOpen aria-hidden="true" size={14} />
-              </button>
+              </button>}
               {error ? (
                 <div className="turn-file-card-error" role="alert">{t.conversation.openFileFailed(error)}</div>
               ) : null}
@@ -1433,7 +1438,7 @@ export const UnifiedConversationRow = React.memo(function UnifiedConversationRow
     aria-expanded={expanded} onClick={() => onToggle(row.id)}>
     <ConversationStatus row={row} /><ChevronRight size={14} style={{transform: expanded ? "rotate(90deg)" : undefined}} />
   </button>;
-  if (row.kind === "artifacts") return <TurnFileList files={row.artifacts ?? []} onOpenFile={onOpenFile} onRevealFile={onRevealFile} />;
+  if (row.kind === "artifacts") return <TurnFileList sessionId={attachmentSessionId} files={row.artifacts ?? []} onOpenFile={onOpenFile} onRevealFile={onRevealFile} />;
   if (row.kind === "image_views") return <ImageViewGroup rows={row.imageRows ?? []} sessionId={attachmentSessionId} />;
   if (row.kind === "tool") {
     const operation = row.operation ?? (row.liveTool ? liveToolOperations([row.liveTool])[0] : undefined);
@@ -1592,6 +1597,7 @@ export function SessionDetailView({
             </>
           )}
         </div>
+        <PreviewHeaderActions />
         {session ? (
           <button
             className="session-detail-toggle"

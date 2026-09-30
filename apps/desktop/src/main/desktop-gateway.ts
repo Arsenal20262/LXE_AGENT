@@ -1,8 +1,10 @@
+import { FilePreviewService } from "./file-preview/service";
+import { OfficePreviewCache } from "./file-preview/office-cache";
+import type { DesktopFileCall, DesktopFileOperations } from "@lxe/desktop-protocol";
 import { imageBytesThumbnail } from "./attachment-thumbnail";
 import { UpdateBusyError } from "./update-service";
 import { prepareConversationAttachments } from "./conversation-submission";
 import { existsSync, mkdirSync } from "node:fs";
-import { access } from "node:fs/promises";
 import { join } from "node:path";
 import { shell } from "electron";
 import { DashboardRpcError } from "@lxe/desktop-protocol";
@@ -45,11 +47,8 @@ import {
 import { publicDashboardChannelHealth } from "./dashboard-channel-health";
 import { desktopLxeSkillState } from "./lxeskill-health";
 import {
-  openConversationArtifact,
-  openConversationAttachment,
   previewConversationAttachment,
   previewConversationImageView,
-  revealConversationArtifact,
 } from "./conversation-artifacts";
 import { attachmentThumbnail } from "./attachment-thumbnail";
 import type { DesktopConversationAttachmentService } from "./conversation-attachments";
@@ -130,7 +129,30 @@ export class DesktopGateway {
   private dashboardObservedRuntimeReady = false;
   private lastError = "";
 
+  private files: FilePreviewService | undefined;
   constructor(private readonly options: DesktopGatewayOptions) {}
+  private fileService(): FilePreviewService {
+    return this.files ??= new FilePreviewService(() => {
+      if (!this.runtime) throw new Error("Agent runtime is unavailable");
+      return {
+        resolveWorkspaceDirectory: session => this.runtime!.resolveWorkspaceDirectory(session),
+        resolveArtifact: (session, id) => this.runtime!.resolveArtifact(session, id),
+        resolveAttachment: async (session, id) => await this.runtime!.resolveAttachment(session, id)
+          ?? this.composition?.parts.conversations.resolveAttachmentPreview(session, id),
+        resolveImagePreview: async (session, kind, id) => {
+          const stored = await this.runtime!.resolveImagePreview(session, kind, id);
+          if (stored?.source === "history") return stored;
+          const image = this.composition?.parts.conversations.resolveAttachmentPreviewImage(session, id);
+          return image ? { source: "history" as const, image } : stored;
+        },
+      };
+    }, new OfficePreviewCache(join(this.options.paths.dataRoot, "cache", "file-previews"), this.options.paths.officeNodePath, this.options.paths.officeCliPath), {
+      openPath: path => shell.openPath(path), revealPath: path => shell.showItemInFolder(path),
+    });
+  }
+  fileCall<K extends keyof DesktopFileOperations>(call: DesktopFileCall<K>): Promise<DesktopFileOperations[K]["result"]> { return this.fileService().call(call); }
+  fileRead(handle: string, relativeImage?: string): Promise<Uint8Array> { return this.fileService().read(handle, relativeImage); }
+
 
   async start(): Promise<void> {
     if (this.updatePreparing) throw new Error("Application update is preparing");
@@ -313,6 +335,7 @@ export class DesktopGateway {
   }
 
   async stop(strict = false): Promise<void> {
+    await this.files?.dispose(); this.files = undefined;
     const composition = this.composition;
     if (composition) await composition.stop();
     if (strict && composition?.parts.lifecycle.shutdownError) {
@@ -468,24 +491,17 @@ export class DesktopGateway {
     }
     if (call.operation === "sessions.file.open") {
       const { session_id: sessionId, artifact_id: artifactId } = call.input;
-      return await openConversationArtifact({
-        resolveArtifact: (targetSessionId, targetArtifactId) =>
-          this.runtime!.resolveArtifact(targetSessionId, targetArtifactId),
-        // shell.openPath answers with the operating system's own failure text;
-        // "" means it opened.
-        openPath: (path) => shell.openPath(path),
-      }, sessionId, artifactId) as DashboardRpcResult<O>;
+      try {
+        await this.fileCall({ operation: "open", input: { ref: { session_id: sessionId, kind: "artifact", id: artifactId } } });
+        return { opened: true, error: "" } as DashboardRpcResult<O>;
+      } catch (error) { return { opened: false, error: error instanceof Error ? error.message : String(error) } as DashboardRpcResult<O>; }
     }
     if (call.operation === "sessions.file.reveal") {
       const { session_id: sessionId, artifact_id: artifactId } = call.input;
-      return await revealConversationArtifact({
-        resolveArtifact: (targetSessionId, targetArtifactId) =>
-          this.runtime!.resolveArtifact(targetSessionId, targetArtifactId),
-        // access rejects with the filesystem's own ENOENT text, which is what
-        // the conversation shows when a produced file has been moved away.
-        assertExists: (path) => access(path),
-        revealPath: (path) => shell.showItemInFolder(path),
-      }, sessionId, artifactId) as DashboardRpcResult<O>;
+      try {
+        await this.fileCall({ operation: "open", input: { ref: { session_id: sessionId, kind: "artifact", id: artifactId }, reveal: true } });
+        return { revealed: true, error: "" } as DashboardRpcResult<O>;
+      } catch (error) { return { revealed: false, error: error instanceof Error ? error.message : String(error) } as DashboardRpcResult<O>; }
     }
     if (call.operation === "sessions.image_view.preview") {
       return await previewConversationImageView({
@@ -510,11 +526,10 @@ export class DesktopGateway {
     }
     if (call.operation === "sessions.attachment.open") {
       const { session_id: sessionId, attachment_id: attachmentId } = call.input;
-      return await openConversationAttachment({
-        resolveAttachment: (targetSessionId, targetAttachmentId) =>
-          this.runtime!.resolveAttachment(targetSessionId, targetAttachmentId),
-        openPath: (path) => shell.openPath(path),
-      }, sessionId, attachmentId) as DashboardRpcResult<O>;
+      try {
+        await this.fileCall({ operation: "open", input: { ref: { session_id: sessionId, kind: "attachment", id: attachmentId } } });
+        return { opened: true, error: "" } as DashboardRpcResult<O>;
+      } catch (error) { return { opened: false, error: error instanceof Error ? error.message : String(error) } as DashboardRpcResult<O>; }
     }
     const result = await this.runtime.dashboardCall(call as AgentDashboardRpcCall) as DashboardRpcResult<O>;
     if (call.operation === "models.update" || call.operation === "models.thinking.update") {

@@ -534,6 +534,8 @@ async function bootstrap(): Promise<void> {
     inputAssetSlotDirectory: (slot) => inputAssets.directoryFor(slot),
     registerConversationFiles: (selectedPaths) => conversationAttachments.register(selectedPaths),
     registerPastedConversationFiles: (input) => conversationAttachments.registerPaste(input),
+    fileCall: call => gateway.fileCall(call),
+    fileRead: (handle, relativeImage) => gateway.fileRead(handle, relativeImage),
     previewDraftConversationFile: async (attachmentId, variant = "expanded") => {
       const [attachment] = conversationAttachments.resolve([attachmentId]);
       return { data_url: await attachmentThumbnail(attachment!.path, variant === "thumbnail" ? 320 : 1600) };
@@ -553,8 +555,8 @@ async function bootstrap(): Promise<void> {
         responseHeaders: {
           ...details.responseHeaders,
           "Content-Security-Policy": [
-            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
-            + "img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; "
+            "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; "
+            + "img-src 'self' data: blob:; worker-src 'self'; font-src 'self' data:; connect-src 'self'; object-src 'none'; "
             + "base-uri 'self'; frame-ancestors 'none'",
           ],
         },

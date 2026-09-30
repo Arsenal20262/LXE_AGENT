@@ -32,6 +32,10 @@ export function createDesktopBridge(
   files?: DesktopFilePathPort,
 ): LxeDesktopBridge {
   return {
+    files: {
+      call: (call) => ipc.invoke(IPC_CHANNELS.fileCall, call),
+      read: (handle, relativeImage) => ipc.invoke(IPC_CHANNELS.fileRead, handle, relativeImage),
+    },
     dashboard: {
       call: (call) => ipc.invoke(IPC_CHANNELS.dashboardCall, call),
     },

@@ -95,6 +95,7 @@ const wireGuardMsi = wireGuardMsiValue ? resolve(wireGuardMsiValue) : "";
 
 requireResourceSourceFile(agentCli);
 requireResourceSourceDirectory(dashboardRoot);
+createRequire(import.meta.url)("./file-preview-resources.cjs").verifyFilePreviewResources(dashboardRoot);
 if (!projectWheel || !existsSync(projectWheel) || !statSync(projectWheel).isFile()) {
   throw new Error(
     "LXE_DESKTOP_PROJECT_WHEEL must point to the current LXE project wheel built by the desktop wrapper",

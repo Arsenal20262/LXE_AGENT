@@ -49,5 +49,10 @@
   "devDependencies": {
     "typescript": "7.0.2",
     "cos-nodejs-sdk-v5": "3.0.0"
+  },
+  "patchedDependencies": {
+    "@fortune-sheet/core@1.0.4": "patches/@fortune-sheet__core@1.0.4.patch",
+    "@fortune-sheet/react@1.0.4": "patches/@fortune-sheet__react@1.0.4.patch",
+    "exceljs@4.4.0": "patches/exceljs@4.4.0.patch"
   }
 }

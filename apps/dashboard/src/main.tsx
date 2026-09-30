@@ -1,3 +1,4 @@
+import { FilePreviewLayout } from "./features/file-preview/Sidebar";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { createRoot } from "react-dom/client";
@@ -876,6 +877,7 @@ function App({
             ) : null}
             {activeSection === "sessions" ? (
               <section className="sessions-conversation-shell">
+                <FilePreviewLayout sessionId={selectedSessionId ?? ""}>
                 {selectedSessionId || newConversation ? (
                   <SessionDetailView
                     question={newConversation ? undefined : pendingQuestions.find(q => q.session_id === selectedSessionId)}
@@ -928,6 +930,7 @@ function App({
                 ) : (
                   <EmptyState label={selectedSessionId ? t.sessionDetail.loading : t.sessions.selectPrompt} />
                 )}
+                </FilePreviewLayout>
               </section>
             ) : null}
             {activeSection === "home" ? (
