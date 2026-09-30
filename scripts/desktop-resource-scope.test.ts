@@ -79,7 +79,7 @@ describe("desktop resource scope", () => {
     const tracked = new TextDecoder().decode(result.stdout).split("\0").filter(Boolean);
     const approved = tracked.filter((path) => approvedSkillFile(repositoryRoot, path));
     expect(approved.some((path) => path.endsWith("/SKILL.md"))).toBe(true);
-    expect(approved).toContain("skills/minimax-xlsx/references/read-analyze.md");
+    expect(approved.some((path) => path.includes("/references/") && path.endsWith(".md"))).toBe(true);
     expect(approved.some((path) => path.endsWith("_test.py"))).toBe(false);
     validateSelectedSkills(repositoryRoot, approved);
   });

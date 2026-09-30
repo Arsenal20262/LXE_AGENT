@@ -77,7 +77,6 @@ LXE formally maintains these modules' command and failure contracts. Their resul
 
 ## Default Skills
 
-- `minimax-xlsx`: general workbook creation and transformation utilities.
 - `skill-creator`: create or edit reusable user skills through conversation and existing file/exec tools.
 
 ## Ziniao Browser
