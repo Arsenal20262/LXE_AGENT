@@ -2,7 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-const installer = readFileSync(resolve(import.meta.dirname, "../resources/installer.nsh"), "utf8");
+const installer = readFileSync(resolve(import.meta.dirname, "../resources/installer.nsh"), "utf8")
+  .replaceAll("\r\n", "\n");
 
 describe("Windows installer runtime state", () => {
   test("defines uninstall code only while electron-builder compiles the uninstaller", () => {
