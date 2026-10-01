@@ -20,9 +20,9 @@ test("sidebar status entry opens desktop settings", () => {
   assert.match(main, /onOpen=\{\(\) => onOpenDesktopSettings\?\.\("status"\)\}/);
 });
 
-test("sessions persist in the application sidebar with title-only rows", () => {
+test("workspace sessions persist in the application sidebar with compact rows", () => {
   assert.match(styles, /container-name:\s*dashboard-main/);
-  assert.equal((main.match(/<SessionsIndex/g) || []).length, 1);
+  assert.equal((main.match(/<WorkspacesIndex/g) || []).length, 1);
   assert.match(main, /const sessionsQuery = useSessionsInfiniteQuery\(debouncedQuery, dashboardRuntimeReady\);/);
   assert.match(main, /const sidebarMode = sidebar\.mode;/);
   assert.doesNotMatch(main, /activeSection === "sessions" && sessionSidebarExpanded/);

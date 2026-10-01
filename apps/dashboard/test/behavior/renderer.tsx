@@ -135,7 +135,13 @@ const dashboard = {
     }
   },
 };
-window.lxe = { desktop, dashboard } as unknown as LxeDesktopBridge;
+const files = {
+  async call(call: { operation: string; input: unknown }) {
+    if (call.operation === "focus-preview") return;
+    throw new Error(`Unexpected fixture file operation: ${call.operation}`);
+  },
+};
+window.lxe = { desktop, dashboard, files } as unknown as LxeDesktopBridge;
 
 type ComposerOptions = { runtimeReady?: boolean; modelSaving?: boolean; thinkingSaving?: boolean; running?: boolean; holdSend?: boolean };
 let composerOptions: ComposerOptions = {};
