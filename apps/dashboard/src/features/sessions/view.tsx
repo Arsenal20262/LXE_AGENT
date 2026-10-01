@@ -1586,10 +1586,10 @@ export function SessionDetailView({
   return (
     <div className="session-detail conversation-view">
       <header className="conversation-header">
-        {/* An unstarted conversation has no title worth printing, but the row
-            still has to exist: it is the window's drag area on both desktops. */}
+        {/* Drafts use the title-bar row for workspace selection; existing
+            conversations keep their title and window drag area here. */}
         <div className="conversation-header-copy">
-          {newConversation ? null : (
+          {newConversation ? workspaceControl : (
             <>
               <MessageSquareText aria-hidden="true" className="conversation-header-icon" size={15} />
               <h2>{title}</h2>
@@ -1611,7 +1611,7 @@ export function SessionDetailView({
           </button>
         ) : null}
       </header>
-      {workspaceControl}
+      {newConversation ? null : workspaceControl}
       {sessionInfoOpen && session ? (
         <>
           <button
