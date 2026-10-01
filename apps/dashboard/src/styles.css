@@ -224,56 +224,57 @@ button {
   border-right-color: #312e2b;
 }
 
-/* Brand palettes are absolute, not themed - the hue is the brand's. Only the
-   surfaces under it move, so the card stops being a bright slab on a dark page.
-   kimi_coding already ships a fully dark palette and needs nothing here. */
+/* Dark cards use neutral surfaces; brand colors stay on marks and accents.
+   Kimi already has a complete dark palette of its own. */
+:root[data-theme="dark"] .model-card:not([data-provider="kimi_coding"]) {
+  --model-soft: var(--surface-subtle);
+  --model-ring: var(--border-strong);
+  --model-card-bg: var(--surface);
+  --model-card-active-bg: var(--surface);
+  --model-card-text: var(--text-strong);
+  --model-card-muted: var(--muted);
+  --model-card-soft-text: var(--text-soft);
+  --model-panel-bg: var(--surface-muted);
+  --model-panel-border: var(--border);
+  --model-input-bg: var(--surface-subtle);
+  --model-input-disabled-bg: var(--surface-muted);
+  --model-input-text: var(--text);
+  border-color: var(--border);
+  box-shadow: var(--shadow-card);
+}
+
+:root[data-theme="dark"] .model-card:not([data-provider="kimi_coding"]):hover {
+  border-color: var(--model-ring);
+}
+
+:root[data-theme="dark"] .model-card:not([data-provider="kimi_coding"]).item-active {
+  border-color: var(--model-ring);
+  box-shadow: 0 0 0 1px var(--model-ring), var(--shadow-card);
+}
+
+:root[data-theme="dark"] .model-card:not([data-provider="kimi_coding"])::after {
+  background: none;
+}
+
+:root[data-theme="dark"] .model-card:not([data-provider="kimi_coding"]) .model-brand-watermark {
+  opacity: 0.04;
+}
+
+:root[data-theme="dark"] .model-deepseek-waves {
+  opacity: 0.22;
+}
+
 :root[data-theme="dark"] .model-card[data-provider="deepseek"] {
-  --model-soft: #1d2440;
-  --model-ring: #33417a;
-  --model-card-bg: #1a1f33;
-  --model-card-active-bg: #1e2440;
-  --model-card-text: #cfdcfb;
-  --model-card-muted: #8fa3cc;
-  --model-card-soft-text: #adbfe6;
-  --model-panel-bg: rgba(255, 255, 255, 0.04);
-  --model-panel-border: #2f3a63;
-  --model-input-bg: rgba(0, 0, 0, 0.32);
-  --model-input-disabled-bg: #232a45;
-  --model-input-text: #cfdcfb;
-  border-color: #2f3a63;
+  --model-hue-strong: #9db4f5;
 }
 
 :root[data-theme="dark"] .model-card[data-provider="openrouter"] {
-  --model-soft: #2a1d45;
-  --model-ring: #4b3677;
-  --model-card-bg: #1f1830;
-  --model-card-active-bg: #251c3a;
-  --model-card-text: #e4d9fb;
-  --model-card-muted: #a193c9;
-  --model-card-soft-text: #c4b4e8;
-  --model-panel-bg: rgba(255, 255, 255, 0.04);
-  --model-panel-border: #43335f;
-  --model-input-bg: rgba(0, 0, 0, 0.32);
-  --model-input-disabled-bg: #2c2344;
-  --model-input-text: #e4d9fb;
-  border-color: #43335f;
+  --model-hue-strong: #c4a5f5;
 }
 
 :root[data-theme="dark"] .model-card[data-provider="zhipuai"],
 :root[data-theme="dark"] .model-card[data-provider="zhipuai_coding_plan"] {
-  --model-soft: #1d2440;
-  --model-ring: #33417a;
-  --model-card-bg: #1a1f33;
-  --model-card-active-bg: #1e2440;
-  --model-card-text: #cfdcfb;
-  --model-card-muted: #8fa3cc;
-  --model-card-soft-text: #adbfe6;
-  --model-panel-bg: rgba(255, 255, 255, 0.04);
-  --model-panel-border: #2f3a63;
-  --model-input-bg: rgba(0, 0, 0, 0.32);
-  --model-input-disabled-bg: #232a45;
-  --model-input-text: #cfdcfb;
-  border-color: #2f3a63;
+  --model-hue-strong: #8aa9f5;
 }
 
 :root[data-theme="dark"] .skills-catalog {
