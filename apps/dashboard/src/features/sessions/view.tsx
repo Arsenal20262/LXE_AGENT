@@ -55,7 +55,7 @@ import {
   toolOperations,
 } from "./conversation";
 import type { ToolOperation } from "./conversation";
-import { formatCompactNumber, formatDate, formatMessageTime, formatNumber } from "../../shared/format";
+import { formatCompactNumber, formatMessageTime, formatNumber } from "../../shared/format";
 import { useUiText } from "../../shared/i18n";
 import type {
   DesktopConversationActivityPayload,
@@ -66,8 +66,7 @@ import type {
   SessionArtifactPayload,
   SessionDetailPayload,
   SessionMessage,
-  SessionPayload,
-  SourceSummary
+  SessionPayload
 } from "../../api/payloads";
 import { CodeBlock, languageForPath } from "../../shared/ui/code-block";
 import {
@@ -96,12 +95,6 @@ import { ConversationWelcome } from "./welcome";
 /** How close to the bottom still counts as "following the reply". */
 
 export type PendingConversationMessage = PendingMessage;
-
-function sourceLabel(source: SourceSummary | Record<string, unknown>): string {
-  const platform = String(source.platform || "unknown");
-  const chatType = String(source.chat_type || "");
-  return [platform, chatType].filter(Boolean).join(" / ");
-}
 
 function RoleBadge({ role }: { role: string }) {
   const t = useUiText();
@@ -1561,94 +1554,32 @@ export function SessionDetailView({
   const t = useUiText();
   const session = detail?.session || fallbackSession;
   const messages = detail?.messages || [];
-  const [sessionInfoOpen, setSessionInfoOpen] = useState(false);
-  const closeSessionInfo = () => setSessionInfoOpen(false);
-  const sessionInfoRef = useDialogFocus<HTMLElement>(sessionInfoOpen, closeSessionInfo);
   const sessionKey = display?.viewKey ?? session?.session_id ?? "new";
   const rows = display?.rows ?? conversationRows(messages,
     [activity?.latest, activity?.active, ...(activity?.queued ?? [])].filter((turn): turn is DesktopConversationTurnPayload => Boolean(turn)), pendingMessages);
   const process = useProcessRows(groupImageViewRows(rows), sessionKey);
   const [expandedRows, setExpandedRows] = useState<Map<string, boolean>>(() => new Map());
-  useEffect(() => { setExpandedRows(new Map()); setSessionInfoOpen(false); }, [sessionKey]);
+  useEffect(() => { setExpandedRows(new Map()); }, [sessionKey]);
   const toggleRow = useCallback((id: string) => setExpandedRows((current) => new Map(current).set(id, !current.get(id))), []);
-  const detailItems = session ? [
-    { label: t.sessionDetail.sessionId, value: session.session_id, mono: true },
-    { label: t.sessionDetail.source, value: sourceLabel(session.source_summary || session.source) },
-    { label: t.sessionDetail.directory, value: session.workspace.directory, mono: true },
-    { label: t.sessionDetail.worktree, value: session.workspace.worktree, mono: true },
-    { label: t.sessionDetail.model, value: session.model || "-" },
-    { label: t.sessionDetail.lastActive, value: formatDate(session.last_active_at) },
-    { label: t.stats.messages, value: formatNumber(session.message_count) },
-    { label: t.stats.toolCalls, value: formatNumber(session.tool_call_count) },
-    { label: t.stats.tokens, value: formatNumber(session.input_tokens + session.output_tokens) },
-    { label: t.stats.apiCalls, value: formatNumber(session.api_call_count) },
-  ] : [];
   const title = newConversation ? t.conversation.newTitle : session?.title || t.sessions.title;
   return (
     <div className="session-detail conversation-view">
       <header className="conversation-header">
-        {/* Drafts use the title-bar row for workspace selection; existing
-            conversations keep their title and window drag area here. */}
+        {/* Keep title and actions in the two grid columns; a third sibling
+            would create another row in the native title bar. */}
         <div className="conversation-header-copy">
           {newConversation ? workspaceControl : (
             <>
               <MessageSquareText aria-hidden="true" className="conversation-header-icon" size={15} />
-              <h2>{title}</h2>
-              {session ? <span>{sourceLabel(session.source_summary || session.source)}</span> : null}
+              <h2 title={title}>{title}</h2>
             </>
           )}
         </div>
-        <PreviewHeaderActions />
-        {session ? (
-          <button
-            className="session-detail-toggle"
-            type="button"
-            aria-expanded={sessionInfoOpen}
-            onClick={() => setSessionInfoOpen((current) => !current)}
-          >
-            <Info size={15} />
-            <span>{sessionInfoOpen ? t.sessionDetail.hideDetails : t.sessionDetail.details}</span>
-            <ChevronRight size={15} className={sessionInfoOpen ? "expanded" : ""} />
-          </button>
-        ) : null}
+        <div className="conversation-header-actions">
+          {newConversation ? null : workspaceControl}
+          <PreviewHeaderActions />
+        </div>
       </header>
-      {newConversation ? null : workspaceControl}
-      {sessionInfoOpen && session ? (
-        <>
-          <button
-            aria-label={t.sessionDetail.hideDetails}
-            className="session-detail-scrim"
-            onClick={closeSessionInfo}
-            type="button"
-          />
-          <section
-            aria-label={t.sessionDetail.details}
-            aria-modal="true"
-            className="session-detail-panel"
-            ref={sessionInfoRef}
-            role="dialog"
-            tabIndex={-1}
-          >
-            <header className="session-detail-panel-header">
-              <div>
-                <span>{t.sessionDetail.eyebrow}</span>
-                <h3>{title}</h3>
-              </div>
-              <button aria-label={t.sessionDetail.hideDetails} onClick={closeSessionInfo} type="button">
-                <X size={17} />
-              </button>
-            </header>
-            <dl className="session-detail-grid">
-              {detailItems.map((item) => (
-                <div className="session-detail-field" key={item.label}>
-                  <dt>{item.label}</dt>
-                  <dd className={item.mono ? "mono" : ""}>{item.value}</dd>
-                </div>
-              ))}
-            </dl>
-          </section>
-        </>
-      ) : null}
       <ConversationWindow key={sessionKey} rows={process.rows} hasOlder={hasOlder} hasNewer={hasNewer}
         connection={display?.connection} jumpVersion={display?.jump} onFollowingChange={onFollowingChange}
         loadOlder={onLoadOlder} loadNewer={onLoadNewer} jumpToLatest={onJumpToLatest} onVisibleGroups={onVisibleGroups}

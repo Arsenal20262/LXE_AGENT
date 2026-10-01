@@ -116,16 +116,28 @@ export function WorkspaceControl({ directory, workspaces, defaultDirectory, edit
     setError("");
     try { await action(); } catch (cause) { setError(queryError(cause)); }
   };
+  if (!editable) {
+    const name = workspaceName(directory, groups, defaultDirectory, t.workspaces.defaultName);
+    return <div className="conversation-workspace is-readonly">
+      <button type="button" className="conversation-workspace-button" disabled={!directory}
+        title={`${name}\n${directory}`} aria-label={t.workspaces.open}
+        onClick={() => void invoke(() => window.lxe!.desktop.openWorkspace(directory))}>
+        <FolderOpen size={15} aria-hidden="true" />
+        <span className="conversation-workspace-name">{name}</span>
+        {directory === defaultDirectory ? <small className="workspace-default-badge">{t.workspaces.defaultBadge}</small> : null}
+      </button>
+      {error ? <div className="workspace-error" role="alert">{error}</div> : null}
+    </div>;
+  }
   return <div className="conversation-workspace">
     <div className="conversation-workspace-row">
       <FolderOpen size={15} aria-hidden="true" />
-      {editable ? <select aria-label={t.workspaces.choose} title={directory} value={directory} disabled={disabled} onChange={event => onChange(event.target.value)}>
+      <select aria-label={t.workspaces.choose} title={directory} value={directory} disabled={disabled} onChange={event => onChange(event.target.value)}>
         {!directory ? <option value="">{t.workspaces.choose}</option> : null}
         {groups.map(item => <option key={item.directory} value={item.directory}>{workspaceLabel(item.directory, groups, defaultDirectory, t.workspaces.defaultName)}{item.directory === defaultDirectory ? ` (${t.workspaces.defaultBadge})` : ""}</option>)}
-      </select> : <span className="conversation-workspace-name" title={directory}>{workspaceName(directory, groups, defaultDirectory, t.workspaces.defaultName)}</span>}
-      {!editable && directory === defaultDirectory ? <small className="workspace-default-badge">{t.workspaces.defaultBadge}</small> : null}
+      </select>
       <span className="conversation-workspace-path" title={directory}>{directory}</span>
-      {editable ? <button type="button" disabled={disabled} title={t.workspaces.choose} aria-label={t.workspaces.choose} onClick={() => void invoke(onChoose)}><FolderPlus size={16} /></button> : null}
+      <button type="button" disabled={disabled} title={t.workspaces.choose} aria-label={t.workspaces.choose} onClick={() => void invoke(onChoose)}><FolderPlus size={16} /></button>
       <button type="button" disabled={!directory} title={t.workspaces.open} aria-label={t.workspaces.open} onClick={() => void invoke(() => window.lxe!.desktop.openWorkspace(directory))}><FolderOpen size={16} /></button>
     </div>
     {error ? <div className="workspace-error" role="alert">{error}</div> : null}

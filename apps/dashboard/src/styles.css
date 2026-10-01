@@ -4800,88 +4800,6 @@ h1 {
   min-width: 0;
 }
 
-.session-detail-toolbar {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.session-detail-toggle {
-  display: inline-flex;
-  align-items: center;
-  min-height: 30px;
-  gap: 6px;
-  padding: 5px 9px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--text-soft);
-  cursor: pointer;
-  font: inherit;
-  font-size: 0.75rem;
-  font-weight: 550;
-  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease;
-}
-
-.session-detail-toggle:hover,
-.session-detail-toggle:focus-visible {
-  border-color: var(--border-strong);
-  background: var(--row-hover);
-  color: var(--text);
-}
-
-.session-detail-toggle:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 1px;
-}
-
-.session-detail-toggle svg {
-  flex: 0 0 auto;
-}
-
-.session-detail-toggle .expanded {
-  transform: rotate(90deg);
-}
-
-.session-detail-panel {
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-}
-
-.session-detail-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px 12px;
-}
-
-.session-detail-field {
-  display: grid;
-  min-width: 0;
-  gap: 4px;
-}
-
-.session-detail-field span {
-  color: var(--muted);
-  font-size: 0.6875rem;
-  font-weight: 500;
-}
-
-.session-detail-field strong {
-  overflow: hidden;
-  color: var(--text);
-  font-size: 0.8125rem;
-  font-weight: 550;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.session-detail-field .mono {
-  overflow-wrap: anywhere;
-  text-overflow: clip;
-  white-space: normal;
-}
-
 .message-list {
   display: grid;
   gap: 2px;
@@ -6813,10 +6731,6 @@ pre {
     padding: 16px 20px;
   }
 
-  .session-detail-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .sessions-page {
     height: auto;
   }
@@ -6904,9 +6818,6 @@ pre {
     gap: 2px;
   }
 
-  .session-detail-grid {
-    grid-template-columns: 1fr;
-  }
 }
 
 /* Usage stats page */
@@ -8495,6 +8406,8 @@ pre {
   /* The row's own content is 44px: a 30px button inside 7px of padding. Asking
      for more than that only pads the title away from the conversation. */
   min-height: 44px;
+  flex-shrink: 0;
+  container-type: inline-size;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 9px;
@@ -8568,6 +8481,13 @@ pre {
   gap: 9px;
 }
 
+.conversation-header-actions {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+}
+
 /* A label for where you are, not a headline. Session titles here can be a
    whole sentence long, and at 650 weight that sentence became the loudest thing
    on the page. */
@@ -8586,128 +8506,6 @@ pre {
 .conversation-header-icon {
   flex: 0 0 auto;
   color: var(--muted-light);
-}
-
-/* The source is short and fixed; the title is the part that should absorb the
-   truncation. Letting this shrink turned a five-character label into "desk..."
-   while the sentence-long title kept its width. */
-.conversation-header-copy > span {
-  overflow: hidden;
-  flex: 0 0 auto;
-  padding: 3px 7px;
-  border-radius: 6px;
-  background: var(--surface-muted);
-  color: var(--muted);
-  font-size: 0.6875rem;
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.conversation-header .session-detail-toggle {
-  border-color: transparent;
-  background: transparent;
-}
-
-.conversation-header .session-detail-toggle:hover,
-.conversation-header .session-detail-toggle:focus-visible {
-  border-color: transparent;
-}
-
-.session-detail-scrim {
-  position: absolute;
-  z-index: 18;
-  inset: 56px 0 0;
-  border: 0;
-  background: rgba(47, 42, 36, 0.18);
-  cursor: default;
-}
-
-.session-detail-panel {
-  position: absolute;
-  z-index: 19;
-  top: 56px;
-  right: 0;
-  bottom: 0;
-  display: flex;
-  width: min(380px, calc(100% - 24px));
-  flex-direction: column;
-  padding: 0;
-  overflow: auto;
-  border: 0;
-  border-left: 1px solid var(--border);
-  border-radius: 0;
-  background: var(--surface);
-  box-shadow: -18px 0 42px var(--shadow-soft);
-}
-
-.session-detail-panel-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 18px;
-  border-bottom: 1px solid var(--border);
-}
-
-.session-detail-panel-header > div {
-  min-width: 0;
-}
-
-.session-detail-panel-header span {
-  color: var(--muted);
-  font-size: 0.6875rem;
-  font-weight: 650;
-}
-
-.session-detail-panel-header h3 {
-  margin-top: 4px;
-  overflow-wrap: anywhere;
-  color: var(--text-strong);
-  font-size: 1rem;
-  line-height: 1.35;
-}
-
-.session-detail-panel-header button {
-  display: grid;
-  width: 32px;
-  height: 32px;
-  place-items: center;
-  flex: 0 0 auto;
-  border: 0;
-  border-radius: 8px;
-  background: var(--surface-muted);
-  color: var(--muted);
-  cursor: pointer;
-}
-
-.session-detail-panel .session-detail-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 0;
-  margin: 0;
-  padding: 8px 18px 20px;
-}
-
-.session-detail-panel .session-detail-field {
-  gap: 5px;
-  padding: 11px 0;
-  border-bottom: 1px solid var(--surface-muted);
-}
-
-.session-detail-panel .session-detail-field dt {
-  color: var(--muted);
-  font-size: 0.6875rem;
-  font-weight: 550;
-}
-
-.session-detail-panel .session-detail-field dd {
-  margin: 0;
-  overflow-wrap: anywhere;
-  color: var(--text);
-  font-size: 0.78125rem;
-  font-weight: 550;
-  line-height: 1.5;
 }
 
 .conversation-transcript {
@@ -10222,12 +10020,6 @@ pre {
 @media (max-width: 760px) {
   .conversation-header {
     padding-inline: 10px;
-  }
-
-  .conversation-header-copy > span,
-  .conversation-header .session-detail-toggle > span,
-  .conversation-header .session-detail-toggle > svg:last-child {
-    display: none;
   }
 
   .conversation-feed {
