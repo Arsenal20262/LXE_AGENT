@@ -1,3 +1,4 @@
+import { FileAvailabilityBadge } from "../file-preview/FileFailure";
 import { PreviewHeaderActions, usePreviewSidebar } from "../file-preview/Sidebar";
 import { OpenFileButton } from "../file-preview/OpenFileButton";
 import { UserQuestionGate } from "./user-questions";
@@ -567,7 +568,7 @@ function TurnFileList({
     }
   };
   const panel = usePreviewSidebar();
-  const open = (artifactId: string) => run(artifactId, id => panel && sessionId ? panel.open({ session_id: sessionId, kind: "artifact", id }) : onOpenFile(id));
+  const open = (artifactId: string) => run(artifactId, id => panel && sessionId ? panel.open({ session_id: sessionId, kind: "artifact", id }, files.find(file => file.artifact_id === id)?.name) : onOpenFile(id));
   const reveal = (artifactId: string) => run(artifactId, onRevealFile);
   // The type marker stays on every row even when the whole set shares a type:
   // it doubles as the anchor the eye lands on, and without it the list reads as
@@ -598,7 +599,7 @@ function TurnFileList({
                     ? <img alt="" draggable={false} src={FILE_TYPE_ICONS[extension]} />
                     : extension}
                 </span>
-                <span className="turn-file-name" title={file.name}>{file.name}</span>
+                <span className="file-card-title"><span className="turn-file-name" title={file.name}>{file.name}</span>{panel && sessionId ? <FileAvailabilityBadge file={{ session_id: sessionId, kind: "artifact", id: file.artifact_id }} /> : null}</span>
                 {isOpening
                   ? <LoaderCircle aria-hidden="true" className="conversation-spinner turn-file-action" size={14} />
                   : null}

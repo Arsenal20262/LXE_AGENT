@@ -149,3 +149,44 @@ test("directory subscriptions detect changes, enforce roots, release, and open o
   f.service.release("tree"); await expect(f.service.call({ operation: "directory-version", input: { request_id: "tree" } })).rejects.toThrow("closed");
   const pending = f.service.call({ operation: "watch-directory", input: { session_id: "s", path: "", request_id: "cancel" } }); f.service.release("cancel"); await expect(pending).rejects.toThrow();
 });
+
+test("file errors cross IPC as data and distinguish deleted source, invalid references and missing helpers", async () => {
+  const { fileResult } = await import("../src/main/file-preview/errors");
+  const f = await fixture();
+  const call = (operation: "stat" | "applications" | "open", file = ref) => fileResult(operation, () => f.service.call({ operation, input: { ref: file } }));
+  await rm(join(f.workspace, "中文 file.md"));
+  for (const operation of ["stat", "applications", "open"] as const) {
+    const value = structuredClone(await call(operation));
+    expect(value.ok).toBe(false);
+    if (!value.ok) { expect(value.error.kind).toBe("not_found"); expect(value.error.operation).toBe(operation); expect(value.error.diagnostic).toContain("ENOENT"); }
+  }
+  const invalid = await call("stat", { ...ref, kind: "workspace", path: "../outside/external.txt" });
+  expect(invalid.ok ? "success" : invalid.error.kind).toBe("invalid_reference");
+  await writeFile(join(f.workspace, "中文 file.md"), "restored");
+  expect((await call("stat")).ok).toBe(true);
+  const { runOffice } = await import("../src/main/file-preview/office-cache");
+  const helper = await fileResult("prepare", () => runOffice(join(f.root, "absent-node"), "cli", "input.docx", "output.pdf", AbortSignal.timeout(1000)));
+  expect(helper.ok).toBe(false);
+  if (!helper.ok) { expect(helper.error.kind).toBe("unknown"); expect(helper.error.diagnostic).toContain("ENOENT"); }
+  const history = { session_id: "s", kind: "attachment" as const, id: "i" };
+  expect((await f.service.call({ operation: "stat", input: { ref: history } })).source).toBe("history");
+  const original = await fileResult("stat", () => f.service.call({ operation: "stat", input: { ref: history, original: true } }));
+  expect(original.ok ? "success" : original.error.kind).toBe("not_found");
+});
+
+test("permissions are recognized only at target access; diagnostics retain real exceptions with bounded redaction", async () => {
+  const { chmod } = await import("node:fs/promises");
+  const { sourceAccess, fileResult, fileFailure } = await import("../src/main/file-preview/errors");
+  const f = await fixture(), path = join(f.workspace, "中文 file.md");
+  if (process.platform !== "win32" && process.getuid?.() !== 0) {
+    await chmod(path, 0);
+    try {
+      const value = await fileResult("read", () => sourceAccess(() => readFile(path)));
+      expect(value.ok).toBe(false);
+      if (!value.ok) { expect(value.error.kind).toBe("permission_denied"); expect(value.error.diagnostic).toContain("EACCES"); }
+    } finally { await chmod(path, 0o600); }
+  }
+  const diagnostic = fileFailure(new Error("actual failure\nBearer private-token\nhttps://host?token=private-token&key=secret-value\n" + "x".repeat(20000)), "applications");
+  expect(diagnostic.kind).toBe("unknown"); expect(diagnostic.diagnostic).toStartWith("actual failure\n");
+  expect(diagnostic.diagnostic).not.toContain("private-token"); expect(diagnostic.diagnostic).not.toContain("secret-value"); expect(diagnostic.diagnostic).toEndWith("[truncated]");
+});

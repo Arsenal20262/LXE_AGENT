@@ -1,3 +1,4 @@
+import { sourceAccess, invalidFileReference } from "./errors";
 import { createHash, randomUUID } from "node:crypto";
 import { watch, type FSWatcher, type Stats } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
@@ -48,7 +49,7 @@ export class FilePreviewService {
     const runtime = this.runtime();
     if (ref.kind === "workspace") return workspacePath(await runtime.resolveWorkspaceDirectory(ref.session_id), ref.path);
     const path = await (ref.kind === "artifact" ? runtime.resolveArtifact(ref.session_id, ref.id) : runtime.resolveAttachment(ref.session_id, ref.id));
-    if (!path) throw new Error("File is not part of this conversation");
+    if (!path) throw invalidFileReference("File is not part of this conversation");
     return path;
   }
   private fileVersion(path: string, info: Stats): string {
@@ -60,10 +61,10 @@ export class FilePreviewService {
     this.versions.set(path, { signature, revision });
     return `${signature}:${revision}`;
   }
-  private async describe(ref: SessionFileRef): Promise<{ path: string; metadata: FileMetadata; history?: Uint8Array }> {
+  private async describe(ref: SessionFileRef, original = false): Promise<{ path: string; metadata: FileMetadata; history?: Uint8Array }> {
     const path = await this.resolve(ref);
     let history: Uint8Array | undefined, extension = extname(path).toLowerCase() || basename(path).toLowerCase();
-    if (ref.kind === "attachment") {
+    if (ref.kind === "attachment" && !original) {
       const preview = await this.runtime().resolveImagePreview(ref.session_id, "attachment", ref.id);
       if (preview?.source === "history") {
         const source = preview.image.source as { type?: string; data?: string; media_type?: string };
@@ -73,7 +74,7 @@ export class FilePreviewService {
       }
     }
     const canonical = history ? path : await regularFile(path);
-    const info = history ? undefined : await stat(canonical);
+    const info = history ? undefined : await sourceAccess(() => stat(canonical));
     const version = history ? createHash("sha256").update(history).digest("hex") : this.fileVersion(canonical, info!);
     const key = createHash("sha256").update(ref.session_id + "\0" + (history ? `history:${ref.kind === "attachment" ? ref.id : ""}` : canonical)).digest("hex");
     for (const handle of this.handles.values()) if (handle.metadata.key === key) handle.touched = Date.now();
@@ -126,13 +127,13 @@ export class FilePreviewService {
     }
     if (!["stat", "applications", "open", "prepare"].includes(call.operation)) throw new Error("Unknown file operation");
     const ref = validateRef((call.input as { ref: unknown }).ref);
-    if (call.operation === "stat") return (await this.describe(ref)).metadata;
+    if (call.operation === "stat") return (await this.describe(ref, call.input.original === true)).metadata;
     if (call.operation === "applications" || call.operation === "open") {
       const path = await regularFile(await this.resolve(ref));
       const signal = AbortSignal.timeout(20000);
       if (call.operation === "applications") {
         const cached = this.applications.get(path);
-        if (cached && cached.expires > Date.now()) return cached.value;
+        if (!call.input.refresh && cached && cached.expires > Date.now()) return cached.value;
         const value = this.associations.list(path, signal);
         this.applications.set(path, { expires: Date.now() + 30000, value });
         if (this.applications.size > 128) this.applications.delete(this.applications.keys().next().value!);
@@ -214,7 +215,7 @@ export class FilePreviewService {
       if (current.path !== value.path || current.metadata.version !== value.metadata.version) throw new Error("File changed; reload preview");
     };
     await check();
-    const page = await readTextPage(value.path, range, value.signal);
+    const page = await sourceAccess(() => readTextPage(value.path, range, value.signal));
     await check(); value.signal.throwIfAborted();
     return { ...page, version: value.metadata.version };
   }

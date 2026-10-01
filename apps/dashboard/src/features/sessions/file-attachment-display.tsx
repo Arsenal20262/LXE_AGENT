@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { File } from "lucide-react";
 import csvIcon from "../../assets/file-types/csv.png";
 import htmlIcon from "../../assets/file-types/html.png";
@@ -24,10 +25,10 @@ export function FileAttachmentIcon({ name }: { name: string }) {
   </span>;
 }
 
-export function FileAttachmentInfo({ name }: { name: string }) {
+export function FileAttachmentInfo({ name, status }: { name: string; status?: ReactNode }) {
   const suffix = attachmentSuffix(name);
   return <span className="input-attachment-info">
-    <span>{name}</span>
+    <span className="file-card-title"><span title={name}>{name}</span>{status}</span>
     {suffix ? <span className="input-attachment-suffix">{suffix}</span> : null}
   </span>;
 }

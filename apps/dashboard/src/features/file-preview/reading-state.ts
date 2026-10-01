@@ -1,3 +1,4 @@
+import { forgetFileSession } from "./application-state";
 import type { DirectoryPage } from "@lxe/desktop-protocol";
 
 export type ViewMode = "rendered" | "plain" | "code" | "image" | "table" | "pdf" | "unsupported";
@@ -28,6 +29,11 @@ export function readingState(session: string, tab: string): ReadingState {
 }
 export function forgetReadingTab(session: string, tab: string) { sessions.get(session)?.delete(tab); }
 export function forgetPreviewSession(session: string) {
-  sessions.delete(session);
+  sessions.delete(session); forgetFileSession(session);
   try { localStorage.removeItem(`lxe.file-preview.v1.${session}`); } catch { /* Optional layout storage. */ }
+}
+
+export function moveReadingTab(session: string, from: string, to: string) {
+  const tabs = sessions.get(session), value = tabs?.get(from);
+  if (value) { tabs!.set(to, value); tabs!.delete(from); }
 }

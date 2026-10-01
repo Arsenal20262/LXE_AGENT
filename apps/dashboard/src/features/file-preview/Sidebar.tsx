@@ -1,12 +1,13 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { FolderOpen, PanelRight, X, Maximize2, Minimize2, FileText, Image, FileSpreadsheet, File } from "lucide-react";
-import type { SessionFileRef } from "@lxe/desktop-protocol";
+import type { FileMetadata, SessionFileRef } from "@lxe/desktop-protocol";
 import { useUiText } from "../../shared/i18n";
 import { closeTab, emptyLayout, openTab, restoreLayout, type PreviewLayout } from "./layout-state";
-import { errorText, filesApi } from "./api";
+import { filesApi } from "./api";
 import { DocumentViewer } from "./DocumentViewer";
 import { FileTree } from "./FileTree";
-import { readingState, forgetReadingTab } from "./reading-state";
+import { readingState, forgetReadingTab, moveReadingTab } from "./reading-state";
+import { checkFile, fileRefKey } from "./application-state";
 import "./sidebar.css";
 function TabIcon({ name }: { name: string }) { const ext = name.split(".").pop()?.toLowerCase(); const Icon = ["xlsx", "xls", "csv", "tsv"].includes(ext ?? "") ? FileSpreadsheet : ["png", "jpg", "jpeg", "svg", "gif", "webp", "bmp"].includes(ext ?? "") ? Image : ["pdf", "md", "txt", "doc", "docx"].includes(ext ?? "") ? FileText : File; return <Icon size={14} />; }
 interface Controls { session: string; shown: boolean; open(ref: SessionFileRef, name?: string): Promise<void>; tree(): void; toggle(): void }
@@ -20,26 +21,40 @@ export function PreviewHeaderActions() {
 }
 export function FilePreviewLayout({ sessionId, children }: { sessionId: string; children: ReactNode }) {
   const t = useUiText().filePreview, frame = useRef<HTMLDivElement>(null), sessionNow = useRef(sessionId); sessionNow.current = sessionId;
-  const [layouts, setLayouts] = useState<Record<string, PreviewLayout>>({}), [room, setRoom] = useState(1000), [error, setError] = useState("");
+  const [layouts, setLayouts] = useState<Record<string, PreviewLayout>>({}), [room, setRoom] = useState(1000);
   const intent = useRef(0), tabsRef = useRef<HTMLDivElement>(null);
   const saved = useMemo(() => restoreLayout(storage(), sessionId), [sessionId]);
   const layout = layouts[sessionId] ?? saved;
   const update = useCallback((fn: (layout: PreviewLayout) => PreviewLayout) => setLayouts(all => ({ ...all, [sessionId]: fn(all[sessionId] ?? saved) })), [sessionId, saved]);
   useEffect(() => { if (sessionId) try { storage()?.setItem(`lxe.file-preview.v1.${sessionId}`, JSON.stringify(layout)); } catch { /* Optional view preferences. */ } }, [sessionId, layout]);
   useEffect(() => { const observer = new ResizeObserver(entries => setRoom(entries[0]?.contentRect.width ?? 1000)); if (frame.current) observer.observe(frame.current); return () => observer.disconnect(); }, []);
-  useEffect(() => { ++intent.current; setError(""); }, [sessionId]);
+  useEffect(() => { ++intent.current; }, [sessionId]);
   useEffect(() => {
     const focus = () => { const focused = !!document.activeElement?.closest(".file-sidebar, .file-open-menu"); void filesApi().call({ operation: "focus-preview", input: { focused } }).catch(() => {}); };
     document.addEventListener("focusin", focus);
     return () => { document.removeEventListener("focusin", focus); void filesApi().call({ operation: "focus-preview", input: { focused: false } }).catch(() => {}); };
   }, [layout.shown, sessionId]);
+  const canonicalize = useCallback((ref: SessionFileRef, info: FileMetadata) => {
+    if (sessionNow.current !== ref.session_id) return;
+    update(current => {
+      const previous = current.tabs.find(tab => tab.ref && fileRefKey(tab.ref) === fileRefKey(ref));
+      if (!previous || previous.key === info.key) return current;
+      moveReadingTab(ref.session_id, previous.key, info.key);
+      const tabs = current.tabs.filter(tab => tab.key !== info.key).map(tab => tab.key === previous.key ? { ...tab, key: info.key } : tab);
+      return { ...current, tabs, active: current.active === previous.key ? info.key : current.active };
+    });
+  }, [update]);
   const open = useCallback(async (ref: SessionFileRef, name?: string) => {
     const request = ++intent.current;
-    try {
-      const metadata = await filesApi().call({ operation: "stat", input: { ref } });
-      if (sessionNow.current !== ref.session_id || request !== intent.current) return;
-      update(current => openTab(current, { key: metadata.key, name: name ?? metadata.name, ref })); setError("");
-    } catch (error) { if (sessionNow.current === ref.session_id && request === intent.current) setError(errorText(error)); }
+    let metadata: FileMetadata | undefined;
+    try { metadata = await checkFile(ref, true); } catch { /* The viewer renders the structured failure and keeps checking. */ }
+    if (sessionNow.current !== ref.session_id || request !== intent.current) return;
+    update(current => {
+      const existing = current.tabs.find(tab => tab.ref && fileRefKey(tab.ref) === fileRefKey(ref));
+      const key = metadata?.key ?? existing?.key ?? `ref:${fileRefKey(ref)}`;
+      if (existing && existing.key !== key) moveReadingTab(ref.session_id, existing.key, key);
+      return openTab({ ...current, tabs: current.tabs.filter(tab => !existing || tab.key !== existing.key || existing.key === key) }, { key, name: name ?? existing?.name ?? metadata?.name ?? (ref.kind === "workspace" ? ref.path.split(/[\\/]/).pop()! : ref.id), ref });
+    });
   }, [update]);
   const tree = useCallback(() => { ++intent.current; update(current => openTab(current, { key: "tree", name: t.files })); }, [update, t.files]);
   const controls = useMemo<Controls>(() => ({ session: sessionId, shown: layout.shown, open, tree, toggle: () => { ++intent.current; update(current => current.tabs.length ? { ...current, shown: !current.shown } : openTab(emptyLayout(), { key: "tree", name: t.files })); } }), [sessionId, layout.shown, open, tree, update, t.files]);
@@ -53,7 +68,6 @@ export function FilePreviewLayout({ sessionId, children }: { sessionId: string; 
   };
   return <Context.Provider value={controls}><div className={`file-layout${layout.shown && sessionId ? " has-preview" : ""}${full ? " preview-full" : ""}`} ref={frame} style={{ "--preview-width": `${width}px` } as React.CSSProperties}>
     <div className="file-layout-main">{children}</div>
-    {error ? <div className="file-layout-error" role="alert">{error}<button aria-label={t.close} onClick={() => setError("")}><X size={14} /></button></div> : null}
     {layout.shown && sessionId ? <>
       {!full ? <div className="file-preview-resizer" role="separator" tabIndex={0} aria-label={t.resize} aria-orientation="vertical" aria-valuenow={Math.round(width)} aria-valuemin={320} aria-valuemax={Math.max(320, room - 400)} onKeyDown={e => { if (e.key === "ArrowLeft" || e.key === "ArrowRight") { e.preventDefault(); update(l => ({ ...l, width: Math.max(320, Math.min(room - 400, width + (e.key === "ArrowLeft" ? 20 : -20))) })); } }} onPointerDown={e => { e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); }} onPointerMove={e => { if (e.currentTarget.hasPointerCapture(e.pointerId)) update(l => ({ ...l, width: Math.max(320, Math.min(room - 400, (frame.current?.getBoundingClientRect().right ?? 0) - e.clientX)) })); }} onPointerUp={e => { if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId); }} /> : null}
       <aside className="file-sidebar" tabIndex={-1} aria-label={t.toggle} onKeyDown={e => {
@@ -71,7 +85,7 @@ export function FilePreviewLayout({ sessionId, children }: { sessionId: string; 
           const next = layout.tabs[e.key === "Home" ? 0 : e.key === "End" ? layout.tabs.length - 1 : (index + direction + layout.tabs.length) % layout.tabs.length];
           if (next) { update(l => ({ ...l, active: next.key })); requestAnimationFrame(() => tabsRef.current?.querySelector<HTMLButtonElement>('[aria-selected="true"]')?.focus()); }
         }}>{layout.tabs.map(tab => <div className={`file-tab${layout.active === tab.key ? " active" : ""}`} key={tab.key}><button role="tab" tabIndex={layout.active === tab.key ? 0 : -1} aria-selected={layout.active === tab.key} title={tab.key === "tree" ? t.files : tab.name} onClick={() => { ++intent.current; update(l => ({ ...l, active: tab.key })); }}>{tab.key === "tree" ? <FolderOpen size={14} /> : <TabIcon name={tab.name} />}<span>{tab.key === "tree" ? t.files : tab.name}</span></button><button aria-label={`${t.close} ${tab.name}`} onClick={() => close(tab.key)}><X size={12} /></button></div>)}</div><button aria-label={layout.expanded ? t.collapse : t.expand} title={layout.expanded ? t.collapse : t.expand} onClick={() => update(l => ({ ...l, expanded: !l.expanded }))}>{layout.expanded ? <Minimize2 size={15} /> : <Maximize2 size={15} />}</button><button aria-label={t.close} title={t.close} onClick={() => { ++intent.current; update(l => ({ ...l, shown: false })); }}><X size={16} /></button></div>
-        {active?.key === "tree" ? <FileTree key={sessionId} session={sessionId} state={readingState(sessionId, "tree")} open={(ref, name) => void open(ref, name)} /> : active?.ref ? <DocumentViewer key={`${sessionId}:${active.key}`} file={active.ref} name={active.name} state={readingState(sessionId, active.key)} /> : null}
+        {active?.key === "tree" ? <FileTree key={sessionId} session={sessionId} state={readingState(sessionId, "tree")} open={(ref, name) => void open(ref, name)} /> : active?.ref ? <DocumentViewer key={`${sessionId}:${active.key}`} file={active.ref} name={active.name} state={readingState(sessionId, active.key)} resolved={info => canonicalize(active.ref!, info)} /> : null}
       </aside>
     </> : null}
   </div></Context.Provider>;

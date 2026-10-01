@@ -1,13 +1,14 @@
+import { invalidFileReference, sourceAccess } from "./errors";
 import { realpath, stat, open } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep, win32 } from "node:path";
 import type { SessionFileRef } from "@lxe/desktop-protocol";
 export function validateRef(value: unknown): SessionFileRef {
-  if (!value || typeof value !== "object") throw new Error("File reference is required");
+  if (!value || typeof value !== "object") throw invalidFileReference("File reference is required");
   const ref = value as Record<string, unknown>;
-  if (typeof ref.session_id !== "string" || !ref.session_id.trim()) throw new Error("Session is required");
+  if (typeof ref.session_id !== "string" || !ref.session_id.trim()) throw invalidFileReference("Session is required");
   if (ref.kind === "workspace" && typeof ref.path === "string") return { session_id: ref.session_id, kind: ref.kind, path: ref.path };
   if ((ref.kind === "artifact" || ref.kind === "attachment") && typeof ref.id === "string" && ref.id.trim()) return { session_id: ref.session_id, kind: ref.kind, id: ref.id };
-  throw new Error("Invalid file reference");
+  throw invalidFileReference("Invalid file reference");
 }
 export function contains(root: string, path: string): boolean {
   const child = relative(root, path);
@@ -15,22 +16,23 @@ export function contains(root: string, path: string): boolean {
 }
 /** UI directory browsing is narrower than the coding tool's host-file permissions. */
 export async function workspacePath(root: string, path: string): Promise<string> {
-  if (isAbsolute(path) || win32.isAbsolute(path) || path.includes("\0") || path.split(/[\\/]/).includes("..")) throw new Error("Path is outside the session workspace");
-  const canonicalRoot = await realpath(root);
+  if (isAbsolute(path) || win32.isAbsolute(path) || path.includes("\0") || path.split(/[\\/]/).includes("..")) throw invalidFileReference("Path is outside the session workspace");
+  const canonicalRoot = await sourceAccess(() => realpath(root));
   const candidate = resolve(canonicalRoot, path);
-  if (!contains(canonicalRoot, candidate)) throw new Error("Path is outside the session workspace");
-  const canonical = await realpath(candidate);
-  if (!contains(canonicalRoot, canonical)) throw new Error("Symlink is outside the session workspace");
+  if (!contains(canonicalRoot, candidate)) throw invalidFileReference("Path is outside the session workspace");
+  const canonical = await sourceAccess(() => realpath(candidate));
+  if (!contains(canonicalRoot, canonical)) throw invalidFileReference("Symlink is outside the session workspace");
   return canonical;
 }
 export async function regularFile(path: string): Promise<string> {
-  const canonical = await realpath(path);
-  if (!(await stat(canonical)).isFile()) throw new Error(`Not a regular file: ${path}`);
+  const canonical = await sourceAccess(() => realpath(path));
+  if (!(await sourceAccess(() => stat(canonical))).isFile()) throw new Error(`Not a regular file: ${path}`);
   return canonical;
 }
 
 /** Bound allocations even when another application keeps appending to the file. */
 export async function readLimited(path: string, limit: number): Promise<Buffer> {
+  return sourceAccess(async () => {
   const file = await open(path, "r");
   try {
     const info = await file.stat();
@@ -46,4 +48,5 @@ export async function readLimited(path: string, limit: number): Promise<Buffer> 
     if (size > limit) throw new Error(`File grew beyond preview limit (${limit} bytes)`);
     return Buffer.concat(parts, size);
   } finally { await file.close(); }
+  });
 }

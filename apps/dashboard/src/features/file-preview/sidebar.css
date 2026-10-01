@@ -299,13 +299,7 @@
   background:#8882}
 .file-open-menu button:last-child {
   border-top:1px solid #8883}
-.file-open-error {
-  display:block;
-  color:#c33;
-  max-width:170px;
-  overflow:hidden;
-  text-overflow:ellipsis;
-  white-space:nowrap}
+
 .file-open-menu [role=alert] {
   white-space:pre-wrap;
   overflow-wrap:anywhere;
@@ -337,15 +331,7 @@
 .sent-file-with-actions:has(>.file-open-control) {
   width:288px;
   padding-right:8px}
-.turn-file-item:has(.file-open-error),.sent-file-with-actions:has(.file-open-error) {
-  padding-bottom:20px}
-.turn-file-item .file-open-error,.sent-file-with-actions .file-open-error {
-  position:absolute;
-  bottom:4px;
-  left:10px;
-  right:10px;
-  max-width:none;
-  font-size:11px}
+
 
 :root[data-theme=dark] .file-sidebar,:root[data-theme=dark] .file-open-menu,:root[data-theme=dark] .file-layout-error,:root[data-theme=dark] .file-preview-zoom select {
   background:#202225;
@@ -401,3 +387,21 @@
 .file-excel .fortune-fx-input-container { min-width:0 }
 .file-excel .fortune-fx-input { min-width:0; white-space:nowrap; overflow-x:auto; overflow-y:hidden; scrollbar-width:none; padding-right:25px }
 :root[data-theme=dark] .file-zoom-bar { background:#202225; color:#e4e4e7 }
+
+/* File availability occupies the title row; diagnostics never change card height. */
+.file-card-title { display:flex; align-items:center; gap:6px; flex:1; min-width:0; }
+.file-card-title>span:first-child { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+.file-availability-badge { flex-shrink:0; display:inline-block; font-size:10px; line-height:18px; padding:0 5px; border-radius:4px; color:var(--muted); background:var(--surface-secondary,rgba(128,128,128,.10)); font-weight:400; white-space:nowrap; }
+.file-failure-panel { display:flex; flex-direction:column; align-items:center; justify-content:safe center; min-height:0; flex:1; overflow:auto; padding:32px 20px; box-sizing:border-box; gap:14px; color:var(--muted); text-align:center; }
+.file-failure-panel p { margin:0; font-size:13px; }
+.file-failure-panel>button { border:1px solid var(--border); border-radius:6px; padding:6px 12px; background:var(--surface); color:inherit; cursor:pointer; }
+.file-error-details { max-width:100%; min-width:0; text-align:left; font-size:12px; color:var(--muted); }
+.file-error-details summary { cursor:pointer; padding:4px 0; }
+.file-error-details pre { white-space:pre-wrap; overflow-wrap:anywhere; max-height:200px; overflow:auto; font-size:11px; user-select:text; }
+.file-error-details button { color:inherit; cursor:pointer; background:none; border:1px solid var(--border); border-radius:4px; padding:4px 8px; }
+.file-action-notice { position:fixed; bottom:24px; right:24px; z-index:2000; width:360px; max-width:calc(100vw - 48px); max-height:60vh; overflow:auto; padding:12px 16px; background:var(--surface,#fff); color:var(--text); border:1px solid var(--border); border-radius:10px; box-shadow:0 6px 24px #0002; font-size:13px; }
+.file-action-notice>p { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:0 0 6px; }
+.file-action-notice>p>button { background:none; border:0; cursor:pointer; color:inherit; font-size:18px; }
+.file-apps-failure { padding:6px 10px; font-size:12px; }
+.file-apps-failure>p { margin:4px 0; }
+.file-open-split button:disabled { cursor:default; opacity:.45; }

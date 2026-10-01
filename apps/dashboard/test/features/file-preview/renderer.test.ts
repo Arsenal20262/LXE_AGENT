@@ -41,12 +41,12 @@ test("file previews work in the isolated Chromium renderer with React 19", async
   const profile = mkdtempSync(resolve(tmpdir(), "lxe-preview-profile-")), env = { ...process.env };
   delete env.ELECTRON_RUN_AS_NODE;
   const child = Bun.spawn([require(resolve(import.meta.dirname, "../../../../desktop/node_modules/electron")), resolve(import.meta.dirname, "runner.cjs"), profile, output, protocolFile], { env, stdout: "pipe", stderr: "pipe" });
-  const timer = setTimeout(() => child.kill(), 75_000);
+  const timer = setTimeout(() => child.kill(), 100_000);
   try {
     const [code, stdout, stderr] = await Promise.all([child.exited, new Response(child.stdout).text(), new Response(child.stderr).text()]);
     expect(code, `${stdout}\n${stderr}`).toBe(0);
     const report = stdout.split("\n").find(line => line.startsWith("LXE_PREVIEW_RESULT="));
     expect(report).toBeDefined();
-    expect(JSON.parse(report!.slice(19)).passed.length).toBe(13);
+    expect(JSON.parse(report!.slice(19)).passed.length).toBe(18);
   } finally { clearTimeout(timer); if (child.exitCode === null) { child.kill(); await child.exited; } rmSync(profile, { recursive: true, force: true, maxRetries: 5 }); }
-}, 90_000);
+}, 115_000);

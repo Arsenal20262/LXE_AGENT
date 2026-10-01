@@ -1,3 +1,5 @@
+import { checkFile } from "../file-preview/application-state";
+import { FileAvailabilityBadge } from "../file-preview/FileFailure";
 import { usePreviewSidebar } from "../file-preview/Sidebar";
 import { OpenFileButton } from "../file-preview/OpenFileButton";
 import { useEffect, useRef, useState } from "react";
@@ -71,6 +73,15 @@ function ImageAttachment({ attachment, sessionId, ready }: {
     observer.observe(ref.current);
     return () => observer.disconnect();
   }, []);
+  useEffect(() => {
+    if (!panel || !sessionId || !ready) return;
+    let showing = false;
+    const check = () => { if (showing) void checkFile({ session_id: sessionId, kind: "attachment", id: attachment.attachment_id }, "fresh").catch(() => {}); };
+    const observer = new IntersectionObserver(entries => { showing = entries.some(entry => entry.isIntersecting); check(); }, { rootMargin: "160px" });
+    if (ref.current) observer.observe(ref.current);
+    window.addEventListener("focus", check);
+    return () => { observer.disconnect(); window.removeEventListener("focus", check); };
+  }, [sessionId, attachment.attachment_id, ready, !!panel]);
   const preview = usePreview(sessionId, attachment.attachment_id, "thumbnail", ready && visible);
   return <div className="sent-image-item" ref={ref}>
     <button className="sent-image-tile" type="button" title={attachment.name} aria-label={t.conversation.openFile(attachment.name)}
@@ -81,6 +92,7 @@ function ImageAttachment({ attachment, sessionId, ready }: {
         <span>{attachment.name}</span>
       </>}
     </button>
+    {panel && sessionId ? <FileAvailabilityBadge file={{ session_id: sessionId, kind: "attachment", id: attachment.attachment_id }} history={preview.source === "history"} /> : null}
     {preview.error ? <span className="sent-attachment-error" role="alert">{preview.error}</span> : null}
     {expanded ? <ImagePreview attachment={attachment} sessionId={sessionId} thumbnail={preview.url} onClose={() => setExpanded(false)} /> : null}
   </div>;
@@ -106,7 +118,7 @@ export function SentAttachmentList({ attachments, sessionId, ready = true, onOpe
       <div className="sent-file-with-actions" key={attachment.attachment_id}><button className="sent-file-card" type="button"
         title={t.conversation.openFile(attachment.name)} onClick={() => void open(attachment.attachment_id)}>
         <FileAttachmentIcon name={attachment.name} />
-        <FileAttachmentInfo name={attachment.name} />
+        <FileAttachmentInfo name={attachment.name} status={panel && sessionId ? <FileAvailabilityBadge file={{ session_id: sessionId, kind: "attachment", id: attachment.attachment_id }} /> : undefined} />
       </button>{panel && sessionId && ready ? <OpenFileButton file={{ session_id: sessionId, kind: "attachment", id: attachment.attachment_id }} /> : null}</div>)}</div> : null}
     {error ? <div className="sent-attachment-error" role="alert">{t.conversation.openFileFailed(error)}</div> : null}
   </div>;

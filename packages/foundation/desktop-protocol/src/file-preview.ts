@@ -14,9 +14,9 @@ export type PreviewTextPage = { page: number; text: string; offset: number; line
 export type PreparedPreview = { handle: string; metadata: FileMetadata; missingFonts: string[] };
 export interface DesktopFileOperations {
   "focus-preview": { input: { focused: boolean }; result: void };
-  stat: { input: { ref: SessionFileRef }; result: FileMetadata };
+  stat: { input: { ref: SessionFileRef; original?: boolean }; result: FileMetadata };
   list: { input: { session_id: string; path: string; offset?: number }; result: DirectoryPage };
-  applications: { input: { ref: SessionFileRef }; result: FileApplication[] };
+  applications: { input: { ref: SessionFileRef; refresh?: boolean }; result: FileApplication[] };
   open: { input: { ref: SessionFileRef; application?: string; reveal?: boolean }; result: void };
   prepare: { input: { ref: SessionFileRef; request_id: string; mode?: "text" | "bytes" }; result: PreparedPreview };
   "open-workspace": { input: { session_id: string }; result: void };
@@ -25,8 +25,19 @@ export interface DesktopFileOperations {
   release: { input: { request_id: string }; result: void };
 }
 export type DesktopFileCall<K extends keyof DesktopFileOperations = keyof DesktopFileOperations> = K extends keyof DesktopFileOperations ? { operation: K; input: DesktopFileOperations[K]["input"] } : never;
-export interface DesktopFilesBridge {
+export type FileFailureKind = "not_found" | "permission_denied" | "invalid_reference" | "unknown";
+export type FileFailure = { kind: FileFailureKind; operation: string; diagnostic: string };
+export type FileResult<T> = { ok: true; value: T } | { ok: false; error: FileFailure };
+/** Success-shaped API used after unwrapping inside the renderer. */
+export interface DesktopFilesApi {
   call<K extends keyof DesktopFileOperations>(call: DesktopFileCall<K>): Promise<DesktopFileOperations[K]["result"]>;
   read(handle: string, relativeImage?: string): Promise<Uint8Array>;
   readText(handle: string, range?: TextPageRequest): Promise<PreviewTextPage>;
+}
+
+/** IPC transports errors as data; Electron does not preserve Error fields. */
+export interface DesktopFilesBridge {
+  call<K extends keyof DesktopFileOperations>(call: DesktopFileCall<K>): Promise<FileResult<DesktopFileOperations[K]["result"]>>;
+  read(handle: string, relativeImage?: string): Promise<FileResult<Uint8Array>>;
+  readText(handle: string, range?: TextPageRequest): Promise<FileResult<PreviewTextPage>>;
 }

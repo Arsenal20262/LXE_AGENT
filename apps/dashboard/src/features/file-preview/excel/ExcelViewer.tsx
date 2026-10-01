@@ -8,9 +8,9 @@ import ExcelWorker from "./worker?worker";
 import type { ExcelPreview } from "./model";
 import { excelFormat } from "./format";
 import { useUiText } from "../../../shared/i18n";
-export default function ExcelViewer({ bytes, name, state }: { bytes: Uint8Array; name: string; state: ReadingState }) {
+export default function ExcelViewer({ bytes, name, state, failed }: { bytes: Uint8Array; name: string; state: ReadingState; failed(error: unknown): void }) {
   const ui = useUiText(), t = ui.filePreview;
-  const [value, setValue] = useState<ExcelPreview>(), [error, setError] = useState("");
+  const [value, setValue] = useState<ExcelPreview>();
   const ref = useRef<HTMLDivElement>(null), workbook = useRef<WorkbookInstance>(null), restoring = useRef(false), activeName = useRef<string | undefined>(undefined);
   const currentSheet = () => {
     const name = ref.current?.querySelector(".luckysheet-sheets-item-active .luckysheet-sheets-item-name")?.textContent;
@@ -52,8 +52,8 @@ export default function ExcelViewer({ bytes, name, state }: { bytes: Uint8Array;
     return () => { observer.disconnect(); cancelAnimationFrame(frame); restoring.current = false; capture(); };
   }, [value]);
   useEffect(() => {
-    const worker = new ExcelWorker(), timer = setTimeout(() => { setError(t.timeout); worker.terminate(); }, 15000);
-    setValue(undefined); setError("");
+    const worker = new ExcelWorker(), timer = setTimeout(() => { failed(new Error(t.timeout)); worker.terminate(); }, 15000);
+    setValue(undefined);
     worker.onmessage = event => {
       clearTimeout(timer);
       if (event.data.ok) {
@@ -65,10 +65,10 @@ export default function ExcelViewer({ bytes, name, state }: { bytes: Uint8Array;
         for (const sheet of parsed.sheets) { sheet.status = sheet === selected ? 1 : 0; const saved = state.excel.sheets[sheet.name]; if (saved) sheet.zoomRatio = saved.zoom; }
         setValue(parsed);
       }
-      else setError([event.data.code === "tooLarge" ? t.size : event.data.code === "encoding" ? t.encoding : "", event.data.error].filter(Boolean).join("\n"));
+      else failed(new Error([event.data.code === "tooLarge" ? t.size : event.data.code === "encoding" ? t.encoding : "", event.data.error].filter(Boolean).join("\n")));
       worker.terminate();
     };
-    worker.onerror = event => { clearTimeout(timer); setError(event.message); worker.terminate(); };
+    worker.onerror = event => { clearTimeout(timer); failed(new Error(event.message)); worker.terminate(); };
     const copy = bytes.slice(); worker.postMessage({ bytes: copy, format: excelFormat(name), limits: { maxBytes: 16777216, maxCells: 250000, timeoutMs: 15000 } }, [copy.buffer]);
     return () => { clearTimeout(timer); worker.terminate(); };
   }, [bytes, name, t]);
@@ -86,7 +86,6 @@ export default function ExcelViewer({ bytes, name, state }: { bytes: Uint8Array;
     observer.observe(ref.current);
     return () => { observer.disconnect(); cancelAnimationFrame(frame); };
   }, [value]);
-  if (error) return <pre className="file-preview-error" role="alert">{error}</pre>;
   if (!value) return <p className="file-preview-loading" role="status">{t.loading}</p>;
   const features = { charts: t.chart, images: t.image, shapes: t.shape, conditionalFormatting: t.conditional };
   return <section className="file-excel" data-lxe-excel>

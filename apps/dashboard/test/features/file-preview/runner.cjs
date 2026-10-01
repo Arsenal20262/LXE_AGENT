@@ -181,6 +181,87 @@ app.whenReady().then(async () => {
       await win.reload(); await wait("!!document.querySelector('.file-markdown h1')", "restored active tab");
       assert.ok(await js("document.querySelectorAll('[role=tab]').length > 3"));
     });
+    win.setSize(1200, 900); await delay(200);
+    await step("Active deletion releases document resources and restoration preserves reading state", async () => {
+      await click("#open-3"); await wait("!!document.querySelector('.textLayer span')", "PDF ready before deletion");
+      await js("var z=document.querySelector('.file-zoom-bar select');z.value='200';z.dispatchEvent(new Event('change',{bubbles:true}));previewFixture.fault('doc.pdf','not_found')");
+      await wait("!!document.querySelector('.file-failure-panel') && previewFixture.workers.size===0 && previewFixture.pending.size===0", "deleted PDF released by active timer");
+      assert.equal(await js("!!document.querySelector('.file-pdf canvas')"), false);
+      assert.ok(await js("document.querySelector('.file-failure-panel').textContent.includes('文件不存在')"));
+      assert.equal(await js("document.querySelector('.file-error-details').open"), false);
+      assert.equal(await js("document.querySelectorAll('.file-action-notice').length"), 0);
+      await js("previewFixture.fault('doc.pdf')");
+      await wait("!!document.querySelector('.textLayer span') && document.querySelector('.file-zoom-bar select')?.value==='200'", "automatic recovery restores zoom");
+      assert.equal(await js("document.querySelectorAll('[role=tab][title=\"doc.pdf\"]').length"), 1);
+    });
+    await step("Missing first-open tabs, permissions and history have distinct states", async () => {
+      await click("[aria-label='关闭 图.png']");
+      await js("previewFixture.fault('图.png','not_found')"); await click("#open-4");
+      await wait("!!document.querySelector('.file-failure-panel')", "first-open missing tab");
+      assert.ok(await js("document.querySelector('[role=tab][aria-selected=true]').textContent.includes('图.png')"));
+      await js("previewFixture.fault('图.png')"); await wait("document.querySelector('.file-image img')?.naturalWidth > 0", "initially missing file automatically recovers");
+      assert.equal(await js("document.querySelectorAll('[role=tab][title=\"图.png\"]').length"), 1);
+      await js("previewFixture.fault('图.png','not_found')");
+      await click("#open-history"); await wait("document.querySelector('.file-image img')?.naturalWidth > 0", "history remains readable");
+      assert.ok(await js("document.querySelector('.file-preview-note').textContent.includes('源文件不存在')"));
+      assert.equal(await js("document.querySelector('.file-document-toolbar .file-open-split button').disabled"), true);
+      assert.equal(await js("document.querySelectorAll('.file-document-toolbar .file-open-split button').length"), 1);
+      await js("previewFixture.fault('图.png')"); await click("#open-4");
+      await wait("document.querySelector('.file-image img')?.naturalWidth > 0", "recovered temporary tab");
+      assert.equal(await js("document.querySelectorAll('[role=tab][title=\"图.png\"]').length"), 1);
+      await js("previewFixture.fault('文档.md','permission_denied')"); await click("#open-0");
+      await wait("document.querySelector('.file-failure-panel')?.textContent.includes('没有权限')", "permissions stay distinct");
+      assert.equal(await js("document.querySelector('.file-failure-panel').textContent.includes('文件不存在')"), false);
+      await js("previewFixture.fault('文档.md')"); await click(".file-failure-panel>button"); await wait("!!document.querySelector('.file-markdown h1')", "explicit recovery");
+    });
+    await step("Deletion cancels in-flight preparation and late failure cannot overwrite recovery", async () => {
+      await js("previewFixture.slowPrepare(true)"); await click("#open-1");
+      await wait("previewFixture.pending.size===1 && !document.querySelector('.fortune-container')", "preparation pending");
+      await js("previewFixture.fault('book.xlsx','not_found')");
+      await wait("!!document.querySelector('.file-failure-panel') && previewFixture.pending.size===0", "deleted preparation cancelled");
+      await js("previewFixture.slowPrepare(false);previewFixture.fault('book.xlsx')");
+      await click(".file-failure-panel>button"); await wait("!!document.querySelector('.fortune-container canvas')", "new preparation succeeds");
+      await delay(1700); assert.equal(await js("!!document.querySelector('.file-failure-panel')"), false);
+      await click(".file-tab-strip > button:last-child"); await delay(200);
+      const count = await js("previewFixture.calls.filter(c=>c==='stat').length"); await delay(1800);
+      assert.equal(await js("previewFixture.calls.filter(c=>c==='stat').length"), count, "hidden preview stops stat polling");
+      await click("#open-0"); await wait("!!document.querySelector('.file-markdown h1')", "resume");
+    });
+    await step("Batch-deleted production cards keep height and show no raw error wall", async () => {
+      await js("previewFixture.cards(true)"); await wait("document.querySelectorAll('#test-file-cards .turn-file-item').length===3", "production cards mounted");
+      await delay(150);
+      const heights = await js("[...document.querySelectorAll('#test-file-cards .turn-file-item')].map(e=>e.getBoundingClientRect().height)");
+      await js("['book.xlsx','doc.pdf','文档.md'].forEach(p=>previewFixture.fault(p,'not_found'));window.dispatchEvent(new Event('focus'))");
+      await wait("document.querySelectorAll('#test-file-cards .file-availability-badge').length===3", "batch missing badges");
+      assert.deepEqual(await js("[...document.querySelectorAll('#test-file-cards .turn-file-item')].map(e=>e.getBoundingClientRect().height)"), heights);
+      assert.equal(await js("document.querySelector('#test-file-cards').textContent.includes('ENOENT')"), false);
+      assert.equal(await js("document.querySelectorAll('.file-action-notice').length"), 0);
+      assert.equal(await js("[...document.querySelectorAll('#test-file-cards .file-open-split button')].every(b=>b.disabled)"), true);
+      await click("#test-file-cards .turn-file-card"); await wait("document.querySelector('.file-failure-panel')?.textContent.includes('文件不存在')", "missing card opens empty page");
+      await capture("missing-files-light-test-fixture");
+      await js("document.documentElement.dataset.theme='dark';document.querySelector('#test-file-cards').style.maxWidth='300px'"); await delay(100); await capture("missing-files-dark-narrow-test-fixture");
+      assert.ok(await js("[...document.querySelectorAll('#test-file-cards .file-card-title')].every(e=>e.scrollWidth<=e.clientWidth+1)"));
+      await js("document.documentElement.dataset.theme='light';document.querySelector('#test-file-cards').style.maxWidth='520px';['book.xlsx','doc.pdf','文档.md'].forEach(p=>previewFixture.fault(p));window.dispatchEvent(new Event('focus'))");
+      await wait("document.querySelectorAll('#test-file-cards .file-availability-badge').length===0", "card recovery clears badges");
+    });
+    await step("App query failures stay in menus and explicit open failure gets one transient notice", async () => {
+      await js("previewFixture.appFailure(true)"); await click("#open-5");
+      await wait("!!document.querySelector('.file-preview-empty')", "valid file remains previewable");
+      await click(".file-document-toolbar .file-open-split button:last-child");
+      await wait("document.querySelector('.file-apps-failure')?.textContent.includes('无法获取应用列表')", "query failure menu");
+      assert.equal(await js("document.querySelectorAll('.file-action-notice').length"), 0);
+      await capture("applications-error-test-fixture");
+      await js("previewFixture.appFailure(false)"); await click(".file-apps-failure>button");
+      await wait("!!document.querySelector('[role=menuitem]') && !document.querySelector('.file-apps-failure')", "app query retry");
+      await js("previewFixture.openFailure(true)"); await click("[role=menuitem]");
+      await wait("document.querySelectorAll('.file-action-notice').length===1", "single action notice");
+      assert.equal(await js("document.querySelectorAll('#test-file-cards .file-open-error').length"), 0);
+      await click(".file-action-notice summary");
+      assert.ok(await js("document.querySelector('.file-action-notice pre').textContent.includes('native launch rejected')"));
+      await js("previewFixture.openFailure(false);document.querySelector('#draft').focus();document.querySelector('.file-action-notice').dispatchEvent(new MouseEvent('mouseout',{bubbles:true,relatedTarget:document.body}))");
+      await wait("!document.querySelector('.file-action-notice')", "action notice expires");
+      await click(".file-tab-strip > button:last-child"); await wait("previewFixture.pending.size===0 && previewFixture.workers.size===0", "hidden releases resources");
+    });
     console.log("LXE_PREVIEW_RESULT="+JSON.stringify({passed})); win.destroy(); app.exit(0);
-  } catch(error) { console.error(error.stack||error); console.error(JSON.stringify({passed,errors})); console.error(await js("(()=>{const text=document.body.innerText;return text.length>2500?text.slice(0,800)+'\\n[truncated]\\n'+text.slice(-1400):text})()").catch(String)); try {require('node:fs').writeFileSync(require('node:path').join(profile,'failure.png'),(await win.webContents.capturePage()).toPNG());}catch{} win.destroy(); app.exit(1); }
+  } catch(error) { console.error(error.stack||error); console.error(JSON.stringify({passed,errors})); console.error(await js("(()=>{const text=document.body.innerText;return text.length>2500?text.slice(0,800)+'\\n[truncated]\\n'+text.slice(-1400):text})()").catch(String)); console.error(await js("[...document.querySelectorAll('.file-error-details pre')].map(e=>e.textContent)").catch(String)); try {require('node:fs').writeFileSync(require('node:path').join(profile,'failure.png'),(await win.webContents.capturePage()).toPNG());}catch{} win.destroy(); app.exit(1); }
 }).catch(e=>{console.error(e);app.exit(1)});

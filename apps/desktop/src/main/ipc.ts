@@ -1,3 +1,4 @@
+import { fileResult } from "./file-preview/errors";
 import { mkdirSync } from "node:fs";
 import { dialog, ipcMain, shell } from "electron";
 import type {
@@ -96,7 +97,7 @@ const stringArray = (value: unknown, label: string): string[] => {
 };
 
 export function registerDesktopIpc(application: DesktopIpcApplication): () => void {
-  ipcMain.handle(IPC_CHANNELS.fileCall, (event, call) => {
+  ipcMain.handle(IPC_CHANNELS.fileCall, (event, call) => fileResult(typeof call?.operation === "string" ? call.operation : "call", () => {
     if (call?.operation === "focus-preview") {
       if (typeof call.input?.focused !== "boolean") throw new Error("Invalid preview focus state");
       event.sender.setIgnoreMenuShortcuts(call.input.focused);
@@ -104,15 +105,15 @@ export function registerDesktopIpc(application: DesktopIpcApplication): () => vo
     }
     if (!application.fileCall) throw new Error("File previews are unavailable");
     return application.fileCall(call);
-  });
-  ipcMain.handle(IPC_CHANNELS.fileReadText, (_event, handle, range) => {
+  }));
+  ipcMain.handle(IPC_CHANNELS.fileReadText, (_event, handle, range) => fileResult("read_text", () => {
     if (!application.fileReadText) throw new Error("File previews are unavailable");
     return application.fileReadText(handle, range);
-  });
-  ipcMain.handle(IPC_CHANNELS.fileRead, (_event, handle, relativeImage) => {
+  }));
+  ipcMain.handle(IPC_CHANNELS.fileRead, (_event, handle, relativeImage) => fileResult(relativeImage === undefined ? "read" : "read_image", () => {
     if (!application.fileRead) throw new Error("File previews are unavailable");
     return application.fileRead(handle, relativeImage);
-  });
+  }));
   ipcMain.handle(IPC_CHANNELS.getUpdateState, () => application.getUpdateState?.() ?? {phase:"unsupported"});
   ipcMain.handle(IPC_CHANNELS.checkForUpdate, () => application.checkForUpdate?.() ?? {phase:"unsupported"});
   ipcMain.handle(IPC_CHANNELS.installUpdate, () => application.installUpdate?.() ?? {phase:"unsupported"});

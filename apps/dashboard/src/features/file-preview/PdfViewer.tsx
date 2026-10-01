@@ -4,7 +4,6 @@ import { getDocument, GlobalWorkerOptions, TextLayer, type PDFDocumentProxy } fr
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { RotateCw } from "lucide-react";
 import { useUiText } from "../../shared/i18n";
-import { errorText } from "./api";
 import type { ReadingState } from "./reading-state";
 import { useZoom, ZoomBar } from "./Zoom";
 GlobalWorkerOptions.workerSrc = workerUrl;
@@ -13,9 +12,9 @@ export function bitmapRatio(width: number, height: number, deviceRatio: number) 
   return Math.min(deviceRatio, Math.sqrt(MAX_CANVAS_PIXELS / Math.max(1, Math.ceil(width * deviceRatio) * Math.ceil(height * deviceRatio))) * deviceRatio);
 }
 interface PageSize { width: number; height: number; rotation: number }
-function Page({ document: pdf, number, size, scale, rotation, root }: { document: PDFDocumentProxy; number: number; size: PageSize; scale: number; rotation: number; root: HTMLDivElement | null }) {
+function Page({ document: pdf, number, size, scale, rotation, root, failed }: { failed(error: unknown): void; document: PDFDocumentProxy; number: number; size: PageSize; scale: number; rotation: number; root: HTMLDivElement | null }) {
   const host = useRef<HTMLDivElement>(null), painted = useRef<HTMLDivElement>(null);
-  const [visible, setVisible] = useState(false), [error, setError] = useState("");
+  const [visible, setVisible] = useState(false);
   const dimensions = rotation % 180 ? { width: size.height, height: size.width } : size;
   const width = dimensions.width * scale, height = dimensions.height * scale;
   useEffect(() => { const observer = new IntersectionObserver(entries => setVisible(entries.some(e => e.isIntersecting)), { root, rootMargin: "600px" }); if (host.current) observer.observe(host.current); return () => observer.disconnect(); }, [root]);
@@ -42,15 +41,15 @@ function Page({ document: pdf, number, size, scale, rotation, root }: { document
       render = page.render({ canvas, viewport, transform: [canvas.width / viewport.width, 0, 0, canvas.height / viewport.height, 0, 0] }); await render.promise;
       if (cancelled) return;
       layer = new TextLayer({ textContentSource: page.streamTextContent(), container: text, viewport }); await layer.render();
-      if (!cancelled && painted.current) { painted.current.replaceChildren(content); setError(""); }
-    }).catch(error => { if (!cancelled) setError(errorText(error)); }); }, 140);
+      if (!cancelled && painted.current) { painted.current.replaceChildren(content); }
+    }).catch(error => { if (!cancelled) failed(error); }); }, 140);
     return () => { cancelled = true; clearTimeout(timer); render?.cancel(); layer?.cancel(); };
   }, [pdf, number, scale, rotation, visible, size.rotation]);
-  return <div className="file-pdf-page" data-page={number} ref={host} style={{ width, height, minHeight: height }}><div ref={painted} />{error ? <pre role="alert">{error}</pre> : null}</div>;
+  return <div className="file-pdf-page" data-page={number} ref={host} style={{ width, height, minHeight: height }}><div ref={painted} /></div>;
 }
-export default function PdfViewer({ bytes, state }: { bytes: Uint8Array; state: ReadingState }) {
+export default function PdfViewer({ bytes, state, failed }: { bytes: Uint8Array; state: ReadingState; failed(error: unknown): void }) {
   const t = useUiText().filePreview, ref = useRef<HTMLDivElement>(null), restoring = useRef(true);
-  const [pdf, setPdf] = useState<PDFDocumentProxy>(), [sizes, setSizes] = useState<PageSize[]>([]), [error, setError] = useState(""), [width, setWidth] = useState(420), [rotation, setRotation] = useState(state.pdf.rotation), [page, setPage] = useState(state.pdf.page);
+  const [pdf, setPdf] = useState<PDFDocumentProxy>(), [sizes, setSizes] = useState<PageSize[]>([]), [width, setWidth] = useState(420), [rotation, setRotation] = useState(state.pdf.rotation), [page, setPage] = useState(state.pdf.page);
   const base = sizes[0], baseWidth = base ? rotation % 180 ? base.height : base.width : 612;
   const fit = (width - 32) / (baseWidth * 4 / 3) * 100, { zoom, change } = useZoom(state, ref, fit), scale = (zoom || fit) / 100 * 4 / 3;
   useEffect(() => {
@@ -60,7 +59,7 @@ export default function PdfViewer({ bytes, state }: { bytes: Uint8Array; state: 
       const values: PageSize[] = [];
       for (let i = 1; i <= doc.numPages; i++) { if (!active) return; const page = await doc.getPage(i), viewport = page.getViewport({ scale: 1 }); values.push({ width: viewport.width, height: viewport.height, rotation: page.rotate }); }
       if (active) { state.pdf.page = Math.max(1, Math.min(state.pdf.page, doc.numPages)); setPage(state.pdf.page); setSizes(values); setPdf(doc); }
-    }).catch(error => { if (active) setError(errorText(error)); });
+    }).catch(error => { if (active) failed(error); });
     return () => { active = false; void task.destroy().catch(() => {}); };
   }, [bytes]);
   useEffect(() => { const observer = new ResizeObserver(entries => setWidth(entries[0]?.contentRect.width ?? 420)); if (ref.current) observer.observe(ref.current); return () => observer.disconnect(); }, []);
@@ -81,7 +80,7 @@ export default function PdfViewer({ bytes, state }: { bytes: Uint8Array; state: 
       const current = pages.find(p => p.offsetTop + p.offsetHeight > element.scrollTop) ?? pages.at(-1);
       if (current) { state.pdf.page = Number(current.dataset.page); state.pdf.offset = Math.max(0, element.scrollTop - current.offsetTop); setPage(state.pdf.page); state.scroll.pdf = { top: element.scrollTop, left: element.scrollLeft }; }
     }}>
-      {error ? <pre className="file-preview-error" role="alert">{error}</pre> : !pdf ? <p className="file-preview-loading" role="status">{t.loading}</p> : sizes.map((size, i) => <Page key={i} document={pdf} number={i + 1} size={size} scale={scale} rotation={rotation} root={ref.current} />)}
+      {!pdf ? <p className="file-preview-loading" role="status">{t.loading}</p> : sizes.map((size, i) => <Page key={i} document={pdf} number={i + 1} size={size} scale={scale} rotation={rotation} root={ref.current} failed={failed} />)}
     </div><ZoomBar zoom={zoom} fitPercent={fit} change={change} />
   </div>;
 }

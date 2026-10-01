@@ -256,10 +256,10 @@ test("draft preview bridge forwards the registered ID and requested size only", 
 
 test("file bridge has a separate binary channel and never serializes bytes into Dashboard RPC", async () => {
   const calls: unknown[][] = [];
-  const ipc: IpcRendererPort = { invoke: async (channel, ...args) => { calls.push([channel, ...args]); return new Uint8Array([0, 255, 17]) as any; }, on: () => {}, removeListener: () => {} };
+  const ipc: IpcRendererPort = { invoke: async (channel, ...args) => { calls.push([channel, ...args]); return { ok: true, value: new Uint8Array([0, 255, 17]) } as any; }, on: () => {}, removeListener: () => {} };
   const bridge = createDesktopBridge(ipc, "darwin", { getPathForFile: () => "" });
   expect(Object.keys(bridge.files).sort()).toEqual(["call", "read", "readText"]);
-  expect(await bridge.files.read("opaque-handle")).toEqual(new Uint8Array([0, 255, 17]));
+  expect(await bridge.files.read("opaque-handle")).toEqual({ ok: true, value: new Uint8Array([0, 255, 17]) });
   await bridge.files.readText("opaque-text-handle", { offset: 5001 });
   expect(calls).toEqual([[IPC_CHANNELS.fileRead, "opaque-handle", undefined], [IPC_CHANNELS.fileReadText, "opaque-text-handle", { offset: 5001 }]]);
 });
