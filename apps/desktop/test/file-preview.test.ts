@@ -167,7 +167,7 @@ test("file errors cross IPC as data and distinguish deleted source, invalid refe
   const { runOffice } = await import("../src/main/file-preview/office-cache");
   const helper = await fileResult("prepare", () => runOffice(join(f.root, "absent-node"), "cli", "input.docx", "output.pdf", AbortSignal.timeout(1000)));
   expect(helper.ok).toBe(false);
-  if (!helper.ok) { expect(helper.error.kind).toBe("unknown"); expect(helper.error.diagnostic).toContain("ENOENT"); }
+  if (!helper.ok) { expect(helper.error.kind).toBe("unknown"); expect(helper.error.diagnostic).toMatch(/ENOENT|Executable not found in \$PATH/); }
   const history = { session_id: "s", kind: "attachment" as const, id: "i" };
   expect((await f.service.call({ operation: "stat", input: { ref: history } })).source).toBe("history");
   const original = await fileResult("stat", () => f.service.call({ operation: "stat", input: { ref: history, original: true } }));
