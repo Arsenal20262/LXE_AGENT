@@ -64,6 +64,8 @@ app.whenReady().then(async () => {
       await click("#open-3");
       const expected = process.env.LXE_PREVIEW_OFFICE_PDF ? "Office 验证" : "Preview sample";
       await wait(`document.querySelector('.textLayer')?.textContent.includes(${JSON.stringify(expected)})`, "PDF text layer");
+      await js("var range=document.createRange();range.selectNodeContents(document.querySelector('.textLayer'));window.getSelection().removeAllRanges();window.getSelection().addRange(range)");
+      assert.ok((await js("window.getSelection().toString()")).includes(expected), "PDF text can be selected");
       await capture("pdf");
       assert.ok(await js("(() => {const c=document.querySelector('.file-pdf canvas');const p=c.getContext('2d').getImageData(0,0,c.width,c.height).data;return p.some((v,i)=>i%4!==3&&v<240);})()"), "PDF contains visible pixels");
       assert.ok(requested.some(path=>path.includes("pdf.worker")));
@@ -127,8 +129,14 @@ app.whenReady().then(async () => {
     });
     await step("PDF 400 percent, pixel budget, rotation and zoom restoration", async () => {
       await click("#open-3"); await wait("!!document.querySelector('.textLayer span')", "PDF ready");
-      await js("var z=document.querySelector('.file-zoom-bar select');z.value='400';z.dispatchEvent(new Event('change',{bubbles:true}))"); await delay(600);
+      await js("var z=document.querySelector('.file-zoom-bar select');z.value='400';z.dispatchEvent(new Event('change',{bubbles:true}))");
+      await wait("[...document.querySelectorAll('.file-pdf canvas')].some(c=>c.width*c.height>16000000)", "high DPI 400 percent bitmap actually rendered");
       assert.ok(await js("[...document.querySelectorAll('.file-pdf canvas')].every(c=>c.width*c.height<=16777216)"));
+      await js("var v=document.querySelector('.file-pdf');v.scrollTop=200;v.scrollLeft=150"); await delay(100);
+      await js("var v=document.querySelector('.file-pdf'),r=v.getBoundingClientRect(),p=v.querySelector('[data-page]'),b=p.getBoundingClientRect();window.zoomAnchor={x:r.left+100,y:r.top+150,fx:(r.left+100-b.left)/b.width,fy:(r.top+150-b.top)/b.height};v.dispatchEvent(new WheelEvent('wheel',{ctrlKey:true,deltaY:15,clientX:zoomAnchor.x,clientY:zoomAnchor.y,cancelable:true,bubbles:true}))");
+      await delay(80);
+      assert.ok(await js("(()=>{const b=document.querySelector('.file-pdf [data-page]').getBoundingClientRect();return Math.abs(b.left+b.width*zoomAnchor.fx-zoomAnchor.x)<2&&Math.abs(b.top+b.height*zoomAnchor.fy-zoomAnchor.y)<2})()"), "wheel zoom keeps the pointer anchored");
+      await js("var z=document.querySelector('.file-zoom-bar select');z.value='400';z.dispatchEvent(new Event('change',{bubbles:true}))");
       await click(".file-pdf-navigation button"); await delay(350);
       if (!process.env.LXE_PREVIEW_OFFICE_PDF) {
         await js("var p=document.querySelector('.file-pdf-navigation input');var setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;setter.call(p,'8');p.dispatchEvent(new Event('input',{bubbles:true}))");
@@ -137,6 +145,7 @@ app.whenReady().then(async () => {
       await click("#open-0"); await wait("previewFixture.workers.size === 0", "PDF worker released");
       await click("#open-3"); await wait("document.querySelector('.file-zoom-bar select')?.value === '400'", "PDF zoom restored");
       if (!process.env.LXE_PREVIEW_OFFICE_PDF) await wait("document.querySelector('.file-pdf-navigation input')?.value === '8'", "PDF page restored");
+      await wait("!!document.querySelector('.file-pdf [data-page=\"'+document.querySelector('.file-pdf-navigation input').value+'\"] canvas')", "restored page rendered");
       await capture("pdf-400");
     });
     await step("Last opening intent wins and active tabs stay visible", async () => {
