@@ -79,7 +79,7 @@ export function ToolsView({
                           onClick={() => onOpen({ type: "tool", item: tool, title: tool.name })}
                         >
                           <div className="item-heading">
-                            <h3>{tool.name}</h3>
+                            <h3 title={tool.name}>{tool.name}</h3>
                           </div>
                           <p className="description">{tool.description}</p>
                           <div className="pill-row">

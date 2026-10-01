@@ -4501,12 +4501,13 @@ h1 {
 
 .catalog-section-toggle[aria-expanded="true"] {
   border-radius: 14px 14px 0 0;
-  background: linear-gradient(100deg, var(--catalog-soft), var(--surface) 55%);
+  background: var(--surface);
 }
 
-.catalog-section-toggle:hover,
-.catalog-section-toggle:focus-visible {
-  background: linear-gradient(100deg, var(--catalog-soft), var(--surface) 70%);
+.catalog-page .catalog-section-toggle,
+.catalog-page .catalog-section-toggle:hover,
+.catalog-page .catalog-section-toggle:focus-visible {
+  background: var(--surface);
 }
 
 .catalog-section-icon {
@@ -4607,7 +4608,7 @@ h1 {
   gap: 12px;
   padding: 14px;
   border-top: 1px solid var(--border);
-  background: var(--surface-subtle);
+  background: var(--surface);
 }
 
 .catalog-section-heading + .catalog-grid {
@@ -4622,23 +4623,14 @@ h1 {
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 12px;
-  background: linear-gradient(150deg, var(--surface) 72%, var(--catalog-soft) 155%);
+  background: var(--surface);
   box-shadow: 0 1px 2px var(--shadow-soft);
-}
-
-.catalog-item::before {
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 3px;
-  background: var(--catalog-hue);
-  content: "";
-  opacity: 0.62;
 }
 
 .catalog-item.item-button:hover,
 .catalog-item.item-button:focus-visible {
-  border-color: var(--catalog-ring);
-  background: linear-gradient(150deg, var(--surface) 60%, var(--catalog-soft) 135%);
+  border-color: var(--border-strong);
+  background: var(--surface);
   box-shadow: 0 10px 24px var(--shadow-soft);
   transform: translateY(-1px);
 }
@@ -4651,33 +4643,8 @@ h1 {
     transform 0.16s ease;
 }
 
-/* Skill surfaces stay neutral; the tool catalog retains its own decoration. */
-.skills-catalog .catalog-grid,
-.skills-catalog .catalog-section-toggle,
-.skills-catalog .catalog-section-toggle[aria-expanded="true"],
-.skills-catalog .catalog-section-toggle:hover,
-.skills-catalog .catalog-section-toggle:focus-visible,
-.skills-catalog .catalog-item,
-.skills-catalog .catalog-item.item-button:hover,
-.skills-catalog .catalog-item.item-button:focus-visible {
-  background: var(--surface);
-}
-
-.skills-catalog .catalog-item::before {
-  content: none;
-}
-
-.skills-catalog .catalog-item.item-button:hover,
-.skills-catalog .catalog-item.item-button:focus-visible {
-  border-color: var(--border-strong);
-}
-
-.skills-catalog .catalog-item .pill {
-  background: var(--surface-muted);
-}
-
 /* Direct status/source badges are flex children too: don't stretch them across the card. */
-.skills-catalog .catalog-item > .pill {
+.catalog-item > .pill {
   align-self: flex-start;
   max-width: 100%;
 }
@@ -4716,7 +4683,7 @@ h1 {
   min-height: 24px;
   gap: 5px;
   padding: 3px 8px;
-  background: rgba(255, 255, 255, 0.74);
+  background: var(--surface-muted);
   font-size: 0.65625rem;
 }
 
