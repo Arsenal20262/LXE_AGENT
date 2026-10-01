@@ -51,6 +51,7 @@ export const ZH_TEXT = {
   sidebar: {
     collapse: "收起侧边栏",
     expand: "展开侧边栏",
+    resize: "调整侧边栏宽度",
     statusAndSettings: "设置"
   },
   home: {
@@ -920,6 +921,7 @@ export const UI_TEXT: Record<Language, UiText> = {
     sidebar: {
       collapse: "Collapse sidebar",
       expand: "Expand sidebar",
+      resize: "Resize sidebar",
       statusAndSettings: "Settings"
     },
     home: {

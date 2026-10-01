@@ -109,6 +109,7 @@ import {
   storeCapabilityView,
 } from "./shared/navigation";
 import { useThreeStateSidebar } from "./shared/use-three-state-sidebar";
+import { SidebarResizer } from "./shared/sidebar-resizer";
 import type {
   ActivityView,
   CapabilityView,
@@ -1091,6 +1092,7 @@ function App({
           target={detailTarget}
           onClose={() => setDetailTarget(null)}
         />
+        <SidebarResizer expanded={sidebar.expanded} storage={browserStorage()} />
       </main>
       <div className={activeSection === "sessions" ? "runtime-status-host sessions-focus" : "runtime-status-host"}>
         {runtimeStatusPopover}
