@@ -12,7 +12,7 @@ app.whenReady().then(async () => {
   protocol.handle = (scheme, handler) => handle(scheme, request => { requested.push(request.url); return handler(request); });
   require(protocolFile).registerDashboardProtocol(output);
   protocol.handle = handle;
-  const win = new BrowserWindow({ width: 1200, height: 900, show: false, webPreferences: { contextIsolation: true, nodeIntegration: false, backgroundThrottling: false } });
+  const win = new BrowserWindow({ width: 1200, height: 900, show: true, webPreferences: { contextIsolation: true, nodeIntegration: false, backgroundThrottling: false } });
   win.webContents.session.webRequest.onBeforeRequest((details, callback) => {
     requested.push(details.url);
     const local = details.url.startsWith("app://lxe/") || /^(data:|blob:)/.test(details.url);
@@ -20,7 +20,7 @@ app.whenReady().then(async () => {
   });
   win.webContents.on("console-message", event => { if (event.level === "error" || event.message.includes("Setting up fake worker")) errors.push(event.message); });
   const js = code => win.webContents.executeJavaScript(code);
-  const wait = async (condition, label) => { const deadline = Date.now() + 12000; while (Date.now() < deadline) { if (await js(condition)) return; await delay(40); } throw new Error(`Timeout: ${label}\n${await js("(()=>{const text=document.body.innerText;return text.length>2500?text.slice(0,800)+'\\n[truncated]\\n'+text.slice(-1400):text})()")}`); };
+  const wait = async (condition, label) => { const deadline = Date.now() + 12000; while (Date.now() < deadline) { if (await js(condition)) return; await delay(40); } throw new Error(`Timeout: ${label}\n${JSON.stringify(await js("previewFixture.diagnostics()"))}\n${await js("(()=>{const text=document.body.innerText;return text.length>2500?text.slice(0,800)+'\\n[truncated]\\n'+text.slice(-1400):text})()")}`); };
   const click = async selector => { await js(`document.querySelector(${JSON.stringify(selector)}).click()`); await delay(80); };
   const capture = async name => {
     if (!process.env.LXE_PREVIEW_CAPTURE_DIR) return;
@@ -93,6 +93,7 @@ app.whenReady().then(async () => {
       await click("#open-4"); await wait("!!document.querySelector('.file-image img')", "image ready");
       await js("var z=document.querySelector('.file-zoom-bar select');z.value='200';z.dispatchEvent(new Event('change',{bubbles:true}))");
       await click("#open-1"); await wait("!!document.querySelector('.fortune-container canvas')", "workbook ready");
+      await wait("document.querySelector('.fortune-fx-input')?.textContent === '001'", "selection restored");
       await js("[...document.querySelectorAll('.luckysheet-sheets-item')].find(e=>e.textContent.includes('Notes')).click()"); await delay(150);
       await click("#open-0"); await wait("document.querySelector('.file-text-scroll')?.scrollTop > 600", "Markdown position restored");
       await click("#open-4"); await wait("document.querySelector('.file-zoom-bar select')?.value === '200'", "image zoom restored");

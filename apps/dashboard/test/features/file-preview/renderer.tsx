@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { FilePreviewLayout, PreviewHeaderActions, usePreviewSidebar } from "../../../src/features/file-preview/Sidebar";
+import { readingState } from "../../../src/features/file-preview/reading-state";
 import { setFileBridgeForTests } from "../../../src/features/file-preview/api";
 import type { DesktopFilesBridge, FileMetadata, SessionFileRef } from "@lxe/desktop-protocol";
 import "../../../src/styles.css";
@@ -49,7 +50,7 @@ function Controls({ session }: { session: string }) {
 }
 function Fixture() {
   const [session, setSession] = useState("first");
-  (window as any).previewFixture = { calls, pending, workers, slow: (value: boolean) => { slow = value; }, change: () => { version = String(Number(version) + 1); }, switchSession: () => setSession(s => s === "first" ? "second" : "first") };
+  (window as any).previewFixture = { calls, pending, workers, diagnostics: () => ({ reading: readingState("first", "first文档.md"), scroll: document.querySelector(".file-text-scroll")?.scrollTop, visible: document.visibilityState, focused: document.hasFocus() }), slow: (value: boolean) => { slow = value; }, change: () => { version = String(Number(version) + 1); }, switchSession: () => setSession(s => s === "first" ? "second" : "first") };
   return <FilePreviewLayout sessionId={session}><Controls session={session} /></FilePreviewLayout>;
 }
 createRoot(document.getElementById("root")!).render(<Fixture />);
