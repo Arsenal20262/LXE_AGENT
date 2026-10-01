@@ -16,16 +16,25 @@
 
 ## 仓库验证
 
-最终 rebase 后执行 `bun run verify:source`：协议生成检查、生产边界、全工作区类型检查通过；JS 为 1,877 通过 / 6 跳过。Python 为 1,964 通过 / 4 跳过，唯一失败是禁止新增根目录 `patches/`。
+完成 Windows 实测发现的修复并最终 rebase 后，`bun run verify:source` 退出码为 0：协议生成检查、生产边界、全工作区类型检查通过；JS 为 **1,877 通过 / 7 跳过 / 0 失败**，Python 为 **1,965 通过 / 4 跳过**。
 
-已将补丁移到 `config/dependency-patches/`，锁文件仅修改三个补丁路径，依赖版本与补丁内容均未变化。修复后 frozen 安装成功，目录约束 8 项、解析 5 项及真实 Chromium 的 8 组界面场景复测通过。依据仓库测试流程，此处做定向复测，没有无变化地重复全量运行。
+随后 Windows 实际打包发现资源检查脚本漏导入 `createRequire`，仅补充这一行导入；资源及打包路线的 9 项定向回归通过，继续以实际打包验证该入口，没有重复无关的全量测试。
+
+依赖补丁位于 `config/dependency-patches/`，符合仓库目录约束。Bun/uv 使用 frozen 锁文件。各 worktree 使用自己的 Python 环境，仅复用下载缓存。
 
 最新生产 Dashboard / Electron 构建及资源完整性检查通过。原生 Windows 测试在 Mac 上明确跳过，不计为 Windows 验收。
 
 ## Windows x64
 
-尚未完成验收。已连接目标 `PC-20240421FADR`（100.87.60.88），通过 Git bundle 同步分支至 `D:\projects\LXE_AGENT`，并由 `wt-claim.ps1` 领取 `file-preview-sidebar`。Bun frozen 依赖同步成功；Python 同步在获取 `hatchling==1.31.0` 的构建依赖时遇到 PyPI `tls handshake eof`，离线缓存则缺少 `editables~=0.3`。
+验收机：`PC-20240421FADR`。通过 Git bundle 同步分支，由 `wt-claim.ps1` 领取测试 worktree。已取得以下真实结果：
 
-用户开启 VPN TUN 后再次重试，但 SSH 连接超时，Tailscale 将该节点标为离线，未能取得新的 PyPI 同步结果。Windows 定向测试已发起，网络中断后尚未读到完整结果，不计为通过。连接恢复后继续依赖准备、定向测试、内置运行环境真实转换、原生应用关联与离线打包验收。
+- 定向测试 **19 通过 / 0 失败**，覆盖文件边界、目录分页、历史图片、刷新与释放、串行转换、超时/取消、解析、原生系统应用和资源缺项拒绝。
+- 实际 Electron / React 19 界面完成八组场景。使用生产 `app://` 资源处理器，阻断外部请求；PDF 实际创建独立 Worker，切换标签后终止。截图确认中文 Word 内容、公式缓存值 10、前导零 001 正常可见。
+- 中文及空格路径的 DOCX、PPTX、DOC、PPT 均转换为 PDF，缓存复用，源文件哈希全部不变。DOCX 缺少 Courier 的诊断保留；损坏文档返回实际 `invalid-document`。
+- Windows Shell 返回默认记事本和关联应用图标；私有测试扩展名通过指定应用及 Electron 默认打开，实际收到正确文件路径，文件定位成功。未知扩展名返回空列表，任意应用和移除后的应用均被拒绝。测试结束清理私有注册项。
+- 实机发现并修复两处问题：表格 ResizeObserver 同步触发布局循环，改为下一帧合并更新；Shell 全局应用列表包含损坏的无关注册项，改用该文件类型的推荐关联应用。相关系统查询失败仍保留实际异常。
 
-本记录不将本机测试或静态资源检查等同于 Windows 实机结果。
+- Windows `Unpacked -Offline` 打包退出码为 0。资源检查确认两个 Worker、PDF 支持资源及许可证齐全；afterPack 使用包内独立 Python/Node 完成 22 项 Office 操作，公式缓存为 10。解包后总体积 1,039.68 MiB，runtime 677.09 MiB，均在现有预算内。
+- 将预览服务打包为 Node 模块，再直接使用安装包的 `resources/runtime/node/node.exe` 执行；样本由包内 Python 的 `-I` 隔离模式生成。PATH 只保留包内 Node、Python 和 Windows System32，下载代理设为不可用。四种 Word/PPT 格式的转换、缓存、源文件哈希及损坏文件诊断再次通过。
+
+Windows 测试包位于 `D:\projects\LXE_AGENT\.worktrees\pool-1\dist\desktop-unpacked\win-unpacked\LXE Agent.exe`。本次验证的是解包版应用，不发布安装器或更新渠道；Office 预览所需资源全部随包提供。

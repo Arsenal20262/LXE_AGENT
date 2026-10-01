@@ -23,18 +23,20 @@ Excel 是只读表格，可选择、复制、切换工作表和查看公式栏�
 
 限制：普通文件 50 MiB，文本 2 MiB，表格 16 MiB / 25 万单元格 / 15 秒解析，Office 转换 60 秒。转换串行且合并同文件请求，取消时终止 CLI 及其原生子进程。缓存位于应用数据目录的 `cache/file-previews/`，按内容和 Kit 版本复用，512 MiB / 七天闲置清理，正在使用的缓存保留。
 
-PDF/表格查看器及 Worker 按需加载。PDF 字体、CMap、WASM 和许可证都随包提供。Windows Shell 辅助 PowerShell/C# 代码编译进桌面主程序，查询时写入专用临时目录并清理；macOS 使用 JXA/AppKit。应用查询失败保留错误，不当作“没有关联应用”。
+PDF/表格查看器及 Worker 按需加载。PDF 字体、CMap、WASM 和许可证都随包提供。Windows Shell 辅助 PowerShell/C# 代码编译进桌面主程序，查询时写入专用临时目录并清理；macOS 使用 JXA/AppKit。Windows 菜单采用 Shell 为该文件类型提供的推荐关联应用，避免混入无关的全局应用注册项。应用查询失败保留错误，不当作“没有关联应用”。
 
 ## 验证命令
 
 从仓库根目录执行，使用该 worktree 自己的环境：
 
 ```sh
-bun test apps/desktop/test/file-preview.test.ts scripts/file-preview-resources.test.ts apps/dashboard/test/features/file-preview
+bun test apps/desktop/test/file-preview.test.ts apps/desktop/test/file-applications-windows.test.ts scripts/file-preview-resources.test.ts apps/dashboard/test/features/file-preview
 uv run --frozen python scripts/create-file-preview-fixtures.py
 bun scripts/verify-file-preview.ts
 ```
 
 最后一个命令接受三个可选位置参数：样本目录、内置运行环境目录、验收输出目录。Windows 打包验收将第二个参数指向安装目录的 `resources/runtime`。报告记录真实转换错误、缺失字体和转换前后源文件哈希。
+
+界面测试通过生产 `app://` 资源处理器运行，阻断外部网络请求，并检查实际 PDF Worker 在切换标签后释放。Windows 原生关联测试在其他平台明确跳过。
 
 桌面打包入口和 afterPack 都检查 PDF 支持资源、独立查看器、两个 Worker 和许可证；缺项即失败。两平台记录见 [验收记录](file-preview-acceptance.md)。
