@@ -13,7 +13,6 @@ app.whenReady().then(async () => {
   require(protocolFile).registerDashboardProtocol(output);
   protocol.handle = handle;
   const win = new BrowserWindow({ width: 1200, height: 900, show: false, webPreferences: { contextIsolation: true, nodeIntegration: false, backgroundThrottling: false } });
-  win.webContents.enableDeviceEmulation({ screenPosition: "desktop", screenSize: { width: 0, height: 0 }, viewPosition: { x: 0, y: 0 }, viewSize: { width: 0, height: 0 }, deviceScaleFactor: 2, scale: 1 });
   win.webContents.session.webRequest.onBeforeRequest((details, callback) => {
     requested.push(details.url);
     const local = details.url.startsWith("app://lxe/") || /^(data:|blob:)/.test(details.url);
@@ -30,7 +29,9 @@ app.whenReady().then(async () => {
   };
   const step = async (name, fn) => { await fn(); assert.deepEqual(errors, []); passed.push(name); };
   try {
-    await win.loadURL(url); await wait("!!window.previewFixture", "mount");
+    await win.loadURL(url);
+  win.webContents.enableDeviceEmulation({ screenPosition: "desktop", screenSize: { width: 0, height: 0 }, viewPosition: { x: 0, y: 0 }, viewSize: { width: 0, height: 0 }, deviceScaleFactor: 2, scale: 1 });
+    await wait("!!window.previewFixture", "mount");
     assert.ok(requested.includes(url), "production protocol served the fixture");
     assert.equal(await js("previewFixture.workers.size"), 0);
     assert.equal(requested.some(path => /ExcelViewer|PdfViewer|pdf.worker|worker-/.test(path)), false, "large viewers are lazy");
