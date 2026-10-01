@@ -224,22 +224,22 @@ button {
   border-right-color: #312e2b;
 }
 
-/* Dark cards use neutral surfaces; brand colors stay on marks and accents.
-   Kimi already has a complete dark palette of its own. */
+/* Keep each brand's dark surface subdued, with neutral text and brighter
+   accents for legibility. Kimi has a complete dark palette of its own. */
 :root[data-theme="dark"] .model-card:not([data-provider="kimi_coding"]) {
-  --model-soft: var(--surface-subtle);
-  --model-ring: var(--border-strong);
-  --model-card-bg: var(--surface);
-  --model-card-active-bg: var(--surface);
-  --model-card-text: var(--text-strong);
-  --model-card-muted: var(--muted);
-  --model-card-soft-text: var(--text-soft);
-  --model-panel-bg: var(--surface-muted);
-  --model-panel-border: var(--border);
-  --model-input-bg: var(--surface-subtle);
-  --model-input-disabled-bg: var(--surface-muted);
-  --model-input-text: var(--text);
-  border-color: var(--border);
+  --model-soft: color-mix(in srgb, var(--model-hue) 10%, var(--model-dark-surface, var(--surface)));
+  --model-ring: color-mix(in srgb, var(--model-hue-strong) 42%, var(--model-dark-surface, var(--surface)));
+  --model-card-bg: var(--model-dark-surface, var(--surface));
+  --model-card-active-bg: var(--model-card-bg);
+  --model-card-text: #f1f2f4;
+  --model-card-muted: #a9adb5;
+  --model-card-soft-text: #c7cbd2;
+  --model-panel-bg: color-mix(in srgb, var(--model-dark-surface, var(--surface)) 82%, #000);
+  --model-panel-border: color-mix(in srgb, var(--model-hue-strong) 16%, var(--model-dark-surface, var(--surface)));
+  --model-input-bg: color-mix(in srgb, var(--model-dark-surface, var(--surface)) 65%, #000);
+  --model-input-disabled-bg: var(--model-panel-bg);
+  --model-input-text: var(--model-card-text);
+  border-color: var(--model-panel-border);
   box-shadow: var(--shadow-card);
 }
 
@@ -265,15 +265,23 @@ button {
 }
 
 :root[data-theme="dark"] .model-card[data-provider="deepseek"] {
+  --model-dark-surface: #242936;
   --model-hue-strong: #9db4f5;
 }
 
 :root[data-theme="dark"] .model-card[data-provider="openrouter"] {
-  --model-hue-strong: #c4a5f5;
+  --model-dark-surface: #272a23;
+  --model-hue: #c8ff00;
+  --model-hue-strong: #c8df87;
+  --model-badge-bg: #c8ff00;
+  --model-badge-color: #171b0e;
+  --model-badge-border: #c8ff00;
+  --model-focus-ring: rgba(200, 255, 0, 0.2);
 }
 
 :root[data-theme="dark"] .model-card[data-provider="zhipuai"],
 :root[data-theme="dark"] .model-card[data-provider="zhipuai_coding_plan"] {
+  --model-dark-surface: #232e33;
   --model-hue-strong: #8aa9f5;
 }
 
