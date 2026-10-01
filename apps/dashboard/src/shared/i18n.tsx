@@ -287,6 +287,11 @@ export const ZH_TEXT = {
     columnSession: "会话",
     tokenSuffix: "Token"
   },
+  workspaces: {
+    title: "工作区", defaultName: "默认工作区", choose: "选择工作区", open: "打开文件夹",
+    newIn: (name: string) => `在“${name}”中新建对话`,
+    loadMore: "加载更多对话", retry: "重试", empty: "发送第一条消息后，对话会显示在这里。",
+  },
   sessionDetail: {
     back: "会话",
     eyebrow: "Session 详情",
@@ -1148,6 +1153,11 @@ export const UI_TEXT: Record<Language, UiText> = {
       errorLabel: "Sessions error",
       columnSession: "Session",
       tokenSuffix: "Token"
+    },
+    workspaces: {
+      title: "Workspaces", defaultName: "Default workspace", choose: "Choose workspace", open: "Open folder",
+      newIn: (name: string) => `New chat in “${name}”`,
+      loadMore: "Load more chats", retry: "Retry", empty: "Send a message to add a chat here.",
     },
     sessionDetail: {
       back: "Sessions",

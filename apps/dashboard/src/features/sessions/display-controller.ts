@@ -7,6 +7,7 @@ import { isToolTerminal, mergeToolStream } from "./tool-state";
 
 export type WindowConnection = "attached" | "detached";
 export interface ConversationDisplaySnapshot {
+  draftDirectory?: string;
   sessionId: string;
   viewKey: string;
   detail?: SessionDetailPayload;
@@ -20,7 +21,7 @@ export interface ConversationDisplaySnapshot {
   error: string;
   jump: number;
 }
-export interface SendTicket { pendingId: string; sessionId: string; selection: number; message: PendingMessage }
+export interface SendTicket { pendingId: string; sessionId: string; selection: number; message: PendingMessage; directory?: string }
 export interface HistoryTicket { sessionId: string; selection: number; window: number; revision: number }
 const terminal = (turn: DesktopConversationTurnPayload) => ["completed", "error", "cancelled"].includes(turn.state);
 const groups = (page?: SessionDetailPayload) => new Set(page?.messages_page.group_cursors ?? page?.messages.map(message => message.display_group_id) ?? []);
@@ -33,6 +34,7 @@ const activityTurnIds = (activity?: DesktopConversationActivityPayload) =>
 
 /** Selection owns a bounded reading window; pending sends outlive navigation until acknowledged. */
 export class ConversationDisplayController {
+  private draftDirectories = new Map<string, string>();
   private listeners = new Set<() => void>();
   private pending = new Map<string, PendingMessage>();
   private turns = new Map<string, DesktopConversationTurnPayload>();
@@ -60,7 +62,7 @@ export class ConversationDisplayController {
     this.receiveHistory(page, direction, ticket.revision); return true;
   }
 
-  select(sessionId: string, newDraft = false, draftKey?: string): void {
+  select(sessionId: string, newDraft = false, draftKey?: string, directory?: string): void {
     if (sessionId === this.state.sessionId && !newDraft) return;
     this.selection += 1;
     this.turns.clear(); this.touched.clear(); this.visible = []; this.historyRevisions.clear(); this.toolEvidence.clear();
@@ -68,7 +70,20 @@ export class ConversationDisplayController {
     this.historyProjection = undefined;
     this.state = { sessionId, viewKey: sessionId || draftKey || `draft:${this.selection}`, rows: [], pending: [], connection: "attached",
       following: true, loadState: sessionId ? "loading" : "ready", error: "", jump: 0 };
+    if (!sessionId) {
+      const selectedDirectory = directory ?? this.draftDirectories.get(this.state.viewKey);
+      if (selectedDirectory !== undefined) {
+        this.draftDirectories.set(this.state.viewKey, selectedDirectory);
+        this.state.draftDirectory = selectedDirectory;
+      }
+    }
     this.publish();
+  }
+  setDraftDirectory(directory: string): void {
+    if (this.state.sessionId || this.state.pending.some(item => !item.error)) return;
+    this.draftDirectories.set(this.state.viewKey, directory);
+    this.state = { ...this.state, draftDirectory: directory };
+    this.notify();
   }
   setVisibleGroups = (ids: string[]) => { this.visible = ids; };
   receiveExecUpdate(update: BackgroundTaskChangedPayload): void {
@@ -204,7 +219,8 @@ export class ConversationDisplayController {
     const pendingId = crypto.randomUUID();
     this.pending.set(pendingId, { pendingId, sessionId: this.state.sessionId, text: message, attachments, createdAt: Date.now(), draftKey: this.state.viewKey });
     this.publish();
-    return { pendingId, sessionId: this.state.sessionId, selection: this.selection, message: this.pending.get(pendingId)! };
+    return { pendingId, sessionId: this.state.sessionId, selection: this.selection, message: this.pending.get(pendingId)!,
+      ...(!this.state.sessionId && this.state.draftDirectory !== undefined ? { directory: this.state.draftDirectory } : {}) };
   }
   acceptSend(ticket: SendTicket, result: DesktopConversationSendPayload): boolean {
     const item = this.pending.get(ticket.pendingId) ?? ticket.message;
@@ -307,10 +323,11 @@ export class ConversationDisplayController {
 
 /** Shared by the production send handler and browser fixtures. */
 export async function sendConversationMessage(controller: ConversationDisplayController, text: string, attachments: DesktopInputAttachmentPayload[],
-  send: (input: { session_id?: string; text: string; client_message_id: string; attachment_ids?: string[] }) => Promise<DesktopConversationSendPayload>) {
+  send: (input: { session_id?: string; directory?: string; text: string; client_message_id: string; attachment_ids?: string[] }) => Promise<DesktopConversationSendPayload>) {
   const ticket = controller.beginSend(text, attachments);
   try {
-    const result = await send({ ...(ticket.sessionId ? { session_id: ticket.sessionId } : {}), text, client_message_id: ticket.pendingId,
+    const result = await send({ ...(ticket.sessionId ? { session_id: ticket.sessionId } : {}),
+      ...(ticket.directory === undefined ? {} : { directory: ticket.directory }), text, client_message_id: ticket.pendingId,
       ...(attachments.length ? { attachment_ids: attachments.map(attachment => attachment.attachment_id) } : {}) });
     return { result, ticket, selected: controller.acceptSend(ticket, result) };
   } catch (error) { controller.failSend(ticket, error); throw error; }

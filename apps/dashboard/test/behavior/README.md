@@ -18,7 +18,7 @@ bun run --cwd apps/dashboard typecheck
 不改变正式应用的硬件加速设置。启动参数中的页面 URL 放在最后，兼容 Electron 的 Windows 参数检查。
 结束时清理进程、服务器、构建产物与临时用户目录。
 
-三个测试组共 13 个场景：
+四个测试组共 18 个场景：
 
 - **弹窗（3）**：首次聚焦跳过隐藏及禁用控件，Tab 双向循环；嵌套弹窗只关闭最上层，
   并逐层恢复焦点；没有控件时焦点留在弹窗内。
@@ -27,6 +27,7 @@ bun run --cwd apps/dashboard typecheck
   保存期间禁止发送；离线时保留草稿、阻止发送及附件操作，恢复后可继续使用。
 - **启动与集成（5）**：首页、统计页、会话页分别覆盖两个进程的未就绪组合与恢复；
   实际设置弹窗关闭后恢复侧栏焦点；跳过引导并新建会话时不发统计请求，恢复后显示统计。
+- **工作区（5）**：全量目录分组与组内分页；从目录新建草稿；选择器取消、打开目录及真实发送错误；首次发送锁定目录与异步响应隔离；跨目录搜索与已有会话目录只读。支持设置 `LXE_WORKSPACE_SCREENSHOT` 保存界面验收截图。
 
 Tab、Enter、Shift+Enter 通过 Electron 原生输入进入 Chromium；中文合成用 DOM
 CompositionEvent 和带 `isComposing` 的 KeyboardEvent，覆盖 React 事件处理分支。

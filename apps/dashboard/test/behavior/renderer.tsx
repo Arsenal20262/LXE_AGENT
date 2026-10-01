@@ -3,7 +3,7 @@ import React, { useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { DesktopHealth, DesktopInputAttachmentPayload, LxeDesktopBridge } from "@lxe/desktop-protocol";
+import type { DesktopHealth, DesktopInputAttachmentPayload, LxeDesktopBridge, SessionPayload } from "@lxe/desktop-protocol";
 import { ConversationComposer } from "../../src/features/sessions/view";
 import { useDialogFocus } from "../../src/shared/ui/use-dialog-focus";
 import { I18nContext, LANGUAGE_STORAGE_KEY, UI_TEXT } from "../../src/shared/i18n";
@@ -14,6 +14,60 @@ import "../../src/styles.css";
 // Only external boundaries are substituted. App, Query hooks, composer and
 // dialog focus management are production code, running in Chromium.
 const calls: { operation: string; input?: unknown }[] = [];
+const workspaceMode = new URLSearchParams(location.search).has("workspaces");
+let chosenDirectory: string | null = "/fixture/chosen";
+let sendFailure = false;
+let holdWorkspaceSend = false;
+let releaseWorkspaceSend: (() => void) | undefined;
+function workspaceSession(id: string, directory: string, pinned = false): SessionPayload {
+  return { session_id: id, title: id, workspace: { directory, worktree: directory },
+    pinned_at: pinned ? 1 : 0, created_at: 1, last_active_at: 100, source: { platform: "desktop" },
+    source_summary: { platform: "desktop", chat_type: "p2p" }, model: "fixture-model", reasoning_effort: "",
+    model_config: {}, message_count: 0, tool_call_count: 0, input_tokens: 0, output_tokens: 0, api_call_count: 0 };
+}
+const workspaceSessions = [
+  workspaceSession("Default chat", "/fixture/default"),
+  ...Array.from({ length: 23 }, (_, i) => workspaceSession(`Shop chat ${i + 1}`, "/fixture/shop", i === 0)),
+  workspaceSession("Archived project chat", "/fixture/archive"),
+];
+function workspaceRpc(call: { operation: string; input: Record<string, unknown> }): unknown {
+  const input = call.input;
+  switch (call.operation) {
+    case "sessions.workspaces": return { items: [...new Set(workspaceSessions.map(row => row.workspace.directory))].map(directory => ({
+      directory, session_count: workspaceSessions.filter(row => row.workspace.directory === directory).length, last_active_at: 100,
+    })) };
+    case "sessions.list": {
+      const rows = workspaceSessions.filter(row => (!input.directory || row.workspace.directory === input.directory)
+        && (!input.query || row.title.toLowerCase().includes(String(input.query).toLowerCase())));
+      const offset = Number(input.offset ?? 0), limit = Number(input.limit ?? 10);
+      return { items: rows.slice(offset, offset + limit), total: rows.length, offset, limit };
+    }
+    case "sessions.detail": return { session: workspaceSessions.find(row => row.session_id === input.session_id),
+      messages: [], messages_page: { group_cursors: [], total: 0, raw_message_total: 0, limit: 10, fetched_at: 1,
+        oldest_cursor: null, newest_cursor: null, previous_cursor: null, next_cursor: null, has_previous: false, has_next: false } };
+    case "sessions.activity": return { session_id: input.session_id, active: null, latest: null, queued: [] };
+    case "sessions.execTasks": return { items: [] };
+    case "sessions.status.list": return { items: (input.session_ids as string[]).map(session_id => ({
+      session_id, version: 1, state: "idle", queue_count: 0, result: null, updated_at: 1,
+    })) };
+    case "sessions.send": return (async () => {
+      if (sendFailure) throw new Error("EACCES: fixture directory denied");
+      if (holdWorkspaceSend) await new Promise<void>(resolve => { releaseWorkspaceSend = resolve; });
+      const session_id = `Created chat ${workspaceSessions.length}`;
+      workspaceSessions.push(workspaceSession(session_id, String(input.directory || health.workspace_root)));
+      return { session_id, turn_id: "turn", message_id: "message", created: true, state: "queued" };
+    })();
+    case "sessions.pin": {
+      const row = workspaceSessions.find(row => row.session_id === input.session_id)!;
+      row.pinned_at = input.pinned ? 1 : 0; return row;
+    }
+    case "sessions.delete": {
+      workspaceSessions.splice(workspaceSessions.findIndex(row => row.session_id === input.session_id), 1);
+      return { session_id: input.session_id, deleted: true };
+    }
+    default: return undefined;
+  }
+}
 const sends: { text: string; attachments: DesktopInputAttachmentPayload[] }[] = [];
 let stops = 0;
 let releaseSend: (() => void) | undefined;
@@ -31,6 +85,8 @@ const health: DesktopHealth = {
 const currentModel = modelRow("deepseek", "local", "DeepSeek", [modelOption("fixture-model")]);
 const subscribe = () => () => {};
 const desktop = {
+  selectWorkspace: async () => { calls.push({ operation: "chooseWorkspace" }); return chosenDirectory; },
+  openWorkspace: async (directory: string) => { calls.push({ operation: "openWorkspace", input: directory }); },
   platform: "darwin" as const,
   getSetupState: async () => setupState({ complete }),
   getHealth: async () => ({ ...health }),
@@ -58,7 +114,12 @@ const desktop = {
 const dashboard = {
   async call(call: { operation: string; input: Record<string, unknown> }) {
     calls.push(structuredClone(call));
+    if (workspaceMode) {
+      const result = workspaceRpc(call);
+      if (result !== undefined) return result;
+    }
     switch (call.operation) {
+      case "sessions.workspaces": return { items: [] };
       case "sessions.list": return { items: [], total: 0, offset: 0, limit: 10 };
       case "sessions.questions": return { items: [] };
       case "models.current": return currentModel;
@@ -129,6 +190,10 @@ function reset() {
   calls.length = 0; sends.length = 0; stops = 0; releaseSend = undefined;
 }
 const fixture = {
+  chooseDirectory(directory: string | null) { chosenDirectory = directory; },
+  failWorkspaceSend(value: boolean) { sendFailure = value; },
+  holdWorkspaceSend(value: boolean) { holdWorkspaceSend = value; },
+  releaseWorkspaceSend() { releaseWorkspaceSend?.(); },
   mountDialog(empty = false) { reset(); flushSync(() => root!.render(<DialogFixture empty={empty} />)); },
   mountComposer(options: ComposerOptions = {}) {
     reset(); composerOptions = options; conversationKey = `behavior-${++serial}`; renderComposer();
@@ -154,6 +219,7 @@ localStorage.clear();
 localStorage.setItem(LANGUAGE_STORAGE_KEY, "en");
 const params = new URLSearchParams(location.search);
 if (params.has("app")) {
+  if (workspaceMode) Object.assign(health, { gateway: "ready", agent_cli: "ready", workspace_root: "/fixture/default" });
   complete = params.get("complete") !== "false";
   history.replaceState({ section: params.get("section") || "home" }, "");
   await import("../../src/main");

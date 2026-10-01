@@ -130,15 +130,24 @@ export function useAttachmentPreviewQuery(
   });
 }
 
-export function useSessionsInfiniteQuery(query: string, enabled = true) {
+export function useSessionWorkspacesQuery(enabled = true) {
+  return useQuery({
+    queryKey: dashboardQueryKeys.sessions.workspaces,
+    queryFn: () => callDashboard({ operation: "sessions.workspaces", input: {} }),
+    enabled, staleTime: ACTIVE_DATA_STALE_TIME_MS,
+  });
+}
+
+export function useSessionsInfiniteQuery(query: string, enabled = true, directory?: string) {
   const normalizedQuery = query.trim();
   return useInfiniteQuery({
-    queryKey: dashboardQueryKeys.sessions.list(normalizedQuery),
+    queryKey: dashboardQueryKeys.sessions.list(normalizedQuery, directory),
     queryFn: async ({ pageParam }) => {
       return normalizeSessionList(
         await callDashboard({
           operation: "sessions.list",
-          input: { query: normalizedQuery, limit: SESSION_LIST_PAGE_SIZE, offset: pageParam },
+          input: { query: normalizedQuery, limit: SESSION_LIST_PAGE_SIZE, offset: pageParam,
+            ...(directory === undefined ? {} : { directory }) },
         }),
         SESSION_LIST_PAGE_SIZE,
       );

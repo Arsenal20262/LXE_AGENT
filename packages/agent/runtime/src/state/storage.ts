@@ -347,6 +347,7 @@ export interface DashboardSessionListOptions {
   limit: number;
   offset: number;
   query?: string;
+  directory?: string;
 }
 
 export interface DashboardSessionPageOptions {
@@ -1122,6 +1123,15 @@ export class SqliteRuntimeStore implements RuntimeStore {
     return this.usage().turnUsageAcknowledgedSequence(targetUrl);
   }
 
+  listSessionWorkspaces(): { items: Array<{ directory: string; session_count: number; last_active_at: number }> } {
+    return { items: this.allPrepared<{ directory: string; session_count: number; last_active_at: number }>(`
+      SELECT workspace_directory AS directory, COUNT(*) AS session_count,
+             MAX(last_active_at) AS last_active_at
+      FROM agent_sessions WHERE workspace_directory != ''
+      GROUP BY workspace_directory ORDER BY last_active_at DESC, directory ASC
+    `) };
+  }
+
   listSessions(options: DashboardSessionListOptions): {
     items: JsonObject[];
     limit: number;
@@ -1132,10 +1142,17 @@ export class SqliteRuntimeStore implements RuntimeStore {
     const limit = Math.max(1, Math.min(Math.trunc(options.limit), 200));
     const offset = Math.max(0, Math.trunc(options.offset));
     const needle = text(options.query).toLowerCase();
-    const where = needle
-      ? "WHERE lower(coalesce(session_id, '')) LIKE ? OR lower(coalesce(title, '')) LIKE ? OR lower(coalesce(model, '')) LIKE ? OR lower(coalesce(source, '')) LIKE ?"
-      : "";
-    const whereArgs = needle ? Array(4).fill(`%${needle}%`) : [];
+    const clauses: string[] = [];
+    const whereArgs: string[] = [];
+    if (needle) {
+      clauses.push("(lower(coalesce(session_id, '')) LIKE ? OR lower(coalesce(title, '')) LIKE ? OR lower(coalesce(model, '')) LIKE ? OR lower(coalesce(source, '')) LIKE ?)");
+      whereArgs.push(...Array<string>(4).fill(`%${needle}%`));
+    }
+    if (options.directory !== undefined) {
+      clauses.push("workspace_directory = ?");
+      whereArgs.push(options.directory);
+    }
+    const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
     const totalRow = this.getPrepared<{ count: number }>(
       `SELECT COUNT(*) AS count FROM agent_sessions ${where}`,
       ...whereArgs,

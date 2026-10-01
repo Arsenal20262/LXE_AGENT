@@ -7,6 +7,7 @@ export const IPC_CHANNELS = {
   installUpdate: "lxe:desktop:update-install",
   dashboardCall: "lxe:dashboard:call",
   selectWorkspace: "lxe:desktop:select-workspace",
+  openWorkspace: "lxe:desktop:open-workspace",
   selectZiniaoApp: "lxe:desktop:select-ziniao-app",
   selectZiniaoWebDriverDirectory: "lxe:desktop:select-ziniao-webdriver-directory",
   selectCloudEnrollment: "lxe:desktop:select-cloud-enrollment",

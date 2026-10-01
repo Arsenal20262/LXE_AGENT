@@ -14,6 +14,35 @@ afterEach(async () => {
 });
 
 describe("SqliteRuntimeStore dashboard queries", () => {
+  test("summarizes all directories independently of pagination and filters before paging and pinning", async () => {
+    const root = mkdtempSync(join(tmpdir(), "lxe-workspace-groups-"));
+    roots.push(root);
+    const store = new SqliteRuntimeStore(join(root, "agent.sqlite3"));
+    await store.start();
+    const a = join(root, "repository", "a"), b = join(root, "repository", "b");
+    try {
+      for (let index = 0; index < 24; index++) {
+        await store.ensureSession({ session_id: `a-${String(index).padStart(2, "0")}`, source: { platform: "desktop" },
+          workspace: { directory: a, worktree: root }, entry_text: index === 0 ? "needle" : "other" });
+      }
+      await store.ensureSession({ session_id: "b", source: { platform: "desktop" }, workspace: { directory: b, worktree: root }, entry_text: "needle" });
+      store.pinSession("a-00", true);
+      expect(store.listSessions({ limit: 10, offset: 0 }).items).toHaveLength(10);
+      expect(store.listSessionWorkspaces().items.map(item => [item.directory, item.session_count]).sort())
+        .toEqual([[a, 24], [b, 1]].sort());
+      const first = store.listSessions({ directory: a, limit: 10, offset: 0 });
+      const second = store.listSessions({ directory: a, limit: 10, offset: 10 });
+      expect(first.total).toBe(24);
+      expect(first.items[0]?.session_id).toBe("a-00");
+      expect(second.items).toHaveLength(10);
+      expect(new Set([...first.items, ...second.items].map(item => item.session_id)).size).toBe(20);
+      expect(store.listSessions({ directory: b, query: "desktop", limit: 10, offset: 0 }).items.map(item => item.session_id)).toEqual(["b"]);
+      expect(store.listSessions({ directory: b, query: "a-00", limit: 10, offset: 0 }).total).toBe(0);
+      // These directories deliberately do not exist: reading history needs no filesystem lookup.
+      await store.deleteSession("b");
+      expect(store.listSessionWorkspaces().items.map(item => item.directory)).toEqual([a]);
+    } finally { await store.stop(); }
+  });
   test("restores the transcript when the database refuses a session delete", async () => {
     const root = mkdtempSync(join(tmpdir(), "lxe-dashboard-session-delete-rollback-"));
     roots.push(root);

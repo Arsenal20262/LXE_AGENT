@@ -1493,6 +1493,7 @@ export const UnifiedConversationRow = React.memo(function UnifiedConversationRow
   && a.attachmentSessionId === b.attachmentSessionId && JSON.stringify(a.row) === JSON.stringify(b.row));
 
 export function SessionDetailView({
+  workspaceControl,
   question, onQuestionAnswered,
   fallbackSession,
   detail,
@@ -1521,6 +1522,7 @@ export function SessionDetailView({
   onOpenAttachment,
   pendingMessages, display, onFollowingChange,
 }: {
+  workspaceControl?: React.ReactNode;
   question?: PendingUserQuestion;
   onQuestionAnswered?: () => void;
   fallbackSession: SessionPayload | null;
@@ -1609,6 +1611,7 @@ export function SessionDetailView({
           </button>
         ) : null}
       </header>
+      {workspaceControl}
       {sessionInfoOpen && session ? (
         <>
           <button
@@ -1817,6 +1820,7 @@ function SessionDeleteDialog({
 }
 
 export const SessionsIndex = React.memo(function SessionsIndex({
+  embedded = false,
   sessions,
   query,
   searchOpen,
@@ -1842,6 +1846,7 @@ export const SessionsIndex = React.memo(function SessionsIndex({
   statusUnavailable = false,
   statusError = "",
 }: {
+  embedded?: boolean;
   sessions: SessionPayload[];
   query: string;
   searchOpen: boolean;
@@ -1896,7 +1901,7 @@ export const SessionsIndex = React.memo(function SessionsIndex({
 
   function maybeLoadMore() {
     const list = sessionListRef.current;
-    if (!list || initialLoading || loadingMore || !hasMore || loadMoreError) {
+    if (embedded || !list || initialLoading || loadingMore || !hasMore || loadMoreError) {
       return;
     }
     const distanceToBottom = list.scrollHeight - list.scrollTop - list.clientHeight;
@@ -1969,7 +1974,7 @@ export const SessionsIndex = React.memo(function SessionsIndex({
           onClick={() => onOpen(session)}
         >
           <span className="session-index-icon" data-session-state={state} role="img" aria-label={statusLabel} title={statusLabel} />
-          <span className="primary-cell">{sessionTitle}</span>
+          <span className="primary-cell">{sessionTitle}{trimmedQuery ? <small className="session-workspace-result" title={session.workspace.directory}>{session.workspace.directory}</small> : null}</span>
         </button>
         <button
           aria-expanded={menuOpen}
@@ -1992,10 +1997,10 @@ export const SessionsIndex = React.memo(function SessionsIndex({
 
   return (
     <div className="session-index-panel">
-      <button className="session-new-button" type="button" onClick={onNew} aria-label={t.sessions.newConversationAria}>
+      {!embedded ? <button className="session-new-button" type="button" onClick={onNew} aria-label={t.sessions.newConversationAria}>
         <Plus size={15} />
         <span>{t.sessions.newConversation}</span>
-      </button>
+      </button> : null}
       {searchOpen ? (
         <div className="search-box">
           <Search size={16} />
@@ -2033,7 +2038,7 @@ export const SessionsIndex = React.memo(function SessionsIndex({
             <div className="session-index-heading">{t.sessions.pinned}</div>
           ) : null}
           {pinnedSessions.map(renderSession)}
-          {!trimmedQuery && recentSessions.length > 0 ? (
+          {!embedded && !trimmedQuery && recentSessions.length > 0 ? (
             <div className="session-index-heading">{t.sessions.recent}</div>
           ) : null}
           {recentSessions.map(renderSession)}
@@ -2045,6 +2050,7 @@ export const SessionsIndex = React.memo(function SessionsIndex({
           {loadMoreError ? (
             <div className="session-load-more-error">{t.common.errorPrefix(t.sessions.errorLabel, loadMoreError)}</div>
           ) : null}
+          {embedded && hasMore ? <button type="button" className="workspace-load-more" disabled={loadingMore} onClick={onLoadMore}>{t.workspaces.loadMore}</button> : null}
         </div>
       ) : null}
       {menu ? (

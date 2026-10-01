@@ -46,6 +46,7 @@ describe("preload bridge", () => {
       "onSyntheticPerformerTaskChanged",
       "openCloudDestination",
       "openLogsDirectory",
+      "openWorkspace",
       "openSyntheticPerformerOutput",
       "platform",
       "prepareCloudDependencies",

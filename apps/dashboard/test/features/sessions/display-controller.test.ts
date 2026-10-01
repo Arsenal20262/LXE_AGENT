@@ -17,6 +17,36 @@ const result={session_id:"s",message_id:"m",turn_id:"turn",state:"running" as co
 const users=(c:ConversationDisplayController)=>c.getSnapshot().rows.filter(row=>row.message?.role==="user");
 const setup=()=>{const c=new ConversationDisplayController();c.select("s");c.receiveHistory(history([]),"latest");return c;};
 
+test("draft directories survive navigation and failure, and a send captures the original directory", async () => {
+  const c = new ConversationDisplayController();
+  c.select("", true, undefined, "/project/a");
+  const draft = c.getSnapshot().viewKey;
+  let finish!: () => void;
+  const sent: Array<{ directory?: string }> = [];
+  const sending = sendConversationMessage(c, "hello", [image], async input => {
+    sent.push(input);
+    await new Promise<void>(resolve => { finish = resolve; });
+    return result;
+  });
+  c.setDraftDirectory("/should-not-change");
+  expect(c.getSnapshot().draftDirectory).toBe("/project/a");
+  c.select("", true, undefined, "/project/b");
+  finish();
+  expect((await sending).selected).toBe(false);
+  expect(sent[0]?.directory).toBe("/project/a");
+  expect(c.getSnapshot().draftDirectory).toBe("/project/b");
+  await expect(sendConversationMessage(c, "retry", [], async () => { throw new Error("EACCES: actual error"); })).rejects.toThrow("EACCES");
+  c.setDraftDirectory("/project/c");
+  expect(c.getSnapshot().draftDirectory).toBe("/project/c");
+  const failedDraft = c.getSnapshot().viewKey;
+  c.select("existing"); c.setDraftDirectory("/not-allowed");
+  expect(c.getSnapshot().draftDirectory).toBeUndefined();
+  c.select("", true, failedDraft);
+  expect(c.getSnapshot().draftDirectory).toBe("/project/c");
+  expect(c.getSnapshot().pending[0]?.error).toContain("EACCES");
+  expect(draft).not.toBe(failedDraft);
+});
+
 test("empty history then first text, image or attachment-only send keeps bubble visible at every handoff",()=>{
   for(const attachments of [[],[image]]) for(const body of ["hello",""]) {
     const c=setup();const ticket=c.beginSend(body,attachments);

@@ -192,6 +192,72 @@ app.whenReady().then(async () => {
         assert.equal(await js("document.querySelector('textarea').disabled"), false);
         assert.equal(await js("document.querySelector('.welcome-metrics dd').textContent"), "7");
       });
+    } else if (suite === "workspaces") {
+      await load("?app=1&workspaces=1&section=sessions");
+      await waitFor("document.querySelectorAll('.workspace-group').length === 3", "workspace groups");
+      const shop = '.workspace-group[data-workspace-directory="/fixture/shop"]';
+      await step("all workspaces are discoverable and expanded groups page independently", async () => {
+        assert.match(await js("document.querySelector('.workspace-index').textContent"), /archive/);
+        assert.equal((await state()).calls.some(call => call.operation === "sessions.list" && call.input.directory === "/fixture/shop"), false);
+        await click(shop + " .workspace-group-toggle");
+        await waitFor(`document.querySelectorAll('${shop} .session-index-item').length === 10`, "first shop page");
+        assert.match(await js(`document.querySelector('${shop}').textContent`), /Pinned/);
+        await click(shop + " .workspace-load-more");
+        await waitFor(`document.querySelectorAll('${shop} .session-index-item').length === 20`, "second shop page");
+        await click(shop + " .workspace-load-more");
+        await waitFor(`document.querySelectorAll('${shop} .session-index-item').length === 23`, "last shop page");
+        assert.equal(await js(`document.querySelector('${shop}').textContent.includes('Default chat')`), false);
+      });
+      await step("group new chat selects its directory without creating a session", async () => {
+        await click(shop + " .workspace-group-header > button:last-child");
+        await waitFor("Boolean(document.querySelector('.conversation-workspace select'))", "draft directory selector");
+        assert.equal(await js("document.querySelector('.conversation-workspace select').value"), "/fixture/shop");
+        await type("Prepare the project report");
+        assert.equal((await state()).calls.filter(call => call.operation === "sessions.send").length, 0);
+        if (process.env.LXE_WORKSPACE_SCREENSHOT) {
+          require("node:fs").writeFileSync(process.env.LXE_WORKSPACE_SCREENSHOT, (await win.webContents.capturePage()).toPNG());
+        }
+      });
+      await step("cancel, choose, open and failed send preserve the draft and actual directory", async () => {
+        await js("behavior.chooseDirectory(null)");
+        await click(".conversation-workspace button[aria-label='Choose workspace']");
+        assert.equal(await js("document.querySelector('textarea').value"), "Prepare the project report");
+        assert.equal(await js("document.querySelector('.conversation-workspace select').value"), "/fixture/shop");
+        await js('behavior.chooseDirectory("D:\\\\资料\\\\采购")');
+        await click(".conversation-workspace button[aria-label='Choose workspace']");
+        const selected = await js("document.querySelector('.conversation-workspace select').value");
+        assert.equal(selected, "D:\\资料\\采购");
+        await click(".conversation-workspace button[aria-label='Open folder']");
+        assert.equal((await state()).calls.findLast(call => call.operation === "openWorkspace").input, selected);
+        await js("behavior.failWorkspaceSend(true)");
+        await focus("textarea"); await key("Enter");
+        await waitFor("document.body.textContent.includes('EACCES: fixture directory denied')", "actual failure displayed");
+        assert.equal((await state()).calls.findLast(call => call.operation === "sessions.send").input.directory, selected);
+        assert.equal(await js("document.querySelector('textarea').value"), "Prepare the project report");
+        assert.equal(await js("document.querySelector('.conversation-workspace select').disabled"), false);
+      });
+      await step("pending first send locks its directory and a late reply cannot switch a newer draft", async () => {
+        await click(".session-new-button");
+        await js("behavior.failWorkspaceSend(false); behavior.holdWorkspaceSend(true)");
+        await type("Shared default task"); await key("Enter");
+        await waitFor("document.querySelector('.conversation-workspace select').disabled", "directory locked");
+        assert.equal((await state()).calls.findLast(call => call.operation === "sessions.send").input.directory, "/fixture/default");
+        await click(shop + " .workspace-group-header > button:last-child");
+        await js("behavior.releaseWorkspaceSend()");
+        await settle();
+        await waitFor("Boolean(document.querySelector('.conversation-workspace select')) && document.querySelector('.conversation-workspace select').value === '/fixture/shop'", "new draft retained");
+        assert.equal(await js("document.querySelector('textarea').value"), "");
+      });
+      await step("global search labels the directory and an existing chat cannot change it", async () => {
+        await click(".sidebar-search-button");
+        await focus(".search-box input"); await win.webContents.insertText("Archived project"); await settle();
+        await waitFor("document.querySelector('.session-workspace-result')?.textContent === '/fixture/archive'", "search directory label");
+        await click(".session-index-open");
+        await waitFor("document.querySelector('.conversation-workspace-name')?.textContent === 'archive'", "existing chat directory");
+        assert.equal(await js("Boolean(document.querySelector('.conversation-workspace select'))"), false);
+        await click(".conversation-workspace button[aria-label='Open folder']");
+        assert.equal((await state()).calls.findLast(call => call.operation === "openWorkspace").input, "/fixture/archive");
+      });
     } else throw new Error(`Unknown suite: ${suite}`);
     console.log("LXE_BEHAVIOR_RESULT=" + JSON.stringify({ suite, passed }));
     win.destroy(); app.exit(0);

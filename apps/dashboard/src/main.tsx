@@ -26,6 +26,7 @@ import "./styles.css";
 import "./desktop/update-control.css";
 import { SidebarStatus } from "./desktop/sidebar-status";
 import { ConversationDisplayController, sendConversationMessage } from "./features/sessions/display-controller";
+import { WorkspacesIndex, WorkspaceControl } from "./features/sessions/workspaces";
 import { useConversationEntry } from "./features/sessions/use-conversation-entry";
 import { useSessionStatus } from "./api/queries";
 import { acknowledgeConversationSend } from "./features/sessions/presentation";
@@ -41,6 +42,7 @@ import {
   useConversationActivityQuery,
   useSessionConversationQuery,
   useSessionsInfiniteQuery,
+  useSessionWorkspacesQuery,
   useUserQuestionsQuery,
   useSkillsQuery,
   useToolsetsQuery,
@@ -83,8 +85,7 @@ import { applyDesktopStreamBatch } from "./features/sessions/live-stream";
 import { ModelsView } from "./features/models/view";
 import { RuntimeStatusPopover } from "./features/runtime-status/view";
 import {
-  SessionDetailView,
-  SessionsIndex
+  SessionDetailView
 } from "./features/sessions/view";
 import { SkillsCatalogView, type SkillConversationAction } from "./features/skills/user-view";
 import { AddSkillMenu } from "./features/skills/add-menu";
@@ -231,6 +232,7 @@ function App({
     && desktopHealth.agent_cli === "ready";
 
   const sessionsQuery = useSessionsInfiniteQuery(debouncedQuery, dashboardRuntimeReady);
+  const workspacesQuery = useSessionWorkspacesQuery(dashboardRuntimeReady);
   const sessionDetailQuery = useSessionConversationQuery(
     selectedSessionId,
     dashboardRuntimeReady && activeSection === "sessions" && !newConversation,
@@ -421,13 +423,21 @@ function App({
     setNewConversation(false);
   }
 
-  function startNewConversation() {
+  function startNewConversation(directory = desktopHealth.workspace_root) {
     pushDashboardRoute("sessions");
     setActiveSection("sessions");
-    conversationDisplay.select("", true);
+    conversationDisplay.select("", true, undefined, directory);
     unsentNewDraftKey.current = conversationDisplay.getSnapshot().viewKey;
     updateSelectedSessionId("");
     setNewConversation(true);
+  }
+
+  async function chooseWorkspace(newDraft: boolean): Promise<void> {
+    const before = conversationDisplay.getSnapshot().viewKey;
+    const directory = await window.lxe!.desktop.selectWorkspace();
+    if (!directory || conversationDisplay.getSnapshot().viewKey !== before) return;
+    if (newDraft) startNewConversation(directory);
+    else conversationDisplay.setDraftDirectory(directory);
   }
 
   function startSkillConversation(action: SkillConversationAction, skill?: SkillPayload) {
@@ -830,7 +840,16 @@ function App({
             ))}
           </nav>
           <div className="sidebar-session-section">
-            <SessionsIndex
+            <WorkspacesIndex
+              display={sessionDetailQuery.display}
+              workspaces={workspacesQuery.data?.items ?? []}
+              defaultDirectory={desktopHealth.workspace_root}
+              activeDirectory={newConversation ? sessionDetailQuery.display.draftDirectory ?? desktopHealth.workspace_root : selectedSession?.workspace.directory ?? ""}
+              enabled={dashboardRuntimeReady}
+              workspaceError={dashboardRuntimeReady ? queryError(workspacesQuery.error) : ""}
+              workspacesLoading={dashboardRuntimeReady && workspacesQuery.isPending}
+              onRetryWorkspaces={() => void workspacesQuery.refetch()}
+              onChoose={() => { void chooseWorkspace(true).catch(cause => setError(queryError(cause))); }}
               sessions={sessions.items}
               statuses={sessionStatuses.items}
               waitingSessionIds={waitingSessionIds}
@@ -882,6 +901,15 @@ function App({
                 <FilePreviewLayout sessionId={selectedSessionId ?? ""}>
                 {selectedSessionId || newConversation ? (
                   <SessionDetailView
+                    workspaceControl={<WorkspaceControl
+                      directory={newConversation ? sessionDetailQuery.display.draftDirectory ?? desktopHealth.workspace_root : selectedSession?.workspace.directory ?? ""}
+                      defaultDirectory={desktopHealth.workspace_root}
+                      workspaces={workspacesQuery.data?.items ?? []}
+                      editable={newConversation}
+                      disabled={!dashboardRuntimeReady || sessionDetailQuery.display.pending.some(item => !item.error)}
+                      onChange={directory => conversationDisplay.setDraftDirectory(directory)}
+                      onChoose={() => chooseWorkspace(false)}
+                    />}
                     question={newConversation ? undefined : pendingQuestions.find(q => q.session_id === selectedSessionId)}
                     onQuestionAnswered={() => { void questionsQuery.refetch(); }}
                     fallbackSession={selectedSession}

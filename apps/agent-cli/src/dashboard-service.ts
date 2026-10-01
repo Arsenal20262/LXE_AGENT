@@ -226,6 +226,7 @@ export class DashboardService {
   private readonly skillCatalog: SkillCatalog;
   private readonly userSkillFiles: UserSkillFiles;
   private readonly handlers: AgentDashboardRpcHandlers = {
+    "sessions.workspaces": () => this.options.store.listSessionWorkspaces(),
     "sessions.questions": () => ({ items: this.options.questions?.snapshot() ?? [] }),
     "sessions.answer": input => {
       if (!this.options.questions) return rpcError("unavailable", "User questions are unavailable");
@@ -301,6 +302,7 @@ export class DashboardService {
       limit: integer(input.limit, 50, 1, 200),
       offset: integer(input.offset, 0, 0, Number.MAX_SAFE_INTEGER),
       query: input.query ?? "",
+      ...(input.directory === undefined ? {} : { directory: input.directory }),
     });
   }
 

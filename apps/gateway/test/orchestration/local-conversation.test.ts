@@ -1,4 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, mkdirSync, rmSync, symlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { resolveWorkspaceContext } from "@lxe/core";
 import type {
   AgentJob,
   DesktopStreamBatchRequest,
@@ -25,6 +29,26 @@ const tick = async (): Promise<void> => {
   await Promise.resolve();
   await Promise.resolve();
 };
+
+test("a new desktop chat captures its chosen canonical directory and refuses later rebinding", async () => {
+  const root = mkdtempSync(join(tmpdir(), "lxe-selected-workspace-"));
+  const directory = join(root, "project"), alias = join(root, "alias");
+  mkdirSync(directory);
+  symlinkSync(directory, alias, process.platform === "win32" ? "junction" : "dir");
+  try {
+    const h = harness(["chosen", "turn", "message", "route"]);
+    const result = await h.controller.send({ text: "hello", directory: alias });
+    expect(result.session_id).toBe("chosen");
+    expect(h.storage.ensured[0]?.workspace).toEqual(resolveWorkspaceContext(directory));
+    await tick();
+    expect(h.runtime.started[0]?.workspace).toEqual(resolveWorkspaceContext(directory));
+    await expect(h.controller.send({ session_id: "chosen", directory: root, text: "change" })).rejects.toThrow("cannot change workspace");
+    const invalid = harness(["unused", "unused-relative"]);
+    await expect(invalid.controller.send({ directory: join(root, "missing"), text: "hello" })).rejects.toThrow("ENOENT");
+    expect(invalid.storage.ensured).toHaveLength(0);
+    await expect(invalid.controller.send({ directory: "relative", text: "hello" })).rejects.toThrow("absolute path");
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
 
 class RecordingRuntime implements RuntimePort {
   readonly started: AgentJob[] = [];

@@ -21,7 +21,8 @@ import type {
   TurnDisplayPhase,
   WorkspaceContext,
 } from "@lxe/protocol";
-import { createLogger } from "@lxe/core";
+import { createLogger, resolveWorkspaceContext } from "@lxe/core";
+import { accessSync, constants } from "node:fs";
 import type { ChannelAdapter } from "../channels/registry";
 import type { OutboundRequest, ResponseRouteRecord } from "../state/models";
 import type { SessionRuntimeState } from "../state/session-state";
@@ -133,6 +134,7 @@ export class LocalConversationController {
 
   async send(input: {
     session_id?: string;
+    directory?: string;
     text: string;
     attachments?: LocalConversationAttachment[];
     client_message_id?: string;
@@ -141,6 +143,7 @@ export class LocalConversationController {
     const attachments = input.attachments ?? [];
     if (!text && attachments.length === 0) throw new Error("message text or attachment required");
     let sessionId = clean(input.session_id);
+    if (sessionId && input.directory !== undefined) throw new Error("Existing sessions cannot change workspace");
     if (sessionId && this.options.scheduler.isSessionDeletionFenced(sessionId)) {
       throw new Error(`session is being deleted: ${sessionId}`);
     }
@@ -150,7 +153,10 @@ export class LocalConversationController {
     if (!session) {
       sessionId = this.id();
       const source = this.desktopSource(sessionId);
-      const workspace = this.options.defaultWorkspace();
+      const workspace = input.directory === undefined
+        ? this.options.defaultWorkspace()
+        : resolveWorkspaceContext(input.directory);
+      accessSync(workspace.directory, constants.R_OK | constants.W_OK | constants.X_OK);
       await this.options.storage.ensureSession({
         session_id: sessionId,
         source,

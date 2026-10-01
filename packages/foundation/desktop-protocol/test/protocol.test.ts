@@ -19,6 +19,13 @@ const roundTripEvent = (event: unknown): AgentEvent => decodeAgentEvent(
 );
 
 describe("desktop agent protocol", () => {
+  test("accepts workspace summaries and new-chat directories but rejects rebinding existing chats", () => {
+    expect(parseDashboardRpcCall({ operation: "sessions.workspaces", input: {} })).toEqual({ operation: "sessions.workspaces", input: {} });
+    expect(parseDashboardRpcCall({ operation: "sessions.list", input: { directory: "D:\\work" } }).input).toMatchObject({ directory: "D:\\work" });
+    expect(parseDashboardRpcCall({ operation: "sessions.send", input: { text: "hi", directory: "/work/demo" } }).input).toMatchObject({ directory: "/work/demo" });
+    expect(() => parseDashboardRpcCall({ operation: "sessions.send", input: { session_id: "s", directory: "/work", text: "hi" } })).toThrow("cannot change workspace");
+    expect(() => parseDashboardRpcCall({ operation: "sessions.send", input: { directory: "", text: "hi" } })).toThrow();
+  });
   test("parses a valid response envelope", () => {
     const message = parseAgentWireMessage(JSON.stringify({
       jsonrpc: "2.0",

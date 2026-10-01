@@ -460,10 +460,14 @@ export type StatsOverviewPayload = {
 export type DashboardRpcEmptyInput = Record<string, never>;
 
 export interface DashboardRpcSpec {
+  "sessions.workspaces": {
+    input: DashboardRpcEmptyInput;
+    result: { items: Array<{ directory: string; session_count: number; last_active_at: number }> };
+  };
   "sessions.questions": { input: DashboardRpcEmptyInput; result: { items: PendingUserQuestion[] } };
   "sessions.answer": { input: SubmitUserQuestionAnswer; result: { accepted: true; request_id: string } };
   "sessions.list": {
-    input: { query?: string; limit?: number; offset?: number };
+    input: { query?: string; limit?: number; offset?: number; directory?: string };
     result: SessionListPayload;
   };
   "sessions.detail": {
@@ -483,7 +487,7 @@ export interface DashboardRpcSpec {
     result: { session_id: string; deleted: true };
   };
   "sessions.send": {
-    input: { session_id?: string; text: string; attachment_ids?: string[]; client_message_id?: string };
+    input: { session_id?: string; directory?: string; text: string; attachment_ids?: string[]; client_message_id?: string };
     result: DesktopConversationSendPayload;
   };
   "sessions.stop": {
@@ -684,6 +688,7 @@ export function parseDashboardRpcCall(value: unknown): DashboardRpcCall {
   }
 
   switch (operation) {
+    case "sessions.workspaces":
     case "sessions.questions":
       exactKeys(input, [], `${operation}.input`);
       return { operation, input: {} };
@@ -692,8 +697,9 @@ export function parseDashboardRpcCall(value: unknown): DashboardRpcCall {
       try { return { operation, input: parseUserQuestionSubmission(input) }; }
       catch (error) { return rpcError(error instanceof Error ? error.message : String(error)); }
     case "sessions.list":
-      exactKeys(input, ["query", "limit", "offset"], `${operation}.input`);
+      exactKeys(input, ["query", "limit", "offset", "directory"], `${operation}.input`);
       return { operation, input: {
+        ...(input.directory === undefined ? {} : { directory: textValue(input.directory, `${operation}.directory`)! }),
         query: textValue(input.query, `${operation}.query`, { optional: true, allowEmpty: true }) ?? "",
         limit: integerValue(input.limit, `${operation}.limit`, 50, 1, 200),
         offset: integerValue(input.offset, `${operation}.offset`, 0, 0, Number.MAX_SAFE_INTEGER),
@@ -720,11 +726,13 @@ export function parseDashboardRpcCall(value: unknown): DashboardRpcCall {
       exactKeys(input, ["session_id"], `${operation}.input`);
       return { operation, input: { session_id: textValue(input.session_id, `${operation}.session_id`)! } };
     case "sessions.send": {
-      exactKeys(input, ["session_id", "text", "attachment_ids", "client_message_id"], `${operation}.input`);
+      exactKeys(input, ["session_id", "directory", "text", "attachment_ids", "client_message_id"], `${operation}.input`);
+      if (input.session_id !== undefined && input.directory !== undefined) rpcError("Existing sessions cannot change workspace");
       const text = textValue(input.text, `${operation}.text`, { allowEmpty: true })!;
       const attachmentIds = attachmentIdsValue(input.attachment_ids, `${operation}.attachment_ids`);
       if (!text && !attachmentIds?.length) rpcError(`${operation} requires text or an attachment`);
       return { operation, input: {
+        ...(input.directory === undefined ? {} : { directory: textValue(input.directory, `${operation}.directory`)! }),
         ...(input.session_id === undefined
           ? {}
           : { session_id: textValue(input.session_id, `${operation}.session_id`)! }),

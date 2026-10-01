@@ -659,6 +659,7 @@ export interface LxeDesktopBridge {
     checkForUpdate?(): Promise<import("./updates").DesktopUpdateState>;
     installUpdate?(): Promise<import("./updates").DesktopUpdateState>;
     selectWorkspace(): Promise<string | null>;
+    openWorkspace(directory: string): Promise<void>;
     selectZiniaoApp(): Promise<string | null>;
     selectZiniaoWebDriverDirectory(): Promise<string | null>;
     selectCloudEnrollment(): Promise<DesktopCloudEnrollmentSelection | null>;

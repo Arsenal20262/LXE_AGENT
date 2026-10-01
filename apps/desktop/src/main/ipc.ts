@@ -23,6 +23,7 @@ import type {
   DesktopSyntheticPerformerTaskInput,
 } from "@lxe/desktop-protocol";
 import { IPC_CHANNELS } from "../ipc-channels";
+import { openWorkspaceDirectory, workspaceDirectory } from "./workspace-directory";
 import { readClipboardFilePaths } from "./clipboard-files";
 import {
   validateDraftImagePreviewVariant,
@@ -122,8 +123,10 @@ export function registerDesktopIpc(application: DesktopIpcApplication): () => vo
       title: "选择 LXE Agent 工作区",
       properties: ["openDirectory", "createDirectory"],
     });
-    return selection.canceled ? null : selection.filePaths[0] ?? null;
+    return selection.canceled || !selection.filePaths[0] ? null : workspaceDirectory(selection.filePaths[0]);
   });
+  ipcMain.handle(IPC_CHANNELS.openWorkspace, (_event, directory: unknown) =>
+    openWorkspaceDirectory(directory, path => shell.openPath(path)));
   ipcMain.handle(IPC_CHANNELS.selectZiniaoApp, async () => {
     const selection = await dialog.showOpenDialog({
       title: "选择紫鸟 APP",

@@ -38,6 +38,8 @@ export function ConversationWindow({ rows, renderRow, hasOlder, hasNewer, loadOl
     ? answerByTurn.get(row.turnId) ?? answerByGroup.get(row.groupId) : undefined;
   const getItemKey = useCallback((index: number) => rows[index]!.id, [rows]);
   const virtual = useVirtualizer({ count: rows.length, getScrollElement: () => root.current,
+    // First-send rows can be measured during React's commit; schedule the update normally.
+    useFlushSync: false,
     getItemKey, estimateSize: () => 100, overscan: 5, anchorTo: "end", followOnAppend: false,
     // Keep prepend anchoring, but don't let proximity resume following on resize.
     scrollEndThreshold: following ? 80 : -1, useAnimationFrameWithResizeObserver: true,

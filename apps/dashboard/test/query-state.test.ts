@@ -82,6 +82,8 @@ describe("Dashboard Query state", () => {
     } finally { unsubscribe(); client.unmount(); client.clear(); focusManager.setFocused(undefined); }
   });
   test("uses stable keys and the configured cache policy", () => {
+    expect(dashboardQueryKeys.sessions.list("", "/a")).not.toEqual(dashboardQueryKeys.sessions.list("", "/b"));
+    expect(dashboardQueryKeys.sessions.workspaces).not.toEqual(dashboardQueryKeys.sessions.list("workspaces"));
     expect(dashboardQueryKeys.sessions.list("  order  ")).toEqual(["sessions", "list", "order"]);
     expect(dashboardQueryKeys.sessions.detail("s-1", "cursor-2"))
       .toEqual(["sessions", "detail", "s-1", "cursor-2"]);
