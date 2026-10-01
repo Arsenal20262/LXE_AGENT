@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, rmSync } from "node:fs";
+import { mkdirSync, rmSync, cpSync, chmodSync, existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -29,6 +29,17 @@ export function buildDesktop(options: DesktopBuildOptions = {}): void {
   rmSync(outputRoot, { recursive: true, force: true });
   mkdirSync(outputRoot, { recursive: true });
 
+  runBuild(desktopRoot, [join(desktopRoot, "src", "main", "manual-tools", "pty-host.ts"), "--outfile", join(outputRoot, "pty-host.cjs"), "--target", "node", "--format", "cjs", "--external", "node-pty"]);
+  // node-pty's packaged Node-API binaries work across Electron ABIs. Keep native helpers outside ASAR.
+  const nativeRoot = join(outputRoot, "pty-runtime");
+  const installed = dirname(fileURLToPath(import.meta.resolve("node-pty/package.json")));
+  mkdirSync(nativeRoot, { recursive: true });
+  for (const entry of ["lib", "package.json", "LICENSE"]) cpSync(join(installed, entry), join(nativeRoot, entry), { recursive: true });
+  cpSync(join(installed, "prebuilds", `${process.platform}-${process.arch}`), join(nativeRoot, "prebuilds", `${process.platform}-${process.arch}`), { recursive: true, filter: path => !path.endsWith(".pdb") });
+  if (process.platform !== "win32") {
+    const helper = join(nativeRoot, "prebuilds", `${process.platform}-${process.arch}`, "spawn-helper");
+    if (existsSync(helper)) chmodSync(helper, 0o755);
+  }
   runBuild(desktopRoot, [
     join(desktopRoot, "src", "main.ts"),
     "--outfile",

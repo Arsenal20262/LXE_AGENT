@@ -43,6 +43,7 @@ export interface LocalConversationStorage {
   upsertResponseRoute(request: JsonObject): Promise<void>;
   getSession(sessionId: string): Promise<{
     session_id: string;
+    blank?: boolean;
     source: JsonObject;
     workspace: WorkspaceContext;
   } | undefined>;
@@ -242,7 +243,12 @@ export class LocalConversationController {
     activity.queuedTurnIds.push(turnId);
     this.options.runtimeState.resumeAutonomy(sessionId);
     try {
-      await this.options.scheduler.enqueue(job);
+      await this.options.scheduler.enqueue(job, session.blank ? {
+        beforeAccept: () => this.options.storage.ensureSession({
+          session_id: sessionId, source: session.source, workspace: session.workspace,
+          entry_text: text || attachments[0]!.name,
+        }),
+      } : {});
     } catch (error) {
       this.removeTurn(sessionId, turnId);
       throw error;

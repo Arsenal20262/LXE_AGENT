@@ -1,4 +1,6 @@
 export const IPC_CHANNELS = {
+  manualToolCall: "lxe:manual-tools:call",
+  manualToolEvent: "lxe:manual-tools:event",
   fileCall: "lxe:files:call",
   fileRead: "lxe:files:read",
   fileReadText: "lxe:files:read-text",

@@ -15,10 +15,14 @@ import "../../src/styles.css";
 // dialog focus management are production code, running in Chromium.
 const calls: { operation: string; input?: unknown }[] = [];
 const workspaceMode = new URLSearchParams(location.search).has("workspaces");
+let chosenFile = "";
 let chosenDirectory: string | null = "/fixture/chosen";
 let sendFailure = false;
 let holdWorkspaceSend = false;
 let releaseWorkspaceSend: (() => void) | undefined;
+let creationFailure = false;
+let holdCreation = false;
+const pendingCreations: (() => void)[] = [];
 let registrationFailure = false;
 let renameFailure = false;
 let holdRegistration = false;
@@ -57,9 +61,18 @@ function registerWorkspace(directory: string) {
 function workspaceRpc(call: { operation: string; input: Record<string, unknown> }): unknown {
   const input = call.input;
   switch (call.operation) {
+    case "sessions.create": return (async () => {
+      if (creationFailure) throw new Error("SQLITE_FULL: fixture session creation failed");
+      if (holdCreation) await new Promise<void>(resolve => pendingCreations.push(resolve));
+      const directory = String(input.directory);
+      let session = workspaceSessions.find(row => row.blank && row.workspace.directory === directory);
+      if (!session) { session = { ...workspaceSession(`Blank ${workspaceSessions.length}`, directory), blank: true }; workspaceSessions.push(session); }
+      registerWorkspace(directory);
+      return { ...session };
+    })();
     case "sessions.workspaces": return { items: workspaceRegistry.map(row => ({
-      ...row, session_count: workspaceSessions.filter(session => session.workspace.directory === row.directory).length,
-      last_active_at: workspaceSessions.some(session => session.workspace.directory === row.directory) ? 100 : 0,
+      ...row, session_count: workspaceSessions.filter(session => !session.blank && session.workspace.directory === row.directory).length,
+      last_active_at: workspaceSessions.some(session => !session.blank && session.workspace.directory === row.directory) ? 100 : 0,
     })) };
     case "workspaces.register": return (async () => {
       if (registrationFailure) throw new Error("SQLITE_FULL: fixture registry is full");
@@ -74,7 +87,7 @@ function workspaceRpc(call: { operation: string; input: Record<string, unknown> 
       return { ...row };
     }
     case "sessions.list": {
-      const rows = workspaceSessions.filter(row => (!input.directory || row.workspace.directory === input.directory)
+      const rows = workspaceSessions.filter(row => !row.blank && (!input.directory || row.workspace.directory === input.directory)
         && (!input.query || row.title.toLowerCase().includes(String(input.query).toLowerCase())));
       const offset = Number(input.offset ?? 0), limit = Number(input.limit ?? 10);
       return { items: rows.slice(offset, offset + limit), total: rows.length, offset, limit };
@@ -90,10 +103,11 @@ function workspaceRpc(call: { operation: string; input: Record<string, unknown> 
     case "sessions.send": return (async () => {
       if (sendFailure) throw new Error("EACCES: fixture directory denied");
       if (holdWorkspaceSend) await new Promise<void>(resolve => { releaseWorkspaceSend = resolve; });
-      const session_id = `Created chat ${workspaceSessions.length}`;
-      workspaceSessions.push(workspaceSession(session_id, String(input.directory || health.workspace_root)));
-      registerWorkspace(String(input.directory || health.workspace_root));
-      return { session_id, turn_id: "turn", message_id: "message", created: true, state: "queued" };
+      const row = workspaceSessions.find(row => row.session_id === input.session_id)!;
+      if (!row) throw new Error("fixture session missing");
+      row.blank = false; row.title = String(input.text);
+      persistWorkspaces();
+      return { session_id: row.session_id, turn_id: "turn", message_id: "message", created: false, state: "queued" };
     })();
     case "sessions.pin": {
       const row = workspaceSessions.find(row => row.session_id === input.session_id)!;
@@ -146,7 +160,7 @@ const desktop = {
   onConversationStreamEvent: subscribe,
   onExecUpdate: subscribe,
   onSessionStatus: subscribe,
-  selectConversationFiles: async () => { calls.push({ operation: "selectFiles" }); return []; },
+  selectConversationFiles: async () => { calls.push({ operation: "selectFiles" }); return chosenFile ? [{ attachment_id: chosenFile, name: chosenFile, media_type: "text/plain", size_bytes: 1 }] : []; },
   stageDroppedConversationFiles: async (files: File[]) => {
     calls.push({ operation: "dropFiles", input: files.map(file => file.name) }); return [];
   },
@@ -156,7 +170,7 @@ const desktop = {
 const dashboard = {
   async call(call: { operation: string; input: Record<string, unknown> }) {
     calls.push(structuredClone(call));
-    if (workspaceMode) {
+    if (workspaceMode || ["sessions.create", "sessions.detail", "sessions.activity", "sessions.execTasks", "sessions.status.list"].includes(call.operation)) {
       const result = workspaceRpc(call);
       if (result !== undefined) return result;
     }
@@ -238,6 +252,10 @@ function reset() {
   calls.length = 0; sends.length = 0; stops = 0; releaseSend = undefined;
 }
 const fixture = {
+  chooseFile(value: string) { chosenFile = value; },
+  failCreation(value: boolean) { creationFailure = value; },
+  holdCreation(value: boolean) { holdCreation = value; },
+  releaseCreations() { holdCreation = false; pendingCreations.splice(0).forEach(resolve => resolve()); },
   failRegistration(value: boolean) { registrationFailure = value; },
   failRename(value: boolean) { renameFailure = value; },
   holdRegistration(value: boolean) { holdRegistration = value; },
@@ -253,7 +271,7 @@ const fixture = {
   },
   updateComposer(options: ComposerOptions) { Object.assign(composerOptions, options); renderComposer(); },
   releaseSend() { releaseSend?.(); },
-  state() { return { calls, sends, stops, active: document.activeElement?.id,
+  state() { return { calls, sends, stops, sessions: workspaceSessions, active: document.activeElement?.id,
     dialogs: [...document.querySelectorAll('[role="dialog"]')].map(el => el.getAttribute("aria-label")) }; },
   setHealth(patch: Partial<DesktopHealth>) {
     if (workspaceMode && patch.workspace_root) registerWorkspace(patch.workspace_root);

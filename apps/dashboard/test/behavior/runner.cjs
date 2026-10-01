@@ -206,7 +206,7 @@ app.whenReady().then(async () => {
         assert.equal((await rect(".app-navigation")).width, 56);
         assert.equal((await rect(".app-sidebar")).left, 56);
         assert.equal((await rect(".main-panel")).left, 312);
-        assert.ok((await rect(".workspace-index-scroll")).height > 650);
+        assert.ok((await rect(".workspace-index-scroll")).height > await js("innerHeight") * 0.72, "workspace list uses most of the available window height");
         await click(".tab-home");
         assert.equal(await js("document.querySelector('.tab-home').getAttribute('aria-current')"), "page");
         assert.equal(await expanded(), true);
@@ -351,7 +351,7 @@ app.whenReady().then(async () => {
         await waitFor(`document.querySelectorAll('${shop} .session-index-item').length === 23`, "last shop page");
         assert.equal(await js(`document.querySelector('${shop}').textContent.includes('Default chat')`), false);
       });
-      await step("group new chat selects its directory without creating a session", async () => {
+      await step("group new chat creates a blank in its directory without sending", async () => {
         await click(shop + " .workspace-group-header > button:last-child");
         await waitFor("Boolean(document.querySelector('.conversation-workspace select'))", "draft directory selector");
         assert.equal(await js("document.querySelector('.conversation-workspace select').value"), "/fixture/shop");
@@ -375,7 +375,9 @@ app.whenReady().then(async () => {
         await js("behavior.failWorkspaceSend(true)");
         await focus("textarea"); await key("Enter");
         await waitFor("document.body.textContent.includes('EACCES: fixture directory denied')", "actual failure displayed");
-        assert.equal((await state()).calls.findLast(call => call.operation === "sessions.send").input.directory, selected);
+        const sent = (await state()).calls.findLast(call => call.operation === "sessions.send").input;
+        assert.equal(sent.directory, undefined);
+        assert.equal((await state()).sessions.find(row => row.session_id === sent.session_id).workspace.directory, selected);
         assert.equal(await js("document.querySelector('textarea').value"), "Prepare the project report");
         assert.equal(await js("document.querySelector('.conversation-workspace select').disabled"), false);
       });
@@ -384,7 +386,8 @@ app.whenReady().then(async () => {
         await js("behavior.failWorkspaceSend(false); behavior.holdWorkspaceSend(true)");
         await type("Shared default task"); await key("Enter");
         await waitFor("document.querySelector('.conversation-workspace select').disabled", "directory locked");
-        assert.equal((await state()).calls.findLast(call => call.operation === "sessions.send").input.directory, "/fixture/default");
+        const sent = (await state()).calls.findLast(call => call.operation === "sessions.send").input;
+        assert.equal((await state()).sessions.find(row => row.session_id === sent.session_id).workspace.directory, "/fixture/default");
         await click(shop + " .workspace-group-header > button:last-child");
         await js("behavior.releaseWorkspaceSend()");
         await settle();
@@ -401,14 +404,14 @@ app.whenReady().then(async () => {
         await click(".conversation-workspace button[aria-label='Open folder']");
         assert.equal((await state()).calls.findLast(call => call.operation === "openWorkspace").input, "/fixture/archive");
       });
-      await step('selected empty directories survive reload without creating chats', async () => {
+      await step('selected empty directories retain a blank and survive reload without history entries', async () => {
         await click('.session-search-close');
         await js('behavior.chooseDirectory("/fixture/empty")');
         const sends = (await state()).calls.filter(call => call.operation === 'sessions.send').length;
         await click('.workspace-index-heading button');
         await waitFor('document.querySelector(".conversation-workspace select")?.value === "/fixture/empty"', 'registered draft');
         assert.equal((await state()).calls.filter(call => call.operation === 'sessions.send').length, sends);
-        assert.match(await js('document.querySelector(' + JSON.stringify(group('/fixture/empty')) + ').textContent'), /No conversations yet/);
+        assert.match(await js('document.querySelector(' + JSON.stringify(group('/fixture/empty')) + ').textContent'), /New chat/);
         await load('?app=1&workspaces=1&section=sessions');
         await waitFor('Boolean(document.querySelector(' + JSON.stringify(group('/fixture/empty')) + '))', 'empty registration after reload');
         assert.equal(await expanded('/fixture/empty'), 'true');
@@ -501,6 +504,44 @@ app.whenReady().then(async () => {
         await js('behavior.releaseRegistration()'); await settle();
         assert.equal(await js('Boolean(document.querySelector(".conversation-workspace"))'), false);
         await click('.session-new-button');
+      });
+      await step('workspace drafts merge text and attachments while sidebar new keeps them separate', async () => {
+        await js('behavior.holdRegistration(false); behavior.chooseDirectory("/fixture/merge-a")');
+        await click('.workspace-index-heading button');
+        await waitFor('document.querySelector(".conversation-workspace select")?.value === "/fixture/merge-a"', 'first blank');
+        await type('Draft A'); await js('behavior.chooseFile("a.txt")'); await click('[aria-label="Add files"]');
+        await waitFor('document.querySelectorAll(".input-attachment-draft .input-attachment-chip").length === 1', 'first attachment');
+        await js('behavior.chooseDirectory("/fixture/merge-b")'); await click('.workspace-index-heading button');
+        await waitFor('document.querySelector(".conversation-workspace select")?.value === "/fixture/merge-b"', 'second blank');
+        assert.equal(await js('document.querySelector("textarea").value'), '');
+        assert.equal(await js('document.querySelectorAll(".input-attachment-draft .input-attachment-chip").length'), 0);
+        await type('Draft B'); await js('behavior.chooseFile("b.txt"); behavior.chooseDirectory("/fixture/merge-a")');
+        await click('[aria-label="Add files"]');
+        await waitFor('document.querySelectorAll(".input-attachment-draft .input-attachment-chip").length === 1', 'second attachment');
+        await click('.conversation-workspace button[aria-label="Choose workspace"]');
+        await waitFor('document.querySelector(".conversation-workspace select")?.value === "/fixture/merge-a"', 'merged blank');
+        assert.equal(await js('document.querySelector("textarea").value'), 'Draft A\n\nDraft B');
+        assert.equal(await js('document.querySelectorAll(".input-attachment-draft .input-attachment-chip").length'), 2);
+      });
+      await step('blank creation failure preserves the selected draft and attachments', async () => {
+        await js('behavior.failCreation(true)'); await click('.session-new-button');
+        await waitFor('document.body.textContent.includes("SQLITE_FULL: fixture session creation failed")', 'creation error');
+        assert.equal(await js('document.querySelector("textarea").value'), 'Draft A\n\nDraft B');
+        assert.equal(await js('document.querySelectorAll(".input-attachment-draft .input-attachment-chip").length'), 2);
+        await js('behavior.failCreation(false)');
+      });
+      await step('late blank creation cannot steal selection and repeated clicks reuse one blank', async () => {
+        await js('behavior.holdCreation(true)'); await click('.session-new-button');
+        await click(shop + ' .session-index-open');
+        await waitFor('!document.querySelector(".conversation-workspace select")', 'history selected');
+        await js('behavior.releaseCreations()'); await settle();
+        assert.equal(await js('Boolean(document.querySelector(".conversation-workspace select"))'), false);
+        await js('behavior.holdCreation(true)');
+        await click(shop + ' .workspace-group-header > button:last-child');
+        await click(shop + ' .workspace-group-header > button:last-child');
+        await js('behavior.releaseCreations()');
+        await waitFor('document.querySelector(".conversation-workspace select")?.value === "/fixture/shop"', 'reused blank selected');
+        assert.equal((await state()).sessions.filter(row => row.blank && row.workspace.directory === '/fixture/shop').length, 1);
       });
       await step('corrupt preferences and blocked local storage still allow toggling', async () => {
         await js('localStorage.setItem("lxe.window.main.workspaces.expanded.v1", "{")');

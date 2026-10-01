@@ -4,7 +4,7 @@ import { OpenFileButton } from "../file-preview/OpenFileButton";
 import { UserQuestionGate } from "./user-questions";
 import type { PendingUserQuestion } from "@lxe/desktop-protocol";
 import type { DesktopDraftAttachmentPayload } from "@lxe/desktop-protocol";
-import { ConversationAttachmentDraft } from "./attachment-draft";
+import { conversationAttachments } from "./attachment-draft";
 import { useComposerDraft } from "./composer-draft";
 import { SentAttachmentList } from "./sent-attachments";
 import { FILE_TYPE_ICONS, FileAttachmentIcon, FileAttachmentInfo } from "./file-attachment-display";
@@ -1164,12 +1164,12 @@ export function ConversationComposer({
   const [, refreshAttachments] = useState(0);
   const callbacksRef = useRef({ t });
   callbacksRef.current = { t };
-  const [attachmentDraft] = useState(() => new ConversationAttachmentDraft({
+  const attachmentDraft = conversationAttachments(conversationKey, {
     changed: () => refreshAttachments((revision) => revision + 1),
     error: setError,
     discard: async (ids) => { await window.lxe?.desktop.discardConversationFiles(ids); },
     tooMany: () => callbacksRef.current.t.conversation.tooManyScreenshots,
-  }));
+  });
   const attachments = attachmentDraft.items;
   const [dragActive, setDragActive] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -1200,10 +1200,9 @@ export function ConversationComposer({
   useEffect(() => {
     if (previousConversationKey.current === conversationKey) return;
     previousConversationKey.current = conversationKey;
-    attachmentDraft.reset();
     setError("");
   }, [attachmentDraft, conversationKey]);
-  useEffect(() => () => attachmentDraft.reset(), [attachmentDraft]);
+  useEffect(() => () => { attachmentDraft.callbacks.changed = () => {}; }, [attachmentDraft]);
   useEffect(() => {
     const dragOver = (event: DragEvent) => {
       if (!event.dataTransfer?.types.includes("Files")) return;

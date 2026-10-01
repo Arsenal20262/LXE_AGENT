@@ -519,6 +519,9 @@ export class SqliteRuntimeStore implements RuntimeStore {
           ON transcript_attachments (session_id, turn_id);
       `);
       const columns = this.allPrepared<{ name: string }>("PRAGMA table_info(agent_sessions)");
+      if (!columns.some(column => column.name === "blank")) {
+        database.exec("ALTER TABLE agent_sessions ADD COLUMN blank INTEGER NOT NULL DEFAULT 0");
+      }
       if (!columns.some((column) => column.name === "reasoning_effort")) {
         database.exec("ALTER TABLE agent_sessions ADD COLUMN reasoning_effort TEXT NOT NULL DEFAULT ''");
       }
@@ -620,6 +623,25 @@ export class SqliteRuntimeStore implements RuntimeStore {
           workspace_worktree = excluded.workspace_worktree,
           last_active_at = excluded.last_active_at
       `).run(sessionId, JSON.stringify(source), workspace.directory, workspace.worktree, now, now);
+      if (request.entry_text !== undefined) {
+        this.db().query("UPDATE agent_sessions SET blank = 0 WHERE session_id = ?").run(sessionId);
+      }
+    })();
+  }
+
+  /** Only this admission path creates blanks; legacy zero-message sessions stay visible. */
+  createBlankSession(workspace: WorkspaceContext): JsonObject {
+    return this.db().transaction(() => {
+      this.ensureWorkspace(workspace.directory);
+      const existing = this.getPrepared<Record<string, unknown>>(
+        "SELECT * FROM agent_sessions WHERE workspace_directory = ? AND blank = 1 ORDER BY created_at DESC LIMIT 1", workspace.directory,
+      );
+      if (existing) return this.sessionPayload(existing);
+      const id = randomUUID().replaceAll("-", ""), now = Date.now() / 1_000;
+      this.db().query(`INSERT INTO agent_sessions
+        (session_id, source, workspace_directory, workspace_worktree, created_at, last_active_at, blank)
+        VALUES (?, ?, ?, ?, ?, ?, 1)`).run(id, JSON.stringify({ platform: "desktop", chat_type: "dm" }), workspace.directory, workspace.worktree, now, now);
+      return this.sessionPayload(this.getPrepared<Record<string, unknown>>("SELECT * FROM agent_sessions WHERE session_id = ?", id)!);
     })();
   }
 
@@ -1161,7 +1183,7 @@ export class SqliteRuntimeStore implements RuntimeStore {
     return this.getPrepared<StoredWorkspace>(`
       SELECT w.directory, w.display_name, w.created_at, COUNT(s.session_id) AS session_count,
              COALESCE(MAX(s.last_active_at), 0) AS last_active_at
-      FROM agent_workspaces w LEFT JOIN agent_sessions s ON s.workspace_directory = w.directory
+      FROM agent_workspaces w LEFT JOIN agent_sessions s ON s.workspace_directory = w.directory AND s.blank = 0
       WHERE w.directory = ? GROUP BY w.directory
     `, directory) ?? undefined;
   }
@@ -1170,7 +1192,7 @@ export class SqliteRuntimeStore implements RuntimeStore {
     return { items: this.allPrepared<StoredWorkspace>(`
       SELECT w.directory, w.display_name, w.created_at, COUNT(s.session_id) AS session_count,
              COALESCE(MAX(s.last_active_at), 0) AS last_active_at
-      FROM agent_workspaces w LEFT JOIN agent_sessions s ON s.workspace_directory = w.directory
+      FROM agent_workspaces w LEFT JOIN agent_sessions s ON s.workspace_directory = w.directory AND s.blank = 0
       GROUP BY w.directory ORDER BY COALESCE(MAX(s.last_active_at), w.created_at) DESC, w.directory ASC
     `) };
   }
@@ -1185,7 +1207,7 @@ export class SqliteRuntimeStore implements RuntimeStore {
     const limit = Math.max(1, Math.min(Math.trunc(options.limit), 200));
     const offset = Math.max(0, Math.trunc(options.offset));
     const needle = text(options.query).toLowerCase();
-    const clauses: string[] = [];
+    const clauses: string[] = ["blank = 0"];
     const whereArgs: string[] = [];
     if (needle) {
       clauses.push("(lower(coalesce(session_id, '')) LIKE ? OR lower(coalesce(title, '')) LIKE ? OR lower(coalesce(model, '')) LIKE ? OR lower(coalesce(source, '')) LIKE ?)");
@@ -1203,7 +1225,7 @@ export class SqliteRuntimeStore implements RuntimeStore {
     const rows = this.allPrepared<Record<string, unknown>>(`
       SELECT session_id, source, workspace_directory, workspace_worktree,
              model, reasoning_effort, model_config, created_at, last_active_at,
-             message_count, tool_call_count, input_tokens, output_tokens, title, pinned_at, api_call_count
+             blank, message_count, tool_call_count, input_tokens, output_tokens, title, pinned_at, api_call_count
       FROM agent_sessions ${where}
       ORDER BY CASE WHEN pinned_at > 0 THEN 0 ELSE 1 END ASC,
                CASE WHEN pinned_at > 0 THEN pinned_at ELSE last_active_at END DESC,
@@ -1211,7 +1233,7 @@ export class SqliteRuntimeStore implements RuntimeStore {
     `, ...whereArgs, limit, offset);
     const summary = this.getPrepared<Record<string, number>>(`
       SELECT COUNT(*) AS total_sessions, COALESCE(SUM(tool_call_count), 0) AS tool_call_count,
-             COALESCE(SUM(input_tokens + output_tokens), 0) AS token_count FROM agent_sessions
+             COALESCE(SUM(input_tokens + output_tokens), 0) AS token_count FROM agent_sessions WHERE blank = 0
     `);
     return {
       items: rows.map((row) => this.sessionPayload(row)),
@@ -1235,7 +1257,7 @@ export class SqliteRuntimeStore implements RuntimeStore {
     const row = this.getPrepared<Record<string, unknown>>(`
       SELECT session_id, source, workspace_directory, workspace_worktree,
              model, reasoning_effort, model_config, created_at, last_active_at,
-             message_count, tool_call_count, input_tokens, output_tokens, title, pinned_at, api_call_count
+             blank, message_count, tool_call_count, input_tokens, output_tokens, title, pinned_at, api_call_count
       FROM agent_sessions WHERE session_id = ?
     `, safeSessionId);
     return row ? this.sessionPayload(row) : undefined;
@@ -1317,7 +1339,7 @@ export class SqliteRuntimeStore implements RuntimeStore {
     const row = this.getPrepared<Record<string, unknown>>(`
       SELECT session_id, source, workspace_directory, workspace_worktree,
              model, reasoning_effort, model_config, created_at, last_active_at,
-             message_count, tool_call_count, input_tokens, output_tokens, title, pinned_at, api_call_count, context_display
+             blank, message_count, tool_call_count, input_tokens, output_tokens, title, pinned_at, api_call_count, context_display
       FROM agent_sessions WHERE session_id = ?
     `, safeSessionId);
     if (!row) return undefined;
@@ -1362,6 +1384,7 @@ export class SqliteRuntimeStore implements RuntimeStore {
     if (!workspace) throw new Error(`session workspace is missing: ${text(row.session_id)}`);
     return {
       session_id: text(row.session_id),
+      blank: row.blank === 1,
       title: text(row.title),
       pinned_at: Math.max(0, Number(row.pinned_at ?? 0)),
       source,

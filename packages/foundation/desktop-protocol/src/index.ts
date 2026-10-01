@@ -1,3 +1,4 @@
+export * from "./manual-tools";
 export type * from "./file-preview";
 import { parseManagedState, type ManagedLlmState } from "@lxe/core/managed-llm";
 import { parseJsonRpcEnvelope, parseJsonRpcJson, JsonRpcError,
@@ -651,6 +652,7 @@ export interface DesktopUsageBalance {
 }
 
 export interface LxeDesktopBridge {
+  tools?: import("./manual-tools").ManualToolsBridge;
   files: import("./file-preview").DesktopFilesBridge;
   dashboard: DashboardTransport;
   desktop: {

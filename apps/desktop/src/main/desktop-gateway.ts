@@ -73,12 +73,20 @@ class SplitGatewayStorage implements DirectGatewayStorage {
     return this.gateway.upsertResponseRoute(request);
   }
 
-  getSession(sessionId: string): Promise<{
+  async getSession(sessionId: string): Promise<{
     session_id: string;
+    blank?: boolean;
     source: JsonObject;
     workspace: WorkspaceContext;
   } | undefined> {
-    return this.gateway.getSession(sessionId);
+    const existing = await this.gateway.getSession(sessionId);
+    try {
+      const { session } = await this.agent.dashboardCall({ operation: "sessions.detail", input: { session_id: sessionId, message_limit: 1 } });
+      return { session_id: session.session_id, blank: session.blank === true, source: session.source as JsonObject, workspace: session.workspace };
+    } catch (error) {
+      if (error && typeof error === "object" && "code" in error && error.code === "not_found") return existing;
+      throw error;
+    }
   }
 
   appendPendingEvent(sessionId: string, event: JsonObject): Promise<void> {
@@ -99,6 +107,7 @@ class SplitGatewayStorage implements DirectGatewayStorage {
 }
 
 export interface DesktopGatewayOptions {
+  beforeDeleteSession?: (sessionId: string) => Promise<void>;
   authBrowserEnvironment?: () => Record<string, string>;
   paths: DesktopPaths;
   config: DesktopConfigStore;
@@ -131,6 +140,11 @@ export class DesktopGateway {
 
   private files: FilePreviewService | undefined;
   constructor(private readonly options: DesktopGatewayOptions) {}
+  async resolveWorkspaceDirectory(sessionId: string): Promise<string | undefined> {
+    if (this.composition?.parts.scheduler.isSessionDeletionFenced(sessionId)) throw new Error(`Session is being deleted: ${sessionId}`);
+    if (!this.runtime) throw new Error("Agent runtime is unavailable");
+    return this.runtime.resolveWorkspaceDirectory(sessionId);
+  }
   private fileService(): FilePreviewService {
     return this.files ??= new FilePreviewService(() => {
       if (!this.runtime) throw new Error("Agent runtime is unavailable");
@@ -437,6 +451,7 @@ export class DesktopGateway {
       let gatewaySnapshot: ReturnType<NodeGatewayStore["detachSession"]> = undefined;
       let removedBindings: ReturnType<DirectGatewayComposition["parts"]["bindings"]["removeSession"]> = [];
       try {
+        await this.options.beforeDeleteSession?.(sessionId);
         gatewaySnapshot = this.store?.detachSession(sessionId);
         removedBindings = this.composition.parts.bindings.removeSession(sessionId);
         const result = await this.runtime.dashboardCall(

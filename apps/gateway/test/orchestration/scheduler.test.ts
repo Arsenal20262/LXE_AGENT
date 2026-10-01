@@ -589,3 +589,15 @@ test("update admission fence atomically rejects queued and incoming work", async
   await idle.enqueue(job("incoming", "after-unlock"));
   expect(idle.beginUpdate()).toBeUndefined();
 });
+
+test("admission persistence fences deletion and updates before execution", async () => {
+  const runtime = new RecordingRuntime(), scheduler = new SessionScheduler({ runtime });
+  let finish!: () => void;
+  const admission = new Promise<void>(resolve => { finish = resolve; });
+  const accepted = scheduler.enqueue(job("blank", "first"), { beforeAccept: () => admission });
+  expect(runtime.started).toHaveLength(0);
+  expect(scheduler.beginSessionDeletion("blank")).toBeUndefined();
+  expect(scheduler.beginUpdate()).toBeUndefined();
+  finish(); await accepted;
+  expect(runtime.started).toHaveLength(1);
+});

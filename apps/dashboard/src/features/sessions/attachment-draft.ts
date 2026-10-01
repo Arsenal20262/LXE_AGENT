@@ -7,7 +7,7 @@ export class ConversationAttachmentDraft {
   private generation = 0;
   private tail: Promise<void> = Promise.resolve();
 
-  constructor(private readonly callbacks: {
+  constructor(public callbacks: {
     changed(): void;
     error(message: string): void;
     discard(ids: string[]): Promise<void>;
@@ -85,3 +85,24 @@ export class ConversationAttachmentDraft {
     this.callbacks.changed();
   }
 }
+
+
+const drafts = new Map<string, ConversationAttachmentDraft>();
+export function conversationAttachments(key: string, callbacks: ConversationAttachmentDraft["callbacks"]): ConversationAttachmentDraft {
+  let draft = drafts.get(key);
+  if (!draft) { draft = new ConversationAttachmentDraft(callbacks); drafts.set(key, draft); }
+  draft.callbacks = callbacks;
+  return draft;
+}
+export function moveConversationAttachments(from: string, to: string): void {
+  if (from === to) return;
+  const source = drafts.get(from), target = drafts.get(to);
+  if (source?.pending || target?.pending) throw new Error("Wait for attachments to finish loading before switching workspaces.");
+  if (!source) return;
+  const items = [...target?.items ?? [], ...source.items];
+  if (items.filter(item => item.preview_data_url).length > 5) throw new Error(source.callbacks.tooMany());
+  if (target) { target.items = items; source.items = []; target.callbacks.changed(); }
+  else { drafts.set(to, source); drafts.delete(from); }
+  source.callbacks.changed();
+}
+export function forgetConversationAttachments(key: string): void { drafts.get(key)?.reset(); drafts.delete(key); }

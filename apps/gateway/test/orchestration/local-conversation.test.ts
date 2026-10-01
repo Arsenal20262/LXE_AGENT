@@ -59,7 +59,7 @@ class RecordingRuntime implements RuntimePort {
 }
 
 class MemoryStorage implements LocalConversationStorage {
-  readonly sessions = new Map<string, { session_id: string; source: JsonObject; workspace: WorkspaceContext }>();
+  readonly sessions = new Map<string, { session_id: string; blank?: boolean; source: JsonObject; workspace: WorkspaceContext }>();
   readonly ensured: SessionWorkspaceRequest[] = [];
   readonly routes: JsonObject[] = [];
   readonly pending: JsonObject[] = [];
@@ -737,5 +737,35 @@ test("retains image view metadata through stream sanitization and state copies",
   expect(stream?.process_parts[0]).toMatchObject({ tool_step: { image_view } });
   stream!.tool_steps[0]!.image_view!.name = "modified";
   expect(h.controller.activity("session-1").active?.stream?.tool_steps[0]?.image_view).toEqual(image_view);
+  h.controller.dispose();
+});
+
+
+test("first send admits a precreated blank only after the scheduler accepts it", async () => {
+  const accepted = harness(["turn", "message", "route"]);
+  accepted.storage.sessions.set("blank", { session_id: "blank", blank: true, source: { platform: "desktop" }, workspace: testWorkspace });
+  expect((await accepted.controller.send({ session_id: "blank", text: "hello" })).created).toBe(false);
+  expect(accepted.storage.ensured).toMatchObject([{ session_id: "blank", entry_text: "hello", source: { platform: "desktop" } }]);
+  accepted.controller.dispose();
+  const rejected = harness(["turn", "message", "route"]);
+  rejected.storage.sessions.set("blank", { session_id: "blank", blank: true, source: {}, workspace: testWorkspace });
+  rejected.scheduler.enqueue = async () => { throw new Error("fixture queue admission failed"); };
+  await expect(rejected.controller.send({ session_id: "blank", text: "keep draft" })).rejects.toThrow("fixture queue admission failed");
+  expect(rejected.storage.ensured).toEqual([]);
+  rejected.controller.dispose();
+});
+
+test("failed blank admission preserves retry and never starts a model turn", async () => {
+  const h = harness(["turn-1", "message-1", "route-1", "turn-2", "message-2", "route-2"]);
+  h.storage.sessions.set("blank", { session_id: "blank", blank: true, source: {}, workspace: testWorkspace });
+  const persist = h.storage.ensureSession.bind(h.storage);
+  h.storage.ensureSession = async () => { throw new Error("fixture SQLite write failed"); };
+  await expect(h.controller.send({ session_id: "blank", text: "retry me" })).rejects.toThrow("fixture SQLite write failed");
+  expect(h.runtime.started).toHaveLength(0);
+  expect(h.scheduler.hasInflightWork("blank")).toBe(false);
+  expect(h.storage.sessions.get("blank")?.blank).toBe(true);
+  h.storage.ensureSession = persist;
+  await h.controller.send({ session_id: "blank", text: "retry me" });
+  expect(h.runtime.started).toHaveLength(1);
   h.controller.dispose();
 });

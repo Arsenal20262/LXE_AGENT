@@ -1,3 +1,6 @@
+import { ManualToolsService } from "./main/manual-tools/service";
+import { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { DeepSeekBalanceService } from "./main/deepseek-balance";
 import { UpdateJournal } from "./main/update-journal";
 import { DesktopUpdateService, UpdateBusyError } from "./main/update-service";
@@ -138,6 +141,7 @@ let shutdownComplete = false;
 let shutdownPromise: Promise<void> | undefined;
 let removeIpcHandlers: (() => void) | undefined;
 let activeGateway: DesktopGateway | undefined;
+let manualTools: ManualToolsService | undefined;
 let activeAuthBrowserHost: AuthBrowserHost | undefined;
 const applicationWindows = (): BrowserWindow[] => window && !window.isDestroyed() ? [window] : [];
 let activeCloud: DesktopCloudService | undefined;
@@ -176,6 +180,7 @@ const shutdownApplication = (exitCode = 0): Promise<void> => {
     } catch (error) {
       logger.error("desktop_gateway_stop_failed", { error });
     }
+    try { await manualTools?.stop(); } catch (error) { logger.error("manual_tools_stop_failed", { error }); }
     await activeAuthBrowserHost?.stop();
     activeAuthBrowserHost = undefined;
     removeIpcHandlers?.();
@@ -289,6 +294,7 @@ async function bootstrap(): Promise<void> {
   await authBrowserHost.start();
   activeAuthBrowserHost = authBrowserHost;
   gateway = new DesktopGateway({
+    beforeDeleteSession: sessionId => manualTools?.closeSession(sessionId) ?? Promise.resolve(),
     paths,
     config,
     version: app.getVersion(),
@@ -548,6 +554,8 @@ async function bootstrap(): Promise<void> {
     discardConversationFiles: (attachmentIds) => conversationAttachments.discard(attachmentIds),
   };
   removeIpcHandlers = registerDesktopIpc(ipcApplication);
+  manualTools = new ManualToolsService(() => window, dirname(fileURLToPath(import.meta.url)), id => gateway.resolveWorkspaceDirectory(id));
+  manualTools.register();
 
   if (productionRenderer) {
     registerDashboardProtocol(paths.dashboardRoot);
@@ -618,6 +626,8 @@ async function bootstrap(): Promise<void> {
     event.preventDefault();
     window?.hide();
   });
+  window.on("hide", () => manualTools?.browsers.hide());
+  window.webContents.on("did-start-navigation", (_event, _url, _inPlace, main) => { if (main) manualTools?.browsers.hide(); });
   window.on("closed", () => { window = undefined; });
   window.once("ready-to-show", () => window?.show());
   await window.loadURL(

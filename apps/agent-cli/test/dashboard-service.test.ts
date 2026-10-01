@@ -761,3 +761,18 @@ describe("DashboardService", () => {
     await store.stop();
   });
 });
+
+
+test("sessions.create validates and canonicalizes directories, reuses blanks, and never invokes tools", async () => {
+  const root = mkdtempSync(join(tmpdir(), "lxe-blank-rpc-")); roots.push(root);
+  const store = new SqliteRuntimeStore(join(root, "agent.sqlite3"), { legacyWorkspace: workspaceFor(root) }); await store.start();
+  const service = new DashboardService({ stateRoot: root, llmConfigRoot: root, skillsRoot: root, userSkillsRoot: root,
+    environment: {}, store, tools: new ToolRegistry(), mcpConfig: { servers: [] } });
+  try {
+    const first = await service.call({ operation: "sessions.create", input: { directory: root } });
+    const other = await service.call({ operation: "sessions.create", input: { directory: join(root, ".") } });
+    expect(first).toEqual(other); expect(first.blank).toBe(true);
+    expect((await service.call({ operation: "sessions.list", input: {} })).total).toBe(0);
+    await expect(service.call({ operation: "sessions.create", input: { directory: join(root, "missing") } })).rejects.toThrow("ENOENT");
+  } finally { await store.stop(); }
+});

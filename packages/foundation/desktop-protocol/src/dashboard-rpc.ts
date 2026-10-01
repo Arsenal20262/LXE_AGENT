@@ -66,6 +66,7 @@ export type SourceSummary = {
 
 export type SessionPayload = {
   session_id: string;
+  blank?: boolean;
   title: string;
   pinned_at: number;
   source: Record<string, unknown>;
@@ -468,6 +469,10 @@ export interface WorkspaceSummaryPayload {
 }
 
 export interface DashboardRpcSpec {
+  "sessions.create": {
+    input: { directory: string };
+    result: SessionPayload;
+  };
   "sessions.workspaces": {
     input: DashboardRpcEmptyInput;
     result: { items: WorkspaceSummaryPayload[] };
@@ -704,6 +709,9 @@ export function parseDashboardRpcCall(value: unknown): DashboardRpcCall {
   }
 
   switch (operation) {
+    case "sessions.create":
+      exactKeys(input, ["directory"], `${operation}.input`);
+      return { operation, input: { directory: textValue(input.directory, `${operation}.directory`)! } };
     case "workspaces.register":
       exactKeys(input, ["directory"], `${operation}.input`);
       return { operation, input: { directory: textValue(input.directory, `${operation}.directory`)! } };

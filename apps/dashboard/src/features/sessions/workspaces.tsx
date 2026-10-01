@@ -11,6 +11,7 @@ import { WorkspaceActionsMenu, WorkspaceRenameDialog } from "./workspace-actions
 
 type IndexProps = ComponentProps<typeof SessionsIndex>;
 type WorkspaceIndexProps = Omit<IndexProps, "onNew"> & {
+  currentBlank?: import("@lxe/desktop-protocol").SessionPayload | null;
   expanded: Record<string, boolean>;
   onExpandedChange: (directory: string, expanded: boolean) => void;
   onRename: (directory: string, name: string) => Promise<void>;
@@ -57,7 +58,7 @@ function WorkspaceGroup({ workspace, label, active, props, onActions }: {
     </div>
     {openError ? <div className="workspace-error" role="alert">{openError}</div> : null}
     {expanded ? <div className="workspace-group-sessions">
-      <SessionsIndex {...props} embedded searchOpen={false} query="" sessions={sessions.items}
+      <SessionsIndex {...props} embedded searchOpen={false} query="" sessions={props.currentBlank?.workspace.directory === workspace.directory ? [{ ...props.currentBlank, title: t.conversation.newTitle }, ...sessions.items.filter(item => item.session_id !== props.currentBlank?.session_id)] : sessions.items}
         statuses={statuses.items} statusUnavailable={!statuses.ready} statusError={statuses.error}
         initialLoading={props.enabled && query.isPending} loadingMore={query.isFetchingNextPage}
         error={queryError(query.error)} loadMoreError={query.isFetchNextPageError ? queryError(query.error) : ""}

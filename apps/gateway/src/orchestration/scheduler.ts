@@ -131,6 +131,7 @@ export class SessionScheduler {
   private readonly activeByRun = new Map<string, RunHandle>();
   private readonly sessionDeletionFences = new Set<string>();
   private readonly sessionKeyDeletionFences = new Set<string>();
+  private readonly admissions = new Map<string, number>();
   private draining = false;
   private runtimeReady = true;
   private updateFenced = false;
@@ -156,12 +157,22 @@ export class SessionScheduler {
     if (!wasReady && ready) this.drain();
   }
 
-  async enqueue(job: AgentJob, options: { front?: boolean } = {}): Promise<void> {
+  async enqueue(job: AgentJob, options: { front?: boolean; beforeAccept?: () => Promise<void> } = {}): Promise<void> {
     if (this.updateFenced) throw new Error("Application update is preparing; new tasks are blocked");
     const sessionId = clean(job.session_id);
     if (!sessionId) throw new Error("session_id required");
     if (this.sessionDeletionFences.has(sessionId)) {
       throw new Error(`session is being deleted: ${sessionId}`);
+    }
+    if (options.beforeAccept) {
+      // Reserve admission before persistence so deletion/update cannot race it.
+      this.admissions.set(sessionId, (this.admissions.get(sessionId) ?? 0) + 1);
+      try { await options.beforeAccept(); }
+      finally {
+        const remaining = this.admissions.get(sessionId)! - 1;
+        if (remaining) this.admissions.set(sessionId, remaining);
+        else this.admissions.delete(sessionId);
+      }
     }
     const queue = this.pending.get(sessionId) ?? [];
     if (options.front) queue.unshift(job);
@@ -191,11 +202,11 @@ export class SessionScheduler {
 
   hasInflightWork(sessionId: string): boolean {
     const safe = clean(sessionId);
-    return this.activeBySession.has(safe) || (this.pending.get(safe)?.length ?? 0) > 0;
+    return this.admissions.has(safe) || this.activeBySession.has(safe) || (this.pending.get(safe)?.length ?? 0) > 0;
   }
 
   hasInflightJobs(): boolean {
-    return this.activeBySession.size > 0 || [...this.pending.values()].some((items) => items.length > 0);
+    return this.admissions.size > 0 || this.activeBySession.size > 0 || [...this.pending.values()].some((items) => items.length > 0);
   }
 
   isSessionDeletionFenced(sessionId: string): boolean {

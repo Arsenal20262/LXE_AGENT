@@ -228,6 +228,11 @@ export class DashboardService {
   private readonly skillCatalog: SkillCatalog;
   private readonly userSkillFiles: UserSkillFiles;
   private readonly handlers: AgentDashboardRpcHandlers = {
+    "sessions.create": input => {
+      const workspace = resolveWorkspaceContext(input.directory);
+      accessSync(workspace.directory, constants.R_OK | constants.W_OK | constants.X_OK);
+      return this.options.store.createBlankSession(workspace) as DashboardRpcResult<"sessions.create">;
+    },
     "sessions.workspaces": () => this.options.store.listSessionWorkspaces(),
     "workspaces.register": input => {
       const { directory } = resolveWorkspaceContext(input.directory);

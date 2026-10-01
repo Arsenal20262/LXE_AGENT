@@ -86,3 +86,24 @@ test("database failures propagate and session registration is atomic", async () 
     expect(() => store.registerWorkspace(directory)).toThrow("fixture registry denied");
   } finally { db.close(); await store.stop(); }
 });
+
+test("blank admissions reuse a durable session without polluting history, counts, or old zero-message sessions", async () => {
+  const { root, path } = databasePath(); const workspace = { directory: root, worktree: root };
+  let store = new SqliteRuntimeStore(path, { legacyWorkspace: workspace }); await store.start();
+  try {
+    await store.ensureSession({ session_id: "old-empty", workspace, source: { platform: "desktop" } });
+    const first = store.createBlankSession(workspace);
+    expect(first.blank).toBe(true);
+    const ids = await Promise.all(Array.from({ length: 12 }, async () => store.createBlankSession(workspace).session_id));
+    expect(new Set(ids)).toEqual(new Set([first.session_id]));
+    expect(store.listSessions({ limit: 50, offset: 0 }).items.map(s => s.session_id)).toEqual(["old-empty"]);
+    expect(store.listSessionWorkspaces().items[0]?.session_count).toBe(1);
+    expect(store.listSessions({ limit: 50, offset: 0, query: String(first.session_id) }).total).toBe(0);
+    await store.stop(); store = new SqliteRuntimeStore(path, { legacyWorkspace: workspace }); await store.start();
+    expect(store.createBlankSession(workspace).session_id).toBe(first.session_id);
+    expect((await store.sessionDetail(String(first.session_id), { limit: 10 }))?.session).toMatchObject({ blank: true });
+    await store.ensureSession({ session_id: String(first.session_id), workspace, source: { platform: "desktop" }, entry_text: "accepted" });
+    expect(store.listSessionWorkspaces().items[0]?.session_count).toBe(2);
+    expect(store.createBlankSession(workspace).session_id).not.toBe(first.session_id);
+  } finally { await store.stop(); }
+});

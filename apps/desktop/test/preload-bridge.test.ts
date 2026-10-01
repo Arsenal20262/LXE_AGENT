@@ -20,7 +20,7 @@ describe("preload bridge", () => {
       getPathForFile: (file) => `/private/drop/${file.name}`,
     });
 
-    expect(Object.keys(bridge).sort()).toEqual(["dashboard", "desktop", "files"]);
+    expect(Object.keys(bridge).sort()).toEqual(["dashboard", "desktop", "files", "tools"]);
     expect(Object.keys(bridge.dashboard)).toEqual(["call"]);
     expect(Object.keys(bridge.desktop).sort()).toEqual([
       "getUpdateState", "checkForUpdate", "installUpdate",

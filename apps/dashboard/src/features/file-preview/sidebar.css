@@ -405,3 +405,27 @@
 .file-apps-failure { padding:6px 10px; font-size:12px; }
 .file-apps-failure>p { margin:4px 0; }
 .file-open-split button:disabled { cursor:default; opacity:.45; }
+
+.tools-start { flex:1; min-height:0; overflow:auto; display:flex; flex-direction:column; justify-content:safe center; align-items:center; gap:16px; padding:32px 24px; color:var(--muted); }
+.tools-start>svg { margin:0 0 16px; opacity:.5; }
+.tools-start>button { width:100%; max-width:420px; display:flex; align-items:center; gap:20px; padding:20px; border:1px solid var(--border); border-radius:16px; background:var(--surface,#8881); color:var(--text); text-align:left; cursor:pointer; }
+.tools-start>button:hover { background:#8882; }
+.tools-start>button>svg { color:var(--accent); flex:none; }
+.tools-start span { min-width:0; display:flex; flex-direction:column; gap:5px; }
+.tools-start strong { font-size:16px; font-weight:500; }
+.tools-start small { font-size:12px; color:var(--muted); }
+.tool-terminal,.tool-browser { display:flex; flex-direction:column; flex:1; min-height:0; min-width:0; }
+.tool-terminal { background:#202225; color:#e4e4e7; }
+.tool-terminal-screen { flex:1; min-height:0; min-width:0; padding:8px; overflow:hidden; }
+.tool-terminal-screen .xterm { height:100%; }
+.tool-status { display:flex; align-items:center; justify-content:space-between; padding:8px 12px; font-size:12px; gap:12px; }
+.tool-status button { background:#ffffff15; color:inherit; border:1px solid #8885; border-radius:5px; padding:4px 8px; cursor:pointer; }
+.tool-error { padding:8px 12px; font-size:12px; color:#dc664c; white-space:pre-wrap; overflow-wrap:anywhere; max-height:120px; overflow:auto; flex:none; }
+.tool-browser-toolbar { display:flex; align-items:center; gap:4px; padding:8px; border-bottom:1px solid var(--border); }
+.tool-browser-toolbar button { border:0; background:none; color:inherit; padding:4px; display:flex; align-items:center; cursor:pointer; }
+.tool-browser-toolbar button:disabled { opacity:.35; cursor:default; }
+.tool-browser-toolbar input { flex:1; min-width:0; border:1px solid var(--border); border-radius:6px; padding:6px 8px; font-size:12px; background:var(--surface,#8881); color:inherit; }
+.tool-browser-viewport { flex:1; min-height:0; }
+.tool-browser-viewport>p { margin:32px 16px; color:var(--muted); text-align:center; font-size:13px; }
+.tool-browser-toolbar .is-loading { animation:tool-spin 1s linear infinite; }
+@keyframes tool-spin { to { transform:rotate(360deg); } }

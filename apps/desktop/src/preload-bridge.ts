@@ -32,6 +32,14 @@ export function createDesktopBridge(
   files?: DesktopFilePathPort,
 ): LxeDesktopBridge {
   return {
+    tools: {
+      call: call => ipc.invoke(IPC_CHANNELS.manualToolCall, call),
+      subscribe: listener => {
+        const handler: IpcListener = (_event, value) => listener(value as import("@lxe/desktop-protocol").ManualToolEvent);
+        ipc.on(IPC_CHANNELS.manualToolEvent, handler);
+        return () => ipc.removeListener(IPC_CHANNELS.manualToolEvent, handler);
+      },
+    },
     files: {
       call: (call) => ipc.invoke(IPC_CHANNELS.fileCall, call),
       read: (handle, relativeImage) => ipc.invoke(IPC_CHANNELS.fileRead, handle, relativeImage),

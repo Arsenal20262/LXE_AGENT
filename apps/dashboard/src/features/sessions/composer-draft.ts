@@ -1,31 +1,37 @@
-import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
+import { useSyncExternalStore, type Dispatch, type SetStateAction } from "react";
 
-const keyFor = (conversationKey: string) => `lxe.composer-draft.${conversationKey}`;
+const keyFor = (key: string) => `lxe.composer-draft.${key}`;
+const memory = new Map<string, string>();
+const listeners = new Set<() => void>();
 function read(key: string): string {
-  try { return (sessionStorage.getItem(keyFor(key)) ?? "").slice(0, 8192); } catch { return ""; }
+  if (memory.has(key)) return memory.get(key)!;
+  let text = "";
+  try { text = (sessionStorage.getItem(keyFor(key)) ?? "").slice(0, 8192); } catch { /* In-memory drafts remain usable. */ }
+  memory.set(key, text); return text;
 }
-
-/** Preserve text when a question replaces the composer, across session switches and renderer reloads. */
+function write(key: string, text: string): void {
+  memory.set(key, text);
+  try { if (text) sessionStorage.setItem(keyFor(key), text); else sessionStorage.removeItem(keyFor(key)); } catch { /* Optional persistence. */ }
+  listeners.forEach(listener => listener());
+}
+const subscribe = (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; };
 export function useComposerDraft(key: string): [string, Dispatch<SetStateAction<string>>, (key: string, sent: string) => void] {
-  const [draft, setDraft] = useState(() => ({ key, text: read(key) }));
-  const text = draft.key === key ? draft.text : read(key);
-  useEffect(() => {
-    try {
-      if (text) sessionStorage.setItem(keyFor(key), text);
-      else sessionStorage.removeItem(keyFor(key));
-    } catch { /* Storage may be unavailable; the in-memory draft still works. */ }
-  }, [key, text]);
-  return [text, value => setDraft(current => ({ key, text: typeof value === "function"
-    ? value(current.key === key ? current.text : read(key)) : value })), (target, sent) => {
-    try { if (read(target) === sent) sessionStorage.removeItem(keyFor(target)); } catch { /* optional */ }
-    setDraft(current => current.key === target && current.text === sent ? { key: target, text: "" } : current);
-  }];
+  const text = useSyncExternalStore(subscribe, () => read(key));
+  return [text, value => write(key, typeof value === "function" ? value(read(key)) : value),
+    (target, sent) => { if (read(target) === sent) write(target, ""); }];
 }
-
-/** Called only from a user click, before opening the composer; never during render. */
+/** Validate before moving attachments or changing selection. */
+export function prepareDraftMove(from: string, to: string): () => void {
+  if (from === to) return () => {};
+  const source = read(from), target = read(to);
+  const merged = source && target ? `${target}\n\n${source}` : source || target;
+  if (merged.length > 8192) throw new Error("Draft exceeds 8192 characters; shorten it before switching workspaces.");
+  return () => { write(to, merged); write(from, ""); };
+}
 export function appendComposerDraftPrompt(storage: Pick<Storage, "getItem" | "setItem">, key: string, prompt: string): void {
-  const previous = storage.getItem(keyFor(key)) ?? "";
+  const previous = storage.getItem(keyFor(key)) ?? memory.get(key) ?? "";
   const next = previous ? `${previous}\n\n${prompt}` : prompt;
   if (next.length > 8192) throw new Error("Draft exceeds 8192 characters; shorten it before adding a skill prompt.");
   storage.setItem(keyFor(key), next);
+  memory.set(key, next); listeners.forEach(listener => listener());
 }
