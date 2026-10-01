@@ -86,7 +86,7 @@ function PagedText({ preview, state, mode, wrap }: { preview: PreparedPreview; s
       if (!saved.current) return;
       element.scrollTop = saved.current.top; element.scrollLeft = saved.current.left;
       const pendingImages = element.querySelector('[data-preview-pending-image]') || [...element.querySelectorAll('img')].some(image => !image.complete);
-      if (!restoring.current && !pendingImages) saved.current = null;
+      if (!restoring.current && (!pendingImages || saved.current.top === 0 && saved.current.left === 0)) saved.current = null;
     };
     restore();
     const observer = new ResizeObserver(restore);
@@ -97,7 +97,7 @@ function PagedText({ preview, state, mode, wrap }: { preview: PreparedPreview; s
   const copy = async () => { try { await navigator.clipboard.writeText(text); setCopied(true); } catch (error) { setError(errorText(error)); } };
   return <div className="file-paged-text">
     <div className="file-text-actions"><span>{mode === "code" ? languageForPath(preview.metadata.name) || preview.metadata.extension.slice(1) : ""}</span><button onClick={() => void copy()} disabled={busy && !text}>{copied ? t.copied : eof ? t.copy : t.copyLoaded}</button></div>
-    <div className="file-text-scroll" ref={viewport} onScroll={e => {
+    <div className="file-text-scroll" ref={viewport} onWheelCapture={() => { saved.current = null; }} onPointerDownCapture={() => { saved.current = null; }} onKeyDownCapture={() => { saved.current = null; }} onScroll={e => {
       const el = e.currentTarget;
       if (!saved.current) state.scroll[mode] = { top: el.scrollTop, left: el.scrollLeft };
       if (!restoring.current && !busy && !eof && !error && el.scrollHeight - el.scrollTop - el.clientHeight < 400) void load();
