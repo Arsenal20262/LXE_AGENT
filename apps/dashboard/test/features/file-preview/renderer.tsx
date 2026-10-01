@@ -34,7 +34,7 @@ setFileBridgeForTests({
     if (!response.ok) throw new Error('fixture missing ' + name);
     const text = await response.text(), lines = text.match(/[^\n]*\n|[^\n]+$/g) ?? [], offset = range?.offset ?? 1, limit = range?.limit ?? 5000;
     const page = lines.slice(offset - 1, offset - 1 + limit);
-    return { text: page.join(""), offset, lines: page.length, next: offset + page.length, eof: offset - 1 + page.length >= lines.length, version };
+    return { page: Math.floor((offset - 1) / limit) + 1, text: page.join(""), offset, lines: page.length, next: offset + page.length, eof: offset - 1 + page.length >= lines.length, version };
   },
   read: async (handle, relative) => {
     const name = relative ?? pending.get(handle);

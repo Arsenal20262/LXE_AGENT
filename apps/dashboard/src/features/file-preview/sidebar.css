@@ -388,13 +388,16 @@
 .file-pdf-navigation { display:flex; flex:none; align-items:center; justify-content:space-between; padding:4px 12px; font-size:12px }
 .file-pdf-navigation input { width:48px; border:1px solid #8883; background:transparent; color:inherit; border-radius:4px; padding:2px }
 .file-pdf-page { min-width:0; overflow:hidden }
-.file-excel { position:relative }
+.file-excel { position:relative; color-scheme:light }
 .file-formula-note { position:absolute; right:8px; top:7px; z-index:3; color:#888; background:white }
 .file-excel .fortune-stat-area,.file-excel .luckysheet-sheets-item-function,.file-excel .fortune-cols-freeze-handle,.file-excel .fortune-rows-freeze-handle { display:none!important }
-.file-excel .fortune-sheet-area { display:flex; min-width:0 }
+.file-excel .luckysheet-sheet-area { padding:0 }
+.file-excel #luckysheet-sheet-content { flex:1; min-width:0 }
+.file-excel .fortune-sheettab-container { flex:1; min-width:0; max-width:100% }
 .file-excel .luckysheet-sheets-item { flex:none }
-.file-excel .luckysheet-sheets-sheetarea { display:flex; flex:1; min-width:0; overflow-x:auto; scrollbar-width:none }
-.file-excel .luckysheet-sheets-sheetarea::-webkit-scrollbar { display:none }
-.file-excel .fortune-zoom-container { flex:none }
-.file-excel .fortune-fx-input { white-space:pre; overflow-x:auto; overflow-y:hidden }
+.file-excel .fortune-sheettab-container-c { display:flex; flex:1; min-width:0; overflow-x:auto; scrollbar-width:none }
+.file-excel .fortune-sheettab-container-c::-webkit-scrollbar { display:none }
+.file-excel .fortune-zoom-container,.file-excel .fortune-sheettab-scroll,.file-excel .fortune-sheet-area-right { flex:none }
+.file-excel .fortune-fx-input-container { min-width:0 }
+.file-excel .fortune-fx-input { min-width:0; white-space:nowrap; overflow-x:auto; overflow-y:hidden; scrollbar-width:none; padding-right:25px }
 :root[data-theme=dark] .file-zoom-bar { background:#202225; color:#e4e4e7 }

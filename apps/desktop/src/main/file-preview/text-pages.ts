@@ -32,7 +32,7 @@ export async function readTextPage(path: string, range: TextPageRequest = {}, si
   };
   const result = (eof: boolean) => {
     const count = lines + (pendingLine ? 1 : 0);
-    return { text: parts.join(""), offset, lines: count, next: offset + count, eof };
+    return { page: Math.floor((offset - 1) / limit) + 1, text: parts.join(""), offset, lines: count, next: offset + count, eof };
   };
   try {
     for await (const raw of stream) {

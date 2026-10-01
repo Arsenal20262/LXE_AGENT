@@ -5,6 +5,7 @@ const [profile, output, protocolFile] = process.argv.slice(2);
 const url = "app://lxe/test/features/file-preview/renderer.html";
 // Exercise the production asset handler with the desktop's privileged scheme.
 protocol.registerSchemesAsPrivileged([{ scheme: "app", privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: false } }]);
+app.commandLine.appendSwitch("force-device-scale-factor", "2");
 app.disableHardwareAcceleration(); app.setPath("userData", profile);
 const passed = [], errors = [], requested = [], delay = ms => new Promise(r => setTimeout(r, ms));
 app.whenReady().then(async () => {
@@ -113,8 +114,13 @@ app.whenReady().then(async () => {
       await js("var z=document.querySelector('.file-zoom-bar select');z.value='400';z.dispatchEvent(new Event('change',{bubbles:true}))"); await delay(600);
       assert.ok(await js("[...document.querySelectorAll('.file-pdf canvas')].every(c=>c.width*c.height<=16777216)"));
       await click(".file-pdf-navigation button"); await delay(350);
+      if (!process.env.LXE_PREVIEW_OFFICE_PDF) {
+        await js("var p=document.querySelector('.file-pdf-navigation input');var setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;setter.call(p,'8');p.dispatchEvent(new Event('input',{bubbles:true}))");
+        await wait("document.querySelector('.file-pdf-navigation input').value === '8'", "page navigation");
+      }
       await click("#open-0"); await wait("previewFixture.workers.size === 0", "PDF worker released");
       await click("#open-3"); await wait("document.querySelector('.file-zoom-bar select')?.value === '400'", "PDF zoom restored");
+      if (!process.env.LXE_PREVIEW_OFFICE_PDF) await wait("document.querySelector('.file-pdf-navigation input')?.value === '8'", "PDF page restored");
       await capture("pdf-400");
     });
     await step("Last opening intent wins and active tabs stay visible", async () => {

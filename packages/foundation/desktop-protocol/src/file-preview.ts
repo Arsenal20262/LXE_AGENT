@@ -8,8 +8,9 @@ export type FilePreviewKind = "markdown" | "text" | "image" | "pdf" | "office" |
 export type FileMetadata = { key: string; name: string; displayPath?: string; size: number; version: string; kind: FilePreviewKind; extension: string; source: "current_file" | "history" };
 export type FileApplication = { id: string; name: string; icon: string | null; default: boolean };
 export type DirectoryPage = { entries: Array<{ name: string; path: string; kind: "file" | "directory" | "other" }>; next: number | null; rootPath?: string; version?: string };
+/** One-based line offset; each read is bounded to 5,000 lines and 2 MiB. */
 export type TextPageRequest = { offset?: number; limit?: number };
-export type PreviewTextPage = { text: string; offset: number; lines: number; next: number; eof: boolean; version: string };
+export type PreviewTextPage = { page: number; text: string; offset: number; lines: number; next: number; eof: boolean; version: string };
 export type PreparedPreview = { handle: string; metadata: FileMetadata; missingFonts: string[] };
 export interface DesktopFileOperations {
   "focus-preview": { input: { focused: boolean }; result: void };
