@@ -1,6 +1,6 @@
 # Office 文件能力
 
-三个独立 skill 位于 `skills/office-xlsx`、`skills/office-docx`、`skills/office-pptx`。现有 skill 加载器按需读取正文，Agent 用已有的 `exec` 执行 Python、`read` 查看图片、`send_files` 交付文件。没有新增模型工具、`lxeskill` 业务命令或预览界面。
+三个独立 skill 位于 `skills/office-xlsx`、`skills/office-docx`、`skills/office-pptx`。现有 skill 加载器按需读取正文，Agent 用已有的 `exec` 执行 Python、`read` 查看图片、`send_files` 交付文件。没有新增模型工具或 `lxeskill` 业务命令。桌面内查看文件的交互见[文件预览侧栏](file-preview.md)。
 
 ## 分工与入口
 

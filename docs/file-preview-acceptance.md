@@ -24,6 +24,8 @@
 
 ## Windows x64
 
-尚未验收。目标 `PC-20240421FADR`（100.87.60.88）端口 22 可连接，但 SSH 在握手前被对端关闭，尚未进入 Windows 工作区或运行打包。连接恢复后执行同一组定向测试、内置运行环境真实转换、原生应用关联与离线打包验收。
+尚未完成验收。已连接目标 `PC-20240421FADR`（100.87.60.88），通过 Git bundle 同步分支至 `D:\projects\LXE_AGENT`，并由 `wt-claim.ps1` 领取 `file-preview-sidebar`。Bun frozen 依赖同步成功；Python 同步在获取 `hatchling==1.31.0` 的构建依赖时遇到 PyPI `tls handshake eof`，离线缓存则缺少 `editables~=0.3`。
+
+用户开启 VPN TUN 后再次重试，但 SSH 连接超时，Tailscale 将该节点标为离线，未能取得新的 PyPI 同步结果。Windows 定向测试已发起，网络中断后尚未读到完整结果，不计为通过。连接恢复后继续依赖准备、定向测试、内置运行环境真实转换、原生应用关联与离线打包验收。
 
 本记录不将本机测试或静态资源检查等同于 Windows 实机结果。
