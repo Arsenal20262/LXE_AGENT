@@ -56,3 +56,17 @@ Windows 测试包位于 `D:\projects\LXE_AGENT\.worktrees\pool-1\dist\desktop-un
 Windows 最终 `Unpacked -Offline` 构建退出码为 0；资源检查通过，包内 Office Kit 的 22 项操作通过。解包体积 **1,039.71 MiB**，runtime **677.09 MiB**。随后将 PATH 限定为包内 Python／Node 与 Windows System32，并设置不可用的下载代理，使用包内 Python `-I` 创建样本、包内 Node 执行真实预览服务：DOCX、PPTX、DOC、PPT 转换和缓存复用均通过，源文件哈希未变；Courier 缺失字体及损坏文件的 `invalid-document` 原始诊断保留。报告位于 Windows worktree 的 `build/file-preview-polish/packaged-results/report.json`。
 
 将上述包内引擎实际生成的中文 Word PDF 放入 Electron 界面夹具，阻断外部请求后再次通过 13 组场景，确认 PDF Worker、文字和实际像素可用。包内转换与界面查看分别验证，界面夹具不连接真实 Agent 会话 DB。
+
+## 文件失效状态验收（2026-10-01）
+
+本次没有改动依赖、模型工具、会话 DB 或文件格式支持。文件错误改走可序列化结果，详情保留实际诊断；只有目标文件访问的系统错误能触发“文件不存在”或权限不足。
+
+- macOS 和 Windows x64 的真实 Electron 界面均通过 **18 组场景**。新增覆盖批量删除卡片高度不变、无后台通知、失效卡片仍能打开、首次打开不存在后的自动恢复、权限与缺失区别、历史图片保留、PDF Worker 与句柄释放、准备中删除／取消、旧失败不覆盖恢复内容、隐藏后停止轮询，以及应用查询重试和一次性操作提示。明暗主题和长文件名在窄卡片下已检查；应用菜单错误详情可通过方向键和 Enter 展开。
+- 两平台使用 `scripts/verify-file-availability.ts`，通过**生产 preload、生产文件 IPC、沙箱 Renderer 和真实文件系统**验收移动、删除、原路径恢复、权限拒绝、失效应用拒绝及缺少引擎。二进制经 IPC 后仍为 `Uint8Array`，历史来源与原文件状态分开；恢复后文件内容哈希一致。
+- macOS 真实拒绝读取返回 `EACCES`；Windows 普通权限桌面进程返回 `EPERM`。Windows SSH 管理员进程开启了备份权限，会绕过文件 ACL，因此没有把该进程的读取成功算作权限测试通过；改用已登录桌面的普通权限进程取得真实拒绝结果。测试 ACL 在 finally 中恢复，一次性计划任务已删除。
+- Windows 关联查询得到 4 个应用；无效应用产生真实 PowerShell/C# 异常，缺少 Node 产生真实 `spawn … ENOENT`。两者均为未分类操作失败，没有误标为用户文件被删除。下载报告后核对 UTF-8 中文诊断完整，终端代码页显示不影响 IPC 内容。
+- 状态单元测试覆盖同文件并发合并、产物／工作区别名共享、迟到请求不能覆盖恢复状态、历史图片与原文件独立，以及删除会话后在途请求不能重建缓存。
+
+最终 rebase 后，`bun run verify:source` 退出码为 0：JS **1,896 通过 / 7 跳过 / 0 失败**，Python **1,965 通过 / 4 跳过**，协议、生产边界与全工作区类型检查通过。随后仅调整 Windows Bun 的真实缺少程序诊断断言，并修正应用菜单的键盘焦点；分别补做定向断言、类型检查和两平台的 18 组 Electron 回归，没有重复无关的完整测试。Windows 初轮 35 项定向测试中 34 项通过，剩余一项在适配实测诊断后单独复验通过。两平台最终 Dashboard／桌面生产构建通过。
+
+界面截图是**生产组件组成的测试夹具**，不是实际聊天截图。测试截图命名为 `missing-files-light-test-fixture.png`、`missing-files-dark-narrow-test-fixture.png`、`applications-error-test-fixture.png`；原生文件状态另由实际文件／ACL 及 IPC 验收。Windows 报告位于验收 worktree 的 `build/file-availability/native-interactive/report.json`。
