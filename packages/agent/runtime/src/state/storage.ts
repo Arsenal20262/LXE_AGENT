@@ -380,6 +380,14 @@ export interface SqliteRuntimeStoreOptions {
   legacyWorkspace?: WorkspaceContext;
 }
 
+interface StoredWorkspace {
+  directory: string;
+  display_name: string | null;
+  created_at: number;
+  session_count: number;
+  last_active_at: number;
+}
+
 const DEFAULT_REPLAY_CACHE_MAX_ENTRIES = 32;
 const DEFAULT_REPLAY_CACHE_MAX_BYTES = 64 * 1024 * 1024;
 
@@ -419,6 +427,11 @@ export class SqliteRuntimeStore implements RuntimeStore {
     try {
       database.exec("BEGIN IMMEDIATE");
       database.exec(`
+        CREATE TABLE IF NOT EXISTS agent_workspaces (
+          directory TEXT PRIMARY KEY,
+          display_name TEXT,
+          created_at REAL NOT NULL
+        );
         CREATE TABLE IF NOT EXISTS agent_sessions (
           session_id TEXT PRIMARY KEY,
           source TEXT NOT NULL DEFAULT '{}',
@@ -532,6 +545,14 @@ export class SqliteRuntimeStore implements RuntimeStore {
       if (columns.some((column) => column.name === retiredWorkspaceColumn)) {
         database.exec(`ALTER TABLE agent_sessions DROP COLUMN ${retiredWorkspaceColumn}`);
       }
+      // Historical paths are already stored identities, even when their directories are offline.
+      database.exec(`
+        INSERT OR IGNORE INTO agent_workspaces (directory, created_at)
+        SELECT workspace_directory, MIN(created_at) FROM agent_sessions
+        WHERE workspace_directory != '' GROUP BY workspace_directory
+      `);
+      database.exec("CREATE INDEX IF NOT EXISTS idx_agent_sessions_workspace ON agent_sessions (workspace_directory)");
+      if (this.options.legacyWorkspace) this.ensureWorkspace(this.options.legacyWorkspace.directory);
       UsageStore.migrate(database);
       SessionStatusStore.migrate(database);
       if (!hadHistoryImageIndex) database.exec("DELETE FROM transcript_file_state");
@@ -586,24 +607,20 @@ export class SqliteRuntimeStore implements RuntimeStore {
     }
     const source = mergeObjects(current ? parseObject(current.source) : {}, incomingSource);
     const now = Date.now() / 1_000;
-    this.db().query(`
-      INSERT INTO agent_sessions (
-        session_id, source, workspace_directory, workspace_worktree,
-        created_at, last_active_at
-      ) VALUES (?, ?, ?, ?, ?, ?)
-      ON CONFLICT(session_id) DO UPDATE SET
-        source = excluded.source,
-        workspace_directory = excluded.workspace_directory,
-        workspace_worktree = excluded.workspace_worktree,
-        last_active_at = excluded.last_active_at
-    `).run(
-      sessionId,
-      JSON.stringify(source),
-      workspace.directory,
-      workspace.worktree,
-      now,
-      now,
-    );
+    this.db().transaction(() => {
+      this.ensureWorkspace(workspace.directory);
+      this.db().query(`
+        INSERT INTO agent_sessions (
+          session_id, source, workspace_directory, workspace_worktree,
+          created_at, last_active_at
+        ) VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(session_id) DO UPDATE SET
+          source = excluded.source,
+          workspace_directory = excluded.workspace_directory,
+          workspace_worktree = excluded.workspace_worktree,
+          last_active_at = excluded.last_active_at
+      `).run(sessionId, JSON.stringify(source), workspace.directory, workspace.worktree, now, now);
+    })();
   }
 
   async getSession(sessionId: string): Promise<RuntimeSessionRecord | undefined> {
@@ -1123,12 +1140,38 @@ export class SqliteRuntimeStore implements RuntimeStore {
     return this.usage().turnUsageAcknowledgedSequence(targetUrl);
   }
 
-  listSessionWorkspaces(): { items: Array<{ directory: string; session_count: number; last_active_at: number }> } {
-    return { items: this.allPrepared<{ directory: string; session_count: number; last_active_at: number }>(`
-      SELECT workspace_directory AS directory, COUNT(*) AS session_count,
-             MAX(last_active_at) AS last_active_at
-      FROM agent_sessions WHERE workspace_directory != ''
-      GROUP BY workspace_directory ORDER BY last_active_at DESC, directory ASC
+  private ensureWorkspace(directory: string): void {
+    this.db().query("INSERT OR IGNORE INTO agent_workspaces (directory, created_at) VALUES (?, ?)")
+      .run(directory, Date.now() / 1_000);
+  }
+
+  /** Receives an already canonical directory from the host or session creation path. */
+  registerWorkspace(directory: string): StoredWorkspace {
+    this.ensureWorkspace(directory);
+    return this.workspaceSummary(directory)!;
+  }
+
+  renameWorkspace(directory: string, displayName: string): StoredWorkspace | undefined {
+    this.db().query("UPDATE agent_workspaces SET display_name = ? WHERE directory = ?")
+      .run(displayName.trim() || null, directory);
+    return this.workspaceSummary(directory);
+  }
+
+  private workspaceSummary(directory: string): StoredWorkspace | undefined {
+    return this.getPrepared<StoredWorkspace>(`
+      SELECT w.directory, w.display_name, w.created_at, COUNT(s.session_id) AS session_count,
+             COALESCE(MAX(s.last_active_at), 0) AS last_active_at
+      FROM agent_workspaces w LEFT JOIN agent_sessions s ON s.workspace_directory = w.directory
+      WHERE w.directory = ? GROUP BY w.directory
+    `, directory) ?? undefined;
+  }
+
+  listSessionWorkspaces(): { items: StoredWorkspace[] } {
+    return { items: this.allPrepared<StoredWorkspace>(`
+      SELECT w.directory, w.display_name, w.created_at, COUNT(s.session_id) AS session_count,
+             COALESCE(MAX(s.last_active_at), 0) AS last_active_at
+      FROM agent_workspaces w LEFT JOIN agent_sessions s ON s.workspace_directory = w.directory
+      GROUP BY w.directory ORDER BY COALESCE(MAX(s.last_active_at), w.created_at) DESC, w.directory ASC
     `) };
   }
 

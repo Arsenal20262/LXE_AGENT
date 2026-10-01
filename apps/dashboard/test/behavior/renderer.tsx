@@ -3,7 +3,7 @@ import React, { useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { DesktopHealth, DesktopInputAttachmentPayload, LxeDesktopBridge, SessionPayload } from "@lxe/desktop-protocol";
+import type { DesktopHealth, DesktopInputAttachmentPayload, LxeDesktopBridge, SessionPayload, WorkspaceSummaryPayload } from "@lxe/desktop-protocol";
 import { ConversationComposer } from "../../src/features/sessions/view";
 import { useDialogFocus } from "../../src/shared/ui/use-dialog-focus";
 import { I18nContext, LANGUAGE_STORAGE_KEY, UI_TEXT } from "../../src/shared/i18n";
@@ -19,6 +19,11 @@ let chosenDirectory: string | null = "/fixture/chosen";
 let sendFailure = false;
 let holdWorkspaceSend = false;
 let releaseWorkspaceSend: (() => void) | undefined;
+let registrationFailure = false;
+let renameFailure = false;
+let holdRegistration = false;
+let releaseRegistration: (() => void) | undefined;
+let invalidateDashboard: (() => void) | undefined;
 function workspaceSession(id: string, directory: string, pinned = false): SessionPayload {
   return { session_id: id, title: id, workspace: { directory, worktree: directory },
     pinned_at: pinned ? 1 : 0, created_at: 1, last_active_at: 100, source: { platform: "desktop" },
@@ -30,12 +35,44 @@ const workspaceSessions = [
   ...Array.from({ length: 23 }, (_, i) => workspaceSession(`Shop chat ${i + 1}`, "/fixture/shop", i === 0)),
   workspaceSession("Archived project chat", "/fixture/archive"),
 ];
+const workspaceRegistry: WorkspaceSummaryPayload[] = [...new Set(workspaceSessions.map(row => row.workspace.directory))]
+  .map(directory => ({ directory, display_name: null, created_at: 1, session_count: 0, last_active_at: 0 }));
+if (workspaceMode && sessionStorage.getItem("workspaceFixture")) {
+  const saved = JSON.parse(sessionStorage.getItem("workspaceFixture")!);
+  workspaceSessions.splice(0, workspaceSessions.length, ...saved.sessions);
+  workspaceRegistry.splice(0, workspaceRegistry.length, ...saved.registry);
+}
+function persistWorkspaces() {
+  sessionStorage.setItem("workspaceFixture", JSON.stringify({ sessions: workspaceSessions, registry: workspaceRegistry }));
+}
+function registerWorkspace(directory: string) {
+  let row = workspaceRegistry.find(row => row.directory === directory);
+  if (!row) {
+    row = { directory, display_name: null, created_at: Date.now() / 1000, session_count: 0, last_active_at: 0 };
+    workspaceRegistry.push(row);
+  }
+  persistWorkspaces();
+  return row;
+}
 function workspaceRpc(call: { operation: string; input: Record<string, unknown> }): unknown {
   const input = call.input;
   switch (call.operation) {
-    case "sessions.workspaces": return { items: [...new Set(workspaceSessions.map(row => row.workspace.directory))].map(directory => ({
-      directory, session_count: workspaceSessions.filter(row => row.workspace.directory === directory).length, last_active_at: 100,
+    case "sessions.workspaces": return { items: workspaceRegistry.map(row => ({
+      ...row, session_count: workspaceSessions.filter(session => session.workspace.directory === row.directory).length,
+      last_active_at: workspaceSessions.some(session => session.workspace.directory === row.directory) ? 100 : 0,
     })) };
+    case "workspaces.register": return (async () => {
+      if (registrationFailure) throw new Error("SQLITE_FULL: fixture registry is full");
+      if (holdRegistration) await new Promise<void>(resolve => { releaseRegistration = resolve; });
+      return { ...registerWorkspace(String(input.directory)) };
+    })();
+    case "workspaces.rename": {
+      if (renameFailure) throw new Error("SQLITE_READONLY: fixture rename denied");
+      const row = workspaceRegistry.find(row => row.directory === input.directory)!;
+      row.display_name = String(input.display_name).trim() || null;
+      persistWorkspaces();
+      return { ...row };
+    }
     case "sessions.list": {
       const rows = workspaceSessions.filter(row => (!input.directory || row.workspace.directory === input.directory)
         && (!input.query || row.title.toLowerCase().includes(String(input.query).toLowerCase())));
@@ -55,6 +92,7 @@ function workspaceRpc(call: { operation: string; input: Record<string, unknown> 
       if (holdWorkspaceSend) await new Promise<void>(resolve => { releaseWorkspaceSend = resolve; });
       const session_id = `Created chat ${workspaceSessions.length}`;
       workspaceSessions.push(workspaceSession(session_id, String(input.directory || health.workspace_root)));
+      registerWorkspace(String(input.directory || health.workspace_root));
       return { session_id, turn_id: "turn", message_id: "message", created: true, state: "queued" };
     })();
     case "sessions.pin": {
@@ -63,6 +101,7 @@ function workspaceRpc(call: { operation: string; input: Record<string, unknown> 
     }
     case "sessions.delete": {
       workspaceSessions.splice(workspaceSessions.findIndex(row => row.session_id === input.session_id), 1);
+      persistWorkspaces();
       return { session_id: input.session_id, deleted: true };
     }
     default: return undefined;
@@ -87,7 +126,7 @@ const subscribe = () => () => {};
 const desktop = {
   selectWorkspace: async () => { calls.push({ operation: "chooseWorkspace" }); return chosenDirectory; },
   openWorkspace: async (directory: string) => { calls.push({ operation: "openWorkspace", input: directory }); },
-  platform: "darwin" as const,
+  platform: navigator.userAgent.includes("Windows") ? "win32" as const : "darwin" as const,
   getSetupState: async () => setupState({ complete }),
   getHealth: async () => ({ ...health }),
   getCloudState: async () => cloudState(),
@@ -99,7 +138,10 @@ const desktop = {
     return () => { notifyHealth = undefined; };
   },
   onCloudStateChanged: subscribe,
-  onDashboardInvalidated: subscribe,
+  onDashboardInvalidated: listener => {
+    invalidateDashboard = () => listener({ revision: Date.now(), domains: ["sessions"], session_ids: [] });
+    return () => { invalidateDashboard = undefined; };
+  },
   onConversationEvent: subscribe,
   onConversationStreamEvent: subscribe,
   onExecUpdate: subscribe,
@@ -196,6 +238,11 @@ function reset() {
   calls.length = 0; sends.length = 0; stops = 0; releaseSend = undefined;
 }
 const fixture = {
+  failRegistration(value: boolean) { registrationFailure = value; },
+  failRename(value: boolean) { renameFailure = value; },
+  holdRegistration(value: boolean) { holdRegistration = value; },
+  releaseRegistration() { releaseRegistration?.(); },
+  refreshWorkspaces() { invalidateDashboard?.(); },
   chooseDirectory(directory: string | null) { chosenDirectory = directory; },
   failWorkspaceSend(value: boolean) { sendFailure = value; },
   holdWorkspaceSend(value: boolean) { holdWorkspaceSend = value; },
@@ -208,7 +255,10 @@ const fixture = {
   releaseSend() { releaseSend?.(); },
   state() { return { calls, sends, stops, active: document.activeElement?.id,
     dialogs: [...document.querySelectorAll('[role="dialog"]')].map(el => el.getAttribute("aria-label")) }; },
-  setHealth(patch: Partial<DesktopHealth>) { Object.assign(health, patch); notifyHealth?.({ ...health }); },
+  setHealth(patch: Partial<DesktopHealth>) {
+    if (workspaceMode && patch.workspace_root) registerWorkspace(patch.workspace_root);
+    Object.assign(health, patch); notifyHealth?.({ ...health }); invalidateDashboard?.();
+  },
   drop() {
     const data = new DataTransfer(); data.items.add(new File(["fixture"], "fixture.txt", { type: "text/plain" }));
     window.dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: data }));
@@ -221,7 +271,8 @@ const fixture = {
   },
 };
 Object.assign(window, { behavior: fixture });
-localStorage.clear();
+if (!workspaceMode || !sessionStorage.getItem("workspaceFixtureInitialized")) localStorage.clear();
+if (workspaceMode) sessionStorage.setItem("workspaceFixtureInitialized", "true");
 localStorage.setItem(LANGUAGE_STORAGE_KEY, "en");
 const params = new URLSearchParams(location.search);
 if (params.has("app")) {

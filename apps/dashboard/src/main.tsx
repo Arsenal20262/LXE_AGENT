@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
+  DashboardRpcResult,
   DesktopCloudState,
   DesktopConversationActivityPayload,
   DesktopConversationTurnPayload,
@@ -27,6 +28,8 @@ import "./desktop/update-control.css";
 import { SidebarStatus } from "./desktop/sidebar-status";
 import { ConversationDisplayController, sendConversationMessage } from "./features/sessions/display-controller";
 import { WorkspacesIndex, WorkspaceControl } from "./features/sessions/workspaces";
+import { WORKSPACE_EXPANDED_STORAGE_KEY } from "./features/sessions/workspace-state";
+import { useStoredExpanded } from "./shared/ui/use-stored-expanded";
 import { useConversationEntry } from "./features/sessions/use-conversation-entry";
 import { useSessionStatus } from "./api/queries";
 import { acknowledgeConversationSend } from "./features/sessions/presentation";
@@ -233,6 +236,9 @@ function App({
 
   const sessionsQuery = useSessionsInfiniteQuery(debouncedQuery, dashboardRuntimeReady);
   const workspacesQuery = useSessionWorkspacesQuery(dashboardRuntimeReady);
+  const [expandedWorkspaces, setWorkspaceExpanded] = useStoredExpanded(WORKSPACE_EXPANDED_STORAGE_KEY);
+  const workspaceSelectionRevision = useRef(0);
+  useLayoutEffect(() => { workspaceSelectionRevision.current++; }, [activeSection]);
   const sessionDetailQuery = useSessionConversationQuery(
     selectedSessionId,
     dashboardRuntimeReady && activeSection === "sessions" && !newConversation,
@@ -417,6 +423,7 @@ function App({
   }
 
   function openSession(session: SessionPayload) {
+    setWorkspaceExpanded(session.workspace.directory, true);
     pushDashboardRoute("sessions");
     setActiveSection("sessions");
     setSelectedSessionId(session.session_id);
@@ -424,6 +431,7 @@ function App({
   }
 
   function startNewConversation(directory = desktopHealth.workspace_root) {
+    setWorkspaceExpanded(directory, true);
     pushDashboardRoute("sessions");
     setActiveSection("sessions");
     conversationDisplay.select("", true, undefined, directory);
@@ -433,11 +441,30 @@ function App({
   }
 
   async function chooseWorkspace(newDraft: boolean): Promise<void> {
+    const revision = ++workspaceSelectionRevision.current;
     const before = conversationDisplay.getSnapshot().viewKey;
+    const stillCurrent = () => revision === workspaceSelectionRevision.current && conversationDisplay.getSnapshot().viewKey === before;
     const directory = await window.lxe!.desktop.selectWorkspace();
-    if (!directory || conversationDisplay.getSnapshot().viewKey !== before) return;
-    if (newDraft) startNewConversation(directory);
-    else conversationDisplay.setDraftDirectory(directory);
+    if (!directory || !stillCurrent()) return;
+    const workspace = await callDashboard({ operation: "workspaces.register", input: { directory } });
+    queryClient.setQueryData<DashboardRpcResult<"sessions.workspaces">>(
+      dashboardQueryKeys.sessions.workspaces,
+      current => ({ items: [...(current?.items ?? []).filter(item => item.directory !== workspace.directory), workspace] }),
+    );
+    if (!stillCurrent()) return;
+    if (newDraft) startNewConversation(workspace.directory);
+    else {
+      conversationDisplay.setDraftDirectory(workspace.directory);
+      setWorkspaceExpanded(workspace.directory, true);
+    }
+  }
+
+  async function renameWorkspace(directory: string, display_name: string): Promise<void> {
+    const workspace = await callDashboard({ operation: "workspaces.rename", input: { directory, display_name } });
+    queryClient.setQueryData<DashboardRpcResult<"sessions.workspaces">>(
+      dashboardQueryKeys.sessions.workspaces,
+      current => ({ items: [...(current?.items ?? []).filter(item => item.directory !== directory), workspace] }),
+    );
   }
 
   function startSkillConversation(action: SkillConversationAction, skill?: SkillPayload) {
@@ -841,6 +868,9 @@ function App({
           </nav>
           <div className="sidebar-session-section">
             <WorkspacesIndex
+              expanded={expandedWorkspaces}
+              onExpandedChange={setWorkspaceExpanded}
+              onRename={renameWorkspace}
               display={sessionDetailQuery.display}
               workspaces={workspacesQuery.data?.items ?? []}
               defaultDirectory={desktopHealth.workspace_root}
@@ -907,7 +937,10 @@ function App({
                       workspaces={workspacesQuery.data?.items ?? []}
                       editable={newConversation}
                       disabled={!dashboardRuntimeReady || sessionDetailQuery.display.pending.some(item => !item.error)}
-                      onChange={directory => conversationDisplay.setDraftDirectory(directory)}
+                      onChange={directory => {
+                        conversationDisplay.setDraftDirectory(directory);
+                        setWorkspaceExpanded(directory, true);
+                      }}
                       onChoose={() => chooseWorkspace(false)}
                     />}
                     question={newConversation ? undefined : pendingQuestions.find(q => q.session_id === selectedSessionId)}

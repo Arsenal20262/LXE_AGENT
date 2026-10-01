@@ -1877,7 +1877,7 @@ export const SessionsIndex = React.memo(function SessionsIndex({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const sessionListRef = useRef<HTMLDivElement>(null);
   const trimmedQuery = query.trim();
-  const emptyLabel = trimmedQuery ? t.sessions.emptySearch : t.sessions.empty;
+  const emptyLabel = trimmedQuery ? t.sessions.emptySearch : embedded ? t.workspaces.empty : t.sessions.empty;
   const showTable = sessions.length > 0;
   const [menu, setMenu] = useState<{ anchor: HTMLElement; session: SessionPayload } | null>(null);
   const [confirmation, setConfirmation] = useState<SessionPayload | null>(null);
@@ -2024,7 +2024,9 @@ export const SessionsIndex = React.memo(function SessionsIndex({
       ) : null}
       {error ? <EmptyState label={t.common.errorPrefix(t.sessions.errorLabel, error)} /> : null}
       {!showTable && initialLoading && !error ? <EmptyState label={t.sessions.loading} /> : null}
-      {!showTable && !initialLoading && !error ? <EmptyState label={emptyLabel} /> : null}
+      {!showTable && !initialLoading && !error ? (
+        embedded && !searchOpen ? <div className="workspace-empty">{emptyLabel}</div> : <EmptyState label={emptyLabel} />
+      ) : null}
       {showTable ? (
         <div
           className="session-index-list"

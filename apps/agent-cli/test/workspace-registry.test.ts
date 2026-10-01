@@ -1,0 +1,39 @@
+import { expect, test } from "bun:test";
+import { mkdtempSync, mkdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { SqliteRuntimeStore, ToolRegistry } from "@lxe/runtime";
+import { DashboardService } from "../src/dashboard-service";
+
+test("register canonical directories without sessions, reuse aliases, and expose actual path errors", async () => {
+  const root = mkdtempSync(join(tmpdir(), "lxe-register-rpc-"));
+  const directory = join(root, "资料"), alias = join(root, "alias");
+  mkdirSync(directory);
+  symlinkSync(directory, alias, process.platform === "win32" ? "junction" : "dir");
+  const file = join(root, "file.txt");
+  writeFileSync(file, "fixture");
+  const store = new SqliteRuntimeStore(join(root, "agent.sqlite3"));
+  await store.start();
+  const service = new DashboardService({ stateRoot: root, llmConfigRoot: join(root, "llm"),
+    skillsRoot: join(root, "skills"), userSkillsRoot: join(root, "user"), environment: {},
+    store, tools: new ToolRegistry(), mcpConfig: { servers: [] } });
+  const register = (directory: string) => service.call({ operation: "workspaces.register", input: { directory } });
+  const rename = (directory: string, display_name: string) => service.call({ operation: "workspaces.rename", input: { directory, display_name } });
+  try {
+    const saved = await register(directory);
+    expect(saved).toMatchObject({ directory: realpathSync.native(directory), session_count: 0, display_name: null });
+    await rename(saved.directory, "  采购  ");
+    expect(await register(alias)).toEqual({ ...saved, display_name: "采购" });
+    expect(await register(join(directory, "."))).toEqual({ ...saved, display_name: "采购" });
+    expect((await service.call({ operation: "sessions.workspaces", input: {} })).items).toHaveLength(1);
+    expect(store.listSessions({ limit: 10, offset: 0 }).total).toBe(0);
+    await expect(register(join(root, "missing"))).rejects.toThrow("ENOENT");
+    await expect(register(file)).rejects.toThrow("not a directory");
+    await expect(register("relative/path")).rejects.toThrow("absolute path");
+    await expect(rename(join(root, "unknown"), "name")).rejects.toThrow("workspace not found");
+    rmSync(alias, { recursive: true, force: true });
+    rmSync(directory, { recursive: true });
+    expect((await rename(saved.directory, "Offline")).display_name).toBe("Offline");
+    expect((await rename(saved.directory, "  ")).display_name).toBeNull();
+  } finally { await store.stop(); rmSync(root, { recursive: true, force: true, maxRetries: 5 }); }
+});

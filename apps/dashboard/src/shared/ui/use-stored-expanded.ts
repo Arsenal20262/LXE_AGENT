@@ -1,12 +1,12 @@
 import { useCallback, useState } from "react";
 
-function readStoredExpanded(storageKey: string): Record<string, boolean> {
+export function readStoredExpanded(storageKey: string): Record<string, boolean> {
   try {
     const raw = window.localStorage.getItem(storageKey);
     if (!raw) return {};
     const parsed: unknown = JSON.parse(raw);
     return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? (parsed as Record<string, boolean>)
+      ? Object.fromEntries(Object.entries(parsed).filter((entry): entry is [string, boolean] => typeof entry[1] === "boolean"))
       : {};
   } catch {
     return {};

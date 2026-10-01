@@ -19,6 +19,17 @@ const roundTripEvent = (event: unknown): AgentEvent => decodeAgentEvent(
 );
 
 describe("desktop agent protocol", () => {
+  test("validates workspace registration and display-only rename inputs", () => {
+    expect(parseDashboardRpcCall({ operation: "workspaces.register", input: { directory: "/work" } }))
+      .toEqual({ operation: "workspaces.register", input: { directory: "/work" } });
+    expect(parseDashboardRpcCall({ operation: "workspaces.rename", input: { directory: "/work", display_name: "  " } }).input)
+      .toEqual({ directory: "/work", display_name: "" });
+    for (const input of [{}, { directory: "" }, { directory: 3 }, { directory: "/work", sessionIds: [] }])
+      expect(() => parseDashboardRpcCall({ operation: "workspaces.register", input })).toThrow();
+    for (const input of [{ directory: "/work" }, { directory: "/work", display_name: null },
+      { directory: "/work", display_name: 7 }, { directory: "/work", display_name: "name", worktree: "/new" }])
+      expect(() => parseDashboardRpcCall({ operation: "workspaces.rename", input })).toThrow();
+  });
   test("accepts workspace summaries and new-chat directories but rejects rebinding existing chats", () => {
     expect(parseDashboardRpcCall({ operation: "sessions.workspaces", input: {} })).toEqual({ operation: "sessions.workspaces", input: {} });
     expect(parseDashboardRpcCall({ operation: "sessions.list", input: { directory: "D:\\work" } }).input).toMatchObject({ directory: "D:\\work" });

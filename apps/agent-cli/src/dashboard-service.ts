@@ -1,7 +1,9 @@
 import { execDisplayUpdate } from "./exec-display";
-import { withManagedModels, managedCredentialFor, type ManagedLlmState, type ManagedTarget } from "@lxe/core";
+import { withManagedModels, managedCredentialFor, resolveWorkspaceContext, type ManagedLlmState, type ManagedTarget } from "@lxe/core";
 import {
   existsSync,
+  accessSync,
+  constants,
   readFileSync,
 } from "node:fs";
 import { extname, join, relative, resolve, sep } from "node:path";
@@ -227,6 +229,13 @@ export class DashboardService {
   private readonly userSkillFiles: UserSkillFiles;
   private readonly handlers: AgentDashboardRpcHandlers = {
     "sessions.workspaces": () => this.options.store.listSessionWorkspaces(),
+    "workspaces.register": input => {
+      const { directory } = resolveWorkspaceContext(input.directory);
+      accessSync(directory, constants.R_OK | constants.W_OK | constants.X_OK);
+      return this.options.store.registerWorkspace(directory);
+    },
+    "workspaces.rename": input => this.options.store.renameWorkspace(input.directory, input.display_name)
+      ?? rpcError("not_found", "workspace not found"),
     "sessions.questions": () => ({ items: this.options.questions?.snapshot() ?? [] }),
     "sessions.answer": input => {
       if (!this.options.questions) return rpcError("unavailable", "User questions are unavailable");

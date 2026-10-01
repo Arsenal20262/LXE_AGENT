@@ -459,10 +459,26 @@ export type StatsOverviewPayload = {
 
 export type DashboardRpcEmptyInput = Record<string, never>;
 
+export interface WorkspaceSummaryPayload {
+  directory: string;
+  display_name: string | null;
+  created_at: number;
+  session_count: number;
+  last_active_at: number;
+}
+
 export interface DashboardRpcSpec {
   "sessions.workspaces": {
     input: DashboardRpcEmptyInput;
-    result: { items: Array<{ directory: string; session_count: number; last_active_at: number }> };
+    result: { items: WorkspaceSummaryPayload[] };
+  };
+  "workspaces.register": {
+    input: { directory: string };
+    result: WorkspaceSummaryPayload;
+  };
+  "workspaces.rename": {
+    input: { directory: string; display_name: string };
+    result: WorkspaceSummaryPayload;
   };
   "sessions.questions": { input: DashboardRpcEmptyInput; result: { items: PendingUserQuestion[] } };
   "sessions.answer": { input: SubmitUserQuestionAnswer; result: { accepted: true; request_id: string } };
@@ -688,6 +704,15 @@ export function parseDashboardRpcCall(value: unknown): DashboardRpcCall {
   }
 
   switch (operation) {
+    case "workspaces.register":
+      exactKeys(input, ["directory"], `${operation}.input`);
+      return { operation, input: { directory: textValue(input.directory, `${operation}.directory`)! } };
+    case "workspaces.rename":
+      exactKeys(input, ["directory", "display_name"], `${operation}.input`);
+      return { operation, input: {
+        directory: textValue(input.directory, `${operation}.directory`)!,
+        display_name: textValue(input.display_name, `${operation}.display_name`, { allowEmpty: true })!,
+      } };
     case "sessions.workspaces":
     case "sessions.questions":
       exactKeys(input, [], `${operation}.input`);

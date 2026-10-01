@@ -47,6 +47,8 @@ app.whenReady().then(async () => {
   };
   const click = async selector => {
     await focus(selector);
+    // Focus may scroll an offscreen sidebar row; finish that scroll before opening its menu.
+    await settle();
     await js(`document.querySelector(${JSON.stringify(selector)}).click()`);
     await settle();
   };
@@ -196,6 +198,21 @@ app.whenReady().then(async () => {
       await load("?app=1&workspaces=1&section=sessions");
       await waitFor("document.querySelectorAll('.workspace-group').length === 3", "workspace groups");
       const shop = '.workspace-group[data-workspace-directory="/fixture/shop"]';
+      const group = directory => '.workspace-group[data-workspace-directory=' + JSON.stringify(directory) + ']';
+      const expanded = directory => js('document.querySelector(' + JSON.stringify(group(directory) + ' .workspace-group-toggle') + ').getAttribute("aria-expanded")');
+      const label = directory => js('document.querySelector(' + JSON.stringify(group(directory) + ' .workspace-group-toggle > span') + ').textContent');
+      const beginRename = async directory => {
+        await click(group(directory) + ' .workspace-actions-trigger');
+        await key('Enter');
+        await waitFor('document.activeElement?.id === "workspace-display-name"', 'rename input focused');
+      };
+      const enterName = async name => {
+        await focus('#workspace-display-name');
+        await js('document.querySelector("#workspace-display-name").select()');
+        await key('Backspace');
+        if (name) await win.webContents.insertText(name);
+        await click('.workspace-rename-dialog button[type="submit"]');
+      };
       await step("all workspaces are discoverable and expanded groups page independently", async () => {
         assert.match(await js("document.querySelector('.workspace-index').textContent"), /archive/);
         assert.equal((await state()).calls.some(call => call.operation === "sessions.list" && call.input.directory === "/fixture/shop"), false);
@@ -257,6 +274,118 @@ app.whenReady().then(async () => {
         assert.equal(await js("Boolean(document.querySelector('.conversation-workspace select'))"), false);
         await click(".conversation-workspace button[aria-label='Open folder']");
         assert.equal((await state()).calls.findLast(call => call.operation === "openWorkspace").input, "/fixture/archive");
+      });
+      await step('selected empty directories survive reload without creating chats', async () => {
+        await click('.session-search-close');
+        await js('behavior.chooseDirectory("/fixture/empty")');
+        const sends = (await state()).calls.filter(call => call.operation === 'sessions.send').length;
+        await click('.workspace-index-heading button');
+        await waitFor('document.querySelector(".conversation-workspace select")?.value === "/fixture/empty"', 'registered draft');
+        assert.equal((await state()).calls.filter(call => call.operation === 'sessions.send').length, sends);
+        assert.match(await js('document.querySelector(' + JSON.stringify(group('/fixture/empty')) + ').textContent'), /No conversations yet/);
+        await load('?app=1&workspaces=1&section=sessions');
+        await waitFor('Boolean(document.querySelector(' + JSON.stringify(group('/fixture/empty')) + '))', 'empty registration after reload');
+        assert.equal(await expanded('/fixture/empty'), 'true');
+      });
+      await step('rename failure keeps input, retry updates sidebar, selector and conversation title', async () => {
+        await beginRename('/fixture/archive');
+        await js('behavior.failRename(true)');
+        await enterName('  采购项目  ');
+        await waitFor('document.querySelector(".workspace-rename-dialog [role=alert]")?.textContent.includes("SQLITE_READONLY")', 'actual rename failure');
+        assert.equal(await js('document.querySelector("#workspace-display-name").value'), '  采购项目  ');
+        await js('behavior.failRename(false)');
+        await click('.workspace-rename-dialog button[type="submit"]');
+        await waitFor('!document.querySelector(".workspace-rename-dialog")', 'rename saved');
+        assert.equal(await label('/fixture/archive'), '采购项目');
+        if (await expanded('/fixture/archive') !== 'true') await click(group('/fixture/archive') + ' .workspace-group-toggle');
+        await click(group('/fixture/archive') + ' .session-index-open');
+        await waitFor('document.querySelector(".conversation-workspace-name")?.textContent === "采购项目"', 'updated conversation name');
+        await click(group('/fixture/archive') + ' .workspace-group-header > button:last-child');
+        assert.equal(await js('document.querySelector(".conversation-workspace select option:checked").textContent'), '采购项目');
+        await beginRename('/fixture/archive'); await enterName('');
+        await waitFor('!document.querySelector(".workspace-rename-dialog")', 'reset saved');
+        assert.equal(await label('/fixture/archive'), 'archive');
+        assert.equal(await js('document.querySelector(".conversation-workspace select option:checked").textContent'), 'archive');
+      });
+      await step('default aliases, duplicate names and default-directory changes remain distinct', async () => {
+        await beginRename('/fixture/default'); await enterName('日常工作');
+        await waitFor('!document.querySelector(".workspace-rename-dialog")', 'default renamed');
+        assert.equal(await label('/fixture/default'), '日常工作');
+        assert.equal(await js('document.querySelector(' + JSON.stringify(group('/fixture/default') + ' .workspace-default-badge') + ').textContent'), 'Default');
+        await beginRename('/fixture/empty'); await enterName('日常工作');
+        await waitFor('!document.querySelector(".workspace-rename-dialog")', 'duplicate saved');
+        assert.equal(await label('/fixture/empty'), '日常工作 · /fixture/empty');
+        assert.equal(await label('/fixture/default'), '日常工作 · /fixture/default');
+        await js('behavior.setHealth({workspace_root:"/fixture/empty"})'); await settle();
+        await waitFor('document.querySelector(".workspace-group")?.dataset.workspaceDirectory === "/fixture/empty"', 'new default first');
+        assert.equal(await js('Boolean(document.querySelector(' + JSON.stringify(group('/fixture/default') + ' .workspace-default-badge') + '))'), false);
+        assert.equal(await js('Boolean(document.querySelector(' + JSON.stringify(group('/fixture/empty') + ' .workspace-default-badge') + '))'), true);
+        await beginRename('/fixture/empty'); await enterName(' ');
+        await waitFor('!document.querySelector(".workspace-rename-dialog")', 'default reset');
+        assert.equal(await label('/fixture/empty'), 'Default workspace');
+        assert.equal(await label('/fixture/default'), '日常工作');
+        await js('behavior.setHealth({workspace_root:"/fixture/default"})'); await settle();
+        assert.equal(await label('/fixture/empty'), 'empty');
+        if (process.env.LXE_WORKSPACE_SCREENSHOT) require('node:fs').writeFileSync(process.env.LXE_WORKSPACE_SCREENSHOT, (await win.webContents.capturePage()).toPNG());
+      });
+      await step('fold preferences survive data refresh, search and reload; deliberate entry expands', async () => {
+        for (const directory of ['/fixture/default', '/fixture/archive', '/fixture/shop']) {
+          if (await expanded(directory) === 'true') await click(group(directory) + ' .workspace-group-toggle');
+        }
+        await js('behavior.refreshWorkspaces()'); await settle();
+        assert.equal(await expanded('/fixture/archive'), 'false');
+        await click('.sidebar-search-button'); await click('.session-search-close');
+        assert.equal(await expanded('/fixture/shop'), 'false');
+        await load('?app=1&workspaces=1&section=sessions');
+        await waitFor('Boolean(document.querySelector(' + JSON.stringify(shop) + '))', 'groups restored');
+        assert.equal(await expanded('/fixture/default'), 'false');
+        assert.equal(await expanded('/fixture/archive'), 'false');
+        await click('.sidebar-search-button');
+        await focus('.search-box input'); await win.webContents.insertText('Archived project');
+        await waitFor('document.querySelector(".session-workspace-result")?.textContent === "/fixture/archive"', 'search ready');
+        await click('.session-index-open'); await click('.session-search-close');
+        assert.equal(await expanded('/fixture/archive'), 'true');
+        await click(shop + ' .workspace-group-header > button:last-child');
+        assert.equal(await expanded('/fixture/shop'), 'true');
+        assert.equal(await js('JSON.parse(localStorage.getItem("lxe.window.main.workspaces.expanded.v1"))["/fixture/shop"]'), true);
+      });
+      await step('registration cancel and failure retain the draft and retry registers without sending', async () => {
+        await type('Keep my draft');
+        const before = (await state()).calls.filter(call => call.operation === 'workspaces.register').length;
+        await js('behavior.chooseDirectory(null)'); await click('.workspace-index-heading button');
+        assert.equal((await state()).calls.filter(call => call.operation === 'workspaces.register').length, before);
+        await js('behavior.chooseDirectory("/fixture/retry"); behavior.failRegistration(true)');
+        await click('.conversation-workspace button[aria-label="Choose workspace"]');
+        await waitFor('document.querySelector(".conversation-workspace")?.textContent.includes("SQLITE_FULL")', 'registration failure');
+        assert.equal(await js('document.querySelector("textarea").value'), 'Keep my draft');
+        assert.equal(await js('document.querySelector(".conversation-workspace select").value'), '/fixture/shop');
+        await js('behavior.failRegistration(false)'); await click('.conversation-workspace button[aria-label="Choose workspace"]');
+        await waitFor('document.querySelector(".conversation-workspace select").value === "/fixture/retry"', 'retry registered');
+        assert.equal(await js('document.querySelector("textarea").value'), 'Keep my draft');
+      });
+      await step('late registration cannot switch a newer draft or pull the user off another page', async () => {
+        await js('behavior.chooseDirectory("/fixture/late"); behavior.holdRegistration(true)');
+        await click('.workspace-index-heading button');
+        await click(shop + ' .workspace-group-header > button:last-child');
+        await js('behavior.releaseRegistration()'); await settle();
+        await waitFor('Boolean(document.querySelector(' + JSON.stringify(group('/fixture/late')) + '))', 'late directory registered');
+        assert.equal(await js('document.querySelector(".conversation-workspace select").value'), '/fixture/shop');
+        await js('behavior.chooseDirectory("/fixture/later")'); await click('.workspace-index-heading button');
+        await click('.tab-list button:first-child');
+        await js('behavior.releaseRegistration()'); await settle();
+        assert.equal(await js('Boolean(document.querySelector(".conversation-workspace"))'), false);
+        await click('.session-new-button');
+      });
+      await step('corrupt preferences and blocked local storage still allow toggling', async () => {
+        await js('localStorage.setItem("lxe.window.main.workspaces.expanded.v1", "{")');
+        await load('?app=1&workspaces=1&section=sessions');
+        await waitFor('Boolean(document.querySelector(' + JSON.stringify(shop) + '))', 'groups after corrupt preferences');
+        assert.equal(await expanded('/fixture/default'), 'true');
+        await js('Storage.prototype.setItem = () => { throw new Error("fixture storage unavailable"); }; undefined');
+        await click(group('/fixture/default') + ' .workspace-group-toggle');
+        assert.equal(await expanded('/fixture/default'), 'false');
+        await click(group('/fixture/default') + ' .workspace-group-toggle');
+        assert.equal(await expanded('/fixture/default'), 'true');
       });
     } else throw new Error(`Unknown suite: ${suite}`);
     console.log("LXE_BEHAVIOR_RESULT=" + JSON.stringify({ suite, passed }));

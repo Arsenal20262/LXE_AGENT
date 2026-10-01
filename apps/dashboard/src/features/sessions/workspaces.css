@@ -12,6 +12,7 @@
 .workspace-icon-button { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 28px; flex-shrink: 0; padding: 0; border: 0; border-radius: 5px; background: transparent; color: var(--sidebar-ink-soft); cursor: pointer; }
 .workspace-icon-button:hover { color: var(--sidebar-ink); background: var(--sidebar-hover); }
 .workspace-group-sessions { margin-left: 19px; }
+.workspace-empty { padding: 8px 20px 12px; color: var(--sidebar-ink-soft); font-size: .75rem; }
 .sidebar-session-section .workspace-group-sessions .session-index-list { overflow: visible; max-height: none; }
 .workspace-load-more { border: 0; background: transparent; color: var(--accent-strong); padding: 7px; font: inherit; font-size: .75rem; cursor: pointer; text-align: left; }
 .workspace-error, .workspace-loading { font-size: .75rem; overflow-wrap: anywhere; padding: 6px 8px; }
@@ -28,3 +29,8 @@
 .conversation-workspace-row > button:hover { background: var(--accent-soft); color: var(--accent-strong); }
 .workspace-index button:focus-visible, .conversation-workspace button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
 .workspace-index button:disabled, .conversation-workspace button:disabled { opacity: .45; cursor: default; }
+.workspace-default-badge { flex: 0 0 auto; border: 1px solid var(--border); border-radius: 4px; padding: 1px 4px; color: var(--muted); font-size: .62rem; font-weight: 400; white-space: nowrap; }
+.workspace-group .workspace-default-badge { color: var(--sidebar-ink-soft); }
+.workspace-rename-dialog .workspace-rename-path { overflow-wrap: anywhere; font-size: .8rem; }
+.workspace-rename-dialog label { display: block; margin-top: 14px; font-size: .8rem; }
+.workspace-rename-dialog input { width: 100%; margin: 7px 0; padding: 9px 11px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); color: var(--text); font: inherit; }

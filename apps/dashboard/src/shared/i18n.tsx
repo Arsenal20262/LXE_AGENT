@@ -290,7 +290,9 @@ export const ZH_TEXT = {
   workspaces: {
     title: "工作区", defaultName: "默认工作区", choose: "选择工作区", open: "打开文件夹",
     newIn: (name: string) => `在“${name}”中新建对话`,
-    loadMore: "加载更多对话", retry: "重试", empty: "发送第一条消息后，对话会显示在这里。",
+    loadMore: "加载更多对话", retry: "重试", empty: "暂无对话",
+    defaultBadge: "默认", actions: "工作区操作", rename: "重命名工作区", name: "显示名称",
+    nameHelp: "留空恢复自动名称，不会修改文件夹路径。", save: "保存", saving: "正在保存…", cancel: "取消",
   },
   sessionDetail: {
     back: "会话",
@@ -1157,7 +1159,9 @@ export const UI_TEXT: Record<Language, UiText> = {
     workspaces: {
       title: "Workspaces", defaultName: "Default workspace", choose: "Choose workspace", open: "Open folder",
       newIn: (name: string) => `New chat in “${name}”`,
-      loadMore: "Load more chats", retry: "Retry", empty: "Send a message to add a chat here.",
+      loadMore: "Load more chats", retry: "Retry", empty: "No conversations yet",
+      defaultBadge: "Default", actions: "Workspace actions", rename: "Rename workspace", name: "Display name",
+      nameHelp: "Leave empty to restore the automatic name. The folder path stays the same.", save: "Save", saving: "Saving…", cancel: "Cancel",
     },
     sessionDetail: {
       back: "Sessions",

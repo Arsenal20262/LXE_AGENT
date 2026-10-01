@@ -459,12 +459,16 @@ async function bootstrap(): Promise<void> {
     getUsageBalance: () => usageBalance.getBalance(),
     saveSetup: async (input: DesktopSetupInput): Promise<DesktopSetupState> => {
       const previousEnvironment = config.environment();
-      const wasComplete = config.state().complete;
+      const previousSetup = config.state();
+      const wasComplete = previousSetup.complete;
       const state = config.save(input);
       logging.configure();
       const nextEnvironment = config.environment();
       const runtimeConfigurationChanged = JSON.stringify(previousEnvironment) !== JSON.stringify(nextEnvironment);
       if (!wasComplete || runtimeConfigurationChanged) await gateway.restart();
+      else if (state.workspace_root !== previousSetup.workspace_root) {
+        await gateway.dashboardCall({ operation: "workspaces.register", input: { directory: state.workspace_root } });
+      }
       invalidations.push(ALL_DASHBOARD_DATA_DOMAINS);
       broadcastHealth(gateway.health());
       return state;

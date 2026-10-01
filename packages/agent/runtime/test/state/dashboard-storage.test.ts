@@ -40,7 +40,7 @@ describe("SqliteRuntimeStore dashboard queries", () => {
       expect(store.listSessions({ directory: b, query: "a-00", limit: 10, offset: 0 }).total).toBe(0);
       // These directories deliberately do not exist: reading history needs no filesystem lookup.
       await store.deleteSession("b");
-      expect(store.listSessionWorkspaces().items.map(item => item.directory)).toEqual([a]);
+      expect(store.listSessionWorkspaces().items.find(item => item.directory === b)?.session_count).toBe(0);
     } finally { await store.stop(); }
   });
   test("restores the transcript when the database refuses a session delete", async () => {
