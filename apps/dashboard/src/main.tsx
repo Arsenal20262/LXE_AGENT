@@ -1,3 +1,4 @@
+import { forgetPreviewSession } from "./features/file-preview/reading-state";
 import { FilePreviewLayout } from "./features/file-preview/Sidebar";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
@@ -479,6 +480,7 @@ function App({
       operation: "sessions.delete",
       input: { session_id: session.session_id },
     });
+    forgetPreviewSession(session.session_id);
     queryClient.removeQueries({ queryKey: dashboardQueryKeys.sessions.detailSession(session.session_id) });
     queryClient.removeQueries({ queryKey: dashboardQueryKeys.sessions.activity(session.session_id) });
     if (selectedSessionId === session.session_id) startNewConversation();

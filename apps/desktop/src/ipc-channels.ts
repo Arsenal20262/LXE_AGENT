@@ -1,6 +1,7 @@
 export const IPC_CHANNELS = {
   fileCall: "lxe:files:call",
   fileRead: "lxe:files:read",
+  fileReadText: "lxe:files:read-text",
   getUpdateState: "lxe:desktop:update-state",
   checkForUpdate: "lxe:desktop:update-check",
   installUpdate: "lxe:desktop:update-install",

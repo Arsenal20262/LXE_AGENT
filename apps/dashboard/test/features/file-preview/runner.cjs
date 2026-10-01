@@ -12,7 +12,7 @@ app.whenReady().then(async () => {
   protocol.handle = (scheme, handler) => handle(scheme, request => { requested.push(request.url); return handler(request); });
   require(protocolFile).registerDashboardProtocol(output);
   protocol.handle = handle;
-  const win = new BrowserWindow({ width: 1200, height: 900, show: false, webPreferences: { offscreen: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false } });
+  const win = new BrowserWindow({ width: 1200, height: 900, show: false, webPreferences: { contextIsolation: true, nodeIntegration: false, backgroundThrottling: false } });
   win.webContents.session.webRequest.onBeforeRequest((details, callback) => {
     requested.push(details.url);
     const local = details.url.startsWith("app://lxe/") || /^(data:|blob:)/.test(details.url);
@@ -20,7 +20,7 @@ app.whenReady().then(async () => {
   });
   win.webContents.on("console-message", event => { if (event.level === "error" || event.message.includes("Setting up fake worker")) errors.push(event.message); });
   const js = code => win.webContents.executeJavaScript(code);
-  const wait = async (condition, label) => { const deadline = Date.now() + 12000; while (Date.now() < deadline) { if (await js(condition)) return; await delay(40); } throw new Error(`Timeout: ${label}\n${await js("document.body.innerText")}`); };
+  const wait = async (condition, label) => { const deadline = Date.now() + 12000; while (Date.now() < deadline) { if (await js(condition)) return; await delay(40); } throw new Error(`Timeout: ${label}\n${await js("(()=>{const text=document.body.innerText;return text.length>2500?text.slice(0,800)+'\\n[truncated]\\n'+text.slice(-1400):text})()")}`); };
   const click = async selector => { await js(`document.querySelector(${JSON.stringify(selector)}).click()`); await delay(80); };
   const capture = async name => {
     if (!process.env.LXE_PREVIEW_CAPTURE_DIR) return;
@@ -84,6 +84,57 @@ app.whenReady().then(async () => {
       await js("previewFixture.switchSession()"); await delay(100); assert.equal(await js("!!document.querySelector('.file-sidebar')"),false);
       await js("previewFixture.switchSession()"); await delay(100); assert.equal(await js("document.querySelectorAll('[role=tab]').length"), count);
     });
+    await step("Reading position, image zoom and worksheet survive tab remounts", async () => {
+      await click("#open-0"); await wait("!!document.querySelector('.file-markdown h1')", "Markdown loaded");
+      await js("document.querySelector('.file-text-scroll').scrollTop = 650"); await delay(100);
+      assert.ok(await js("document.querySelector('.file-text-scroll').scrollTop > 600"));
+      await click("#open-4"); await wait("!!document.querySelector('.file-image img')", "image ready");
+      await js("var z=document.querySelector('.file-zoom-bar select');z.value='200';z.dispatchEvent(new Event('change',{bubbles:true}))");
+      await click("#open-1"); await wait("!!document.querySelector('.fortune-container canvas')", "workbook ready");
+      await js("[...document.querySelectorAll('.luckysheet-sheets-item')].find(e=>e.textContent.includes('Notes')).click()"); await delay(150);
+      await click("#open-0"); await wait("document.querySelector('.file-text-scroll')?.scrollTop > 600", "Markdown position restored");
+      await click("#open-4"); await wait("document.querySelector('.file-zoom-bar select')?.value === '200'", "image zoom restored");
+      await click("#open-1"); await wait("document.querySelector('.luckysheet-sheets-item-active')?.textContent.includes('Notes')", "worksheet restored");
+    });
+    await step("Text paging, exact partial copy and cross-page Markdown", async () => {
+      await click("#open-0"); await wait("!!document.querySelector('.file-markdown h1')", "Markdown ready");
+      await js("var s=document.querySelector('.file-document-toolbar select');s.value='plain';s.dispatchEvent(new Event('change',{bubbles:true}))");
+      await wait("document.querySelector('.file-text-actions button')?.textContent.includes('已加载') && !document.querySelector('.file-text-actions button').disabled", "partial copy label");
+      win.show(); win.focus(); win.webContents.focus(); await delay(150);
+      clipboard.clear(); await click(".file-text-actions button"); await wait("document.querySelector('.file-text-actions button')?.textContent.includes('已复制')", "copy completed");
+      assert.ok(clipboard.readText().startsWith('# Preview heading\n')); assert.equal(clipboard.readText().includes('const last = 2;'),false);
+      await click(".file-load-more"); await wait("document.querySelector('.file-text code')?.textContent.includes('const last = 2;')", "second page");
+      await click(".file-text-actions button"); assert.ok(clipboard.readText().endsWith('const last = 2;\n' + String.fromCharCode(96).repeat(3) + '\n'));
+      await js("var s=document.querySelector('.file-document-toolbar select');s.value='rendered';s.dispatchEvent(new Event('change',{bubbles:true}))");
+      await wait("document.querySelector('.file-markdown pre')?.textContent.includes('const last = 2;')", "cross-page fence");
+    });
+    await step("PDF 400 percent, pixel budget, rotation and zoom restoration", async () => {
+      await click("#open-3"); await wait("!!document.querySelector('.textLayer span')", "PDF ready");
+      await js("var z=document.querySelector('.file-zoom-bar select');z.value='400';z.dispatchEvent(new Event('change',{bubbles:true}))"); await delay(600);
+      assert.ok(await js("[...document.querySelectorAll('.file-pdf canvas')].every(c=>c.width*c.height<=16777216)"));
+      await click(".file-pdf-navigation button"); await delay(350);
+      await click("#open-0"); await wait("previewFixture.workers.size === 0", "PDF worker released");
+      await click("#open-3"); await wait("document.querySelector('.file-zoom-bar select')?.value === '400'", "PDF zoom restored");
+      await capture("pdf-400");
+    });
+    await step("Last opening intent wins and active tabs stay visible", async () => {
+      await js("previewFixture.slow(true);document.querySelector('#open-0').click();document.querySelector('#open-4').click()"); await delay(650);
+      assert.ok(await js("document.querySelector('[role=tab][aria-selected=true]').textContent.includes('图.png')"));
+      await js("previewFixture.slow(false)");
+      assert.ok(await js("(()=>{const a=document.querySelector('[aria-selected=true]').getBoundingClientRect(),r=document.querySelector('.file-tabs').getBoundingClientRect();return a.left>=r.left-1&&a.right<=r.right+1})()"));
+      await js("document.querySelector('[role=tab][aria-selected=true]').dispatchEvent(new KeyboardEvent('keydown',{key:'Home',bubbles:true}))");
+      await wait("document.querySelector('[role=tab][aria-selected=true]')?.textContent.includes('文档.md')", "Home navigation");
+    });
+    await step("Scoped shortcuts close only the current tab and refresh only its preview", async () => {
+      await wait("!!document.querySelector('.file-markdown h1')", "active document");
+      const before=await js("previewFixture.calls.filter(c=>c==='prepare').length"), count=await js("document.querySelectorAll('[role=tab]').length");
+      const modifier=process.platform==='darwin'?'metaKey':'ctrlKey';
+      await js("document.querySelector('.file-sidebar').dispatchEvent(new KeyboardEvent('keydown',{key:'r',"+modifier+":true,bubbles:true,cancelable:true}))");
+      await wait("previewFixture.calls.filter(c=>c==='prepare').length>"+before,"scoped refresh");
+      await js("document.querySelector('.file-sidebar').dispatchEvent(new KeyboardEvent('keydown',{key:'w',"+modifier+":true,bubbles:true,cancelable:true}))");
+      await wait("document.querySelectorAll('[role=tab]').length==="+(count-1),"scoped close");
+      assert.equal(await js("document.querySelector('#draft').value"),"keep this draft");
+    });
     await step("Refresh releases old handle and closing releases active preview", async () => {
       await click("#open-0"); await wait("!!document.querySelector('.file-markdown h1')", "Markdown remount");
       const before=await js("previewFixture.calls.filter(c=>c==='prepare').length");
@@ -100,5 +151,5 @@ app.whenReady().then(async () => {
       assert.ok(await js("document.querySelectorAll('[role=tab]').length > 3"));
     });
     console.log("LXE_PREVIEW_RESULT="+JSON.stringify({passed})); win.destroy(); app.exit(0);
-  } catch(error) { console.error(error.stack||error); console.error(JSON.stringify({passed,errors})); console.error(await js("document.body.innerText").catch(String)); try {require('node:fs').writeFileSync(require('node:path').join(profile,'failure.png'),(await win.webContents.capturePage()).toPNG());}catch{} win.destroy(); app.exit(1); }
+  } catch(error) { console.error(error.stack||error); console.error(JSON.stringify({passed,errors})); console.error(await js("(()=>{const text=document.body.innerText;return text.length>2500?text.slice(0,800)+'\\n[truncated]\\n'+text.slice(-1400):text})()").catch(String)); try {require('node:fs').writeFileSync(require('node:path').join(profile,'failure.png'),(await win.webContents.capturePage()).toPNG());}catch{} win.destroy(); app.exit(1); }
 }).catch(e=>{console.error(e);app.exit(1)});

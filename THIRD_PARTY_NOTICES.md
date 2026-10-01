@@ -164,7 +164,8 @@ metadata and license files remain in the packaged Python site-packages.
 
 ## Desktop file previews
 
-The spreadsheet parsers, read-only FortuneSheet/ExcelJS patches, and native file
+The spreadsheet parsers, read-only FortuneSheet/ExcelJS patches, read-only viewer
+styles, zoom/paging behavior, and native file
 association helpers and legacy Office test fixtures are adapted from DeepSeek Harness (MIT, Copyright 2026
 DeepSeek). Source: https://github.com/deepseek-ai/deepseek-harness, revision
 `639ed015397290b3745d163aafe02ffee4aa3f84`. The full MIT text ships at

@@ -35,6 +35,7 @@ export function createDesktopBridge(
     files: {
       call: (call) => ipc.invoke(IPC_CHANNELS.fileCall, call),
       read: (handle, relativeImage) => ipc.invoke(IPC_CHANNELS.fileRead, handle, relativeImage),
+      readText: (handle, range) => ipc.invoke(IPC_CHANNELS.fileReadText, handle, range),
     },
     dashboard: {
       call: (call) => ipc.invoke(IPC_CHANNELS.dashboardCall, call),

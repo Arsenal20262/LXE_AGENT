@@ -352,3 +352,49 @@
   color:#e4e4e7}
 :root[data-theme=dark] .file-sidebar,:root[data-theme=dark] .file-document-toolbar,:root[data-theme=dark] .file-tab-strip {
   border-color:#ffffff18}
+
+/* Reading controls follow LXE colours; heavyweight viewers own their scroll area. */
+.file-tab>button:last-child { visibility:hidden }
+.file-tab:is(.active,:hover,:focus-within)>button:last-child { visibility:visible }
+.file-tab svg { flex:none }
+.file-document-content { overflow:hidden; display:flex; flex-direction:column }
+.file-document-toolbar { gap:5px; padding:7px 9px }
+.file-document-toolbar select { max-width:90px; border:1px solid #8883; border-radius:5px; background:transparent; color:inherit; font-size:12px; padding:4px 2px }
+.file-document-toolbar [aria-pressed=true] { background:#8882 }
+.file-display-path { direction:rtl; text-align:left; unicode-bidi:plaintext }
+.file-display-path>span { opacity:.55 }
+.file-preview-loading { display:flex; align-items:center; justify-content:center; min-height:100px; margin:0; flex:1 }
+.file-preview-error { overflow:auto }
+.file-preview-empty .file-open-control,.file-preview-error>.file-open-control { margin-top:14px; width:max-content }
+.file-open-split button { gap:5px }
+.file-paged-text { display:flex; flex:1; min-height:0; flex-direction:column }
+.file-text-actions { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:5px 12px; flex:none; font-size:11px; color:var(--muted,#888) }
+.file-text-actions button,.file-load-more { color:inherit; background:transparent; border:1px solid #8883; border-radius:5px; padding:4px 8px; font-size:12px }
+.file-text-scroll { overflow:auto; flex:1; min-height:0; overflow-anchor:none }
+.file-markdown,.file-text { min-height:0 }
+.file-text pre { margin:0; font-size:12px; line-height:1.6; overflow:visible; tab-size:4 }
+.file-text .numbered-code { display:block; counter-reset:line }
+.file-text .code-line { display:block; position:relative; padding-left:4.5em; min-height:1.6em }
+.file-text .code-line::before { content:attr(data-line); position:absolute; left:0; width:3.3em; text-align:right; color:#999; user-select:none; -webkit-user-select:none }
+.file-load-more { display:block; margin:16px auto }
+.file-visual { flex:1; min-height:0; position:relative; display:flex; flex-direction:column }
+.file-image,.file-pdf { flex:1; min-height:0; height:100%; overflow:auto; padding:16px 16px 64px; position:relative; overflow-anchor:none }
+.file-image img { margin:0 auto; display:block }
+.file-zoom-bar { position:absolute; z-index:5; bottom:16px; left:50%; transform:translateX(-50%); display:flex; align-items:center; gap:2px; padding:4px; border:1px solid #8884; border-radius:10px; background:var(--bg,#fff); color:var(--text,#222); box-shadow:0 3px 14px #0002 }
+.file-zoom-bar button,.file-pdf-navigation button { display:flex; align-items:center; justify-content:center; padding:5px; border:0; border-radius:5px; background:transparent; color:inherit }
+.file-zoom-bar button:hover { background:#8882 }
+.file-zoom-bar button:disabled { opacity:.35 }
+.file-zoom-bar select { border:0; background:transparent; color:inherit; width:95px; text-align:center; font-size:12px }
+.file-pdf-navigation { display:flex; flex:none; align-items:center; justify-content:space-between; padding:4px 12px; font-size:12px }
+.file-pdf-navigation input { width:48px; border:1px solid #8883; background:transparent; color:inherit; border-radius:4px; padding:2px }
+.file-pdf-page { min-width:0; overflow:hidden }
+.file-excel { position:relative }
+.file-formula-note { position:absolute; right:8px; top:7px; z-index:3; color:#888; background:white }
+.file-excel .fortune-stat-area,.file-excel .luckysheet-sheets-item-function,.file-excel .fortune-cols-freeze-handle,.file-excel .fortune-rows-freeze-handle { display:none!important }
+.file-excel .fortune-sheet-area { display:flex; min-width:0 }
+.file-excel .luckysheet-sheets-item { flex:none }
+.file-excel .luckysheet-sheets-sheetarea { display:flex; flex:1; min-width:0; overflow-x:auto; scrollbar-width:none }
+.file-excel .luckysheet-sheets-sheetarea::-webkit-scrollbar { display:none }
+.file-excel .fortune-zoom-container { flex:none }
+.file-excel .fortune-fx-input { white-space:pre; overflow-x:auto; overflow-y:hidden }
+:root[data-theme=dark] .file-zoom-bar { background:#202225; color:#e4e4e7 }

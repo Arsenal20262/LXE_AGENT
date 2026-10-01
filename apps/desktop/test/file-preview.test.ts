@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { mkdtemp, writeFile, mkdir, symlink, rm, readFile } from "node:fs/promises";
+import { mkdtemp, writeFile, mkdir, symlink, rm, readFile, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FilePreviewService } from "../src/main/file-preview/service";
@@ -105,4 +105,47 @@ test("real conversion processes terminate on timeout, cancellation and missing e
   await expect(pending).rejects.toThrow("cancelled");
   expect(Date.now() - started).toBeLessThan(5000);
   await expect(runOffice(join(f.root, "missing-node"), cli, "input", "output", new AbortController().signal)).rejects.toThrow();
+});
+
+test("paged text reads beyond 32 MiB, preserves CRLF and rejects stale/released handles", async () => {
+  const f = await fixture(), path = join(f.workspace, "大日志 file.log");
+  const line = "内容".repeat(40) + "\r\n";
+  await writeFile(path, line.repeat(150000));
+  const p = await f.service.call({ operation: "prepare", input: { ref: { ...ref, kind: "workspace", path: "大日志 file.log" }, request_id: "paged", mode: "text" } });
+  expect(p.metadata.size).toBeGreaterThan(32 * 1024 * 1024); expect(p.metadata.displayPath).toBe(await realpath(path));
+  const first = await f.service.readText(p.handle);
+  expect(first.text).toBe(line.repeat(5000)); expect(first.lines).toBe(5000); expect(first.next).toBe(5001); expect(first.eof).toBe(false);
+  const last = await f.service.readText(p.handle, { offset: 149999 }); expect(last.text).toBe(line.repeat(2)); expect(last.eof).toBe(true);
+  await expect(f.service.read(p.handle)).rejects.toThrow("paged");
+  await writeFile(path, "changed"); await expect(f.service.readText(p.handle)).rejects.toThrow("changed");
+  f.service.release("paged"); await expect(f.service.readText(p.handle)).rejects.toThrow("closed");
+});
+
+test("text page byte/line boundaries, BOM encodings, invalid data and cancellation", async () => {
+  const { readTextPage, TEXT_PAGE_BYTES } = await import("../src/main/file-preview/text-pages");
+  const f = await fixture(), path = join(f.workspace, "pages.txt");
+  await writeFile(path, "a\n".repeat(5000)); expect((await readTextPage(path)).eof).toBe(true);
+  await writeFile(path, "a\n".repeat(5001)); expect((await readTextPage(path)).eof).toBe(false);
+  await writeFile(path, "x".repeat(TEXT_PAGE_BYTES)); expect((await readTextPage(path)).text.length).toBe(TEXT_PAGE_BYTES);
+  await writeFile(path, "x".repeat(TEXT_PAGE_BYTES + 1)); await expect(readTextPage(path)).rejects.toThrow("exceeds 2 MiB");
+  const content = "标题😀\r\n第二行\n末尾", little = Buffer.from("\ufeff" + content, "utf16le");
+  await writeFile(path, little); expect((await readTextPage(path)).text).toBe(content);
+  await writeFile(path, little.swap16()); expect((await readTextPage(path, { offset: 2 })).text).toBe("第二行\n末尾");
+  await writeFile(path, Buffer.from([255, 0, 255])); await expect(readTextPage(path)).rejects.toThrow();
+  await writeFile(path, "a\0b"); await expect(readTextPage(path)).rejects.toThrow("NUL");
+  await expect(readTextPage(path, { offset: -1 })).rejects.toThrow("range");
+  const abort = new AbortController(); abort.abort(); await expect(readTextPage(path, {}, abort.signal)).rejects.toThrow();
+});
+
+test("directory subscriptions detect changes, enforce roots, release, and open only the session workspace", async () => {
+  const f = await fixture();
+  const first = await f.service.call({ operation: "watch-directory", input: { session_id: "s", path: "", request_id: "tree" } });
+  const list = await f.service.call({ operation: "list", input: { session_id: "s", path: "" } }); expect(list.rootPath).toBe(f.workspace); expect(list.version).toBeTruthy();
+  await writeFile(join(f.workspace, "new.txt"), "new");
+  const next = await f.service.call({ operation: "directory-version", input: { request_id: "tree" } }); expect(next.version).not.toBe(first.version);
+  await expect(f.service.call({ operation: "watch-directory", input: { session_id: "s", path: "../outside", request_id: "escape" } })).rejects.toThrow("outside");
+  await expect(f.service.call({ operation: "open-workspace", input: { session_id: "other" } })).rejects.toThrow("Session");
+  await f.service.call({ operation: "open-workspace", input: { session_id: "s" } }); expect(f.nativeCalls).toEqual([await realpath(f.workspace)]);
+  f.service.release("tree"); await expect(f.service.call({ operation: "directory-version", input: { request_id: "tree" } })).rejects.toThrow("closed");
+  const pending = f.service.call({ operation: "watch-directory", input: { session_id: "s", path: "", request_id: "cancel" } }); f.service.release("cancel"); await expect(pending).rejects.toThrow();
 });

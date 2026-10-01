@@ -536,6 +536,7 @@ async function bootstrap(): Promise<void> {
     registerPastedConversationFiles: (input) => conversationAttachments.registerPaste(input),
     fileCall: call => gateway.fileCall(call),
     fileRead: (handle, relativeImage) => gateway.fileRead(handle, relativeImage),
+    fileReadText: (handle, range) => gateway.fileReadText(handle, range),
     previewDraftConversationFile: async (attachmentId, variant = "expanded") => {
       const [attachment] = conversationAttachments.resolve([attachmentId]);
       return { data_url: await attachmentThumbnail(attachment!.path, variant === "thumbnail" ? 320 : 1600) };

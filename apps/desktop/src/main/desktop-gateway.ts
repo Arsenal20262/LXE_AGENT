@@ -152,6 +152,7 @@ export class DesktopGateway {
   }
   fileCall<K extends keyof DesktopFileOperations>(call: DesktopFileCall<K>): Promise<DesktopFileOperations[K]["result"]> { return this.fileService().call(call); }
   fileRead(handle: string, relativeImage?: string): Promise<Uint8Array> { return this.fileService().read(handle, relativeImage); }
+  fileReadText(handle: string, range?: import("@lxe/desktop-protocol").TextPageRequest) { return this.fileService().readText(handle, range); }
 
 
   async start(): Promise<void> {

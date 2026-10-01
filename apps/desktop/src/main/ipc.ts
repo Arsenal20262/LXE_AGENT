@@ -41,6 +41,7 @@ import {
 export interface DesktopIpcApplication {
   fileCall?<K extends keyof import("@lxe/desktop-protocol").DesktopFileOperations>(call: import("@lxe/desktop-protocol").DesktopFileCall<K>): Promise<import("@lxe/desktop-protocol").DesktopFileOperations[K]["result"]>;
   fileRead?(handle: string, relativeImage?: string): Promise<Uint8Array>;
+  fileReadText?(handle: string, range?: import("@lxe/desktop-protocol").TextPageRequest): Promise<import("@lxe/desktop-protocol").PreviewTextPage>;
   getUpdateState?(): import("@lxe/desktop-protocol").DesktopUpdateState;
   checkForUpdate?(): Promise<import("@lxe/desktop-protocol").DesktopUpdateState>;
   installUpdate?(): Promise<import("@lxe/desktop-protocol").DesktopUpdateState>;
@@ -94,9 +95,18 @@ const stringArray = (value: unknown, label: string): string[] => {
 };
 
 export function registerDesktopIpc(application: DesktopIpcApplication): () => void {
-  ipcMain.handle(IPC_CHANNELS.fileCall, (_event, call) => {
+  ipcMain.handle(IPC_CHANNELS.fileCall, (event, call) => {
+    if (call?.operation === "focus-preview") {
+      if (typeof call.input?.focused !== "boolean") throw new Error("Invalid preview focus state");
+      event.sender.setIgnoreMenuShortcuts(call.input.focused);
+      return;
+    }
     if (!application.fileCall) throw new Error("File previews are unavailable");
     return application.fileCall(call);
+  });
+  ipcMain.handle(IPC_CHANNELS.fileReadText, (_event, handle, range) => {
+    if (!application.fileReadText) throw new Error("File previews are unavailable");
+    return application.fileReadText(handle, range);
   });
   ipcMain.handle(IPC_CHANNELS.fileRead, (_event, handle, relativeImage) => {
     if (!application.fileRead) throw new Error("File previews are unavailable");

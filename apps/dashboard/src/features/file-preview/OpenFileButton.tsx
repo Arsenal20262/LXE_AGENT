@@ -1,28 +1,25 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, ExternalLink, FolderOpen, LoaderCircle } from "lucide-react";
-import type { FileApplication, SessionFileRef } from "@lxe/desktop-protocol";
+import type { SessionFileRef } from "@lxe/desktop-protocol";
 import { useUiText } from "../../shared/i18n";
 import { errorText, filesApi } from "./api";
-export function OpenFileButton({ file }: { file: SessionFileRef }) {
+import { useFileApplications } from "./application-state";
+export function OpenFileButton({ file, label = false }: { file: SessionFileRef; label?: boolean }) {
   const t = useUiText().filePreview;
-  const [apps, setApps] = useState<FileApplication[]>([]), [error, setError] = useState(""), [busy, setBusy] = useState(false), [menu, setMenu] = useState(false), [loaded, setLoaded] = useState(false);
+  const { apps, loaded, error: queryError, load } = useFileApplications(file);
+  const [actionError, setError] = useState(""), [busy, setBusy] = useState(false), [menu, setMenu] = useState(false);
+  const error = actionError || queryError;
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const menuRef = useRef<HTMLDivElement>(null), toggle = useRef<HTMLButtonElement>(null);
-  const anchor = useRef<HTMLDivElement>(null), generation = useRef(0), locked = useRef(false);
+  const anchor = useRef<HTMLDivElement>(null), locked = useRef(false);
   const key = JSON.stringify(file);
-  const load = async () => {
-    const id = ++generation.current;
-    try { const value = await filesApi().call({ operation: "applications", input: { ref: file } }); if (generation.current === id) { setApps(value); setError(""); } }
-    catch (error) { if (generation.current === id) setError(errorText(error)); }
-    finally { if (generation.current === id) setLoaded(true); }
-  };
   useEffect(() => {
-    setApps([]); setLoaded(false); setMenu(false);
-    if (typeof IntersectionObserver === "undefined") { void load(); return () => { generation.current++; }; }
+    setError(""); setMenu(false);
+    if (typeof IntersectionObserver === "undefined") { void load(); return; }
     const observer = new IntersectionObserver(entries => { if (entries.some(entry => entry.isIntersecting)) { observer.disconnect(); void load(); } }, { rootMargin: "160px" });
     if (anchor.current) observer.observe(anchor.current);
-    return () => { observer.disconnect(); generation.current++; };
+    return () => { observer.disconnect(); };
   }, [key]);
   useLayoutEffect(() => {
     if (!menu) return;
@@ -41,7 +38,7 @@ export function OpenFileButton({ file }: { file: SessionFileRef }) {
     document.addEventListener("pointerdown", down); document.addEventListener("keydown", esc);
     return () => { document.removeEventListener("pointerdown", down); document.removeEventListener("keydown", esc); };
   }, [menu]);
-  const preferred = apps.find(app => app.default);
+  const preferred = apps.find(app => app.default) ?? apps[0];
   const act = async (application?: string, reveal = false) => {
     if (locked.current) return; locked.current = true; setBusy(true); setError(""); setMenu(false);
     try { await filesApi().call({ operation: "open", input: { ref: file, ...(application ? { application } : {}), ...(reveal ? { reveal } : {}) } }); }
@@ -50,10 +47,11 @@ export function OpenFileButton({ file }: { file: SessionFileRef }) {
   };
   return <div className="file-open-control" ref={anchor}>
     <div className="file-open-split">
-      <button type="button" disabled={busy || !loaded} title={preferred ? `${t.open} · ${preferred.name}` : loaded && !error ? t.reveal : t.open} aria-label={preferred || error ? t.open : t.reveal} onClick={() => void act(preferred?.default ? undefined : preferred?.id, !preferred && loaded && !error)}>
+      <button type="button" disabled={busy || !loaded || !!queryError} title={preferred ? `${t.open} · ${preferred.name}` : loaded && !error ? t.reveal : t.open} aria-label={preferred || error ? t.open : t.reveal} onClick={() => void act(preferred?.default ? undefined : preferred?.id, !preferred && loaded && !error)}>
         {busy ? <LoaderCircle className="conversation-spinner" size={15} /> : preferred?.icon ? <img src={preferred.icon} alt={preferred.name} /> : !preferred && loaded && !error ? <FolderOpen size={15} /> : <ExternalLink size={15} />}
+        {label ? <span>{preferred ? t.open : t.reveal}</span> : null}
       </button>
-      <button ref={toggle} type="button" disabled={busy} aria-label={t.apps} aria-haspopup="menu" aria-expanded={menu} onClick={() => { setMenu(!menu); if (!menu) void load(); }}><ChevronDown size={12} /></button>
+      {!(loaded && !error && !apps.length) ? <button ref={toggle} type="button" disabled={busy} aria-label={t.apps} aria-haspopup="menu" aria-expanded={menu} onClick={() => { setMenu(!menu); if (!menu) void load(); }}><ChevronDown size={12} /></button> : null}
     </div>
     {menu ? createPortal(<div className="file-open-menu" role="menu" ref={menuRef} style={{ position: "fixed", ...position }} onKeyDown={e => {
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
@@ -62,7 +60,7 @@ export function OpenFileButton({ file }: { file: SessionFileRef }) {
       } else if (e.key === "Tab") setMenu(false);
     }}>
       {apps.map(app => <button type="button" role="menuitem" key={app.id} onClick={() => void act(app.id)}>{app.icon ? <img src={app.icon} alt="" /> : <ExternalLink size={15} />}<span>{app.name}{app.default ? ` · ${t.defaultApp}` : ""}</span></button>)}
-      {error ? <div role="alert">{error}</div> : null}
+      {error ? <div role="alert">{error}<button onClick={() => void load()}>{t.retry}</button></div> : null}
       <button type="button" role="menuitem" onClick={() => void act(undefined, true)}><FolderOpen size={15} />{t.reveal}</button>
     </div>, document.body) : null}
     {error && !menu ? <span className="file-open-error" role="alert" title={error}>{error}</span> : null}

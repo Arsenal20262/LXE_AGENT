@@ -80,11 +80,13 @@ export function CodeBlock({
   language = "",
   className = "",
   autoDetect = false,
+  lineNumbers = false,
 }: {
   code: string;
   language?: string;
   className?: string;
   autoDetect?: boolean;
+  lineNumbers?: boolean;
 }) {
   const normalizedLanguage = normalizeCodeLanguage(language);
   const supported = Boolean(normalizedLanguage || autoDetect);
@@ -116,11 +118,23 @@ export function CodeBlock({
     .filter(Boolean)
     .join(" ");
 
+  const numbered = lineNumbers ? numberCodeLines(html || code.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")) : "";
   return (
     <pre className={classes}>
-      {html
+      {numbered ? <code className="hljs numbered-code" dangerouslySetInnerHTML={{ __html: numbered }} /> : html
         ? <code className="hljs" dangerouslySetInnerHTML={{ __html: html }} />
         : <code>{code}</code>}
     </pre>
   );
+}
+
+/** Highlight.js emits spans only; reopen spans across lines so multiline tokens keep their colour. */
+export function numberCodeLines(html: string): string {
+  const stack: string[] = [], lines: string[] = []; let current = "";
+  for (const token of html.split(/(<span[^>]*>|<\/span>|\r?\n)/g)) {
+    if (token === "\n" || token === "\r\n") { lines.push(current + "</span>".repeat(stack.length)); current = stack.join(""); }
+    else { if (token.startsWith("<span")) stack.push(token); else if (token === "</span>") stack.pop(); current += token; }
+  }
+  lines.push(current);
+  return lines.map((line, i) => '<span class="code-line" data-line="' + (i + 1) + '">' + (line || "&#8203;") + '</span>').join("");
 }
