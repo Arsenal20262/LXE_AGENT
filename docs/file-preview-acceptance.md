@@ -38,3 +38,21 @@
 - 将预览服务打包为 Node 模块，再直接使用安装包的 `resources/runtime/node/node.exe` 执行；样本由包内 Python 的 `-I` 隔离模式生成。PATH 只保留包内 Node、Python 和 Windows System32，下载代理设为不可用。四种 Word/PPT 格式的转换、缓存、源文件哈希及损坏文件诊断再次通过。
 
 Windows 测试包位于 `D:\projects\LXE_AGENT\.worktrees\pool-1\dist\desktop-unpacked\win-unpacked\LXE Agent.exe`。本次验证的是解包版应用，不发布安装器或更新渠道；Office 预览所需资源全部随包提供。
+
+## 侧栏完善验收（2026-10-01）
+
+以上记录属于首版。以下记录对应本次阅读状态、文本分页和查看器控件的增量实现；没有更新依赖或数据库结构。
+
+- 状态采用内存中的会话／标签映射。单元测试确认关闭标签、删除会话的清理，以及布局与阅读状态分离。重启仅恢复原有布局。
+- 实际 Electron 13 组场景覆盖 Markdown 阅读位置、跨页代码围栏、部分复制、图片缩放、Excel 工作表与 A2 选区恢复、标签打开竞态、方向键导航、关闭／刷新快捷键和窄窗口恢复。目录测试包括 200 项分页、展开目录、滚动恢复、自动移除消失文件及隐藏后的监听释放。
+- PDF 夹具包含 20 页及带旋转信息的页面。2 倍设备像素比下确认 400% 实际生成超过 1,600 万像素的画布，且不超过 16,777,216 上限；检查文字可选择、Ctrl+滚轮指针锚点、旋转、第 8 页恢复及 Worker 释放。画布检查要求非空，不能由尚未渲染的页面假通过。
+- 文本后端实际读取超过 32 MiB 的日志，覆盖 5,000 行与 2 MiB 边界、超长单行、CRLF、两种 UTF-16 BOM、非法编码、NUL、取消、过期句柄和源文件变化。Windows 剪贴板会将 LF 转为 CRLF，因此同时检查传给剪贴板的原始文本和系统剪贴板中的内容。
+- 全量验证曾发现 macOS 延迟／重复文件通知引起的误报。版本号现按设备、inode、大小及修改／变更时间确认实际变化后推进；通知到达本身不会使未变更的文件失效。真实修改、删除和会话归属检查仍生效。
+- macOS 真实系统集成返回 TextEdit、15 个关联应用及 15 个图标；Windows 已登录桌面返回记事本、4 个关联应用及 3 个图标。两平台的默认／指定应用、文件定位、工作区打开、无关联扩展名和无效应用拒绝均通过，源文件哈希不变。Windows 临时验收计划任务已清理。
+- 使用生产组件的测试截图明确属于测试夹具。未将这些截图作为生产聊天会话截图展示；原生系统集成另由真实桌面 Shell 验证。
+
+最终 rebase 后，修复通知竞态并重新验证：`bun run verify:source` 退出码为 0。协议、生产边界和全工作区类型检查通过；JS **1,882 通过 / 7 跳过 / 0 失败**，Python **1,965 通过 / 4 跳过**。Windows 定向验证 **28 通过 / 0 失败**，包含上述 13 组真实 Electron 界面场景。macOS 最终生产 Dashboard / Electron 构建通过；PDF 和表格仍分别输出按需加载模块。
+
+Windows 最终 `Unpacked -Offline` 构建退出码为 0；资源检查通过，包内 Office Kit 的 22 项操作通过。解包体积 **1,039.71 MiB**，runtime **677.09 MiB**。随后将 PATH 限定为包内 Python／Node 与 Windows System32，并设置不可用的下载代理，使用包内 Python `-I` 创建样本、包内 Node 执行真实预览服务：DOCX、PPTX、DOC、PPT 转换和缓存复用均通过，源文件哈希未变；Courier 缺失字体及损坏文件的 `invalid-document` 原始诊断保留。报告位于 Windows worktree 的 `build/file-preview-polish/packaged-results/report.json`。
+
+将上述包内引擎实际生成的中文 Word PDF 放入 Electron 界面夹具，阻断外部请求后再次通过 13 组场景，确认 PDF Worker、文字和实际像素可用。包内转换与界面查看分别验证，界面夹具不连接真实 Agent 会话 DB。

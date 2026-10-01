@@ -45,4 +45,8 @@ bun scripts/verify-file-preview.ts
 
 界面测试通过生产 `app://` 资源处理器运行，阻断外部网络请求，并检查实际 PDF Worker 在切换标签后释放。Windows 原生关联测试在其他平台明确跳过。
 
+`scripts/verify-preview-native.ts` 可先用 Bun 打包为 Node CJS（将 `electron` 保持 external），再用目标平台的 Electron 执行。它检查真实默认应用、指定应用、图标、文件定位和工作区打开，并生成 `report.json`。Windows 需在已登录的桌面会话中执行；SSH 的 Session 0 不能代表交互式 Shell 行为。
+
+界面验收截图来自生产查看器组件与测试夹具组成的窗口，左侧按钮及示例草稿是测试入口，不是生产聊天界面。
+
 桌面打包入口和 afterPack 都检查 PDF 支持资源、独立查看器、两个 Worker 和许可证；缺项即失败。两平台记录见 [验收记录](file-preview-acceptance.md)。
