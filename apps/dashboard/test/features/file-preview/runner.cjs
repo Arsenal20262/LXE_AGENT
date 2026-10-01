@@ -82,8 +82,15 @@ app.whenReady().then(async () => {
     });
     await step("File tree includes hidden files and session state stays isolated", async () => {
       await click(".file-header-actions button:first-child"); await wait("document.body.innerText.includes('.hidden')", "hidden file");
+      assert.equal(await js("document.querySelector('.file-tree .file-display-path').textContent"), "/test/workspace");
+      await click(".file-tree button[title=folder]"); await wait("document.body.innerText.includes('nested.txt')", "expanded folder");
+      await click(".file-tree-scroll > .file-tree-level > li:last-child > button"); await wait("document.body.innerText.includes('file-201.txt')", "second directory page");
+      await js("document.querySelector('.file-tree-scroll').scrollTop=500"); await delay(100);
+      await click("#open-0"); await wait("previewFixture.watches.size===0", "tree watches released");
+      await click(".file-header-actions button:first-child"); await wait("previewFixture.watches.size===2 && document.querySelector('.file-tree-scroll')?.scrollTop > 400", "tree expansion, pages and scroll restored");
+      await js("previewFixture.removeTreeFile()"); await wait("!document.body.innerText.includes('nested.txt')", "visible directory auto-refresh");
       const count=await js("document.querySelectorAll('[role=tab]').length");
-      await js("previewFixture.switchSession()"); await delay(100); assert.equal(await js("!!document.querySelector('.file-sidebar')"),false);
+      await js("previewFixture.switchSession()"); await delay(100); assert.equal(await js("!!document.querySelector('.file-sidebar')"),false); assert.equal(await js("previewFixture.watches.size"),0);
       await js("previewFixture.switchSession()"); await delay(100); assert.equal(await js("document.querySelectorAll('[role=tab]').length"), count);
     });
     await step("Reading position, image zoom and worksheet survive tab remounts", async () => {

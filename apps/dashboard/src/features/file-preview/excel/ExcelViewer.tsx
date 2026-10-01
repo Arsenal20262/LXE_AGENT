@@ -87,7 +87,7 @@ export default function ExcelViewer({ bytes, name, state }: { bytes: Uint8Array;
     return () => { observer.disconnect(); cancelAnimationFrame(frame); };
   }, [value]);
   if (error) return <pre className="file-preview-error" role="alert">{error}</pre>;
-  if (!value) return <p role="status">{t.loading}</p>;
+  if (!value) return <p className="file-preview-loading" role="status">{t.loading}</p>;
   const features = { charts: t.chart, images: t.image, shapes: t.shape, conditionalFormatting: t.conditional };
   return <section className="file-excel" data-lxe-excel>
     <style>{`@scope ([data-lxe-excel]) { ${fortuneCss} }`}</style>

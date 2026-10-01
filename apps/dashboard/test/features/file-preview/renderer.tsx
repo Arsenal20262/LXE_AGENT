@@ -5,13 +5,13 @@ import { readingState } from "../../../src/features/file-preview/reading-state";
 import { setFileBridgeForTests } from "../../../src/features/file-preview/api";
 import type { DesktopFilesBridge, FileMetadata, SessionFileRef } from "@lxe/desktop-protocol";
 import "../../../src/styles.css";
-const calls: string[] = [], pending = new Map<string, string>();
+const calls: string[] = [], pending = new Map<string, string>(), watches = new Map<string, string>();
 const workers = new Set<Worker>(), NativeWorker = window.Worker;
 window.Worker = class extends NativeWorker {
   constructor(url: string | URL, options?: WorkerOptions) { super(url, options); workers.add(this); }
   override terminate() { workers.delete(this); super.terminate(); }
 };
-let version = "1", slow = false;
+let version = "1", slow = false, removedTreeFile = false;
 const pathOf = (ref: SessionFileRef) => ref.kind === "workspace" ? ref.path : ref.id;
 function metadata(ref: SessionFileRef): FileMetadata {
   const path = pathOf(ref), extension = path.slice(path.lastIndexOf("."));
@@ -21,12 +21,17 @@ setFileBridgeForTests({
   call: async call => {
     calls.push(call.operation);
     const { input } = call;
-    if (call.operation === "watch-directory" || call.operation === "directory-version") return { version };
+    if (call.operation === "watch-directory") { watches.set(call.input.request_id, call.input.path); return { version }; }
+    if (call.operation === "directory-version") return { version };
     if (call.operation === "stat") { if (slow && pathOf(call.input.ref) === "文档.md") await new Promise(resolve => setTimeout(resolve, 400)); return metadata(call.input.ref); }
     if (call.operation === "applications") return [{ id: "editor", name: "Test Editor", default: true, icon: null }];
     if (call.operation === "open") { calls.push(JSON.stringify(call.input)); return; }
-    if (call.operation === "list") return { rootPath: "/test/workspace", version, entries: [{ name: "文档.md", path: "文档.md", kind: "file" }, { name: ".hidden", path: ".hidden", kind: "file" }], next: null };
-    if (call.operation === "release") { pending.delete(call.input.request_id); return; }
+    if (call.operation === "list") {
+      const entries = call.input.path ? (removedTreeFile ? [] : [{ name: "nested.txt", path: "folder/nested.txt", kind: "file" }]) : [{ name: "folder", path: "folder", kind: "directory" }, { name: "文档.md", path: "文档.md", kind: "file" }, { name: ".hidden", path: ".hidden", kind: "file" }, ...Array.from({ length: 202 }, (_, i) => ({ name: `file-${i}.txt`, path: `file-${i}.txt`, kind: "file" }))];
+      const offset = call.input.offset ?? 0;
+      return { rootPath: "/test/workspace", version, entries: entries.slice(offset, offset + 200), next: offset + 200 < entries.length ? offset + 200 : null };
+    }
+    if (call.operation === "release") { pending.delete(call.input.request_id); watches.delete(call.input.request_id); return; }
     if (call.operation === "prepare") { pending.set(call.input.request_id, pathOf(call.input.ref)); return { handle: call.input.request_id, metadata: metadata(call.input.ref), missingFonts: [] }; }
   },
   readText: async (handle, range) => {
@@ -50,7 +55,7 @@ function Controls({ session }: { session: string }) {
 }
 function Fixture() {
   const [session, setSession] = useState("first");
-  (window as any).previewFixture = { calls, pending, workers, diagnostics: () => ({ reading: readingState("first", "first文档.md"), scroll: document.querySelector(".file-text-scroll")?.scrollTop, visible: document.visibilityState, focused: document.hasFocus() }), slow: (value: boolean) => { slow = value; }, change: () => { version = String(Number(version) + 1); }, switchSession: () => setSession(s => s === "first" ? "second" : "first") };
+  (window as any).previewFixture = { calls, pending, workers, watches, removeTreeFile: () => { removedTreeFile = true; version = String(Number(version) + 1); }, diagnostics: () => ({ reading: readingState("first", "first文档.md"), scroll: document.querySelector(".file-text-scroll")?.scrollTop, visible: document.visibilityState, focused: document.hasFocus() }), slow: (value: boolean) => { slow = value; }, change: () => { version = String(Number(version) + 1); }, switchSession: () => setSession(s => s === "first" ? "second" : "first") };
   return <FilePreviewLayout sessionId={session}><Controls session={session} /></FilePreviewLayout>;
 }
 createRoot(document.getElementById("root")!).render(<Fixture />);
