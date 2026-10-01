@@ -34,11 +34,11 @@ export function OpenFileButton({ file, label = false }: { file: SessionFileRef; 
       if (box && panel) setPosition({ left: Math.max(8, Math.min(innerWidth - panel.width - 8, box.right - panel.width)), top: box.bottom + panel.height + 8 > innerHeight ? Math.max(8, box.top - panel.height - 5) : box.bottom + 5 });
     };
     place(); window.addEventListener("resize", place); document.addEventListener("scroll", place, true);
-    menuRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
     return () => { window.removeEventListener("resize", place); document.removeEventListener("scroll", place, true); };
   }, [menu, apps, error]);
   useEffect(() => {
     if (!menu) return;
+    menuRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
     const down = (e: PointerEvent) => { if (!anchor.current?.contains(e.target as Node) && !menuRef.current?.contains(e.target as Node)) setMenu(false); };
     const esc = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); setMenu(false); toggle.current?.focus(); } };
     document.addEventListener("pointerdown", down); document.addEventListener("keydown", esc);
@@ -59,11 +59,11 @@ export function OpenFileButton({ file, label = false }: { file: SessionFileRef; 
       </button>
       {!missing && !(loaded && !error && !apps.length) ? <button ref={toggle} type="button" disabled={busy} aria-label={t.apps} aria-haspopup="menu" aria-expanded={menu} onClick={() => { setMenu(!menu); if (!menu) void load(); }}><ChevronDown size={12} /></button> : null}
     </div>
-    {menu ? createPortal(<div className="file-open-menu" role="menu" ref={menuRef} style={{ position: "fixed", ...position }} onKeyDown={e => {
+    {menu ? createPortal(<div className="file-open-menu" role="menu" ref={menuRef} onBlur={e => { if (e.relatedTarget && !e.currentTarget.contains(e.relatedTarget) && !anchor.current?.contains(e.relatedTarget)) setMenu(false); }} style={{ position: "fixed", ...position }} onKeyDown={e => {
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-        e.preventDefault(); const items = [...e.currentTarget.querySelectorAll<HTMLButtonElement>("button")];
-        const index = items.indexOf(document.activeElement as HTMLButtonElement); items[(index + (e.key === "ArrowDown" ? 1 : -1) + items.length) % items.length]?.focus();
-      } else if (e.key === "Tab") setMenu(false);
+        e.preventDefault(); const items = [...e.currentTarget.querySelectorAll<HTMLElement>("button:not(:disabled), summary")].filter(item => item.getClientRects().length > 0);
+        const index = items.indexOf(document.activeElement as HTMLElement); items[(index + (e.key === "ArrowDown" ? 1 : -1) + items.length) % items.length]?.focus();
+      }
     }}>
       {apps.map(app => <button type="button" role="menuitem" key={app.id} onClick={() => void act(app.id)}>{app.icon ? <img src={app.icon} alt="" /> : <ExternalLink size={15} />}<span>{app.name}{app.default ? ` · ${t.defaultApp}` : ""}</span></button>)}
       {error ? <div className="file-apps-failure"><p>{t.appsFailed}</p><button onClick={() => void check(true).catch(() => {}).then(() => load(true))}>{t.retry}</button><ErrorDetails failure={error} /></div> : null}

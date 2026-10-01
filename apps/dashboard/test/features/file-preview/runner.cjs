@@ -245,11 +245,16 @@ app.whenReady().then(async () => {
       await wait("document.querySelectorAll('#test-file-cards .file-availability-badge').length===0", "card recovery clears badges");
     });
     await step("App query failures stay in menus and explicit open failure gets one transient notice", async () => {
+      win.show(); win.focus(); win.webContents.focus(); await delay(100);
       await js("previewFixture.appFailure(true)"); await click("#open-5");
       await wait("!!document.querySelector('.file-preview-empty')", "valid file remains previewable");
       await click(".file-document-toolbar .file-open-split button:last-child");
       await wait("document.querySelector('.file-apps-failure')?.textContent.includes('无法获取应用列表')", "query failure menu");
       assert.equal(await js("document.querySelectorAll('.file-action-notice').length"), 0);
+      await js("document.querySelector('.file-apps-failure>button').focus();document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,cancelable:true}))");
+      assert.equal(await js("document.activeElement.tagName"), "SUMMARY", "menu keyboard navigation reaches error details");
+      win.webContents.sendInputEvent({type:"keyDown",keyCode:"Return"}); win.webContents.sendInputEvent({type:"char",keyCode:"\r"}); win.webContents.sendInputEvent({type:"keyUp",keyCode:"Return"});
+      await wait("document.querySelector('.file-apps-failure details')?.open", "keyboard expands error details");
       await capture("applications-error-test-fixture");
       await js("previewFixture.appFailure(false)"); await click(".file-apps-failure>button");
       await wait("!!document.querySelector('[role=menuitem]') && !document.querySelector('.file-apps-failure')", "app query retry");
