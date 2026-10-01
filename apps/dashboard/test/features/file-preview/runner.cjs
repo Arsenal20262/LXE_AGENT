@@ -104,7 +104,7 @@ app.whenReady().then(async () => {
       await js("var s=document.querySelector('.file-document-toolbar select');s.value='plain';s.dispatchEvent(new Event('change',{bubbles:true}))");
       await wait("document.querySelector('.file-text-actions button')?.textContent.includes('已加载') && !document.querySelector('.file-text-actions button').disabled", "partial copy label");
       // Preserve an exact assertion on the renderer payload; Windows' native clipboard uses CRLF.
-      await js("var originalCopy=navigator.clipboard.writeText.bind(navigator.clipboard);navigator.clipboard.writeText=async text=>{window.copiedPreviewText=text;return originalCopy(text)}");
+      await js("var originalCopy=navigator.clipboard.writeText.bind(navigator.clipboard);navigator.clipboard.writeText=async text=>{window.copiedPreviewText=text;return originalCopy(text)};void 0");
       win.show(); win.focus(); win.webContents.focus(); await delay(150);
       clipboard.clear(); await click(".file-text-actions button"); await wait("document.querySelector('.file-text-actions button')?.textContent.includes('已复制')", "copy completed");
       const partial = await js("window.copiedPreviewText");
