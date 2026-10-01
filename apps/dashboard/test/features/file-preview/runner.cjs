@@ -5,7 +5,6 @@ const [profile, output, protocolFile] = process.argv.slice(2);
 const url = "app://lxe/test/features/file-preview/renderer.html";
 // Exercise the production asset handler with the desktop's privileged scheme.
 protocol.registerSchemesAsPrivileged([{ scheme: "app", privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: false } }]);
-app.commandLine.appendSwitch("force-device-scale-factor", "2");
 app.disableHardwareAcceleration(); app.setPath("userData", profile);
 const passed = [], errors = [], requested = [], delay = ms => new Promise(r => setTimeout(r, ms));
 app.whenReady().then(async () => {
@@ -14,6 +13,7 @@ app.whenReady().then(async () => {
   require(protocolFile).registerDashboardProtocol(output);
   protocol.handle = handle;
   const win = new BrowserWindow({ width: 1200, height: 900, show: false, webPreferences: { contextIsolation: true, nodeIntegration: false, backgroundThrottling: false } });
+  win.webContents.enableDeviceEmulation({ screenPosition: "desktop", screenSize: { width: 0, height: 0 }, viewPosition: { x: 0, y: 0 }, viewSize: { width: 0, height: 0 }, deviceScaleFactor: 2, scale: 1 });
   win.webContents.session.webRequest.onBeforeRequest((details, callback) => {
     requested.push(details.url);
     const local = details.url.startsWith("app://lxe/") || /^(data:|blob:)/.test(details.url);
