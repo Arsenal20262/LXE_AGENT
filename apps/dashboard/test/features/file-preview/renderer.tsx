@@ -5,6 +5,11 @@ import { setFileBridgeForTests } from "../../../src/features/file-preview/api";
 import type { DesktopFilesBridge, FileMetadata, SessionFileRef } from "@lxe/desktop-protocol";
 import "../../../src/styles.css";
 const calls: string[] = [], pending = new Map<string, string>();
+const workers = new Set<Worker>(), NativeWorker = window.Worker;
+window.Worker = class extends NativeWorker {
+  constructor(url: string | URL, options?: WorkerOptions) { super(url, options); workers.add(this); }
+  override terminate() { workers.delete(this); super.terminate(); }
+};
 let version = "1";
 const pathOf = (ref: SessionFileRef) => ref.kind === "workspace" ? ref.path : ref.id;
 function metadata(ref: SessionFileRef): FileMetadata {
@@ -35,7 +40,7 @@ function Controls({ session }: { session: string }) {
 }
 function Fixture() {
   const [session, setSession] = useState("first");
-  (window as any).previewFixture = { calls, pending, change: () => { version = String(Number(version) + 1); }, switchSession: () => setSession(s => s === "first" ? "second" : "first") };
+  (window as any).previewFixture = { calls, pending, workers, change: () => { version = String(Number(version) + 1); }, switchSession: () => setSession(s => s === "first" ? "second" : "first") };
   return <FilePreviewLayout sessionId={session}><Controls session={session} /></FilePreviewLayout>;
 }
 createRoot(document.getElementById("root")!).render(<Fixture />);

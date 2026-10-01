@@ -2,7 +2,8 @@
 import { randomUUID } from 'node:crypto'
 import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
+import { createRequire } from 'node:module'
 import { expect, test } from 'bun:test'
 import { nativeFileApplications, openNativeFileApplication } from '../src/main/file-preview/native/file-applications'
 import { runNativeCommand, type NativeCommandRunner } from '../src/main/file-preview/native/runner'
@@ -105,9 +106,39 @@ $key.SetValue('${extension}', ''); $key.Dispose()
       throw error
     }
   }, { timeout: 8000 })
+  phase = 'default Electron open and reveal'
+  await rm(marker)
+  const electronScript = join(root, 'default-open.cjs')
+  await writeFile(electronScript, `const {app,shell}=require('electron');
+app.setPath('userData',${JSON.stringify(join(root, 'electron-profile'))});
+app.disableHardwareAcceleration();
+app.whenReady().then(async()=>{const error=await shell.openPath(${JSON.stringify(path)});if(error)throw new Error(error);shell.showItemInFolder(${JSON.stringify(path)});app.exit(0);}).catch(e=>{console.error(e);app.exit(1);});`)
+  const electron = createRequire(import.meta.url)(resolve(import.meta.dirname, '../node_modules/electron')) as string
+  await run(electron, [electronScript], signal, 'hidden')
+  await waitUntil(async () => {
+    try { return await realpath((await readFile(marker, 'utf8')).trim().split(/\r?\n/)[0]!) === await realpath(path) }
+    catch { return false }
+  }, { timeout: 8000 })
+  phase = 'reject a stale selected application'
+  await rm(executable)
+  await expect(openNativeFileApplication(path, expected!.id, signal, { run })).rejects.toThrow()
   } catch (error) { console.error("Native acceptance phase:", phase); throw error; }
   finally { await cleanup(); }
 }, 60000)
+
+test.skipIf(process.platform !== 'win32')('Windows lists relevant apps and icons, distinguishes no association, and rejects arbitrary apps', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'lxe-windows-app-list-'))
+  const signal = AbortSignal.timeout(30000)
+  try {
+    const text = join(root, 'text sample.txt'), unknown = join(root, `.file.lxe${randomUUID().replaceAll('-', '')}`)
+    await writeFile(text, 'LXE preview'); await writeFile(unknown, 'LXE preview')
+    const apps = await nativeFileApplications(text, signal)
+    expect(apps.some(app => app.default)).toBe(true)
+    expect(apps.some(app => app.icon?.startsWith('data:image/png;base64,'))).toBe(true)
+    expect(await nativeFileApplications(unknown, signal)).toEqual([])
+    await expect(openNativeFileApplication(text, join(root, 'unregistered.exe'), signal)).rejects.toThrow('Application is not registered')
+  } finally { await rm(root, { recursive: true, force: true }) }
+}, 40000)
 
 async function waitUntil(check: () => boolean | Promise<boolean>, { timeout }: { timeout: number }): Promise<void> {
   const deadline = Date.now() + timeout;

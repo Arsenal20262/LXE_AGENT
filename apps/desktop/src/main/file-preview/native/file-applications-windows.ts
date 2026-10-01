@@ -182,7 +182,10 @@ public static class LxeFileAssociations {
     var extension = Path.GetExtension(path);
     if (extension.Length == 0) return;
     IEnumHandlers handlers;
-    SHAssocEnumHandlers(extension, 0, out handlers);
+    // ASSOC_FILTER_RECOMMENDED limits the menu to this file type's handlers.
+    // NONE also returns unrelated globally registered apps, even for unknown
+    // extensions; one broken global registration must not break every menu.
+    SHAssocEnumHandlers(extension, 1, out handlers);
     try {
       while (true) {
         IHandler handler; uint fetched;
@@ -216,6 +219,8 @@ public static class LxeFileAssociations {
     Visit(path, delegate(IHandler handler) {
       string id; handler.GetName(out id);
       if (opened || !String.Equals(id, application, StringComparison.OrdinalIgnoreCase)) return;
+      if (Path.IsPathRooted(id) && !File.Exists(Environment.ExpandEnvironmentVariables(id)))
+        throw new FileNotFoundException("Registered application no longer exists", id);
       var iid = typeof(IShellItem).GUID;
       IShellItem item;
       SHCreateItemFromParsingName(path, IntPtr.Zero, ref iid, out item);

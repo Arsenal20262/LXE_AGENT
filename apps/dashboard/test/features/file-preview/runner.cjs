@@ -1,17 +1,24 @@
 // Tests only the local LXE renderer, never an external store browser.
-const { app, BrowserWindow, clipboard } = require("electron");
+const { app, BrowserWindow, clipboard, protocol } = require("electron");
 const assert = require("node:assert/strict");
-const [profile, url] = process.argv.slice(2);
+const [profile, output, protocolFile] = process.argv.slice(2);
+const url = "app://lxe/test/features/file-preview/renderer.html";
+// Exercise the production asset handler with the desktop's privileged scheme.
+protocol.registerSchemesAsPrivileged([{ scheme: "app", privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: false } }]);
 app.disableHardwareAcceleration(); app.setPath("userData", profile);
 const passed = [], errors = [], requested = [], delay = ms => new Promise(r => setTimeout(r, ms));
 app.whenReady().then(async () => {
+  const handle = protocol.handle.bind(protocol);
+  protocol.handle = (scheme, handler) => handle(scheme, request => { requested.push(request.url); return handler(request); });
+  require(protocolFile).registerDashboardProtocol(output);
+  protocol.handle = handle;
   const win = new BrowserWindow({ width: 1200, height: 900, show: false, webPreferences: { offscreen: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false } });
   win.webContents.session.webRequest.onBeforeRequest((details, callback) => {
     requested.push(details.url);
-    const local = details.url.startsWith(new URL(url).origin + "/") || /^(data:|blob:)/.test(details.url);
+    const local = details.url.startsWith("app://lxe/") || /^(data:|blob:)/.test(details.url);
     if (!local) errors.push(`External request: ${details.url}`); callback({ cancel: !local });
   });
-  win.webContents.on("console-message", event => { if (event.level === "error") errors.push(event.message); });
+  win.webContents.on("console-message", event => { if (event.level === "error" || event.message.includes("Setting up fake worker")) errors.push(event.message); });
   const js = code => win.webContents.executeJavaScript(code);
   const wait = async (condition, label) => { const deadline = Date.now() + 12000; while (Date.now() < deadline) { if (await js(condition)) return; await delay(40); } throw new Error(`Timeout: ${label}\n${await js("document.body.innerText")}`); };
   const click = async selector => { await js(`document.querySelector(${JSON.stringify(selector)}).click()`); await delay(80); };
@@ -23,6 +30,8 @@ app.whenReady().then(async () => {
   const step = async (name, fn) => { await fn(); assert.deepEqual(errors, []); passed.push(name); };
   try {
     await win.loadURL(url); await wait("!!window.previewFixture", "mount");
+    assert.ok(requested.includes(url), "production protocol served the fixture");
+    assert.equal(await js("previewFixture.workers.size"), 0);
     assert.equal(requested.some(path => /ExcelViewer|PdfViewer|pdf.worker|worker-/.test(path)), false, "large viewers are lazy");
     await step("Markdown, local image and tab deduplication", async () => {
       await click("#open-0"); await wait("document.querySelector('.file-markdown img')?.naturalWidth > 0", "local Markdown image");
@@ -56,9 +65,11 @@ app.whenReady().then(async () => {
       await capture("pdf");
       assert.ok(await js("(() => {const c=document.querySelector('.file-pdf canvas');const p=c.getContext('2d').getImageData(0,0,c.width,c.height).data;return p.some((v,i)=>i%4!==3&&v<240);})()"), "PDF contains visible pixels");
       assert.ok(requested.some(path=>path.includes("pdf.worker")));
+      assert.equal(await js("previewFixture.workers.size"), 1, "PDF runs in its dedicated worker");
     });
     await step("Image and unsupported HTML", async () => {
       await click("#open-4"); await wait("document.querySelector('.file-image img')?.naturalWidth > 0", "image");
+      await wait("previewFixture.workers.size === 0", "PDF worker released after changing tabs");
       await click("#open-5"); await wait("!!document.querySelector('.file-preview-empty')", "unsupported");
       assert.equal(await js("document.body.innerText.includes('Never execute')"),false);
     });

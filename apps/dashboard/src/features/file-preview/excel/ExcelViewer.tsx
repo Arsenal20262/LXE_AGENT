@@ -24,8 +24,17 @@ export default function ExcelViewer({ bytes, name }: { bytes: Uint8Array; name: 
   }, [bytes, name, t]);
   useEffect(() => {
     if (!value || !ref.current) return;
-    const observer = new ResizeObserver(() => window.dispatchEvent(new Event("resize")));
-    observer.observe(ref.current); return () => observer.disconnect();
+    let frame = 0, width = -1, height = -1;
+    const observer = new ResizeObserver(([entry]) => {
+      if (!entry || (entry.contentRect.width === width && entry.contentRect.height === height)) return;
+      ({ width, height } = entry.contentRect);
+      // FortuneSheet measures and updates its canvas on resize. Defer that work
+      // until after ResizeObserver delivery to avoid a synchronous layout loop.
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
+    });
+    observer.observe(ref.current);
+    return () => { observer.disconnect(); cancelAnimationFrame(frame); };
   }, [value]);
   if (error) return <pre className="file-preview-error" role="alert">{error}</pre>;
   if (!value) return <p role="status">{t.loading}</p>;
