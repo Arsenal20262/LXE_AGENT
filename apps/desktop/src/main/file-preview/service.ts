@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { watch, type FSWatcher } from "node:fs";
+import { watch, type FSWatcher, type Stats } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import { basename, dirname, extname, join } from "node:path";
 import type { DesktopFileCall, DesktopFileOperations, FileMetadata, FilePreviewKind, SessionFileRef, ConversationImagePreviewSource, PreviewTextPage, TextPageRequest } from "@lxe/desktop-protocol";
@@ -33,7 +33,7 @@ export class FilePreviewService {
   private handles = new Map<string, Handle>();
   private directoryWatches = new Map<string, DirectoryWatch>();
   private applications = new Map<string, { expires: number; value: ReturnType<typeof nativeFileApplications> }>();
-  private versions = new Map<string, number>();
+  private versions = new Map<string, { signature: string; revision: number }>();
   private readonly timer: ReturnType<typeof setInterval>;
   constructor(private runtime: () => FileServiceRuntime, private office: OfficePreviewCache,
     private native: { openPath(path: string): Promise<string>; revealPath(path: string): void },
@@ -51,6 +51,15 @@ export class FilePreviewService {
     if (!path) throw new Error("File is not part of this conversation");
     return path;
   }
+  private fileVersion(path: string, info: Stats): string {
+    const signature = `${info.dev}:${info.ino}:${info.size}:${info.mtimeMs}:${info.ctimeMs}`;
+    const previous = this.versions.get(path);
+    // File notifications may arrive late or more than once. A notification alone
+    // must not invalidate bytes that still belong to the same filesystem version.
+    const revision = previous ? previous.revision + Number(previous.signature !== signature) : 0;
+    this.versions.set(path, { signature, revision });
+    return `${signature}:${revision}`;
+  }
   private async describe(ref: SessionFileRef): Promise<{ path: string; metadata: FileMetadata; history?: Uint8Array }> {
     const path = await this.resolve(ref);
     let history: Uint8Array | undefined, extension = extname(path).toLowerCase() || basename(path).toLowerCase();
@@ -65,7 +74,7 @@ export class FilePreviewService {
     }
     const canonical = history ? path : await regularFile(path);
     const info = history ? undefined : await stat(canonical);
-    const version = history ? createHash("sha256").update(history).digest("hex") : `${info!.size}:${info!.mtimeMs}:${info!.ctimeMs}:${this.versions.get(canonical) ?? 0}`;
+    const version = history ? createHash("sha256").update(history).digest("hex") : this.fileVersion(canonical, info!);
     const key = createHash("sha256").update(ref.session_id + "\0" + (history ? `history:${ref.kind === "attachment" ? ref.id : ""}` : canonical)).digest("hex");
     for (const handle of this.handles.values()) if (handle.metadata.key === key) handle.touched = Date.now();
     return { path: canonical, metadata: { key, name: basename(path), displayPath: path, size: history?.byteLength ?? info!.size, version, extension, kind: history ? "image" : previewKind(extension), source: history ? "history" : "current_file" }, ...(history ? { history } : {}) };
@@ -164,7 +173,9 @@ export class FilePreviewService {
       if (!source.history) {
         try {
           value.watcher = watch(dirname(source.path), (_type, name) => {
-            if (!name || String(name) === basename(source.path)) this.versions.set(source.path, (this.versions.get(source.path) ?? 0) + 1);
+            if (!name || String(name) === basename(source.path)) void stat(source.path).then(info => {
+              if (!value.signal.aborted) this.fileVersion(source.path, info);
+            }).catch(() => { /* The next validated read/stat reports deletions and access errors. */ });
           });
           value.watcher.on("error", () => { value.watcher?.close(); });
           value.watcher.unref();
