@@ -325,23 +325,30 @@
   overflow-wrap:anywhere}
 .file-layout-error button {
   float:right}
-.turn-file-item>.file-open-control {
+.turn-file-item>.file-open-control,.sent-file-with-actions>.file-open-control {
+  position:static;
   align-self:center;
-  margin-right:8px}
-.turn-file-item:has(>.file-open-control) {
-  display:grid;
-  grid-template-columns:minmax(0,1fr) auto}
-.sent-file-with-actions {
-  display:flex;
-  align-items:center;
-  gap:8px}
-.sent-file-with-actions>.sent-file-card {
-  flex:1;
+  width:56px;
   min-width:0}
+.turn-file-item .file-open-split,.sent-file-with-actions .file-open-split {
+  width:100%}
+.turn-file-item .file-open-split button:first-child,.sent-file-with-actions .file-open-split button:first-child {
+  flex:1}
+.sent-file-with-actions:has(>.file-open-control) {
+  width:288px;
+  padding-right:8px}
+.turn-file-item:has(.file-open-error),.sent-file-with-actions:has(.file-open-error) {
+  padding-bottom:20px}
+.turn-file-item .file-open-error,.sent-file-with-actions .file-open-error {
+  position:absolute;
+  bottom:4px;
+  left:10px;
+  right:10px;
+  max-width:none;
+  font-size:11px}
 
 :root[data-theme=dark] .file-sidebar,:root[data-theme=dark] .file-open-menu,:root[data-theme=dark] .file-layout-error,:root[data-theme=dark] .file-preview-zoom select {
   background:#202225;
   color:#e4e4e7}
 :root[data-theme=dark] .file-sidebar,:root[data-theme=dark] .file-document-toolbar,:root[data-theme=dark] .file-tab-strip {
   border-color:#ffffff18}
-

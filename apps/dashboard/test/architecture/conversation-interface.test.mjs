@@ -170,8 +170,8 @@ test("the file list spends its width on what differs between the files", () => {
   assert.match(styles, /\.turn-file-extension > img \{[^}]*width:\s*22px[^}]*height:\s*22px/s);
   // Cards are --surface on the --bg plane like the rest of the transcript;
   // --surface-subtle sits too close to the background to read as a card.
-  assert.match(styles, /\.turn-file-card \{[^}]*background:\s*var\(--surface\)[^}]*text-align:\s*left/s);
-  assert.match(styles, /\.turn-file-card \{[^}]*border:\s*1px solid var\(--border\)/s);
+  assert.match(styles, /\.turn-file-item \{[^}]*background:\s*var\(--surface\)/s);
+  assert.match(styles, /\.turn-file-item \{[^}]*border:\s*1px solid var\(--border\)/s);
   // Two columns only while both can hold a name; otherwise one full-width row
   // beats two clipped ones.
   assert.match(styles, /\.turn-file-grid \{[^}]*grid-template-columns:\s*repeat\(auto-fit, minmax\(min\(330px, 100%\), 1fr\)\)/s);

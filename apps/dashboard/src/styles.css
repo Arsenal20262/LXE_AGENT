@@ -9431,48 +9431,53 @@ pre {
 .turn-file-item {
   display: grid;
   position: relative;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
   min-width: 0;
-  gap: 4px;
+  gap: 4px 8px;
+  padding-right: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  transition: border-color 0.16s ease, background 0.16s ease;
 }
 
 .turn-file-card {
   display: grid;
-  grid-template-columns: 30px minmax(0, 1fr) 18px;
-  /* The reveal button sits over this last track. */
+  grid-template-columns: 30px minmax(0, 1fr) auto;
   min-width: 0;
   min-height: 44px;
   align-items: center;
   gap: 9px;
   padding: 7px 10px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  /* White on the --bg plane, like every other card in the transcript.
-     --surface-subtle sat 5 units from the background and turned the list into
-     one flat beige block. */
-  background: var(--surface);
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
   color: var(--text);
   cursor: pointer;
   font: inherit;
   text-align: left;
-  transition: border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
 }
 
-.turn-file-card:hover:not(:disabled) {
+.turn-file-item:has(> .turn-file-card:hover:not(:disabled)) {
   border-color: var(--accent-muted);
   background: var(--accent-soft);
 }
 
 .turn-file-card:focus-visible {
   outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
+  outline-offset: -2px;
+}
+
+.turn-file-item:has(> .turn-file-card:disabled) {
+  border-color: var(--accent-muted);
 }
 
 .turn-file-card:disabled {
-  border-color: var(--accent-muted);
   cursor: progress;
 }
 
-.turn-file-item.has-error .turn-file-card {
+.turn-file-item.has-error {
   border-color: var(--danger-border);
 }
 
@@ -9507,17 +9512,12 @@ pre {
   white-space: nowrap;
 }
 
-/* Overlays the card's last track rather than sitting inside it: a button
-   cannot nest in a button, and the card stays one clickable surface. */
+/* Sibling buttons share the outer card without nesting interactive controls. */
 .turn-file-reveal {
-  position: absolute;
-  top: 50%;
-  right: 8px;
   display: grid;
   width: 26px;
   height: 26px;
   place-items: center;
-  transform: translateY(-50%);
   border: 0;
   border-radius: 7px;
   background: transparent;
@@ -9567,7 +9567,8 @@ pre {
 }
 
 .turn-file-card-error {
-  padding: 0 4px;
+  grid-column: 1 / -1;
+  padding: 0 10px 7px;
   color: var(--danger);
   font-size: 0.6875rem;
   line-height: 1.45;
@@ -11302,25 +11303,37 @@ pre {
 .sent-image-tile > img { width: 100%; height: 100%; object-fit: cover; object-position: center; }
 .sent-image-tile > span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 8px; }
 .sent-image-tile:disabled { cursor: default; }
-.sent-file-card {
+.sent-file-with-actions {
   display: flex;
-  flex-shrink: 0;
+  position: relative;
+  flex: 0 0 auto;
   align-items: center;
   gap: 8px;
   width: 224px;
-  height: 54px;
+  min-height: 54px;
   min-width: 0;
   max-width: 100%;
-  padding: 6px;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--surface-subtle);
+}
+.sent-file-with-actions:has(> .sent-file-card:hover) { border-color: var(--border-strong); background: var(--surface-muted); }
+.sent-file-card {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-height: 52px;
+  min-width: 0;
+  padding: 6px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
   color: var(--text);
   cursor: pointer;
   text-align: left;
 }
-.sent-file-card:hover { border-color: var(--border-strong); background: var(--surface-muted); }
-.sent-file-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sent-file-card:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .sent-attachment-error { display: block; font-size: 0.75rem; overflow-wrap: anywhere; color: var(--muted); }
 .sent-image-backdrop {
   position: fixed;

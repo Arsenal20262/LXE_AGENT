@@ -603,9 +603,7 @@ function TurnFileList({
                   ? <LoaderCircle aria-hidden="true" className="conversation-spinner turn-file-action" size={14} />
                   : null}
               </button>
-              {/* A second action needs its own button - one cannot nest inside
-                  the card's - and its own shape. An arrow would read as "open",
-                  which is what the card already does. */}
+              {/* Preview and native open are sibling buttons inside one card. */}
               {panel && sessionId ? <OpenFileButton file={{ session_id: sessionId, kind: "artifact", id: file.artifact_id }} /> : <button
                 aria-label={t.conversation.revealFile(file.name)}
                 className="turn-file-reveal"
