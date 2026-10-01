@@ -1,6 +1,6 @@
 .workspace-index { display: flex; flex: 1; min-width: 0; min-height: 0; flex-direction: column; gap: 10px; }
 .workspace-index-heading { display: flex; align-items: center; justify-content: space-between; padding: 0 8px; color: var(--sidebar-ink-soft); font-size: .78rem; }
-.workspace-index-scroll { flex: 1; min-height: 0; overflow: auto; scrollbar-width: thin; }
+.workspace-index-scroll { flex: 1; min-height: 0; overflow: hidden auto; scrollbar-width: thin; }
 .workspace-group { margin-bottom: 7px; }
 .workspace-group-header { display: flex; align-items: center; border-radius: 8px; min-height: 34px; padding-right: 3px; }
 .workspace-group-header:hover, .workspace-group.is-active > .workspace-group-header { background: var(--sidebar-hover); }
@@ -13,7 +13,7 @@
 .workspace-icon-button:hover { color: var(--sidebar-ink); background: var(--sidebar-hover); }
 .workspace-group-sessions { margin-left: 19px; }
 .workspace-empty { padding: 8px 20px 12px; color: var(--sidebar-ink-soft); font-size: .75rem; }
-.sidebar-session-section .workspace-group-sessions .session-index-list { overflow: visible; max-height: none; }
+.sidebar-session-section .workspace-group-sessions .session-index-list { overflow: visible; max-height: none; margin-right: 0; scrollbar-gutter: auto; }
 .workspace-load-more { border: 0; background: transparent; color: var(--accent-strong); padding: 7px; font: inherit; font-size: .75rem; cursor: pointer; text-align: left; }
 .workspace-error, .workspace-loading { font-size: .75rem; overflow-wrap: anywhere; padding: 6px 8px; }
 .workspace-error { color: var(--danger, #c65050); }
