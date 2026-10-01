@@ -10,10 +10,10 @@ const styles = readFileSync(path.join(sourceDir, "styles.css"), "utf8");
 const main = readFileSync(path.join(sourceDir, "main.tsx"), "utf8");
 const sidebar = readFileSync(path.join(sourceDir, "shared/use-three-state-sidebar.ts"), "utf8");
 
-test("macOS expanded sidebar shares the native traffic-light row", () => {
+test("macOS list starts below the native traffic-light row", () => {
   assert.match(
     styles,
-    /\.app-sidebar\.is-expanded\s*\{[^}]*padding-top:\s*50px;/s
+    /\.app-sidebar\.is-expanded\s*\{[^}]*margin-top:\s*44px;/s
   );
   assert.match(
     styles,
@@ -22,13 +22,13 @@ test("macOS expanded sidebar shares the native traffic-light row", () => {
   assert.match(styles, /\.sidebar-window-controls\s*\{[^}]*position:\s*fixed;[^}]*-webkit-app-region:\s*no-drag;/s);
 });
 
-test("collapsed desktop sidebar leaves only the title-bar control", () => {
+test("collapsed desktop sidebar retains the navigation rail and title-bar control", () => {
   assert.match(
     styles,
-    /\.app-shell\.sidebar-collapsed\s*\{\s*grid-template-columns:\s*0 minmax\(0, 1fr\)/
+    /\.app-shell\.sidebar-collapsed\s*\{\s*grid-template-columns:\s*var\(--app-navigation-width\) 0 minmax\(0, 1fr\)/
   );
-  assert.match(styles, /\.app-shell > \.main-panel\s*\{[^}]*grid-column:\s*2;/s);
-  assert.match(styles, /\.app-sidebar\.is-expanded\s*\{[^}]*grid-column:\s*1;/s);
+  assert.match(styles, /\.app-shell > \.main-panel\s*\{[^}]*grid-column:\s*3;/s);
+  assert.match(styles, /\.app-sidebar\.is-expanded\s*\{[^}]*grid-column:\s*2;/s);
   assert.match(styles, /\.app-sidebar\.is-collapsed\s*\{[^}]*pointer-events:\s*none;[^}]*visibility:\s*hidden;/s);
 });
 
@@ -67,7 +67,7 @@ test("macOS conversations merge the page header into the native title-bar row", 
   );
   assert.match(
     styles,
-    /\.desktop-platform-darwin \.app-shell\.sidebar-collapsed\.sessions-focus \.conversation-header\s*\{\s*padding-left:\s*126px;/
+    /\.desktop-window-frame \.app-shell\.sidebar-collapsed\.sessions-focus \.conversation-header\s*\{\s*padding-left:\s*calc\(var\(--sidebar-control-left\) \+ 44px - var\(--app-navigation-width\)\);/
   );
 });
 

@@ -25,6 +25,7 @@ import {
 
 import "./styles.css";
 import "./desktop/update-control.css";
+import "./shared/navigation-rail.css";
 import { SidebarStatus } from "./desktop/sidebar-status";
 import { ConversationDisplayController, sendConversationMessage } from "./features/sessions/display-controller";
 import { WorkspacesIndex, WorkspaceControl } from "./features/sessions/workspaces";
@@ -110,6 +111,7 @@ import {
 } from "./shared/navigation";
 import { useThreeStateSidebar } from "./shared/use-three-state-sidebar";
 import { SidebarResizer } from "./shared/sidebar-resizer";
+import { NavigationRail } from "./shared/navigation-rail";
 import type {
   ActivityView,
   CapabilityView,
@@ -805,6 +807,13 @@ function App({
   return (
     <>
       <main className={shellClassName}>
+        <NavigationRail
+          items={tabs}
+          activeSection={activeSection}
+          label={t.nav.aria}
+          onNavigate={openDashboardSection}
+          footer={<SidebarStatus onOpen={() => onOpenDesktopSettings?.("status")} />}
+        />
         <div
           className={sidebarVisible ? "sidebar-window-controls sidebar-visible" : "sidebar-window-controls"}
           {...sidebar.controlProps}
@@ -825,7 +834,25 @@ function App({
           >
             {sessionSidebarExpanded ? <PanelLeftClose size={17} /> : <PanelLeftOpen size={17} />}
           </button>
-          {sidebarVisible ? (
+        </div>
+        {sessionSidebarExpanded ? <button
+          className="sidebar-dismiss"
+          type="button"
+          aria-label={t.sidebar.collapse}
+          onClick={sidebar.toggle}
+          tabIndex={-1}
+        /> : null}
+        <aside
+          aria-hidden={!sidebarVisible}
+          aria-label={t.workspaces.title}
+          className={`app-sidebar is-${sidebarMode}`}
+          id="app-sidebar"
+          inert={!sidebarVisible}
+          ref={sidebar.panelRef}
+          {...sidebar.panelProps}
+        >
+          <div className="sidebar-list-header">
+            <span>{t.app.title}</span>
             <button
               aria-label={t.sessions.searchAria}
               aria-pressed={sessionSearchOpen}
@@ -840,33 +867,7 @@ function App({
             >
               <Search size={17} />
             </button>
-          ) : null}
-        </div>
-        <aside
-          aria-hidden={!sidebarVisible}
-          aria-label={t.nav.aria}
-          className={`app-sidebar is-${sidebarMode}`}
-          id="app-sidebar"
-          inert={!sidebarVisible}
-          ref={sidebar.panelRef}
-          {...sidebar.panelProps}
-        >
-          <nav className="tab-list" aria-label={t.nav.aria}>
-            {tabs.map((tab) => (
-              <button
-                className={
-                  activeSection === tab.id ? `tab tab-${tab.id} active` : `tab tab-${tab.id}`
-                }
-                key={tab.id}
-                title={tab.label}
-                type="button"
-                onClick={() => openDashboardSection(tab.id)}
-              >
-                {tab.icon}
-                <span>{tab.label}</span>
-              </button>
-            ))}
-          </nav>
+          </div>
           <div className="sidebar-session-section">
             <WorkspacesIndex
               expanded={expandedWorkspaces}
@@ -906,7 +907,6 @@ function App({
               deleteBlockedSessionIds={deleteBlockedSessionIds}
             />
           </div>
-          <SidebarStatus onOpen={() => onOpenDesktopSettings?.("status")} />
         </aside>
 
         <section className={showDashboardHome ? "main-panel dashboard-home-panel" : "main-panel"}>

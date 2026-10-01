@@ -213,7 +213,8 @@ button {
 
 /* Decision A: the sidebar sits below the content plane rather than above it, so
    the "chrome recedes, content is the stage" relationship survives the switch. */
-:root[data-theme="dark"] .app-sidebar {
+:root[data-theme="dark"] .app-shell {
+  --navigation-bg: #242322;
   --sidebar-bg: #1c1b1a;
   --sidebar-border: rgba(255, 255, 255, 0.065);
   --sidebar-ink: #eee8df;
@@ -2053,13 +2054,23 @@ button {
 }
 
 .app-shell {
-  --app-sidebar-width: 280px;
-  --sidebar-control-left: 8px;
+  --app-navigation-width: 56px;
+  --app-sidebar-width: 256px;
+  --sidebar-control-left: calc(var(--app-navigation-width) + 8px);
+  --navigation-bg: #272321;
+  --sidebar-bg: #211d1a;
+  --sidebar-border: rgba(255, 255, 255, 0.07);
+  --sidebar-ink: #f2ede6;
+  --sidebar-ink-soft: #a89d90;
+  --sidebar-accent: #d9a488;
+  --sidebar-hover: rgba(255, 255, 255, 0.06);
+  --sidebar-active: rgba(255, 255, 255, 0.1);
   position: relative;
   display: grid;
   width: 100%;
   height: 100vh;
-  grid-template-columns: var(--app-sidebar-width) minmax(0, 1fr);
+  grid-template-columns: var(--app-navigation-width) var(--app-sidebar-width) minmax(0, 1fr);
+  background: var(--navigation-bg);
   margin: 0;
   overflow: hidden;
   padding: 0;
@@ -2067,14 +2078,14 @@ button {
 }
 
 .app-shell.sidebar-collapsed {
-  grid-template-columns: 0 minmax(0, 1fr);
+  grid-template-columns: var(--app-navigation-width) 0 minmax(0, 1fr);
 }
 
 .sidebar-resizer {
   position: absolute;
   z-index: 25;
   inset-block: 0;
-  left: calc(var(--app-sidebar-width) - 3px);
+  left: calc(var(--app-navigation-width) + var(--app-sidebar-width) - 3px);
   width: 6px;
   cursor: col-resize;
   touch-action: none;
@@ -2105,7 +2116,8 @@ button {
 }
 
 .app-shell > .main-panel {
-  grid-column: 2;
+  grid-column: 3;
+  grid-row: 1;
   min-width: 0;
 }
 
@@ -2114,14 +2126,6 @@ button {
 }
 
 .app-sidebar {
-  /* Dark shell: warm graphite so the light content plane reads as the stage */
-  --sidebar-bg: #211d1a;
-  --sidebar-border: rgba(255, 255, 255, 0.07);
-  --sidebar-ink: #f2ede6;
-  --sidebar-ink-soft: #a89d90;
-  --sidebar-accent: #d9a488;
-  --sidebar-hover: rgba(255, 255, 255, 0.06);
-  --sidebar-active: rgba(255, 255, 255, 0.1);
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -2221,12 +2225,25 @@ button {
   background: rgba(255, 255, 255, 0.12);
 }
 
+.app-shell.sidebar-collapsed .sidebar-window-controls .sidebar-icon-button {
+  color: var(--text-soft);
+}
+
+.app-shell.sidebar-collapsed .sidebar-window-controls .sidebar-icon-button:hover {
+  background: var(--row-hover);
+}
+
 .app-sidebar.is-expanded {
   position: relative;
   z-index: 1;
-  grid-column: 1;
+  grid-column: 2;
+  grid-row: 1;
   width: var(--app-sidebar-width);
-  padding-top: 50px;
+  height: calc(100vh - 44px);
+  margin-top: 44px;
+  padding-top: 8px;
+  border-top: 1px solid var(--sidebar-border);
+  border-radius: 14px 0 0 0;
   opacity: 1;
   transform: translateX(0);
   visibility: visible;
@@ -2237,8 +2254,8 @@ button {
   position: fixed;
   z-index: 23;
   top: 48px;
-  left: 8px;
-  width: var(--app-sidebar-width);
+  left: calc(var(--app-navigation-width) + 8px);
+  width: min(var(--app-sidebar-width), calc(100vw - var(--app-navigation-width) - 16px));
   height: min(78vh, 720px);
   max-height: calc(100vh - 64px);
   padding: 12px 14px 14px;
@@ -2258,6 +2275,23 @@ button {
   pointer-events: none;
   transform: translateY(-6px);
   visibility: hidden;
+}
+
+.sidebar-list-header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 34px;
+  padding-left: 8px;
+  color: var(--sidebar-ink);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.sidebar-dismiss {
+  display: none;
 }
 
 .sidebar-header {
@@ -6724,45 +6758,44 @@ pre {
     border-radius: 14px;
   }
 
-  .app-shell {
-    height: auto;
-    grid-template-columns: 1fr;
-    min-height: 100vh;
-    overflow: visible;
-  }
-
+  .app-shell,
   .app-shell.sidebar-collapsed {
-    grid-template-columns: 1fr;
+    grid-template-columns: var(--app-navigation-width) 0 minmax(0, 1fr);
   }
 
-  .app-shell > .main-panel {
-    grid-column: 1;
+  .sidebar-dismiss {
+    display: block;
+    position: fixed;
+    z-index: 22;
+    inset: 40px 0 0 var(--app-navigation-width);
+    border: 0;
+    background: var(--scrim);
   }
 
-  .app-sidebar {
-    height: auto;
-    min-height: auto;
-    max-height: 62vh;
-    border-right: 0;
-    border-bottom: 1px solid var(--border);
+  .app-sidebar.is-expanded {
+    position: fixed;
+    z-index: 23;
+    top: 48px;
+    left: calc(var(--app-navigation-width) + 8px);
+    width: min(var(--app-sidebar-width), calc(100vw - var(--app-navigation-width) - 16px));
+    height: calc(100vh - 64px);
+    margin-top: 0;
+    padding-top: 12px;
+    border: 1px solid var(--sidebar-border);
+    border-radius: 14px;
+    box-shadow: 0 22px 52px rgba(0, 0, 0, 0.34);
   }
 
-  .tab-list {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+  .desktop-window-frame .app-shell.sessions-focus .conversation-header {
+    padding-left: calc(var(--sidebar-control-left) + 44px - var(--app-navigation-width));
   }
 
-  .tab {
-    justify-content: center;
+  .app-shell .sidebar-window-controls .sidebar-icon-button {
+    color: var(--text-soft);
   }
 
-  .tab span {
-    display: none;
-  }
-
-  .main-panel {
-    height: auto;
-    min-height: 0;
-    overflow: visible;
+  .app-shell .sidebar-window-controls .sidebar-icon-button:hover {
+    background: var(--row-hover);
   }
 
   .main-header {
@@ -8122,10 +8155,8 @@ pre {
   display: flex;
   min-height: 0;
   flex: 1;
-  margin-top: 8px;
-  padding-top: 8px;
+  margin-top: 4px;
   overflow: hidden;
-  border-top: 1px solid var(--sidebar-border);
 }
 
 .sidebar-session-section .session-index-panel {
@@ -8506,11 +8537,7 @@ pre {
 }
 
 .desktop-window-frame .app-shell.sidebar-collapsed.sessions-focus .conversation-header {
-  padding-left: 96px;
-}
-
-.desktop-platform-darwin .app-shell.sidebar-collapsed.sessions-focus .conversation-header {
-  padding-left: 126px;
+  padding-left: calc(var(--sidebar-control-left) + 44px - var(--app-navigation-width));
 }
 
 .conversation-header-copy {

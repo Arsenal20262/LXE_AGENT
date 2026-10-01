@@ -273,7 +273,7 @@ const fixture = {
 Object.assign(window, { behavior: fixture });
 if (!workspaceMode || !sessionStorage.getItem("workspaceFixtureInitialized")) localStorage.clear();
 if (workspaceMode) sessionStorage.setItem("workspaceFixtureInitialized", "true");
-localStorage.setItem(LANGUAGE_STORAGE_KEY, "en");
+localStorage.setItem(LANGUAGE_STORAGE_KEY, new URLSearchParams(location.search).get("language") || "en");
 const params = new URLSearchParams(location.search);
 if (params.has("app")) {
   if (workspaceMode) Object.assign(health, { gateway: "ready", agent_cli: "ready", workspace_root: "/fixture/default" });

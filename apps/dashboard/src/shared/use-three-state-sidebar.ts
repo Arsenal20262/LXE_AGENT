@@ -138,6 +138,9 @@ export function useThreeStateSidebar(storage?: Storage) {
     },
     onKeyDownCapture: onEscape,
     onPointerEnter: () => {
+      // A fresh visit also clears suppression after a keyboard toggle, where
+      // the pointer may never have entered (and therefore never left) here.
+      if (!controlHoveredRef.current) peekSuppressedRef.current = false;
       controlHoveredRef.current = true;
       keyboardModeRef.current = false;
       scheduleOpen();

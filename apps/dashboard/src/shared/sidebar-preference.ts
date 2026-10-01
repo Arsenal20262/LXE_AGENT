@@ -1,6 +1,6 @@
 export const SIDEBAR_EXPANDED_STORAGE_KEY = "lxe.dashboard.sidebar.expanded";
 export const SIDEBAR_WIDTH_STORAGE_KEY = "lxe.dashboard.sidebar.width";
-export const SIDEBAR_DEFAULT_WIDTH = 280;
+export const SIDEBAR_DEFAULT_WIDTH = 256;
 export const SIDEBAR_MIN_WIDTH = 256;
 export const SIDEBAR_MAX_WIDTH = 420;
 

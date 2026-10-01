@@ -132,10 +132,7 @@ test("unified status rows retain phases and locally ticking elapsed time", () =>
   assert.match(styles, /\.live-progress-status/);
 });
 
-test("details and runtime status overlay the conversation without moving the reading axis", () => {
-  assert.match(view, /useDialogFocus<HTMLElement>\(sessionInfoOpen, closeSessionInfo\)/);
-  assert.match(view, /className="session-detail-panel"[\s\S]*?role="dialog"/);
-  assert.match(styles, /\.session-detail-panel \{[^}]*position:\s*absolute[^}]*width:\s*min\(380px,/s);
+test("runtime status overlays the conversation without moving the reading axis", () => {
   assert.match(main, /runtime-status-host sessions-focus/);
   assert.match(styles, /@media \(max-width:\s*1060px\)[\s\S]*?\.sessions-focus \.runtime-status-floating \{[^}]*bottom:\s*114px/s);
 });
@@ -296,7 +293,7 @@ test("nothing pads the header away from the transcript", () => {
   // min-height above the row's own content is pure padding: a 30px button
   // inside 7px of padding needs 44.
   assert.match(styles, /\.conversation-header \{[^}]*min-height:\s*44px;/s);
-  assert.match(styles, /\.session-detail-toggle \{[^}]*min-height:\s*30px;/s);
+  assert.match(view, /className="conversation-header-actions"[\s\S]*?<PreviewHeaderActions \/>/);
 });
 
 test("the transcript dissolves under the header instead of being cut by a rule", () => {

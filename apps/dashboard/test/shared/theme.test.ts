@@ -95,12 +95,12 @@ describe("dark palette", () => {
   });
 
   test("keeps the sidebar below the content plane in dark mode", () => {
-    const sidebar = tokens(':root[data-theme="dark"] .app-sidebar');
+    const sidebar = tokens(':root[data-theme="dark"] .app-shell');
     expect(luminance(sidebar["--sidebar-bg"])).toBeLessThan(luminance(dark["--bg"]));
   });
 
   test("keeps the main dark planes out of the near-black range", () => {
-    const sidebar = tokens(':root[data-theme="dark"] .app-sidebar');
+    const sidebar = tokens(':root[data-theme="dark"] .app-shell');
     expect(luminance(dark["--bg"])).toBeGreaterThan(0.015);
     expect(luminance(sidebar["--sidebar-bg"])).toBeGreaterThan(0.01);
   });
