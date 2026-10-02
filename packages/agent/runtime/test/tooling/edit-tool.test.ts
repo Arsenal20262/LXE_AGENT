@@ -7,7 +7,7 @@ import { createFileTools } from "../../src/tooling/coding/file-tools";
 import { FileVersionLedger } from "../../src/tooling/coding/file-version-ledger";
 import { CodingPathPolicy } from "../../src/tooling/coding/path-policy";
 import { ToolRegistry } from "../../src/tooling/registry";
-import { workspaceFor } from "../workspace";
+import { policyFor, workspaceFor } from "../workspace";
 
 const roots: string[] = [];
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
@@ -21,7 +21,7 @@ function setup(ledger = new FileVersionLedger()) {
   for (const tool of createFileTools({ paths: new CodingPathPolicy({}), ledger, imageProcessor: new ModelImageProcessor(), toolOutputLimit: 10_000 })) registry.register(tool);
   const controller = new AbortController();
   const context = {
-    session_id: "test", workspace: workspaceFor(root),
+    session_id: "test", workspace: workspaceFor(root), executionPolicy: policyFor(root),
     handle: { signal: controller.signal, cancelled: false, drainSteering: () => [], registerProcess: () => () => undefined },
   };
   return { root, path, registry, controller, context, ledger };

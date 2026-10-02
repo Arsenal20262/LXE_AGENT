@@ -16,6 +16,43 @@ afterEach(async () => {
 });
 
 describe("SqliteRuntimeStore", () => {
+  test("permission modes have their own storage, survive cold reload, and migrate legacy sessions to full access", async () => {
+    const root = mkdtempSync(join(tmpdir(), "lxe-session-permissions-"));
+    roots.push(root);
+    const path = join(root, "agent.sqlite3");
+    let store = new SqliteRuntimeStore(path);
+    await store.start();
+    await store.ensureSession({ session_id: "legacy", source: {}, workspace: testWorkspace });
+    expect((await store.getSession("legacy"))?.permission_mode).toBe("danger-full-access");
+    await store.stop();
+    const legacy = new Database(path);
+    legacy.exec("ALTER TABLE agent_sessions DROP COLUMN permission_mode");
+    legacy.close();
+    store = new SqliteRuntimeStore(path);
+    await store.start();
+    try {
+      expect(store.getSessionPermissionMode("legacy")).toBe("danger-full-access");
+      const blank = store.createBlankSession(testWorkspace);
+      expect(store.getSessionPermissionMode(String(blank.session_id))).toBe("danger-full-access");
+      for (const mode of ["read-only", "workspace-write", "danger-full-access"] as const) {
+        await store.ensureSession({ session_id: mode, source: {}, workspace: testWorkspace });
+        store.setSessionPermissionMode(mode, mode);
+        await store.patchSessionState(mode, { permission_mode: "danger-full-access" });
+        await store.ensureSession({ session_id: mode, source: { permission_mode: "danger-full-access" }, workspace: testWorkspace });
+        expect(store.getSessionPermissionMode(mode)).toBe(mode);
+      }
+      expect(() => store.setSessionPermissionMode("legacy", "bogus" as never)).toThrow("Invalid permission mode");
+      expect(() => store.setSessionPermissionMode("missing", "read-only")).toThrow("session not found");
+    } finally { await store.stop(); }
+    store = new SqliteRuntimeStore(path);
+    await store.start();
+    try {
+      for (const mode of ["read-only", "workspace-write", "danger-full-access"] as const) {
+        expect((await store.getSession(mode))?.permission_mode).toBe(mode);
+      }
+    } finally { await store.stop(); }
+  });
+
   test("new stop context preserves provenance, turn ownership and user title across cold reload", async () => {
     const root = mkdtempSync(join(tmpdir(), "lxe-stop-replay-"));
     roots.push(root);
@@ -113,7 +150,8 @@ describe("SqliteRuntimeStore", () => {
     const root = mkdtempSync(join(tmpdir(), "lxe-runtime-attachments-"));
     roots.push(root);
     const databasePath = join(root, "local_agent.sqlite3");
-    const selectedPath = join(root, "selected.csv");
+    const selectedPath = join(root, "artifacts", "selected.csv");
+    mkdirSync(join(root, "artifacts"));
     writeFileSync(selectedPath, "sku,qty\nA,1\n", "utf8");
     const localFile = {
       type: "local_file",

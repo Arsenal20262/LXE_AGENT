@@ -7,7 +7,7 @@ import { formatDirectoryPage, validateDirectoryListInput } from "../../src/tooli
 import { CodingPathPolicy } from "../../src/tooling/coding/path-policy";
 import { createSearchTools } from "../../src/tooling/coding/search-tools";
 import { ToolRegistry } from "../../src/tooling/registry";
-import { workspaceFor } from "../workspace";
+import { policyFor, workspaceFor } from "../workspace";
 
 const entry = (name: string, kind: "file" | "directory" | "symlink" = "file") => ({
   name, isDirectory: () => kind === "directory", isSymbolicLink: () => kind === "symlink",
@@ -140,7 +140,7 @@ function setup() {
   for (const tool of createSearchTools({ paths: new CodingPathPolicy({ homeDirectory: root }), toolOutputLimit: 10_000 })) registry.register(tool);
   const controller = new AbortController();
   const context = {
-    session_id: "ls-test", workspace: workspaceFor(root),
+    session_id: "ls-test", workspace: workspaceFor(root), executionPolicy: policyFor(root),
     handle: { signal: controller.signal, cancelled: false, drainSteering: () => [], registerProcess: () => () => undefined },
   };
   const call = async (input: JsonObject = {}): Promise<string> => String((await registry.execute("ls", input, context)).content[0]?.text);

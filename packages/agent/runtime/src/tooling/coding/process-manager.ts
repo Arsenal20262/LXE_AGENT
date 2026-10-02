@@ -1,3 +1,5 @@
+import { mkdirSync } from "node:fs";
+import { assertPermissionExecutionAvailable, type ExecutionPolicy } from "../../permissions/policy";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { createLogger, runWithLogContext } from "@lxe/core";
@@ -47,7 +49,6 @@ interface CancellableOutputReader {
   cancel(reason?: unknown): Promise<void>;
 }
 
-const SPILL_DIRECTORY_SEGMENTS = ["var", "tmp", "exec"] as const;
 const MAX_EXEC_RECORDS_PER_SESSION = 64;
 const PROTECTED_RECENT_EXEC_RECORDS = 8;
 const OUTPUT_DRAIN_DEADLINE_MS = 2_000;
@@ -104,6 +105,7 @@ export class CodingProcessManager {
   }
 
   async execute(request: {
+    executionPolicy: ExecutionPolicy;
     command: string;
     cwd: string;
     sessionId: string;
@@ -115,6 +117,7 @@ export class CodingProcessManager {
     turnId?: string;
     env?: Record<string, string>;
   }): Promise<JsonObject> {
+    assertPermissionExecutionAvailable(request.executionPolicy);
     this.throwIfAborted(request.signal);
     const started = await this.withAdmission(request.sessionId, async () => {
       await this.enforceCapacity(request.sessionId);
@@ -137,6 +140,7 @@ export class CodingProcessManager {
   }
 
   private spawnEntry(request: {
+    executionPolicy: ExecutionPolicy;
     command: string;
     cwd: string;
     sessionId: string;
@@ -150,6 +154,7 @@ export class CodingProcessManager {
     const id = `exec_${randomUUID().replaceAll("-", "")}`;
     let child: ReturnType<typeof Bun.spawn>;
     try {
+      mkdirSync(request.executionPolicy.temporaryDirectory, { recursive: true });
       const spawn = this.options.shell.spawnSpec(request.command);
       child = Bun.spawn(spawn.argv, {
         cwd: request.cwd,
@@ -160,12 +165,19 @@ export class CodingProcessManager {
         windowsHide: true,
         env: {
           ...this.options.shell.childEnvironment(request.workspace.worktree, {
+            workspaceDirectory: request.executionPolicy.workspaceRoot,
+            temporaryDirectory: request.executionPolicy.temporaryDirectory,
             sessionId: request.sessionId,
             responseRouteId: request.responseRouteId,
             turnId: request.turnId ?? "",
             execSessionId: id,
           }),
           ...request.env,
+          // Dynamic host scope may vary per call; directory authority stays with the policy.
+          LXE_WORKSPACE_ROOT: request.executionPolicy.workspaceRoot,
+          TMP: request.executionPolicy.temporaryDirectory,
+          TEMP: request.executionPolicy.temporaryDirectory,
+          TMPDIR: request.executionPolicy.temporaryDirectory,
         },
       });
     } catch (error) {
@@ -202,7 +214,7 @@ export class CodingProcessManager {
         status: "failed", exec_id: id, error: "spawned process did not expose stdout/stderr pipes",
       } };
     }
-    const spillDirectory = join(request.workspace.worktree, ...SPILL_DIRECTORY_SEGMENTS);
+    const spillDirectory = request.executionPolicy.outputDirectory;
     if (!this.sweptSpillRoots.has(spillDirectory)) {
       this.sweptSpillRoots.add(spillDirectory);
       sweepSpillDirectory(spillDirectory);

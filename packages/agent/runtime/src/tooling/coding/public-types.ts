@@ -14,7 +14,6 @@ export type ProcessStatus = "running" | "completed" | "failed" | "killed";
 export interface CodingToolOptions {
   repositorySkillsRoot?: string;
   userSkillsRoot?: string;
-  artifactRoot?: string;
   homeDirectory?: string;
   /** Bytes of process output kept in memory and shown to the model at once. */
   maxOutputBytes?: number;

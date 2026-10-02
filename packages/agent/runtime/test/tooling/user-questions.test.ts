@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { UserQuestionService, registerUserQuestionTool } from "../../src/tooling/user-questions";
 import { ToolRegistry } from "../../src/tooling/registry";
-import { testWorkspace } from "../workspace";
+import { policyFor, testWorkspace } from "../workspace";
 
 const input = { questions: [
   { id: "one", question: "Which?", options: [{ label: "A" }, { label: "B" }] },
@@ -10,7 +10,7 @@ const input = { questions: [
 ] };
 const answers = [{ id: "one", selected: ["A"] }, { id: "many", selected: ["C", "D"], custom: "also E" }, { id: "text", selected: [], custom: "Details" }];
 function context(session_id = "s", controller = new AbortController(), platform = "desktop") {
-  return { session_id, platform, turn_id: `turn-${session_id}`, tool_call_id: `call-${session_id}`, workspace: testWorkspace,
+  return { session_id, platform, turn_id: `turn-${session_id}`, tool_call_id: `call-${session_id}`, workspace: testWorkspace, executionPolicy: policyFor(testWorkspace.directory),
     handle: { signal: controller.signal, get cancelled() { return controller.signal.aborted; }, drainSteering: () => [], registerProcess: () => () => {} } };
 }
 

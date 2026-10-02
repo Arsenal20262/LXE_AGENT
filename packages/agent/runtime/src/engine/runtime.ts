@@ -1,3 +1,4 @@
+import { assertPermissionExecutionAvailable, type PermissionPolicyService } from "../permissions/policy";
 import { normalizeToolResultImages } from "../tooling/tool-result-images";
 import type { ToolDisplayOutput } from "../tooling/tool-display";
 import { contextFingerprint } from "./context-meter";
@@ -89,7 +90,7 @@ export interface TypeScriptAgentRuntimeOptions {
     model: string,
     credentialRevision: string,
   ) => Promise<void> | void;
-  artifactRoot?: string;
+  permissionPolicy: PermissionPolicyService;
   userSkillsRoot?: string;
   systemPrompt: string | ((context: SystemPromptContext) => string);
   /** Defaults to unlimited steps; a finite limit reserves the last step for a tool-free reply. */
@@ -237,6 +238,9 @@ export class TypeScriptAgentRuntime implements AgentRuntime {
       throw new Error(`job workspace does not match session: ${job.session_id}`);
     }
     const workspace = assertWorkspaceAvailable(session.workspace);
+    const initialPolicy = this.options.permissionPolicy.resolve(session);
+    assertPermissionExecutionAvailable(initialPolicy);
+    if (initialPolicy.diagnostics.length) this.logger.warn("permission_boundary_diagnostics", { session_id: session.session_id, diagnostics: initialPolicy.diagnostics });
     const providerSnapshot = this.options.providerManager?.acquire();
     const provider = providerSnapshot?.provider ?? this.options.provider;
     if (!provider) throw new Error("runtime provider is not configured");
@@ -527,7 +531,7 @@ export class TypeScriptAgentRuntime implements AgentRuntime {
           await finalAnswerStreamer?.updateContext(measurement);
         };
         const prepareRequestContext = async (): Promise<void> => {
-          let snapshot = captureEnvironment({ ...systemPromptContext, ...(this.options.artifactRoot ? { artifactRoot: this.options.artifactRoot } : {}), ...(this.options.userSkillsRoot ? { userSkillsRoot: this.options.userSkillsRoot } : {}) });
+          let snapshot = captureEnvironment({ ...systemPromptContext, artifactRoot: initialPolicy.artifactRoot, ...(this.options.userSkillsRoot ? { userSkillsRoot: this.options.userSkillsRoot } : {}) });
           let environment = environmentMessage(snapshot);
           const prepared = await contextPipeline.prepare({
             sessionId: job.session_id,
@@ -550,7 +554,7 @@ export class TypeScriptAgentRuntime implements AgentRuntime {
             throw new ContextOverflowError(prepared.afterTokens, contextPipeline.hardLimitTokens);
           }
           // Summarization can span midnight; refresh the clock after it finishes.
-          snapshot = captureEnvironment({ ...systemPromptContext, ...(this.options.artifactRoot ? { artifactRoot: this.options.artifactRoot } : {}), ...(this.options.userSkillsRoot ? { userSkillsRoot: this.options.userSkillsRoot } : {}) });
+          snapshot = captureEnvironment({ ...systemPromptContext, artifactRoot: initialPolicy.artifactRoot, ...(this.options.userSkillsRoot ? { userSkillsRoot: this.options.userSkillsRoot } : {}) });
           environment = environmentMessage(snapshot);
           if (environmentChanged(messages, snapshot)) {
             const tokens = contextPipeline.measure(systemPrompt, [...messages, environment], toolSchemas, fingerprint).tokens;
@@ -748,7 +752,12 @@ export class TypeScriptAgentRuntime implements AgentRuntime {
           let toolDisplayStatus: import("@lxe/protocol").ToolStepStatus = "success";
           let toolDisplayOutput: ToolDisplayOutput | undefined;
           try {
+            const currentSession = await this.options.store.getSession(job.session_id);
+            if (!currentSession || !sameWorkspaceContext(currentSession.workspace, workspace)) throw new Error("Session workspace changed before tool execution");
+            const executionPolicy = this.options.permissionPolicy.resolve(currentSession);
+            assertPermissionExecutionAvailable(executionPolicy);
             const executed = await this.options.tools.execute(call.name, call.arguments, {
+              executionPolicy,
               handle,
               platform: String(job.source.platform ?? "").trim(),
               session_id: job.session_id,

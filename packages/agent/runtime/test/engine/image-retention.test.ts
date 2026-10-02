@@ -1,3 +1,4 @@
+import { PermissionPolicyService } from "../../src/permissions/policy";
 import { expect, test } from "bun:test";
 import { mkdtemp, readFile, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -55,7 +56,7 @@ for (const cancelled of [false, true]) {
       },
     };
     let store = new SqliteRuntimeStore(dbPath);
-    const makeRuntime = () => new TypeScriptAgentRuntime({ store, tools, provider, systemPrompt: "test", emitter: { emit: async () => {}, typing: async () => {}, desktopStream: async batch => { stream.push(batch); } } });
+    const makeRuntime = () => new TypeScriptAgentRuntime({ permissionPolicy: new PermissionPolicyService({ dataRoot: join(root, "var") }), store, tools, provider, systemPrompt: "test", emitter: { emit: async () => {}, typing: async () => {}, desktopStream: async batch => { stream.push(batch); } } });
     let runtime = makeRuntime();
     try {
       await runtime.start();

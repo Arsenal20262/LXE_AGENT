@@ -17,6 +17,7 @@ import {
 } from "../../src/engine/context";
 import { RuntimeProviderError } from "../../src/providers/provider-errors";
 import type {
+  RuntimeSessionRecord,
   RuntimeMessage,
   RuntimeProvider,
   RuntimeStore,
@@ -28,12 +29,13 @@ import type {
 const workspace = resolveWorkspaceContext(repositoryRoot(import.meta.dir));
 
 class MemoryStore implements RuntimeStore {
+  permissionMode: RuntimeSessionRecord["permission_mode"] = "danger-full-access";
   messages: RuntimeMessage[] = [];
   replacements: Array<{ kind: string; messages: RuntimeMessage[]; metadata: JsonObject }> = [];
   async start(): Promise<void> {}
   async stop(): Promise<void> {}
-  async getSession(): Promise<{ session_id: string; source: JsonObject; workspace: typeof workspace }> {
-    return { session_id: "s1", source: {}, workspace };
+  async getSession(): Promise<RuntimeSessionRecord> {
+    return { session_id: "s1", source: {}, workspace, permission_mode: this.permissionMode };
   }
   async popPendingEvents(): Promise<JsonObject[]> { return []; }
   async loadMessages(): Promise<RuntimeMessage[]> { return structuredClone(this.messages); }

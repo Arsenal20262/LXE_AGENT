@@ -6,6 +6,7 @@ import type {
   EmitRequest,
   JsonObject,
   JsonValue,
+  PermissionMode,
   ToolStepStatus,
   WorkspaceContext,
 } from "@lxe/protocol";
@@ -125,6 +126,7 @@ export interface RuntimeHandle {
 
 export interface RuntimeSessionRecord {
   session_id: string;
+  permission_mode: PermissionMode;
   source: JsonObject;
   workspace: WorkspaceContext;
 }

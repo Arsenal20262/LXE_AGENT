@@ -68,7 +68,6 @@ describe("system prompt builder", () => {
         { id: "fba_delivery_csv", dir: "fba/delivery_csv", holds: "FBA 发货单 CSV。" },
         { id: "replenish_store_msku", dir: "replenish/store_msku", holds: "店铺 MSKU 数据。" },
       ],
-      artifactRoot: "/data/var/artifacts",
     });
     const [stable, volatile] = prompt.split(SYSTEM_PROMPT_CACHE_BREAKPOINT);
     // The map never changes between turns, so it must sit inside the cached prefix.

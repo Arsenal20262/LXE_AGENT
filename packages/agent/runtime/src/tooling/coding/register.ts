@@ -16,12 +16,11 @@ export function registerCodingTools(
 ): CodingProcessManager {
   const toolOutputLimit = 10_000;
   // Anything past this is still captured: the process manager streams the full
-  // transcript to var/tmp/exec and hands the model the tail plus that path.
+  // transcript to the policy output directory and hands the model the tail plus that path.
   const processOutputLimit = Math.max(1_000, Math.trunc(options.maxOutputBytes ?? 50_000));
   const paths = new CodingPathPolicy({
     ...(options.repositorySkillsRoot === undefined ? {} : { repositorySkillsRoot: options.repositorySkillsRoot }),
     ...(options.userSkillsRoot === undefined ? {} : { userSkillsRoot: options.userSkillsRoot }),
-    ...(options.artifactRoot === undefined ? {} : { artifactRoot: options.artifactRoot }),
     ...(options.homeDirectory === undefined ? {} : { homeDirectory: options.homeDirectory }),
   });
   const ledger = new FileVersionLedger();

@@ -31,6 +31,7 @@ import {
   McpManager,
   OfficialMcpConnector,
   OneShotCliRunner,
+  PermissionPolicyService,
   registerCodingTools,
   registerToolSearch,
   registerUserQuestionTool,
@@ -113,11 +114,21 @@ export function createAgentRuntimeHost(
     LXE_LXESKILL_CATALOG_PATH: options.lxeskillCatalogPath,
     LXE_LLM_CONFIG_ROOT: options.llmConfigRoot,
     LXE_DATA_ROOT: options.dataRoot,
+    LXE_WORKSPACE_ROOT: join(options.dataRoot, "workspace"),
     PYTHONDONTWRITEBYTECODE: "1",
   };
   const databasePath = String(environment.LXE_AGENT_SQLITE_DB_PATH ?? "").trim()
     || join(options.dataRoot, "db", "agent.sqlite3");
   const store = new SqliteRuntimeStore(databasePath, { legacyWorkspace: options.legacyWorkspace });
+  const permissionPolicy = new PermissionPolicyService({
+    dataRoot: options.dataRoot,
+    privatePaths: [
+      databasePath,
+      options.llmConfigRoot,
+      ...(environment.LXE_SQLITE_DB_PATH ? [environment.LXE_SQLITE_DB_PATH] : []),
+      ...(environment.LXE_MCP_CONFIG_PATH ? [environment.LXE_MCP_CONFIG_PATH] : []),
+    ],
+  });
   const providerManager = new AtomicRuntimeProviderManager(
     options.dataRoot,
     environment,
@@ -175,6 +186,7 @@ export function createAgentRuntimeHost(
   const {
     LXE_AGENT_SOUL_PATH: _agentSoulPath,
     LXE_USER_SKILLS_ROOT: _userSkillsRoot,
+    LXE_AGENT_SQLITE_DB_PATH: _agentDatabasePath,
     ...lxeSkillEnvironment
   } = environment;
   const lxeSkillRunner = lxeSkillArgv ? new OneShotCliRunner({
@@ -204,7 +216,6 @@ export function createAgentRuntimeHost(
     ...(environment.LXE_FD_PATH ? { fdPath: environment.LXE_FD_PATH } : {}),
     repositorySkillsRoot: options.skillsRoot,
     userSkillsRoot: options.userSkillsRoot,
-    artifactRoot: join(options.dataRoot, "artifacts"),
     businessCommands,
     businessCommandCatalog: cliCommands,
     execShell,
@@ -264,6 +275,7 @@ export function createAgentRuntimeHost(
   });
   const providerDescriptor = providerManager.acquire().descriptor;
   const runtime = new TypeScriptAgentRuntime({
+    permissionPolicy,
     store,
     providerManager,
     environment,
@@ -285,7 +297,6 @@ export function createAgentRuntimeHost(
     ...(options.onManagedLlmAuthenticationFailure
       ? { onManagedLlmAuthenticationFailure: options.onManagedLlmAuthenticationFailure }
       : {}),
-    artifactRoot: join(options.dataRoot, "artifacts"),
     userSkillsRoot: options.userSkillsRoot,
     systemPrompt: (context) => buildSystemPrompt({
       soul: context.workspaceSnapshot?.soul ?? "",
@@ -296,7 +307,6 @@ export function createAgentRuntimeHost(
       skillPrompt: context.workspaceSnapshot?.skills.prompt ?? context.skillPrompt,
       workspaceInstructions: context.workspaceSnapshot?.instructions_prompt ?? "",
       datasets: cliDatasets,
-      artifactRoot: join(options.dataRoot, "artifacts"),
       larkCliAvailable: execShell.hasExecutable("lark-cli", context.workspace.worktree, context.workspace.directory),
     }),
     services: runtimeServices,

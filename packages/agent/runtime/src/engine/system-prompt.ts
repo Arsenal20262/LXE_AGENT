@@ -52,8 +52,6 @@ export interface BuildSystemPromptOptions {
   workspace: WorkspaceContext;
   /** Artifact dataset registry; stable across turns, so it is cached with the prefix. */
   datasets?: readonly LxeSkillDataset[];
-  /** Absolute artifact root the directories above resolve against. */
-  artifactRoot?: string;
   /** Whether lark-cli resolves in the current exec environment. */
   larkCliAvailable?: boolean;
 }

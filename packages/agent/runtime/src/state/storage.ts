@@ -1,4 +1,5 @@
 import { omitImageData } from "../messages/image-content";
+import { parsePermissionMode, type PermissionMode } from "@lxe/protocol";
 import { validContextDisplaySnapshot, type ContextDisplaySnapshot } from "@lxe/protocol";
 import { existsSync, mkdirSync, statSync } from "node:fs";
 import { appendFile, mkdir, open, readFile, rename, stat, truncate, unlink } from "node:fs/promises";
@@ -435,6 +436,7 @@ export class SqliteRuntimeStore implements RuntimeStore {
         CREATE TABLE IF NOT EXISTS agent_sessions (
           session_id TEXT PRIMARY KEY,
           source TEXT NOT NULL DEFAULT '{}',
+          permission_mode TEXT NOT NULL DEFAULT 'danger-full-access',
           workspace_directory TEXT NOT NULL DEFAULT '',
           workspace_worktree TEXT NOT NULL DEFAULT '',
           model TEXT NOT NULL DEFAULT '',
@@ -532,6 +534,7 @@ export class SqliteRuntimeStore implements RuntimeStore {
         ["context_display", "TEXT"],
         ["workspace_directory", "TEXT NOT NULL DEFAULT ''"],
         ["workspace_worktree", "TEXT NOT NULL DEFAULT ''"],
+        ["permission_mode", "TEXT NOT NULL DEFAULT 'danger-full-access'"],
       ] as const) {
         if (!columns.some((column) => column.name === name)) {
           database.exec(`ALTER TABLE agent_sessions ADD COLUMN ${name} ${declaration}`);
@@ -648,18 +651,33 @@ export class SqliteRuntimeStore implements RuntimeStore {
   async getSession(sessionId: string): Promise<RuntimeSessionRecord | undefined> {
     const row = this.getPrepared<{
       session_id: string;
+      permission_mode: string;
       source: string;
       workspace_directory: string;
       workspace_worktree: string;
     }>(
-      `SELECT session_id, source, workspace_directory, workspace_worktree
+      `SELECT session_id, permission_mode, source, workspace_directory, workspace_worktree
        FROM agent_sessions WHERE session_id = ?`,
       text(sessionId),
     );
     if (!row) return undefined;
     const workspace = this.workspaceFromRow(row);
     if (!workspace) throw new Error(`session workspace is missing: ${row.session_id}`);
-    return { session_id: row.session_id, source: parseObject(row.source), workspace };
+    return { session_id: row.session_id, permission_mode: parsePermissionMode(row.permission_mode), source: parseObject(row.source), workspace };
+  }
+
+  /** Internal settings API; never exposed as a tool state patch or dashboard mutation. */
+  setSessionPermissionMode(sessionId: string, value: PermissionMode): void {
+    const mode = parsePermissionMode(value);
+    const result = this.db().query("UPDATE agent_sessions SET permission_mode = ? WHERE session_id = ?")
+      .run(mode, text(sessionId));
+    if (result.changes === 0) throw new Error(`session not found: ${sessionId}`);
+  }
+
+  getSessionPermissionMode(sessionId: string): PermissionMode {
+    const row = this.getPrepared<{ permission_mode: string }>("SELECT permission_mode FROM agent_sessions WHERE session_id = ?", text(sessionId));
+    if (!row) throw new Error(`session not found: ${sessionId}`);
+    return parsePermissionMode(row.permission_mode);
   }
 
   async appendPendingEvent(sessionId: string, event: JsonObject): Promise<void> {

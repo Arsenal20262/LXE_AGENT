@@ -3,7 +3,7 @@ import { createInterface } from "node:readline";
 import { join } from "node:path";
 import { AgentProtocolServer } from "../src/server";
 import { DashboardService } from "../src/dashboard-service";
-import { SqliteRuntimeStore, ToolRegistry, TypeScriptAgentRuntime, UserQuestionService, registerUserQuestionTool } from "@lxe/runtime";
+import { PermissionPolicyService, SqliteRuntimeStore, ToolRegistry, TypeScriptAgentRuntime, UserQuestionService, registerUserQuestionTool } from "@lxe/runtime";
 console.log = (...values: unknown[]) => { process.stderr.write(values.map(String).join(" ") + "\n"); };
 const server = new AgentProtocolServer({
   environment: { LOCAL_LOGS_ENABLED: "0", LOG_LEVEL: "ERROR" },
@@ -14,7 +14,7 @@ const server = new AgentProtocolServer({
     const tools = new ToolRegistry();
     const questions = new UserQuestionService(id => { void options.onSessionChanged?.(id, "questions"); });
     registerUserQuestionTool(tools, questions);
-    const runtime = new TypeScriptAgentRuntime({ store, tools, emitter: options.emitter, systemPrompt: "Test fixture",
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy: new PermissionPolicyService({ dataRoot: options.dataRoot }), store, tools, emitter: options.emitter, systemPrompt: "Test fixture",
       onSessionChanged: (id, change) => options.onSessionChanged?.(id, change),
       provider: {
         summarize: async () => ({ text: "Fixture summary", usage: { input_tokens: 0, output_tokens: 0 } }),

@@ -203,6 +203,7 @@ export function createExecTools(dependencies: ExecToolDependencies): ToolDefinit
         };
       },
       execute: async (input, context) => {
+        if (!context.executionPolicy) throw new ToolExecutionError("failed_precondition", "exec requires a runtime execution policy");
         const rawCommand = inputText(input, "command");
         if (!rawCommand.trim()) throw new Error("command 不能为空");
         // The standalone/composition rules keep lxeskill invocations parseable for
@@ -241,6 +242,7 @@ export function createExecTools(dependencies: ExecToolDependencies): ToolDefinit
         const maxOutputTokens = outputTokenBudget(input);
         const command = execShell.normalizeCommand(context.workspace.worktree, rawCommand);
         const payload = await processes.execute({
+          executionPolicy: context.executionPolicy,
           command,
           cwd: paths.resolveExecutableCwd(context.workspace, input.cwd ?? "."),
           sessionId: context.session_id,
