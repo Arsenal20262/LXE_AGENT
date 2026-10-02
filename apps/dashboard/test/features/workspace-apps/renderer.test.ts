@@ -14,8 +14,9 @@ test('workspace application menus and native IPC in real Electron',async()=>{
   const child=Bun.spawn([require(resolve(import.meta.dirname,'../../../../desktop/node_modules/electron')),resolve(import.meta.dirname,'runner.cjs'),profile,output],{env,stdout:'pipe',stderr:'pipe'});
   const timer=setTimeout(()=>child.kill(),90000);
   try{
-   const [code,stdout,stderr]=await Promise.all([child.exited,new Response(child.stdout).text(),new Response(child.stderr).text()]);
-   console.log(stdout);expect(code,stdout+'\n'+stderr).toBe(0);const line=stdout.split('\n').find(l=>l.startsWith('LXE_WORKSPACE_RESULT='));expect(line).toBeDefined();expect(JSON.parse(line!.slice(21)).passed).toHaveLength(8);
+   const readOutput=async()=>{let value='';for await(const chunk of child.stdout){const text=new TextDecoder().decode(chunk);value+=text;process.stdout.write(text);}return value;};
+   const [code,stdout,stderr]=await Promise.all([child.exited,readOutput(),new Response(child.stderr).text()]);
+   expect(code,stdout+'\n'+stderr).toBe(0);const line=stdout.split('\n').find(l=>l.startsWith('LXE_WORKSPACE_RESULT='));expect(line).toBeDefined();expect(JSON.parse(line!.slice(21)).passed).toHaveLength(8);
   }finally{clearTimeout(timer);if(child.exitCode===null){child.kill();await child.exited;}}
  }finally{rmSync(output,{recursive:true,force:true,maxRetries:5});rmSync(profile,{recursive:true,force:true,maxRetries:5});}
 },115000);
