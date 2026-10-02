@@ -54,6 +54,8 @@ describe("preload bridge", () => {
       "restartAgent",
       "retryCloudConnection",
       "revealInputAssetSlot",
+      "uploadVietnamSkuMap",
+      "rollbackVietnamSkuMap",
       "saveLocalModelCredential",
       "saveSetup",
       "selectCloudEnrollment",
@@ -262,4 +264,19 @@ test("file bridge has a separate binary channel and never serializes bytes into 
   expect(await bridge.files.read("opaque-handle")).toEqual({ ok: true, value: new Uint8Array([0, 255, 17]) });
   await bridge.files.readText("opaque-text-handle", { offset: 5001 });
   expect(calls).toEqual([[IPC_CHANNELS.fileRead, "opaque-handle", undefined], [IPC_CHANNELS.fileReadText, "opaque-text-handle", { offset: 5001 }]]);
+});
+
+
+test("Vietnam map bridge sends no renderer source path or slot", async () => {
+  const calls: unknown[][] = [];
+  const bridge = createDesktopBridge({
+    invoke: async <T>(...args: unknown[]) => { calls.push(args); return null as T; },
+    on: () => {}, removeListener: () => {},
+  }, "darwin");
+  await bridge.desktop.uploadVietnamSkuMap();
+  await bridge.desktop.rollbackVietnamSkuMap("a".repeat(32));
+  expect(calls).toEqual([
+    [IPC_CHANNELS.uploadVietnamSkuMap],
+    [IPC_CHANNELS.rollbackVietnamSkuMap, "a".repeat(32)],
+  ]);
 });

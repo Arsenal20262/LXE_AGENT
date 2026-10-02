@@ -201,7 +201,16 @@ export const ZH_TEXT = {
     loading: "正在读取…",
     loadError: "读取失败",
     neverUsed: "尚未使用",
-    note: "这里只做查看。要更换版本，在对话里上传新文件即可。"
+    note: "其他模板和数据源仍通过对应技能维护。",
+    managedEmptyHint: "请在这里上传越南 SKU 参数表。",
+    upload: "上传映射表",
+    rollback: "回滚上一版",
+    busy: "正在处理…",
+    installed: "映射表已上传",
+    unchanged: "内容未变化，继续使用当前版本",
+    rolledBack: "已回滚到上一版",
+    integrityError: "文件校验失败",
+    historical: "旧版模板仅供历史参考；越南备货生成使用应用内置骨架。"
   },
   stats: {
     sessions: "会话",
@@ -1072,7 +1081,16 @@ export const UI_TEXT: Record<Language, UiText> = {
       loading: "Loading…",
       loadError: "Could not load",
       neverUsed: "Not used yet",
-      note: "This view is read-only. To change a version, upload a new file in a conversation."
+      note: "Other templates and data sources are maintained through their skills.",
+      managedEmptyHint: "Upload the Vietnam SKU map here.",
+      upload: "Upload SKU map",
+      rollback: "Roll back to previous",
+      busy: "Working…",
+      installed: "SKU map uploaded",
+      unchanged: "The content is unchanged; the current version remains in use",
+      rolledBack: "Rolled back to the previous version",
+      integrityError: "File integrity check failed",
+      historical: "This legacy template is for reference only; Vietnam recommendations use the built-in workbook."
     },
     stats: {
       sessions: "Sessions",

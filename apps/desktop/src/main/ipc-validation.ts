@@ -30,6 +30,13 @@ export function validateEnrollmentId(value: unknown): string {
   return enrollmentId;
 }
 
+export function validateVietnamSkuMapRevision(value: unknown): string {
+  if (typeof value !== "string" || !/^[0-9a-f]{32}$/u.test(value)) {
+    throw new Error("Vietnam SKU map revision is invalid");
+  }
+  return value;
+}
+
 export function validateSyntheticPerformerId(value: unknown): string {
   const identifier = boundedText(value, "Synthetic performer identifier", 128);
   if (!/^[A-Za-z0-9-]+$/u.test(identifier)) {

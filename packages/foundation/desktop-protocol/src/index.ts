@@ -633,6 +633,11 @@ export interface DesktopInputAssetVersion {
 
 export interface DesktopInputAssetSlot {
   slot: string;
+  management: "command" | "desktop";
+  manifest_revision: string | null;
+  current_error?: string;
+  previous_error?: string;
+  manifest_error?: string;
   display_name: string;
   used_by: string[];
   holds: string;
@@ -641,6 +646,11 @@ export interface DesktopInputAssetSlot {
   current: DesktopInputAssetVersion | null;
   /** Retained rollback copy. Shown to the user, never to the model. */
   previous: DesktopInputAssetVersion | null;
+}
+
+export interface DesktopVietnamSkuMapMutation {
+  status: "installed" | "unchanged" | "rolled_back";
+  manifest_revision: string;
 }
 
 export interface DesktopUsageBalance {
@@ -699,6 +709,8 @@ export interface LxeDesktopBridge {
     openSyntheticPerformerOutput(taskId: string): Promise<void>;
     listInputAssets(): Promise<DesktopInputAssetSlot[]>;
     revealInputAssetSlot(slot: string): Promise<void>;
+    uploadVietnamSkuMap(): Promise<DesktopVietnamSkuMapMutation | null>;
+    rollbackVietnamSkuMap(expectedRevision: string): Promise<DesktopVietnamSkuMapMutation>;
     onSyntheticPerformerTaskChanged(
       listener: (task: DesktopSyntheticPerformerTask) => void,
     ): () => void;
