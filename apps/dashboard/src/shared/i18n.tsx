@@ -819,7 +819,19 @@ export const ZH_TEXT = {
       selectWebdriver: "选择驱动目录"
     },
     mabangTms: { description: "配置马帮 TMS数据导出。密码加密保存，每次任务自动登录。", account: "账号", password: "马帮 TMS密码" },
-    yacang: { description: "配置雅仓数据导出。密码加密保存，每次任务自动登录。", mobile: "手机号", password: "雅仓密码" },
+    yacang: {
+      description: "配置雅仓数据导出。密码加密保存，每次任务自动登录。",
+      mobile: "手机号", password: "雅仓密码",
+      vietnamTitle: "越南备货",
+      vietnamDescription: "长期计算参数。保存后在下一次生成时生效。",
+      weight30d: "30 天销量权重",
+      weight15d: "15 天销量权重",
+      weight7d: "7 天销量权重",
+      exchangeRate: "汇率",
+      vietnamSave: "保存越南参数",
+      vietnamSaving: "正在保存…",
+      vietnamSaved: "越南备货参数已保存，下次生成时生效。",
+    },
     shangman: {
       description: "配置上马 ERP 登录。验证码由 AI 读取；登录态保存在本机，供后续任务复用。",
       tenantId: "ID", username: "上马账号", password: "上马密码",
@@ -1699,7 +1711,19 @@ export const UI_TEXT: Record<Language, UiText> = {
         selectWebdriver: "Choose the driver directory"
       },
       mabangTms: { description: "Configure Mabang TMS exports. Passwords are stored encrypted; each task signs in automatically.", account: "Account", password: "Mabang TMS password" },
-      yacang: { description: "Configure Yacang exports. Passwords are stored encrypted; each task signs in automatically.", mobile: "Mobile", password: "Yacang password" },
+      yacang: {
+        description: "Configure Yacang exports. Passwords are stored encrypted; each task signs in automatically.",
+        mobile: "Mobile", password: "Yacang password",
+        vietnamTitle: "Vietnam replenishment",
+        vietnamDescription: "Saved calculation values take effect for the next generated workbook.",
+        weight30d: "30-day sales weight",
+        weight15d: "15-day sales weight",
+        weight7d: "7-day sales weight",
+        exchangeRate: "Exchange rate",
+        vietnamSave: "Save Vietnam parameters",
+        vietnamSaving: "Saving…",
+        vietnamSaved: "Vietnam replenishment parameters saved for the next generation.",
+      },
       shangman: {
         description: "Configure Shangman ERP login. AI reads the captcha; login state is saved locally for later tasks.",
         tenantId: "Tenant ID", username: "Shangman ERP account", password: "Shangman ERP password",

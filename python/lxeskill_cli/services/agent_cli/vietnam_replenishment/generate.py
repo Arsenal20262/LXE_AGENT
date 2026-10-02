@@ -43,4 +43,11 @@ def run(arguments: dict[str, Any]) -> dict[str, Any]:
         "warehouse": "VN8806",
         "sku_count": result.sku_count,
         "output_xlsx": str(display_path(output)),
+        "config": {
+            "weight_30d": str(result.config.weight_30d),
+            "weight_15d": str(result.config.weight_15d),
+            "weight_7d": str(result.config.weight_7d),
+            "exchange_rate": str(result.config.exchange_rate),
+        },
+        "config_source": result.config_source,
     }
