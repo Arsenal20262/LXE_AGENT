@@ -132,11 +132,16 @@ app.whenReady().then(async () => {
       await wait(async () => !!frame() && await inner("document.querySelector('#other')?.textContent==='Other session'").catch(() => false), 'other session');
       const old = frame().url; await js('fixture.open(null)'); await wait(() => service.handles.size === 0, 'all handles released');
       await assert.rejects(() => service.htmlDocument(new URL(old).pathname.slice(1)), /closed/);
-      await js("fixture.open('报告/中文 page.html')"); await ready(); await click('[data-preview-refresh]'); await ready();
+      await js("fixture.open('报告/中文 page.html')"); await ready(); const beforeRefresh = frame().url;
+      await click('[data-preview-refresh]'); await wait(() => !!frame() && frame().url !== beforeRefresh, 'new frame after refresh'); await ready();
       await wait(() => service.handles.size === 1, 'no duplicate handles');
     });
     await step('Frame fills resized preview; deleted sources become real errors', async () => {
-      const before = await inner('innerWidth'); win.setSize(680, 580); await delay(200); assert.ok(await inner('innerWidth') < before);
+      await wait(async () => await inner('innerWidth') > 900, 'initial frame geometry');
+      const before = await inner('innerWidth'); win.show(); win.focus(); win.setSize(680, 580);
+      await wait(async () => await inner('innerWidth') < before, 'resized frame geometry').catch(async error => {
+        console.error(JSON.stringify({ bounds: win.getBounds(), before, inner: await inner('innerWidth'), geometry: await js("({width:innerWidth,root:document.querySelector('#root').getBoundingClientRect().width,iframe:document.querySelector('iframe').getBoundingClientRect().width,section:document.querySelector('.file-document').getBoundingClientRect().width})") })); throw error;
+      });
       assert.ok(await js("document.querySelector('iframe').getBoundingClientRect().height>400"));
       if (process.env.LXE_HTML_SCREENSHOT) writeFileSync(process.env.LXE_HTML_SCREENSHOT, (await win.webContents.capturePage()).toPNG());
       rmSync(rootFile); await wait(() => js("document.querySelector('.file-error-details pre')?.textContent.includes('ENOENT')"), 'deleted root');
