@@ -33,7 +33,7 @@
 
 应用目录与检测规则参考 DeepSeek Harness `639ed01539`（MIT），覆盖其 macOS、Windows 编辑器、IDE、Git 客户端和终端条目，菜单只列出本机检测到的应用。检测及图标在主进程缓存；失败可重试。卸载或移动启动器后，下次打开会重新检测该应用一次；不可用则回到系统文件管理器。错误保留实际诊断，图标提取失败使用通用图标。
 
-桌面桥接新增 `desktop.getWorkspaceApplications({ refresh? })`，`desktop.openWorkspace(directory, applicationId?)` 的应用 ID 可省略，省略时保持系统打开行为。主进程校验调用方和目录，只接受内置应用 ID，用参数数组启动，并清理凭据及应用运行环境。外部应用独立运行；成功仅表示启动请求已接受，不保证窗口已加载完成。不会修改系统默认应用，也不连接内置终端、浏览器或 Agent 工具。
+桌面桥接新增 `desktop.getWorkspaceApplications({ refresh? })`，`desktop.openWorkspace(directory, applicationId?)` 的应用 ID 可省略，省略时保持系统打开行为。主进程校验调用方和目录，只接受内置应用 ID，用参数数组启动，并清理凭据及应用运行环境。外部应用独立运行；成功仅表示启动请求已接受，不保证窗口已加载完成。不会修改系统默认应用，也不连接内置终端、浏览器或 Agent 工具。两平台结果及复现入口见[验收记录](../record/20261002-workspace-applications.md)。
 
 ## 输入框引用
 
