@@ -1,0 +1,295 @@
+"""A workbook is published only after managed Office and result checks succeed."""
+
+from __future__ import annotations
+
+from dataclasses import replace
+from decimal import Decimal
+from pathlib import Path
+import shutil
+from types import SimpleNamespace
+from xml.etree import ElementTree as ET
+from zipfile import ZipFile
+
+from openpyxl import load_workbook
+import pytest
+
+from services.vietnam_replenishment.asset_contract import SkuParameters
+from services.vietnam_replenishment.workbook import (
+    RecommendationConfig,
+    canonical_product_time,
+    write_vietnam_workbook,
+)
+from services.vietnam_replenishment.yacang_sources import VietnamSources
+from services.vietnam_replenishment import recalculation
+
+
+def _sources() -> VietnamSources:
+    return VietnamSources(
+        skus=("VN-A", "VN-B"),
+        sales={
+            sku: {"SKU": sku, "仓库": "VN8806", "7天销量": 0, "15天销量": 0, "30天销量": 0}
+            for sku in ("VN-A", "VN-B")
+        },
+        inventory={
+            "VN-A": {"SKU": "VN-A", "仓库": "VN8806", "在途数量": 3, "可用库存": 0},
+            "VN-B": {"SKU": "VN-B", "仓库": "VN8806", "在途数量": 0, "可用库存": 0},
+        },
+        products={
+            "VN-A": {"SKU": "VN-A", "中文标题": "产品 A", "创建时间": "2026-09-23 10:00"},
+            "VN-B": {"SKU": "VN-B", "中文标题": "产品 B", "创建时间": "2024-01-02 03:04"},
+        },
+        missing_sales=(), missing_inventory=(), missing_products=(),
+        in_transit={"VN-A": Decimal("3"), "VN-B": Decimal("0")},
+        missing_in_transit=(), in_transit_mismatch=(), artifacts={},
+    )
+
+
+def _parameters() -> dict[str, SkuParameters]:
+    return {
+        "VN-A": SkuParameters(cost=Decimal("10"), cross_border_price=Decimal("20"), discount_price=Decimal("15")),
+        "VN-B": SkuParameters(cost=Decimal("5"), cross_border_price=Decimal("25"), discount_price=Decimal("18")),
+    }
+
+
+def _formula_caches(sources: VietnamSources, config: RecommendationConfig) -> dict[str, object]:
+    caches: dict[str, object] = {}
+    for row_number, sku in enumerate(sources.skus, 2):
+        caches.update({
+            f"H{row_number}": 0,
+            f"J{row_number}": 0,
+            f"K{row_number}": 0,
+            f"L{row_number}": 0,
+            f"M{row_number}": 0,
+            f"S{row_number}": 0,
+            f"T{row_number}": 0,
+            f"U{row_number}": "无动销无库存",
+            f"AA{row_number}": canonical_product_time(sources.products[sku]["创建时间"]),
+            f"AB{row_number}": "#DIV/0!",
+            f"AC{row_number}": 0,
+            f"AV{row_number}": config.weight_30d,
+            f"AW{row_number}": config.weight_15d,
+            f"AX{row_number}": config.weight_7d,
+            f"AY{row_number}": config.exchange_rate,
+        })
+    return caches
+
+
+def _set_formula_caches(path: Path, caches: dict[str, object]) -> None:
+    namespace = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+    ET.register_namespace("", namespace)
+    staged = path.with_name("cached.xlsx")
+    with ZipFile(path) as source, ZipFile(staged, "w") as target:
+        for info in source.infolist():
+            data = source.read(info.filename)
+            if info.filename == "xl/worksheets/sheet1.xml":
+                root = ET.fromstring(data)
+                found: set[str] = set()
+                for cell in root.iter(f"{{{namespace}}}c"):
+                    coordinate = cell.attrib.get("r")
+                    if coordinate not in caches:
+                        continue
+                    assert cell.find(f"{{{namespace}}}f") is not None, coordinate
+                    value = caches[coordinate]
+                    if isinstance(value, str):
+                        cell.attrib["t"] = "e" if value.startswith("#") else "str"
+                    else:
+                        cell.attrib.pop("t", None)
+                    cached = cell.find(f"{{{namespace}}}v")
+                    if cached is None:
+                        cached = ET.SubElement(cell, f"{{{namespace}}}v")
+                    cached.text = str(value)
+                    found.add(coordinate)
+                assert found == set(caches)
+                data = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+            target.writestr(info, data)
+    staged.replace(path)
+
+
+def _calculated_fixture(
+    path: Path,
+    *,
+    sources: VietnamSources | None = None,
+    parameters: dict[str, SkuParameters] | None = None,
+    config: RecommendationConfig | None = None,
+) -> Path:
+    current_sources = sources if sources is not None else _sources()
+    current_parameters = parameters if parameters is not None else _parameters()
+    current_config = config if config is not None else RecommendationConfig()
+    write_vietnam_workbook(path, current_sources, current_parameters, current_config)
+    _set_formula_caches(path, _formula_caches(current_sources, current_config))
+    return path
+
+
+def _edit_formula_workbook(path: Path, edit) -> None:
+    workbook = load_workbook(path, data_only=False)
+    try:
+        edit(workbook)
+        workbook.save(path)
+    finally:
+        workbook.close()
+    _set_formula_caches(path, _formula_caches(_sources(), RecommendationConfig()))
+
+
+def _validate(path: Path, *, parameters: dict[str, SkuParameters] | None = None) -> None:
+    recalculation.validate_recalculated_workbook(
+        path, sources=_sources(), parameters=parameters or _parameters(),
+        config=RecommendationConfig(),
+    )
+
+
+def test_packaged_writer_with_two_skus_passes_cached_result_validation(tmp_path: Path) -> None:
+    path = _calculated_fixture(tmp_path / "output.xlsx")
+    _validate(path)
+
+
+def test_known_zero_sales_available_days_error_is_narrowly_allowed(tmp_path: Path) -> None:
+    path = _calculated_fixture(tmp_path / "output.xlsx")
+    _validate(path)
+    _set_formula_caches(path, {"S2": 2})
+    with pytest.raises(recalculation.WorkbookGenerationError, match="AB2.*#DIV/0"):
+        _validate(path)
+
+
+@pytest.mark.parametrize("formula", ("=H2", "=ROUNDUP(T2*AC2-J2-AN2,-1)"))
+def test_second_sku_wrong_or_cross_row_replenishment_formula_is_rejected(
+    tmp_path: Path, formula: str
+) -> None:
+    path = _calculated_fixture(tmp_path / "wrong-formula.xlsx")
+    _edit_formula_workbook(path, lambda book: setattr(book["越南备货清单"]["H3"], "value", formula))
+    with pytest.raises(recalculation.WorkbookGenerationError) as error:
+        _validate(path)
+    assert "VN-B" in str(error.value)
+    assert "H3" in str(error.value)
+
+
+@pytest.mark.parametrize(
+    ("sheet", "coordinate", "field"),
+    (("雅仓动销", "E3", "7天销量"), ("雅仓库存", "J3", "可用库存")),
+)
+def test_recalculated_auxiliary_value_must_equal_current_source(
+    tmp_path: Path, sheet: str, coordinate: str, field: str
+) -> None:
+    path = _calculated_fixture(tmp_path / "wrong-auxiliary.xlsx")
+    _edit_formula_workbook(path, lambda book: setattr(book[sheet][coordinate], "value", 999))
+    with pytest.raises(recalculation.WorkbookGenerationError) as error:
+        _validate(path)
+    assert "VN-B" in str(error.value)
+    assert field in str(error.value)
+
+
+def test_blank_sku_row_cannot_hide_business_data(tmp_path: Path) -> None:
+    path = _calculated_fixture(tmp_path / "hidden-row.xlsx")
+    _edit_formula_workbook(path, lambda book: setattr(book["雅仓动销"]["E4"], "value", 77))
+    with pytest.raises(recalculation.WorkbookGenerationError) as error:
+        _validate(path)
+    assert "雅仓动销" in str(error.value)
+    assert "4" in str(error.value)
+    assert "SKU" in str(error.value)
+
+
+@pytest.mark.parametrize("formula", ("=数据更改!A20", "=数据更改!A2+999"))
+def test_parameter_formula_requires_exact_fixed_reference(tmp_path: Path, formula: str) -> None:
+    path = _calculated_fixture(tmp_path / "wrong-parameter.xlsx")
+    _edit_formula_workbook(path, lambda book: setattr(book["越南备货清单"]["AV3"], "value", formula))
+    with pytest.raises(recalculation.WorkbookGenerationError) as error:
+        _validate(path)
+    assert "VN-B" in str(error.value)
+    assert "AV3" in str(error.value)
+
+
+def test_finite_cached_replenishment_must_match_formula_inputs(tmp_path: Path) -> None:
+    path = _calculated_fixture(tmp_path / "wrong-cache.xlsx")
+    _set_formula_caches(path, {"H3": 10})
+    with pytest.raises(recalculation.WorkbookGenerationError) as error:
+        _validate(path)
+    assert "VN-B" in str(error.value)
+    assert "H3" in str(error.value)
+
+
+@pytest.mark.parametrize(
+    ("field", "coordinate", "label"),
+    (("cross_border_price", "AH2", "跨境价"), ("discount_price", "AM2", "折扣价")),
+)
+def test_zero_price_margin_error_names_sku_and_field(
+    tmp_path: Path, field: str, coordinate: str, label: str
+) -> None:
+    parameters = _parameters()
+    parameters["VN-A"] = replace(parameters["VN-A"], **{field: Decimal("0")})
+    path = _calculated_fixture(tmp_path / "zero-price.xlsx", parameters=parameters)
+    _set_formula_caches(path, {coordinate: "#DIV/0!"})
+    with pytest.raises(recalculation.WorkbookGenerationError) as error:
+        _validate(path, parameters=parameters)
+    assert "VN-A" in str(error.value)
+    assert label in str(error.value)
+    assert coordinate in str(error.value)
+
+
+def test_office_failure_preserves_actual_redacted_diagnostic(tmp_path: Path, monkeypatch) -> None:
+    source = tmp_path / "input.xlsx"
+    source.write_bytes(b"not material to mocked process")
+    monkeypatch.setenv("LXE_YACANG_PASSWORD", "private-secret")
+    monkeypatch.setattr(
+        recalculation.subprocess,
+        "run",
+        lambda *args, **kwargs: SimpleNamespace(
+            returncode=7, stderr="Kit failed on sheet 2: private-secret", stdout=""
+        ),
+    )
+    with pytest.raises(recalculation.WorkbookGenerationError) as error:
+        recalculation.recalculate_with_office(source, tmp_path / "output.xlsx")
+    assert "Kit failed on sheet 2" in str(error.value)
+    assert "private-secret" not in str(error.value)
+    assert "退出码 7" in str(error.value)
+
+
+def test_failed_generation_leaves_no_final_file(tmp_path: Path, monkeypatch) -> None:
+    output = tmp_path / "result.xlsx"
+    monkeypatch.setattr(recalculation, "load_sku_parameters", lambda path: _parameters())
+    monkeypatch.setattr(
+        recalculation,
+        "write_vietnam_workbook",
+        lambda path, sources, parameters, config: Path(path).write_bytes(b"draft"),
+    )
+
+    def fail_office(_source, _output):
+        raise recalculation.WorkbookGenerationError("Kit actual failure")
+
+    monkeypatch.setattr(recalculation, "recalculate_with_office", fail_office)
+    with pytest.raises(recalculation.WorkbookGenerationError, match="actual failure"):
+        recalculation.generate_vietnam_workbook(
+            tmp_path / "map.xlsx", output, sources=_sources()
+        )
+    assert not output.exists()
+    assert not list(tmp_path.glob(".vietnam-workbook-*"))
+
+
+def test_success_publishes_after_validation_without_overwriting(tmp_path: Path, monkeypatch) -> None:
+    output = tmp_path / "result.xlsx"
+    events: list[str] = []
+    monkeypatch.setattr(recalculation, "load_sku_parameters", lambda path: _parameters())
+
+    def write(path, sources, parameters, config):
+        events.append("write")
+        Path(path).write_bytes(b"draft")
+
+    def recalculate(source, target):
+        events.append("recalculate")
+        shutil.copyfile(source, target)
+
+    def validate(path, **kwargs):
+        events.append("validate")
+        assert Path(path).read_bytes() == b"draft"
+        assert not output.exists()
+
+    monkeypatch.setattr(recalculation, "write_vietnam_workbook", write)
+    monkeypatch.setattr(recalculation, "recalculate_with_office", recalculate)
+    monkeypatch.setattr(recalculation, "validate_recalculated_workbook", validate)
+    assert recalculation.generate_vietnam_workbook(
+        tmp_path / "map.xlsx", output, sources=_sources()
+    ) == output
+    assert events == ["write", "recalculate", "validate"]
+    assert output.read_bytes() == b"draft"
+    with pytest.raises(FileExistsError):
+        recalculation.generate_vietnam_workbook(
+            tmp_path / "map.xlsx", output, sources=_sources()
+        )
