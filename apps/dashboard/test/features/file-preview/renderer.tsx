@@ -19,7 +19,7 @@ let version = "1", slow = false, removedTreeFile = false;
 const pathOf = (ref: SessionFileRef) => ref.kind === "workspace" ? ref.path : ref.id;
 function metadata(ref: SessionFileRef): FileMetadata {
   const path = pathOf(ref), extension = path.slice(path.lastIndexOf("."));
-  return { key: ref.session_id + (ref.kind === "attachment" ? "history:" : "") + path, name: path, extension, size: 100, version, source: ref.kind === "attachment" ? "history" : "current_file", kind: extension === ".xlsx" || extension === ".csv" ? "excel" : extension === ".pdf" ? "pdf" : extension === ".png" ? "image" : extension === ".md" ? "markdown" : extension === ".html" ? "unsupported" : "text" };
+  return { key: ref.session_id + (ref.kind === "attachment" ? "history:" : "") + path, name: path, extension, size: 100, version, source: ref.kind === "attachment" ? "history" : "current_file", kind: extension === ".xlsx" || extension === ".csv" ? "excel" : extension === ".pdf" ? "pdf" : extension === ".png" ? "image" : extension === ".md" ? "markdown" : extension === ".zip" ? "unsupported" : "text" };
 }
 setFileBridgeForTests({
   call: async call => {
@@ -55,7 +55,7 @@ setFileBridgeForTests({
 } as DesktopFilesApi);
 function Controls({ session }: { session: string }) {
   const panel = usePreviewSidebar()!;
-  return <div><PreviewHeaderActions />{["文档.md", "book.xlsx", "table.csv", "doc.pdf", "图.png", "page.html"].map((name, i) => <button id={`open-${i}`} key={name} onClick={() => void panel.open({ session_id: session, kind: "workspace", path: name })}>{name}</button>)}<button id="open-history" onClick={() => void panel.open({ session_id: session, kind: "attachment", id: "图.png" }, "历史图片.png")}>历史图片</button><textarea id="draft" defaultValue="keep this draft" /></div>;
+  return <div><PreviewHeaderActions />{["文档.md", "book.xlsx", "table.csv", "doc.pdf", "图.png", "archive.zip"].map((name, i) => <button id={`open-${i}`} key={name} onClick={() => void panel.open({ session_id: session, kind: "workspace", path: name })}>{name}</button>)}<button id="open-history" onClick={() => void panel.open({ session_id: session, kind: "attachment", id: "图.png" }, "历史图片.png")}>历史图片</button><textarea id="draft" defaultValue="keep this draft" /></div>;
 }
 function Fixture() {
   const [session, setSession] = useState("first"), [cards, setCards] = useState(false);

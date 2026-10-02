@@ -75,10 +75,10 @@ test("native operations retain actual failures and reject an arbitrary applicati
   await expect(f.service.call({ operation: "open", input: { ref, application: "malicious" } })).rejects.toThrow("not registered");
   await f.service.call({ operation: "open", input: { ref, application: "installed" } }); expect(f.nativeCalls).toEqual(["installed"]);
 });
-test("text limits and unsupported HTML are explicit without reading arbitrary binaries", async () => {
-  const f = await fixture(); await writeFile(join(f.workspace, "large.txt"), Buffer.alloc(2 * 1024 * 1024 + 1)); await writeFile(join(f.workspace, "page.html"), "<script>bad()</script>");
+test("text limits and unsupported files are explicit without reading arbitrary binaries", async () => {
+  const f = await fixture(); await writeFile(join(f.workspace, "large.txt"), Buffer.alloc(2 * 1024 * 1024 + 1)); await writeFile(join(f.workspace, "archive.zip"), "<script>bad()</script>");
   await expect(f.service.call({ operation: "prepare", input: { ref: { ...ref, kind: "workspace", path: "large.txt" }, request_id: "large" } })).rejects.toThrow("limit");
-  const p = await f.service.call({ operation: "prepare", input: { ref: { ...ref, kind: "workspace", path: "page.html" }, request_id: "html" } }); expect(p.metadata.kind).toBe("unsupported"); expect(await f.service.read(p.handle)).toHaveLength(0);
+  const p = await f.service.call({ operation: "prepare", input: { ref: { ...ref, kind: "workspace", path: "archive.zip" }, request_id: "html" } }); expect(p.metadata.kind).toBe("unsupported"); expect(await f.service.read(p.handle)).toHaveLength(0);
 });
 test("conversion is coalesced, serial, cached, and cancelled only after the last consumer releases", async () => {
   const f = await fixture(); let calls = 0, active = 0, maxActive = 0;

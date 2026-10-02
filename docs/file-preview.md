@@ -17,7 +17,11 @@ Markdown 支持公式、Mermaid 和受限的本地图片，可切换渲染与纯
 
 图片和 PDF 共用底部缩放条，支持适应宽度、25%–400% 缩放、触控板捏合及 Ctrl+滚轮。图片 100% 对应固有 CSS 像素，PDF 100% 对应 96 DPI；PDF 可跳页、旋转和选择文字，单页画布不超过 16,777,216 像素。连续调宽时保留旧画面，稳定后更新视口附近页面。Word/PPT 使用随应用提供的 LibreOffice Kit 0.1.3 转为临时 PDF，缺失字体通过工具栏警告按钮展开。
 
-Excel 是只读表格，可选择、复制、切换工作表和查看公式栏。它显示文件保存的公式缓存，不重新计算；缓存缺失和检测到的图表、图片等遗漏会提示。CSV/TSV 中的前导零等字面值保留。HTML 和其他不支持的格式提供系统打开入口。
+Excel 是只读表格，可选择、复制、切换工作表和查看公式栏。它显示文件保存的公式缓存，不重新计算；缓存缺失和检测到的图表、图片等遗漏会提示。CSV/TSV 中的前导零等字面值保留。其他不支持的格式提供系统打开入口。
+
+HTML（`.html` / `.htm`）默认显示“网页预览”，也可切换到分页、高亮和可复制的“源码”。适合单页报告、图表和小型交互演示。支持内嵌 CSS、JavaScript，以及 HTML 直接引用的相对 `.css` 和普通 `.js`。data 图片、网络图片／脚本和网络请求交给浏览器，受 CORS 与混合内容规则约束；含 `<base href>` 时，相对资源也交给浏览器解析。
+
+第一版不打包独立本地图片、本地模块 import、CSS `url()` / `@import`、动态本地 `fetch` 或多页面工程。需要本地图片时可将图片转为 data URL。HTML 预览不是网站浏览器；页面不具备文件读取、应用 IPC 或 Node 权限，也不连接手动浏览器、紫鸟或 Agent 工具。刷新、切换查看方式或重新挂载后脚本重新运行，页面中的交互状态不保存。
 
 已发送图片使用会话保存的历史图片；工具结果图片和草稿附件沿用原交互。系统应用打开的是原文件。原文件缺失但历史图片可读取时，仍显示发送时的图片，并标记“源文件不存在”；系统打开和定位不可用。
 
@@ -33,6 +37,10 @@ Excel 是只读表格，可选择、复制、切换工作表和查看公式栏�
 
 文件引用只接受会话内的产物 ID、附件 ID 或工作区相对路径。Bun 运行时提供记录及工作目录，桌面检查规范路径和符号链接。Markdown 图片仅能读取文档所在目录及其子目录中的图片，不允许读取任意宿主路径。
 
+HTML 依赖在主进程读取：工作区文件限当前工作区，工作区外的已登记附件／产物限其所在目录及子目录。规范路径与符号链接检查通过后，才发布完整内存包；每个关联资源最多 4 MiB、最多 64 个不同引用，HTML 和依赖合计最多 32 MiB，统一严格 UTF-8 解码。缺失、编码错误或超限会显示真实诊断并提供重试，不发布残缺页面。活动预览沿用 1.5 秒及焦点检查，HTML 或已加载 CSS／JS 变化时重新准备。
+
+预览通过标准 Electron `lxe-preview:` 协议访问临时令牌，URL 不映射任意磁盘路径。iframe 使用 `sandbox="allow-scripts"`，只有隔离页可以创建资源 Blob；不授予同源、弹窗、表单、下载或顶层导航权限。主界面 CSP 仅增加该 frame 来源，其自身脚本权限保持不变，也不启用 CSP 绕过。关闭、切换或卸载时释放请求、内存包与 Blob；字节、临时 URL、脚本状态不写入会话 DB 或标签布局。
+
 文件内容使用短期句柄：二进制和文本分页分别走受限 IPC，不进入聊天 JSON 或持久界面存储。文件树仅缓存目录条目，阅读状态不保留文档字节或完整工作簿。预览不修改源文件。仅活动标签保留内容；关闭或切换会释放 Worker、句柄及不再使用的转换任务。文件监听配合活动轮询、窗口焦点检查与手动刷新，过期结果不会替换新结果。
 
 限制：普通文件 50 MiB，文本每页 2 MiB / 5,000 行，表格 16 MiB / 25 万单元格 / 15 秒解析，Office 转换 60 秒。转换串行且合并同文件请求，取消时终止 CLI 及其原生子进程。缓存位于应用数据目录的 `cache/file-previews/`，按内容和 Kit 版本复用，512 MiB / 七天闲置清理，正在使用的缓存保留。
@@ -45,6 +53,7 @@ PDF/表格查看器及 Worker 按需加载。PDF 字体、CMap、WASM 和许可�
 
 ```sh
 bun test apps/desktop/test/file-preview.test.ts apps/desktop/test/file-applications-windows.test.ts scripts/file-preview-resources.test.ts apps/dashboard/test/features/file-preview
+bun test apps/desktop/test/html-preview.test.ts apps/dashboard/test/features/html-preview/renderer.test.ts
 uv run --frozen python scripts/create-file-preview-fixtures.py
 bun scripts/verify-file-preview.ts
 ```
@@ -52,6 +61,8 @@ bun scripts/verify-file-preview.ts
 最后一个命令接受三个可选位置参数：样本目录、内置运行环境目录、验收输出目录。Windows 打包验收将第二个参数指向安装目录的 `resources/runtime`。报告记录真实转换错误、缺失字体和转换前后源文件哈希。
 
 界面测试通过生产 `app://` 资源处理器运行，阻断外部网络请求，并检查实际 PDF Worker 在切换标签后释放。Windows 原生关联测试在其他平台明确跳过。
+
+HTML 界面测试使用生产文件服务、IPC、preload、CSP 和真实 Electron iframe；本机 HTTP 夹具验证网络资源与 CORS，不依赖公网网站。它同时覆盖生产 `app://` 与开发 HTTP 来源、源码切换、依赖刷新、错误重试、会话切换和资源释放。可用 `LXE_HTML_SCREENSHOT` 保存测试窗口截图。
 
 `scripts/verify-preview-native.ts` 可先用 Bun 打包为 Node CJS（将 `electron` 保持 external），再用目标平台的 Electron 执行。它检查真实默认应用、指定应用、图标、文件定位和工作区打开，并生成 `report.json`。Windows 需在已登录的桌面会话中执行；SSH 的 Session 0 不能代表交互式 Shell 行为。
 

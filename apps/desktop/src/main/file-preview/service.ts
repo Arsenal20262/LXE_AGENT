@@ -8,10 +8,12 @@ import { readTextPage } from "./text-pages";
 import { validateRef, regularFile, workspacePath, readLimited } from "./paths";
 import { OfficePreviewCache } from "./office-cache";
 import { nativeFileApplications, openNativeFileApplication } from "./native/file-applications";
+import { HTML_MAX_BYTES, htmlDependency, htmlVersion, prepareHtmlDocument, type HtmlPreviewDocument } from "./html-preview";
 
 const MiB = 1024 * 1024;
 const IMAGE = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg", ".ico"]);
 export function previewKind(extension: string): FilePreviewKind {
+  if ([".html", ".htm"].includes(extension)) return "html";
   if ([".md", ".markdown"].includes(extension)) return "markdown";
   if (IMAGE.has(extension)) return "image";
   if (extension === ".pdf") return "pdf";
@@ -27,7 +29,7 @@ export interface FileServiceRuntime {
   resolveImagePreview(session: string, kind: "attachment", id: string): Promise<ConversationImagePreviewSource | undefined>;
 }
 interface Request { controller: AbortController; handle?: string; cacheRelease?: () => void }
-interface Handle { ref: SessionFileRef; metadata: FileMetadata; bytes: Uint8Array; path: string; touched: number; watcher?: FSWatcher; mode: "text" | "bytes"; signal: AbortSignal }
+interface Handle { ref: SessionFileRef; metadata: FileMetadata; bytes: Uint8Array; path: string; touched: number; watcher?: FSWatcher; mode: "text" | "bytes"; signal: AbortSignal; html?: HtmlPreviewDocument; htmlGeneration?: number }
 interface DirectoryWatch { session: string; relative: string; path: string; watcher: FSWatcher; revision: number; error?: Error; touched: number }
 export class FilePreviewService {
   private requests = new Map<string, Request>();
@@ -88,6 +90,25 @@ export class FilePreviewService {
     const call = raw as DesktopFileCall;
     if (!call.input || typeof call.input !== "object") throw new Error("File operation input is required");
     if (call.operation === "release") { this.release(this.requestId(call.input.request_id)); return; }
+    if (call.operation === "html.prepare" || call.operation === "html.version") {
+      const handle = this.htmlHandle(call.input.handle);
+      if (call.operation === "html.version") return { version: await this.htmlCurrentVersion(handle) };
+      const generation = handle.htmlGeneration = (handle.htmlGeneration ?? 0) + 1;
+      delete handle.html;
+      await this.read(call.input.handle);
+      const root = handle.ref.kind === "workspace" ? await this.runtime().resolveWorkspaceDirectory(handle.ref.session_id) : dirname(handle.path);
+      const document = await prepareHtmlDocument(handle.bytes, handle.path, root, handle.metadata.version, call.input.references, handle.signal);
+      await this.read(call.input.handle);
+      handle.signal.throwIfAborted();
+      if (handle.htmlGeneration !== generation) throw new Error("HTML preparation was superseded");
+      handle.html = document;
+      try {
+        if (await this.htmlCurrentVersion(handle) !== document.version) throw new Error("HTML files changed while preparing preview");
+      } catch (error) { if (handle.html === document) delete handle.html; throw error; }
+      handle.signal.throwIfAborted();
+      if (handle.html !== document) throw new Error("HTML preparation was superseded");
+      return { url: "lxe-preview://document/" + document.token, version: document.version };
+    }
     if (call.operation === "open-workspace" || call.operation === "watch-directory") {
       const { session_id } = call.input;
       if (typeof session_id !== "string" || !session_id) throw new Error("Invalid session");
@@ -154,9 +175,9 @@ export class FilePreviewService {
     try {
       const source = await this.describe(ref), metadata = source.metadata;
       const mode = call.input.mode ?? "bytes";
-      if (!["text", "bytes"].includes(mode) || mode === "text" && (source.history || !["text", "markdown"].includes(metadata.kind) && ![".csv", ".tsv", ".svg"].includes(metadata.extension))) throw new Error("Invalid text preview mode");
+      if (!["text", "bytes"].includes(mode) || mode === "text" && (source.history || !["text", "markdown", "html"].includes(metadata.kind) && ![".csv", ".tsv", ".svg"].includes(metadata.extension))) throw new Error("Invalid text preview mode");
       request.controller.signal.throwIfAborted();
-      const limit = metadata.kind === "excel" ? 16 * MiB : ["text", "markdown"].includes(metadata.kind) ? 2 * MiB : 50 * MiB;
+      const limit = metadata.kind === "html" ? HTML_MAX_BYTES : metadata.kind === "excel" ? 16 * MiB : ["text", "markdown"].includes(metadata.kind) ? 2 * MiB : 50 * MiB;
       if (mode === "bytes" && metadata.size > limit) throw new Error(`File exceeds preview limit (${limit / MiB} MiB): ${metadata.size} bytes`);
       let bytes: Uint8Array = mode === "text" || metadata.kind === "unsupported" ? new Uint8Array() : source.history ?? await readLimited(source.path, limit);
       if (bytes.byteLength > limit) throw new Error("File grew beyond the preview size limit");
@@ -218,6 +239,29 @@ export class FilePreviewService {
     const page = await sourceAccess(() => readTextPage(value.path, range, value.signal));
     await check(); value.signal.throwIfAborted();
     return { ...page, version: value.metadata.version };
+  }
+  private htmlHandle(id: string): Handle {
+    const value = typeof id === "string" ? this.handles.get(id) : undefined;
+    if (!value || value.mode !== "bytes" || value.metadata.kind !== "html") throw new Error("HTML preview expired or was closed");
+    value.touched = Date.now(); value.signal.throwIfAborted();
+    return value;
+  }
+  private async htmlCurrentVersion(value: Handle): Promise<string> {
+    if (!value.html) throw new Error("HTML preview has not been prepared");
+    const current = await this.describe(value.ref), bundle = value.html;
+    if (current.path !== value.path) return "source-changed";
+    const dependencies = await Promise.all(bundle.dependencies.map(asset => htmlDependency(value.path, bundle.root, asset)));
+    value.signal.throwIfAborted();
+    return htmlVersion(current.metadata.version, dependencies);
+  }
+  /** The protocol serves only an existing, still-authorized in-memory package. */
+  async htmlDocument(token: string): Promise<string> {
+    const value = [...this.handles.values()].find(handle => handle.html?.token === token);
+    if (!value?.html) throw new Error("HTML preview expired or was closed");
+    const bundle = value.html;
+    value.touched = Date.now();
+    if (await this.htmlCurrentVersion(value) !== bundle.version || value.html !== bundle) throw new Error("HTML files changed; reload preview");
+    return bundle.document;
   }
   private async directoryVersion(value: DirectoryWatch): Promise<string> {
     const path = await workspacePath(await this.runtime().resolveWorkspaceDirectory(value.session), value.relative);

@@ -429,3 +429,5 @@
 .tool-browser-viewport>p { margin:32px 16px; color:var(--muted); text-align:center; font-size:13px; }
 .tool-browser-toolbar .is-loading { animation:tool-spin 1s linear infinite; }
 @keyframes tool-spin { to { transform:rotate(360deg); } }
+
+.file-html-preview { display:block; width:100%; flex:1; min-height:0; border:0; background:white; color-scheme:light; }

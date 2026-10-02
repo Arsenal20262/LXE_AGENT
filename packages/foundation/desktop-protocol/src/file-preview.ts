@@ -4,7 +4,8 @@ export type SessionFileRef = { session_id: string } & (
   | { kind: "attachment"; id: string }
   | { kind: "workspace"; path: string }
 );
-export type FilePreviewKind = "markdown" | "text" | "image" | "pdf" | "office" | "excel" | "unsupported";
+export type FilePreviewKind = "markdown" | "text" | "image" | "pdf" | "office" | "excel" | "html" | "unsupported";
+export type HtmlPreviewReference = { kind: "script" | "stylesheet"; reference: string };
 export type FileMetadata = { key: string; name: string; displayPath?: string; size: number; version: string; kind: FilePreviewKind; extension: string; source: "current_file" | "history" };
 export type FileApplication = { id: string; name: string; icon: string | null; default: boolean };
 export type DirectoryPage = { entries: Array<{ name: string; path: string; kind: "file" | "directory" | "other" }>; next: number | null; rootPath?: string; version?: string };
@@ -19,6 +20,8 @@ export interface DesktopFileOperations {
   applications: { input: { ref: SessionFileRef; refresh?: boolean }; result: FileApplication[] };
   open: { input: { ref: SessionFileRef; application?: string; reveal?: boolean }; result: void };
   prepare: { input: { ref: SessionFileRef; request_id: string; mode?: "text" | "bytes" }; result: PreparedPreview };
+  "html.prepare": { input: { handle: string; references: HtmlPreviewReference[] }; result: { url: string; version: string } };
+  "html.version": { input: { handle: string }; result: { version: string } };
   "open-workspace": { input: { session_id: string }; result: void };
   "watch-directory": { input: { session_id: string; path: string; request_id: string }; result: { version: string } };
   "directory-version": { input: { request_id: string }; result: { version: string } };

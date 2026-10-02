@@ -13,6 +13,7 @@ import { type ReadingState, type ViewMode } from "./reading-state";
 import { useZoom, ZoomBar } from "./Zoom";
 const PdfViewer = lazy(() => import("./PdfViewer"));
 const ExcelViewer = lazy(() => import("./excel/ExcelViewer"));
+const HtmlViewer = lazy(() => import("./html/HtmlViewer"));
 class PreviewBoundary extends Component<{ children: ReactNode; failed(error: unknown): void }, { error: string }> {
   state = { error: "" };
   static getDerivedStateFromError(error: unknown) { return { error: errorText(error) }; }
@@ -31,7 +32,7 @@ export function viewModes(name: string): ViewMode[] {
   if (["xlsx", "xls"].includes(ext ?? "")) return ["table"];
   if (["png", "jpg", "jpeg", "gif", "webp", "bmp", "ico"].includes(ext ?? "")) return ["image"];
   if (["pdf", "doc", "docx", "ppt", "pptx"].includes(ext ?? "")) return ["pdf"];
-  if (["html", "htm"].includes(ext ?? "")) return ["unsupported"];
+  if (["html", "htm"].includes(ext ?? "")) return ["html", "code"];
   return languageForPath(name) || ["ps1", "rs", "go", "c", "cpp", "h", "java", "rb"].includes(ext ?? "") ? ["code", "plain"] : ["txt", "log", "ini", "env", "gitignore"].includes(ext ?? "") ? ["plain"] : ["unsupported"];
 }
 function imageType(extension: string) { return extension === ".svg" ? "image/svg+xml" : extension === ".jpg" ? "image/jpeg" : `image/${extension.slice(1)}`; }
@@ -166,7 +167,7 @@ export function DocumentViewer({ file, name, state, resolved }: { file: SessionF
   }, [key, revision, mode]);
   // An explicit native open may notice deletion before the next active-tab check.
   useEffect(() => { if (availability.previewError && preview) fatal.current(new FilePreviewError(availability.previewError)); }, [availability.previewError, preview]);
-  const labels: Record<ViewMode, string> = { rendered: t.rendered, plain: t.plain, code: t.code, image: t.imageView, table: t.tableView, pdf: "PDF", unsupported: "" };
+  const labels: Record<ViewMode, string> = { rendered: t.rendered, plain: t.plain, code: metadata?.kind === "html" ? t.htmlSource : t.code, image: t.imageView, table: t.tableView, pdf: "PDF", html: t.html, unsupported: "" };
   const path = metadata?.displayPath ?? name, split = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
   return <section className="file-document">
     <header className="file-document-toolbar"><span className="file-display-path" title={path}><span>{path.slice(0, split + 1)}</span>{path.slice(split + 1)}</span>
@@ -183,6 +184,7 @@ export function DocumentViewer({ file, name, state, resolved }: { file: SessionF
           : textMode ? <PagedText key={`${preview.handle}:${mode}`} preview={preview} state={state} mode={mode} wrap={wrap} failed={cause => fatal.current(cause)} />
           : mode === "image" ? <ImageViewer bytes={bytes!} extension={preview.metadata.extension} name={name} state={state} failed={cause => fatal.current(cause)} />
           : mode === "pdf" ? <PdfViewer bytes={bytes!} state={state} failed={cause => fatal.current(cause)} />
+          : mode === "html" ? <HtmlViewer handle={preview.handle} bytes={bytes!} reload={refresh} failed={cause => fatal.current(cause)} />
           : <ExcelViewer bytes={bytes!} name={name} state={state} failed={cause => fatal.current(cause)} />}
       </Suspense></PreviewBoundary>}
     </div>

@@ -44,6 +44,7 @@ import {
 } from "@lxe/gateway/desktop";
 import { IPC_CHANNELS } from "./ipc-channels";
 import { registerDashboardProtocol } from "./main/app-protocol";
+import { DASHBOARD_CSP, HTML_PREVIEW_SCHEME, registerHtmlPreviewProtocol } from "./main/file-preview/html-protocol";
 import { createTrayIcon } from "./main/brand";
 import { resolveDesktopBrandAssets } from "./main/brand-assets";
 import { DesktopConversationAttachmentService } from "./main/conversation-attachments";
@@ -97,7 +98,7 @@ protocol.registerSchemesAsPrivileged([{
     supportFetchAPI: true,
     corsEnabled: false,
   },
-}]);
+}, HTML_PREVIEW_SCHEME]);
 
 const launchMode = resolveDesktopLaunchMode({
   packaged: app.isPackaged,
@@ -544,6 +545,7 @@ async function bootstrap(): Promise<void> {
     inputAssetSlotDirectory: (slot) => inputAssets.directoryFor(slot),
     registerConversationFiles: (selectedPaths) => conversationAttachments.register(selectedPaths),
     registerPastedConversationFiles: (input) => conversationAttachments.registerPaste(input),
+    isTrustedFileSender: event => !!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame,
     fileCall: call => gateway.fileCall(call),
     fileRead: (handle, relativeImage) => gateway.fileRead(handle, relativeImage),
     fileReadText: (handle, range) => gateway.fileReadText(handle, range),
@@ -556,6 +558,7 @@ async function bootstrap(): Promise<void> {
   removeIpcHandlers = registerDesktopIpc(ipcApplication);
   manualTools = new ManualToolsService(() => window, dirname(fileURLToPath(import.meta.url)), id => gateway.resolveWorkspaceDirectory(id));
   manualTools.register();
+  registerHtmlPreviewProtocol(session.defaultSession, token => gateway.htmlPreviewDocument(token));
 
   if (productionRenderer) {
     registerDashboardProtocol(paths.dashboardRoot);
@@ -567,11 +570,7 @@ async function bootstrap(): Promise<void> {
       callback({
         responseHeaders: {
           ...details.responseHeaders,
-          "Content-Security-Policy": [
-            "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; "
-            + "img-src 'self' data: blob:; worker-src 'self'; font-src 'self' data:; connect-src 'self'; object-src 'none'; "
-            + "base-uri 'self'; frame-ancestors 'none'",
-          ],
+          "Content-Security-Policy": [DASHBOARD_CSP],
         },
       });
     });

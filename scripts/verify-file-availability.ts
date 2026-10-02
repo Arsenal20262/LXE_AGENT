@@ -19,7 +19,7 @@ app.whenReady().then(async () => {
     resolveAttachment: async (session, id) => session === "acceptance" && id === "history" ? join(root, "missing-original.png") : undefined,
     resolveImagePreview: async () => ({ source: "history", image: { type: "image", source: { type: "base64", media_type: "image/png", data: "aGlzdG9yeQ==" } } }),
   }), new OfficePreviewCache(join(root, "cache"), join(root, "missing-node-engine"), "cli"), { openPath: path => shell.openPath(path), revealPath: path => shell.showItemInFolder(path) });
-  const unregister = registerDesktopIpc({ fileCall: call => service.call(call), fileRead: (handle, relative) => service.read(handle, relative), fileReadText: (handle, range) => service.readText(handle, range) } as DesktopIpcApplication);
+  const unregister = registerDesktopIpc({ isTrustedFileSender: event => event.sender === win.webContents && event.senderFrame === win.webContents.mainFrame, fileCall: call => service.call(call), fileRead: (handle, relative) => service.read(handle, relative), fileReadText: (handle, range) => service.readText(handle, range) } as DesktopIpcApplication);
   const win = new BrowserWindow({ show: false, webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload } });
   const execute = (code: string) => win.webContents.executeJavaScript(code);
   const call = (operation: string, input: unknown = { ref }) => execute(`window.lxe.files.call(${JSON.stringify({ operation, input })})`);

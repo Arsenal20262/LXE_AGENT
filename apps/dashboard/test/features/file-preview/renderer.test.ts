@@ -29,7 +29,7 @@ beforeAll(async () => {
   const workbook = new ExcelJS.Workbook(), sheet = workbook.addWorksheet("Sales");
   sheet.addRows([["SKU", "Units", "Total"], ["001", 5, { formula: "B2*2", result: 10 }]]);
   workbook.addWorksheet("Notes").getCell("A1").value = "Keep this worksheet";
-  const fixtures: Record<string, any> = { "book.xlsx": await workbook.xlsx.writeBuffer(), "table.csv": "SKU,Value\n001,20\n", "文档.md": "# Preview heading\n\n![Local image](图.png)\n\nInline math $x^2$\n" + "\n段落内容 ".repeat(4992) + "\n```ts\nconst first = 1;\nconst last = 2;\n```\n", "doc.pdf": pdf(), "图.png": Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Z5ZkAAAAASUVORK5CYII=", "base64"), "page.html": "<h1>Never execute</h1>" };
+  const fixtures: Record<string, any> = { "book.xlsx": await workbook.xlsx.writeBuffer(), "table.csv": "SKU,Value\n001,20\n", "文档.md": "# Preview heading\n\n![Local image](图.png)\n\nInline math $x^2$\n" + "\n段落内容 ".repeat(4992) + "\n```ts\nconst first = 1;\nconst last = 2;\n```\n", "doc.pdf": pdf(), "图.png": Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Z5ZkAAAAASUVORK5CYII=", "base64"), "archive.zip": "<h1>Never execute</h1>" };
   if (process.env.LXE_PREVIEW_OFFICE_PDF) fixtures["doc.pdf"] = await Bun.file(process.env.LXE_PREVIEW_OFFICE_PDF).arrayBuffer();
   for (const [name, value] of Object.entries(fixtures)) await Bun.write(resolve(output, "fixtures", name), value);
   const protocol = await Bun.build({ entrypoints: [resolve(import.meta.dirname, "../../../../desktop/src/main/app-protocol.ts")], outdir: resolve(output, "main"), target: "node", format: "cjs", external: ["electron"] });

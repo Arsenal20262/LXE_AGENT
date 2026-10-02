@@ -71,7 +71,7 @@ app.whenReady().then(async () => {
       assert.ok(requested.some(path=>path.includes("pdf.worker")));
       assert.equal(await js("previewFixture.workers.size"), 1, "PDF runs in its dedicated worker");
     });
-    await step("Image and unsupported HTML", async () => {
+    await step("Image and unsupported files", async () => {
       await click("#open-4"); await wait("document.querySelector('.file-image img')?.naturalWidth > 0", "image");
       await wait("previewFixture.workers.size === 0", "PDF worker released after changing tabs");
       await click("#open-5"); await wait("!!document.querySelector('.file-preview-empty')", "unsupported");
