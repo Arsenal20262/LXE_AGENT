@@ -1,5 +1,6 @@
 import { mkdirSync } from "node:fs";
-import { assertPermissionExecutionAvailable, type ExecutionPolicy } from "../../permissions/policy";
+import type { ExecutionPolicy } from "../../permissions/policy";
+import { ExecSandbox, assertExecSandboxBoundaries, type ExecSandboxInfo } from "../../permissions/exec-sandbox";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { createLogger, runWithLogContext } from "@lxe/core";
@@ -10,6 +11,7 @@ import type { ProcessStatus } from "./public-types";
 
 interface ProcessEntry {
   id: string;
+  sandbox: ExecSandboxInfo;
   toolCallId: string;
   command: string;
   cwd: string;
@@ -64,6 +66,7 @@ export class CodingProcessManager {
     maxOutputBytes: number;
     tailBytes: number;
     shell: ExecShellAdapter;
+    sandbox?: ExecSandbox;
   }) {}
 
   async start(): Promise<void> {}
@@ -117,7 +120,7 @@ export class CodingProcessManager {
     turnId?: string;
     env?: Record<string, string>;
   }): Promise<JsonObject> {
-    assertPermissionExecutionAvailable(request.executionPolicy);
+    assertExecSandboxBoundaries(request.executionPolicy);
     this.throwIfAborted(request.signal);
     const started = await this.withAdmission(request.sessionId, async () => {
       await this.enforceCapacity(request.sessionId);
@@ -153,9 +156,11 @@ export class CodingProcessManager {
   }): { entry: ProcessEntry } | { failure: JsonObject } {
     const id = `exec_${randomUUID().replaceAll("-", "")}`;
     let child: ReturnType<typeof Bun.spawn>;
+    let sandbox: ExecSandboxInfo;
     try {
       mkdirSync(request.executionPolicy.temporaryDirectory, { recursive: true });
-      const spawn = this.options.shell.spawnSpec(request.command);
+      const spawn = (this.options.sandbox ?? new ExecSandbox()).prepare(request.executionPolicy, this.options.shell.spawnSpec(request.command));
+      sandbox = spawn.sandbox;
       child = Bun.spawn(spawn.argv, {
         cwd: request.cwd,
         stdin: "ignore",
@@ -221,6 +226,7 @@ export class CodingProcessManager {
     }
     const entry: ProcessEntry = {
       id,
+      sandbox,
       toolCallId: request.toolCallId,
       command: request.command,
       cwd: request.cwd,
@@ -328,6 +334,7 @@ export class CodingProcessManager {
       const slice = entry.output.renderSince(entry.outputCursor);
       const payload: JsonObject = {
         exec_id: entry.id,
+      sandbox: { ...entry.sandbox },
         status: terminal ? entry.status : "running",
         new_output: slice.text || "(no new output)",
       };
@@ -452,6 +459,7 @@ export class CodingProcessManager {
     const payload: JsonObject = {
       status: entry.status,
       exec_id: entry.id,
+      sandbox: { ...entry.sandbox },
       exit_code: entry.exitCode,
       output: entry.output.renderRetained().trim() || "(no output)",
       duration_sec: this.duration(entry),
@@ -467,6 +475,7 @@ export class CodingProcessManager {
     const payload: JsonObject = {
       status: entry.status,
       exec_id: entry.id,
+      sandbox: { ...entry.sandbox },
       pid: entry.process.pid,
       duration_sec: this.duration(entry),
       message: `命令仍在运行。使用 wait(exec_id='${entry.id}') 查看新输出或终止命令。`,
@@ -482,6 +491,7 @@ export class CodingProcessManager {
     const endedAt = entry.endedAt ?? null;
     return {
       exec_id: entry.id,
+      sandbox: { ...entry.sandbox },
       tool_call_id: entry.toolCallId,
       session_id: entry.sessionId,
       origin_turn_id: entry.turnId,
@@ -653,6 +663,7 @@ export class CodingProcessManager {
   private processFields(entry: ProcessEntry): JsonObject {
     return {
       pid: entry.process.pid,
+      sandbox: { ...entry.sandbox },
       task_id: entry.id,
       status: entry.status,
       duration_ms: Math.max(0, Math.round(((entry.endedAt ?? Date.now() / 1_000) - entry.startedAt) * 1_000)),
