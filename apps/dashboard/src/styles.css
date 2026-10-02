@@ -8738,9 +8738,7 @@ pre {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
-/* A neutral fill, the same one the heatmap's idle days use, so the two halves
-   of the panel read as one surface instead of two. The fill alone draws the
-   tile - a border around a block this small only makes it look heavier. */
+/* Quiet neutral tiles keep the numbers prominent without extra borders. */
 .welcome-metrics > div {
   display: grid;
   min-width: 0;
@@ -8748,6 +8746,10 @@ pre {
   padding: 4px 8px;
   border-radius: 7px;
   background: var(--conversation-muted-fill);
+}
+
+:root[data-theme="dark"] .welcome-metrics > div {
+  background: #3d3b39;
 }
 
 /* A dd carries a 40px indent from the user-agent sheet, which quietly ate more
@@ -8786,6 +8788,11 @@ pre {
 }
 
 .welcome-heatmap {
+  --heatmap-empty: var(--conversation-muted-fill);
+  --heatmap-level-1: color-mix(in srgb, var(--accent) 28%, var(--conversation-muted-fill));
+  --heatmap-level-2: color-mix(in srgb, var(--accent) 52%, var(--conversation-muted-fill));
+  --heatmap-level-3: color-mix(in srgb, var(--accent) 76%, var(--conversation-muted-fill));
+  --heatmap-level-4: var(--accent);
   display: grid;
   width: 100%;
   aspect-ratio: var(--heatmap-columns) / 7;
@@ -8795,15 +8802,25 @@ pre {
   grid-template-rows: repeat(7, minmax(0, 1fr));
 }
 
-.welcome-heatmap-cell {
-  border-radius: 2px;
-  background: var(--conversation-muted-fill);
+/* Idle days must remain visible against the panel. A dedicated dark ramp
+   keeps low activity distinct instead of mixing the accent into muddy grey. */
+:root[data-theme="dark"] .welcome-heatmap {
+  --heatmap-empty: #43413e;
+  --heatmap-level-1: #87553b;
+  --heatmap-level-2: #b4754e;
+  --heatmap-level-3: #db9869;
+  --heatmap-level-4: #f2bd8d;
 }
 
-.welcome-heatmap-cell[data-level="1"] { background: color-mix(in srgb, var(--accent) 28%, var(--conversation-muted-fill)); }
-.welcome-heatmap-cell[data-level="2"] { background: color-mix(in srgb, var(--accent) 52%, var(--conversation-muted-fill)); }
-.welcome-heatmap-cell[data-level="3"] { background: color-mix(in srgb, var(--accent) 76%, var(--conversation-muted-fill)); }
-.welcome-heatmap-cell[data-level="4"] { background: var(--accent); }
+.welcome-heatmap-cell {
+  border-radius: 2px;
+  background: var(--heatmap-empty);
+}
+
+.welcome-heatmap-cell[data-level="1"] { background: var(--heatmap-level-1); }
+.welcome-heatmap-cell[data-level="2"] { background: var(--heatmap-level-2); }
+.welcome-heatmap-cell[data-level="3"] { background: var(--heatmap-level-3); }
+.welcome-heatmap-cell[data-level="4"] { background: var(--heatmap-level-4); }
 
 .welcome-status {
   color: var(--muted);
