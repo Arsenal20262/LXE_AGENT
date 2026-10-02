@@ -386,13 +386,13 @@ flowchart LR
 
 ### `desktop:pack:win`：检查真实目录
 
-这条路线会构建当前 wheel、Agent CLI、Dashboard 和 Electron，准备全部资源，生成真实 `win-unpacked`，并执行体积门禁。
+这条路线会构建当前 wheel、Agent CLI、Dashboard 和 Electron，准备全部资源，生成真实 `win-unpacked`，统计体积并检查打包资源。
 
 它适合日常确认：
 
 - 有没有漏带文件。
 - 目录是否符合真实安装后的布局。
-- Runtime 和整个应用是否超过体积预算。
+- Runtime、整个应用及各类资源分别占用多少空间。
 
 它不会自动启动产物，也不会验证安装目录、快捷方式、升级、卸载和 WireGuard UAC 行为。
 
@@ -416,12 +416,15 @@ bun run release:build
 desktop-resource-sizes.json
 ```
 
-当前预算是：
+报告记录解包后文件的字节总量和文件数，按 Electron、Python、Node、Office、Agent CLI 等分类。报告版本为 `schema_version: 2`，不再包含 `budgets` 字段。体积只用于观察，不设固定上限，也不会因为体积增长阻止打包。
 
-- 受管 Runtime 不超过 950 MiB。
-- 完整 `win-unpacked` 不超过 1.30 GiB。
+资源检查仍要求：
 
-超过预算会直接打包失败。
+- 不携带独立的 Playwright Chromium 浏览器目录内容。
+- Python 的 Playwright driver 不携带重复的 Node 可执行文件。
+- ExifTool 可执行文件和非空的 `exiftool_files` 支持目录齐全。
+
+报告先写入磁盘，再检查资源；资源检查失败会终止打包并保留报告。正式路线通过检查后才记录发布候选。
 
 当前流水线不会自动启动打包后的应用，也不会自动走完安装、升级和卸载。因此正式发布前，仍需要在 Windows 测试机上人工确认：
 
@@ -438,4 +441,4 @@ desktop-resource-sizes.json
 
 Windows 签名使用 electron-builder 的 `CSC_LINK` 与 `CSC_KEY_PASSWORD`，凭据不提交仓库。macOS 源码验证不覆盖私有 Runtime 分发、签名或 notarization；未建立对应流水线前，不将普通 Mac 构建视为正式安装包。
 
-资源选择、裁剪和体积门禁以 [`prepare-desktop-resources.ts`](../../scripts/prepare-desktop-resources.ts) 与 [`report-desktop-resource-sizes.ts`](../../scripts/report-desktop-resource-sizes.ts) 为准，避免沿用旧安装包体积样本作为当前保证。
+资源选择、裁剪、体积统计和资源检查以 [`prepare-desktop-resources.ts`](../../scripts/prepare-desktop-resources.ts) 与 [`report-desktop-resource-sizes.ts`](../../scripts/report-desktop-resource-sizes.ts) 为准，避免沿用旧安装包体积样本作为当前保证。

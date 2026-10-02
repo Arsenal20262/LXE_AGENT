@@ -1,12 +1,11 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  assertDesktopResourceSizeBudgets,
+  assertPackagedDesktopResources,
   createDesktopResourceSizeReport,
-  DESKTOP_RUNTIME_BUDGET_BYTES,
-  DESKTOP_UNPACKED_BUDGET_BYTES,
+  writeDesktopResourceSizeReport,
 } from "../../../scripts/report-desktop-resource-sizes";
 
 const temporaryRoots: string[] = [];
@@ -41,8 +40,13 @@ describe("desktop resource size report", () => {
       Buffer.alloc(37),
     );
 
-    const report = createDesktopResourceSizeReport(root);
+    const reportPath = `${root}.json`;
+    temporaryRoots.push(reportPath);
+    const report = writeDesktopResourceSizeReport(root, reportPath);
 
+    expect(JSON.parse(readFileSync(reportPath, "utf8"))).toEqual(report);
+    expect(report.schema_version).toBe(2);
+    expect(report).not.toHaveProperty("budgets");
     expect(report.total.bytes).toBe(164);
     expect(report.electron.bytes).toBe(11);
     expect(report.resources.runtime.total.bytes).toBe(153);
@@ -57,11 +61,7 @@ describe("desktop resource size report", () => {
     expect(report.resources.runtime.tools.exiftool.bytes).toBe(68);
     expect(report.resources.runtime.tools.exiftool_executable.bytes).toBe(31);
     expect(report.resources.runtime.tools.exiftool_support.bytes).toBe(37);
-    expect(report.budgets.runtime.limit_bytes).toBe(DESKTOP_RUNTIME_BUDGET_BYTES);
-    expect(report.budgets.unpacked.limit_bytes).toBe(DESKTOP_UNPACKED_BUDGET_BYTES);
-    expect(report.budgets.runtime.passed).toBe(true);
-    expect(report.budgets.unpacked.passed).toBe(true);
-    expect(() => assertDesktopResourceSizeBudgets(report)).not.toThrow();
+    expect(() => assertPackagedDesktopResources(report)).not.toThrow();
     mkdirSync(join(runtime, "office"));
     writeFileSync(join(runtime, "office", "engine.exe"), Buffer.alloc(41));
     const withOffice = createDesktopResourceSizeReport(root);
@@ -69,7 +69,7 @@ describe("desktop resource size report", () => {
     expect(withOffice.resources.runtime.total.bytes).toBe(194);
     expect(withOffice.total.bytes).toBe(205);
     writeFileSync(join(runtime, "playwright", "chrome.exe"), Buffer.alloc(23));
-    expect(() => assertDesktopResourceSizeBudgets(createDesktopResourceSizeReport(root))).toThrow("Standalone Chromium must not be packaged");
+    expect(() => assertPackagedDesktopResources(createDesktopResourceSizeReport(root))).toThrow("Standalone Chromium must not be packaged");
   });
 
   test("rejects a packaged Playwright driver containing its duplicate Node runtime", () => {
@@ -108,23 +108,23 @@ describe("desktop resource size report", () => {
       bytes: 1024,
       files: 1,
     });
-    expect(() => assertDesktopResourceSizeBudgets(reportWithExifTool)).toThrow(
+    expect(() => assertPackagedDesktopResources(reportWithExifTool)).toThrow(
       "Playwright driver contains a duplicate Node runtime",
     );
   });
 
-  test("fails explicitly when either size budget is exceeded", () => {
-    const root = mkdtempSync(join(tmpdir(), "lxe-resource-budget-"));
+  test("accepts resources above the former runtime and unpacked size limits", () => {
+    const root = mkdtempSync(join(tmpdir(), "lxe-resource-size-"));
     temporaryRoots.push(root);
     mkdirSync(join(root, "resources", "runtime"), { recursive: true });
     writeFileSync(join(root, "LXE Agent.exe"), "desktop", "utf8");
     const report = createDesktopResourceSizeReport(root);
     report.resources.runtime.tools.exiftool_executable.files = 1;
     report.resources.runtime.tools.exiftool_support.files = 1;
-    report.budgets.runtime.passed = false;
-    report.budgets.runtime.mib = 951;
+    report.resources.runtime.total = { bytes: 1024 ** 3, mib: 1024, files: 1 };
+    report.total = { bytes: 2 * 1024 ** 3, mib: 2048, files: 2 };
 
-    expect(() => assertDesktopResourceSizeBudgets(report)).toThrow("runtime is 951 MiB");
+    expect(() => assertPackagedDesktopResources(report)).not.toThrow();
   });
 
   test("fails when the packaged ExifTool runtime is incomplete", () => {
@@ -133,10 +133,12 @@ describe("desktop resource size report", () => {
     mkdirSync(join(root, "resources", "runtime"), { recursive: true });
     writeFileSync(join(root, "LXE Agent.exe"), "desktop", "utf8");
 
-    const report = createDesktopResourceSizeReport(root);
+    const reportPath = `${root}.json`;
+    temporaryRoots.push(reportPath);
 
-    expect(() => assertDesktopResourceSizeBudgets(report)).toThrow(
-      "ExifTool executable or exiftool_files support directory is missing",
+    expect(() => writeDesktopResourceSizeReport(root, reportPath)).toThrow(
+      "Packaged desktop resource validation failed: ExifTool executable or exiftool_files support directory is missing",
     );
+    expect(JSON.parse(readFileSync(reportPath, "utf8")).resources.runtime.tools.exiftool_executable.files).toBe(0);
   });
 });

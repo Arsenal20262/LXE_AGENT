@@ -282,7 +282,7 @@ try {
     if (-not (Test-Path -LiteralPath $packagedExecutable -PathType Leaf)) {
         throw "Packaged desktop executable is missing: $packagedExecutable"
     }
-    Invoke-LxeDesktopBuildStep -Label "Enforce desktop resource size budgets" -Arguments @(
+    Invoke-LxeDesktopBuildStep -Label "Report desktop sizes and validate packaged resources" -Arguments @(
         "scripts/report-desktop-resource-sizes.ts",
         (Split-Path -Parent $packagedExecutable),
         $sizeReport

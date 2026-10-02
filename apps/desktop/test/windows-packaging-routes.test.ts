@@ -68,7 +68,7 @@ describe("Windows desktop packaging routes", () => {
     expect(wrapper).toContain('"Load desktop product version"');
     expect(wrapper).toContain('$env:LXE_DESKTOP_PRODUCT_VERSION = [string]$selection.selected_version');
     expect(wrapper).toMatch(
-      /"Enforce desktop resource size budgets"[\s\S]+if \(\$PackageTarget -eq "Nsis"\) \{[\s\S]+& \$bunCommand\.Source \$versionSelector "candidate"/u,
+      /"Report desktop sizes and validate packaged resources"[\s\S]+if \(\$PackageTarget -eq "Nsis"\) \{[\s\S]+& \$bunCommand\.Source \$versionSelector "candidate"/u,
     );
     expect(wrapper).toContain('if ($PackageTarget -eq "Unpacked")');
     expect(wrapper).toContain('"dist\\desktop-unpacked"');
@@ -77,7 +77,7 @@ describe("Windows desktop packaging routes", () => {
       /else \{\s+\$packageOutputRoot = Join-Path \$repositoryRoot "dist\\desktop"\s+if \(Test-Path -LiteralPath \$packageOutputRoot\) \{\s+Remove-Item -LiteralPath \$packageOutputRoot -Recurse -Force\s+\}\s+Invoke-LxeDesktopBuildStep -Label "Build NSIS installer"/u,
     );
     expect(wrapper).toContain('"Build NSIS installer"');
-    expect(wrapper).toContain('"Enforce desktop resource size budgets"');
+    expect(wrapper).toContain('"Report desktop sizes and validate packaged resources"');
     expect(wrapper.match(/"Build current LXE project wheel"/gu)).toHaveLength(1);
     expect(wrapper.match(/"Compile private agent-cli"/gu)).toHaveLength(1);
     expect(wrapper.match(/"Build Dashboard and Electron"/gu)).toHaveLength(1);

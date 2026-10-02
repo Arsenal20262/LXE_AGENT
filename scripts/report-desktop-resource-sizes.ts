@@ -8,9 +8,6 @@ import {
 import { dirname, join, resolve } from "node:path";
 
 const MIB = 1024 ** 2;
-const GIB = 1024 ** 3;
-export const DESKTOP_RUNTIME_BUDGET_BYTES = 950 * MIB;
-export const DESKTOP_UNPACKED_BUDGET_BYTES = Math.floor(1.3 * GIB);
 
 export interface SizeSummary {
   bytes: number;
@@ -18,16 +15,8 @@ export interface SizeSummary {
   files: number;
 }
 
-interface BudgetSummary {
-  bytes: number;
-  mib: number;
-  limit_bytes: number;
-  limit_mib: number;
-  passed: boolean;
-}
-
 export interface DesktopResourceSizeReport {
-  schema_version: 1;
+  schema_version: 2;
   platform: "win32-x64";
   root: string;
   total: SizeSummary;
@@ -68,10 +57,6 @@ export interface DesktopResourceSizeReport {
     wireguard: SizeSummary;
     legal: SizeSummary;
   };
-  budgets: {
-    runtime: BudgetSummary;
-    unpacked: BudgetSummary;
-  };
 }
 
 const emptySummary = (): SizeSummary => ({ bytes: 0, mib: 0, files: 0 });
@@ -111,14 +96,6 @@ const summarizeChildrenExcept = (root: string, excludedNames: ReadonlySet<string
   return summary;
 };
 
-const budgetSummary = (actual: SizeSummary, limitBytes: number): BudgetSummary => ({
-  bytes: actual.bytes,
-  mib: actual.mib,
-  limit_bytes: limitBytes,
-  limit_mib: Number((limitBytes / MIB).toFixed(2)),
-  passed: actual.bytes <= limitBytes,
-});
-
 export const createDesktopResourceSizeReport = (unpackedRoot: string): DesktopResourceSizeReport => {
   const root = resolve(unpackedRoot);
   if (!existsSync(join(root, "LXE Agent.exe"))) {
@@ -130,7 +107,7 @@ export const createDesktopResourceSizeReport = (unpackedRoot: string): DesktopRe
   const total = summarizePath(root);
   const runtime = summarizePath(runtimeRoot);
   return {
-    schema_version: 1,
+    schema_version: 2,
     platform: "win32-x64",
     root,
     total,
@@ -179,17 +156,11 @@ export const createDesktopResourceSizeReport = (unpackedRoot: string): DesktopRe
       wireguard: summarizePath(join(resourcesRoot, "wireguard")),
       legal: summarizePath(join(resourcesRoot, "legal")),
     },
-    budgets: {
-      runtime: budgetSummary(runtime, DESKTOP_RUNTIME_BUDGET_BYTES),
-      unpacked: budgetSummary(total, DESKTOP_UNPACKED_BUDGET_BYTES),
-    },
   };
 };
 
-export const assertDesktopResourceSizeBudgets = (report: DesktopResourceSizeReport): void => {
-  const failures = Object.entries(report.budgets)
-    .filter(([, budget]) => !budget.passed)
-    .map(([name, budget]) => `${name} is ${budget.mib} MiB; limit is ${budget.limit_mib} MiB`);
+export const assertPackagedDesktopResources = (report: DesktopResourceSizeReport): void => {
+  const failures: string[] = [];
   if (report.resources.runtime.playwright.files > 0) {
     failures.push("Standalone Chromium must not be packaged; desktop authentication uses Electron");
   }
@@ -204,7 +175,7 @@ export const assertDesktopResourceSizeBudgets = (report: DesktopResourceSizeRepo
     failures.push("ExifTool executable or exiftool_files support directory is missing");
   }
   if (failures.length > 0) {
-    throw new Error(`Desktop size budget exceeded: ${failures.join("; ")}`);
+    throw new Error(`Packaged desktop resource validation failed: ${failures.join("; ")}`);
   }
 };
 
@@ -216,7 +187,7 @@ export const writeDesktopResourceSizeReport = (
   const destination = resolve(outputPath);
   mkdirSync(dirname(destination), { recursive: true });
   writeFileSync(destination, `${JSON.stringify(report, null, 2)}\n`, "utf8");
-  assertDesktopResourceSizeBudgets(report);
+  assertPackagedDesktopResources(report);
   return report;
 };
 
