@@ -1,7 +1,7 @@
-/* Composer reference colors and system font stack follow dsh (MIT; see THIRD_PARTY_NOTICES.md). */
+/* Composer reference colors follow dsh (MIT; see THIRD_PARTY_NOTICES.md); typography uses the app font. */
 .reference-composer { --composer-reference-color: #4176e6; --composer-reference-hover: #e4edfd; position: relative; min-width: 0; width: 100%; }
 :root[data-theme="dark"] .reference-composer { --composer-reference-color: #7aaaff; --composer-reference-hover: #34415b; }
-.reference-editor { width: 100%; min-height: 42px; max-height: 180px; padding: 8px 9px; overflow-y: auto; white-space: pre-wrap; overflow-wrap: anywhere; outline: none; font: inherit; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif; font-size: .875rem; font-weight: 400; line-height: 1.5; color: var(--text); cursor: text; }
+.reference-editor { width: 100%; min-height: 42px; max-height: 180px; padding: 8px 9px; overflow-y: auto; white-space: pre-wrap; overflow-wrap: anywhere; outline: none; font: inherit; font-family: var(--font-sans); font-size: .875rem; font-weight: 400; line-height: 1.5; color: var(--text); cursor: text; }
 .reference-editor p { margin: 0; }
 .reference-editor[data-empty="true"]::before { content: attr(data-placeholder); color: var(--muted-light); pointer-events: none; position: absolute; }
 .composer-reference-chip { display: inline-flex; max-width: min(100%, 260px); align-items: baseline; gap: 3px; padding: 0 4px; border-radius: 4px; background: transparent; color: var(--composer-reference-color); font: inherit; vertical-align: baseline; cursor: pointer; }
