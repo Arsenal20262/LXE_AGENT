@@ -39,7 +39,7 @@ test("capabilities use compact child navigation while activity opens statistics 
   assert.doesNotMatch(main, /const activityItems/);
   assert.doesNotMatch(main, /useBackgroundTasksQuery/);
   assert.match(main, /activeSection === "activity"[\s\S]*<StatsView/);
-  assert.match(main, /aria-current=\{activeView === item\.id \? "page" : undefined\}/);
+  assert.match(readFileSync(path.join(sourceDir, "shared/workspace-view.tsx"), "utf8"), /aria-current=\{activeView === item\.id \? "page" : undefined\}/);
   assert.match(styles, /\.workspace-subnav-item\.active/);
   assert.match(main, /const nextActivityView = section === "activity" \? "stats" : activityView/);
 });
