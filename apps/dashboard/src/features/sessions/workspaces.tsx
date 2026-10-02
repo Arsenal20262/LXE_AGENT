@@ -5,6 +5,7 @@ import { useUiText } from "../../shared/i18n";
 import { SessionsIndex } from "./view";
 import type { ConversationDisplaySnapshot } from "./display-controller";
 import "./workspaces.css";
+import { WorkspaceOpenButton } from "../workspace-apps/WorkspaceOpenButton";
 
 import { emptyWorkspace, workspaceGroups, workspaceLabel, workspaceName, type SessionWorkspace } from "./workspace-state";
 import { WorkspaceActionsMenu, WorkspaceRenameDialog } from "./workspace-actions";
@@ -120,13 +121,11 @@ export function WorkspaceControl({ directory, workspaces, defaultDirectory, edit
   if (!editable) {
     const name = workspaceName(directory, groups, defaultDirectory, t.workspaces.defaultName);
     return <div className="conversation-workspace is-readonly">
-      <button type="button" className="conversation-workspace-button" disabled={!directory}
-        title={`${name}\n${directory}`} aria-label={t.workspaces.open}
-        onClick={() => void invoke(() => window.lxe!.desktop.openWorkspace(directory))}>
+      <span className="conversation-workspace-label" title={`${name}\n${directory}`}>
         <FolderOpen size={15} aria-hidden="true" />
         <span className="conversation-workspace-name">{name}</span>
         {directory === defaultDirectory ? <small className="workspace-default-badge">{t.workspaces.defaultBadge}</small> : null}
-      </button>
+      </span><WorkspaceOpenButton directory={directory} />
       {error ? <div className="workspace-error" role="alert">{error}</div> : null}
     </div>;
   }
@@ -139,7 +138,7 @@ export function WorkspaceControl({ directory, workspaces, defaultDirectory, edit
       </select>
       <span className="conversation-workspace-path" title={directory}>{directory}</span>
       <button type="button" disabled={disabled} title={t.workspaces.choose} aria-label={t.workspaces.choose} onClick={() => void invoke(onChoose)}><FolderPlus size={16} /></button>
-      <button type="button" disabled={!directory} title={t.workspaces.open} aria-label={t.workspaces.open} onClick={() => void invoke(() => window.lxe!.desktop.openWorkspace(directory))}><FolderOpen size={16} /></button>
+      <WorkspaceOpenButton directory={directory} />
     </div>
     {error ? <div className="workspace-error" role="alert">{error}</div> : null}
   </div>;

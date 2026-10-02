@@ -651,6 +651,8 @@ export interface DesktopUsageBalance {
   error: string | null;
 }
 
+export interface WorkspaceApplication { id: string; name: string; icon: string | null }
+
 export interface LxeDesktopBridge {
   tools?: import("./manual-tools").ManualToolsBridge;
   files: import("./file-preview").DesktopFilesBridge;
@@ -661,7 +663,8 @@ export interface LxeDesktopBridge {
     checkForUpdate?(): Promise<import("./updates").DesktopUpdateState>;
     installUpdate?(): Promise<import("./updates").DesktopUpdateState>;
     selectWorkspace(): Promise<string | null>;
-    openWorkspace(directory: string): Promise<void>;
+    getWorkspaceApplications(input?: { refresh?: boolean }): Promise<WorkspaceApplication[]>;
+    openWorkspace(directory: string, applicationId?: string): Promise<void>;
     selectZiniaoApp(): Promise<string | null>;
     selectZiniaoWebDriverDirectory(): Promise<string | null>;
     selectCloudEnrollment(): Promise<DesktopCloudEnrollmentSelection | null>;

@@ -1,6 +1,6 @@
 import { fileResult } from "./file-preview/errors";
 import { mkdirSync } from "node:fs";
-import { dialog, ipcMain, shell } from "electron";
+import { app, dialog, ipcMain, shell } from "electron";
 import type {
   DashboardRpcCall,
   DashboardRpcOperation,
@@ -24,7 +24,8 @@ import type {
   DesktopSyntheticPerformerTaskInput,
 } from "@lxe/desktop-protocol";
 import { IPC_CHANNELS } from "../ipc-channels";
-import { openWorkspaceDirectory, workspaceDirectory } from "./workspace-directory";
+import { workspaceDirectory } from "./workspace-directory";
+import { WorkspaceApplications } from "./workspace-apps/service";
 import { readClipboardFilePaths } from "./clipboard-files";
 import {
   validateDraftImagePreviewVariant,
@@ -98,6 +99,8 @@ const stringArray = (value: unknown, label: string): string[] => {
 };
 
 export function registerDesktopIpc(application: DesktopIpcApplication): () => void {
+  const workspaceApps = new WorkspaceApplications({ openPath: path => shell.openPath(path), icon: async path => (await app.getFileIcon(path, { size: "normal" })).toDataURL() });
+  const trustedWorkspaceSender = (event: Electron.IpcMainInvokeEvent) => { if (!application.isTrustedFileSender(event)) throw new Error("Workspace applications are only available to the desktop main frame"); };
   ipcMain.handle(IPC_CHANNELS.fileCall, (event, call) => fileResult(typeof call?.operation === "string" ? call.operation : "call", () => {
     if (!application.isTrustedFileSender(event)) throw new Error("File previews are only available to the desktop main frame");
     if (call?.operation === "focus-preview") {
@@ -130,8 +133,8 @@ export function registerDesktopIpc(application: DesktopIpcApplication): () => vo
     });
     return selection.canceled || !selection.filePaths[0] ? null : workspaceDirectory(selection.filePaths[0]);
   });
-  ipcMain.handle(IPC_CHANNELS.openWorkspace, (_event, directory: unknown) =>
-    openWorkspaceDirectory(directory, path => shell.openPath(path)));
+  ipcMain.handle(IPC_CHANNELS.getWorkspaceApplications, (event, input: unknown) => { trustedWorkspaceSender(event); return workspaceApps.list(input); });
+  ipcMain.handle(IPC_CHANNELS.openWorkspace, (event, directory: unknown, applicationId: unknown) => { trustedWorkspaceSender(event); return workspaceApps.open(directory, applicationId); });
   ipcMain.handle(IPC_CHANNELS.selectZiniaoApp, async () => {
     const selection = await dialog.showOpenDialog({
       title: "选择紫鸟 APP",

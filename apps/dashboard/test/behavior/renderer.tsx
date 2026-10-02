@@ -147,6 +147,7 @@ const currentModel = modelRow("deepseek", "local", "DeepSeek", [modelOption("fix
 const subscribe = () => () => {};
 const desktop = {
   selectWorkspace: async () => { calls.push({ operation: "chooseWorkspace" }); return chosenDirectory; },
+  getWorkspaceApplications: async () => [{ id: "finder", name: "Finder", icon: null }],
   openWorkspace: async (directory: string) => { calls.push({ operation: "openWorkspace", input: directory }); },
   platform: navigator.userAgent.includes("Windows") ? "win32" as const : "darwin" as const,
   getSetupState: async () => setupState({ complete }),

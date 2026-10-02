@@ -46,7 +46,7 @@ describe("preload bridge", () => {
       "onSyntheticPerformerTaskChanged",
       "openCloudDestination",
       "openLogsDirectory",
-      "openWorkspace",
+      "openWorkspace", "getWorkspaceApplications",
       "openSyntheticPerformerOutput",
       "platform",
       "prepareCloudDependencies",
@@ -262,4 +262,19 @@ test("file bridge has a separate binary channel and never serializes bytes into 
   expect(await bridge.files.read("opaque-handle")).toEqual({ ok: true, value: new Uint8Array([0, 255, 17]) });
   await bridge.files.readText("opaque-text-handle", { offset: 5001 });
   expect(calls).toEqual([[IPC_CHANNELS.fileRead, "opaque-handle", undefined], [IPC_CHANNELS.fileReadText, "opaque-text-handle", { offset: 5001 }]]);
+});
+
+test("workspace bridge forwards the directory and optional catalog ID without changing legacy calls", async () => {
+  const calls: unknown[][] = [];
+  const bridge = createDesktopBridge({ invoke: async <T>(...args: unknown[]): Promise<T> => {
+    calls.push(args); return [] as T;
+  }, on() {}, removeListener() {} }, "darwin");
+  await bridge.desktop.getWorkspaceApplications({ refresh: true });
+  await bridge.desktop.openWorkspace("/工作目录 & spaces");
+  await bridge.desktop.openWorkspace("/工作目录 & spaces", "vscode");
+  expect(calls).toEqual([
+    [IPC_CHANNELS.getWorkspaceApplications, { refresh: true }],
+    [IPC_CHANNELS.openWorkspace, "/工作目录 & spaces", undefined],
+    [IPC_CHANNELS.openWorkspace, "/工作目录 & spaces", "vscode"],
+  ]);
 });

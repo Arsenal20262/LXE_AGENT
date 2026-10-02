@@ -596,7 +596,7 @@ app.whenReady().then(async () => {
         await click(".conversation-workspace button[aria-label='Choose workspace']");
         const selected = await js("document.querySelector('.conversation-workspace select').value");
         assert.equal(selected, "D:\\资料\\采购");
-        await click(".conversation-workspace button[aria-label='Open folder']");
+        await click(".conversation-workspace .workspace-open-split button:first-child");
         assert.equal((await state()).calls.findLast(call => call.operation === "openWorkspace").input, selected);
         await js("behavior.failWorkspaceSend(true)");
         await focus(".reference-editor"); await key("Enter");
@@ -627,7 +627,7 @@ app.whenReady().then(async () => {
         await click(".session-index-open");
         await waitFor("document.querySelector('.conversation-workspace-name')?.textContent === 'archive'", "existing chat directory");
         assert.equal(await js("Boolean(document.querySelector('.conversation-workspace select'))"), false);
-        await click(".conversation-workspace button[aria-label='Open folder']");
+        await click(".conversation-workspace .workspace-open-split button:first-child");
         assert.equal((await state()).calls.findLast(call => call.operation === "openWorkspace").input, "/fixture/archive");
       });
       await step('selected empty directories retain a blank and survive reload without history entries', async () => {
