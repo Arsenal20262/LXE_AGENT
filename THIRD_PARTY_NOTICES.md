@@ -190,7 +190,7 @@ are adapted from DeepSeek Harness (MIT, Copyright 2026 DeepSeek), revision
 `639ed015397290b3745d163aafe02ffee4aa3f84`:
 `packages/context/file-reference-local`, `packages/client/ui-conversation`,
 `packages/client/ui-primitives`, `packages/client/ui-input-trigger`,
-`packages/client/ui-reference`, `packages/client/ui-skill` and
+`packages/client/ui-reference`, `packages/client/ui-theme`, `packages/client/ui-skill` and
 `packages/skill/tool-skill`. Source: https://github.com/deepseek-ai/deepseek-harness.
 
 The composer uses Lexical and its plain-text, history, text and utils modules

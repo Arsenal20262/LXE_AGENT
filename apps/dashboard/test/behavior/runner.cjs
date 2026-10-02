@@ -364,6 +364,18 @@ app.whenReady().then(async () => {
         await key("Tab"); await options(); await key("Enter"); assert.equal(await draft(), '@"报表/销售 统计.md" ');
         const dir = process.env.LXE_COMPOSER_CAPTURE_DIR;
         if (dir) { require('node:fs').mkdirSync(dir,{recursive:true}); require('node:fs').writeFileSync(require('node:path').join(dir,'composer-reference-fixture-dark.png'),(await win.webContents.capturePage()).toPNG()); }
+        if (dir) {
+          // Optional visual review of real reference nodes alongside ordinary text.
+          win.setSize(1000, 650); await mount(); await type("@报"); await options(); await key("Enter");
+          await win.webContents.insertText("/office-xlsx 测试文本");
+          await waitFor("Boolean(document.querySelector('[data-skill-reference]'))", "reference appearance fixture");
+          for (const theme of ["dark", "light"]) {
+            await js(`document.documentElement.dataset.theme=${JSON.stringify(theme)}`);
+            await js("document.fonts.ready.then(() => undefined)"); await settle();
+            const bounds = await js("document.querySelector('.conversation-composer').getBoundingClientRect().toJSON()");
+            require('node:fs').writeFileSync(require('node:path').join(dir, `composer-reference-appearance-fixture-${theme}.png`), (await win.webContents.capturePage({ x: Math.floor(bounds.x), y: Math.floor(bounds.y), width: Math.ceil(bounds.width), height: Math.ceil(bounds.height) })).toPNG());
+          }
+        }
       });
     } else if (suite === "readiness") {
       for (const [section, expected] of [
