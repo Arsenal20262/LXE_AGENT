@@ -75,7 +75,7 @@ import {
   usesPackagedRuntime,
   usesProductionRenderer,
 } from "./main/launch-mode";
-import { bootstrapDesktopState } from "./main/migration";
+import { bootstrapDesktopState, migrateLegacyArtifacts } from "./main/migration";
 import { resolveDesktopPaths } from "./main/paths";
 import { configureElectronRuntimeState, prepareDesktopRuntimeState } from "./main/runtime-state";
 import { reportDesktopStartupFailure } from "./main/startup-failure";
@@ -212,6 +212,7 @@ async function bootstrap(): Promise<void> {
     sourceRoot: paths.sourceRoot,
   });
   bootstrapDesktopState(paths.mcpDefaultPath, paths.dataRoot);
+  await migrateLegacyArtifacts(paths.dataRoot);
   const sourceEnvironment = packagedRuntime
     ? {}
     : loadEnvironmentFiles({ paths: [join(paths.sourceRoot, ".env")], initial: {} });
