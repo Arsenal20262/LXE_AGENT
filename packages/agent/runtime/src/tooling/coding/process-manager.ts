@@ -334,7 +334,7 @@ export class CodingProcessManager {
       const slice = entry.output.renderSince(entry.outputCursor);
       const payload: JsonObject = {
         exec_id: entry.id,
-      sandbox: { ...entry.sandbox },
+        sandbox: { ...entry.sandbox },
         status: terminal ? entry.status : "running",
         new_output: slice.text || "(no new output)",
       };

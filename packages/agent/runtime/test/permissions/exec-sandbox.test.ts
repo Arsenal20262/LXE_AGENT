@@ -151,3 +151,84 @@ nativeTest("wait preserves output and cancellation kills a running descendant", 
   await Bun.sleep(250);
   expect(readFileSync(heartbeat, "utf8")).toBe(after);
 }, 30_000);
+
+nativeTest("standing workspace grants do not authorize a later read-only command; full access still works", async () => {
+  const { root, workspace, policy } = fixture();
+  const outside = join(root, "outside"), inside = join(workspace, "inside");
+  writeFileSync(outside, "keep");
+  const script = join(workspace, "modes.cjs");
+  writeFileSync(script, `const fs=require('node:fs'); console.log('entered'); fs.writeFileSync(${JSON.stringify(inside)}, 'inside'); fs.writeFileSync(${JSON.stringify(outside)}, 'outside');`);
+  const m = manager();
+  const write = await execute(m, policy("workspace-write"), invokeNode(script));
+  expect(String(write.output)).toContain("entered");
+  expect(write.status).toBe("failed");
+  expect(readFileSync(inside, "utf8")).toBe("inside");
+  expect(readFileSync(outside, "utf8")).toBe("keep");
+  writeFileSync(inside, "readonly-marker");
+  const read = await execute(m, policy("read-only"), invokeNode(script));
+  expect(String(read.output)).toContain("entered");
+  expect(read.status).toBe("failed");
+  expect(readFileSync(inside, "utf8")).toBe("readonly-marker");
+  const full = await execute(m, policy("danger-full-access"), invokeNode(script));
+  expect(full.status, JSON.stringify(full)).toBe("completed");
+  expect(readFileSync(outside, "utf8")).toBe("outside");
+}, 30_000);
+
+nativeTest("native policy prevents deleting and renaming outside files, and host output can still spill", async () => {
+  const { root, workspace, policy } = fixture();
+  const outside = join(root, "outside"); writeFileSync(outside, "keep");
+  const script = join(workspace, "mutations.cjs");
+  writeFileSync(script, `const fs=require('node:fs');
+    for(const [name, fn] of [['delete',()=>fs.unlinkSync(${JSON.stringify(outside)})], ['rename',()=>fs.renameSync(${JSON.stringify(outside)}, ${JSON.stringify(join(workspace, "stolen"))})]]) {
+      try { fn(); console.log(name+':allowed'); } catch(e) { console.log(name+':denied '+e.code); }
+    } console.log('x'.repeat(200000));`);
+  const p = policy("workspace-write"), m = manager();
+  const result = await execute(m, p, invokeNode(script));
+  expect(result.status, JSON.stringify(result)).toBe("completed");
+  const saved = await m.ensureOutputFile(String(result.exec_id), p.temporaryDirectory);
+  expect(saved.output_file_error).toBeUndefined();
+  const snapshot = m.snapshots()[0]!;
+  const output = readFileSync(String(snapshot.output_path), "utf8");
+  expect(output).toContain("delete:denied");
+  expect(output).toContain("rename:denied");
+  expect(readFileSync(outside, "utf8")).toBe("keep");
+  expect(existsSync(join(workspace, "stolen"))).toBe(false);
+}, 30_000);
+
+nativeTest("parallel commands in one workspace keep their temporary directories usable", async () => {
+  const { workspace, policy } = fixture();
+  const script = join(workspace, "temps.cjs");
+  writeFileSync(script, `const fs=require('node:fs'), path=require('node:path');
+    const file=path.join(process.env.TMPDIR, process.env.LXE_EXEC_SESSION_ID); fs.writeFileSync(file, 'before');
+    setTimeout(()=>{ fs.writeFileSync(file, 'after'); console.log('temp-ok:'+process.env.TMPDIR); }, 250);`);
+  const m = manager();
+  const results = await Promise.all(["one", "two"].map(id => execute(m, policy("workspace-write", id), invokeNode(script))));
+  for (const result of results) { expect(result.status, JSON.stringify(result)).toBe("completed"); expect(String(result.output)).toContain("temp-ok:"); }
+  expect(results[0]!.output).not.toBe(results[1]!.output);
+  if (process.platform === "win32") {
+    for (const result of results) {
+      const temporary = String(result.output).match(/temp-ok:([^\r\n]+)/u)?.[1];
+      expect(temporary).toBeTruthy();
+      expect(existsSync(temporary!)).toBe(false);
+    }
+    const same = policy("workspace-write", "shared");
+    const overlap = await Promise.all([1,2].map(() => execute(m, same, invokeNode(script))));
+    for (const result of overlap) expect(result.status, JSON.stringify(result)).toBe("completed");
+    expect(overlap[0]!.output).not.toBe(overlap[1]!.output);
+  }
+}, 30_000);
+
+nativeTest("project Python writes artifacts and private temp but cannot write the host output directory", async () => {
+  const { workspace, policy } = fixture();
+  const p = policy("workspace-write");
+  mkdirSync(p.outputDirectory, { recursive: true });
+  const script = join(workspace, "probe.py");
+  writeFileSync(script, `import os\nfrom pathlib import Path\nroot = Path(os.environ['LXE_WORKSPACE_ROOT']) / '.lxeagent' / 'artifacts'\nroot.mkdir(parents=True, exist_ok=True)\n(root / 'python.txt').write_text('artifact')\nPath(os.environ['TMPDIR'], 'python.tmp').write_text('temporary')\ntry:\n    Path(${JSON.stringify(join(p.outputDirectory, "escaped"))}).write_text('bad')\nexcept PermissionError as error:\n    print('host-output-denied:', error)\nelse:\n    raise RuntimeError('host output writable')\nprint('python-ok')\n`);
+  const python = join(process.cwd(), ".venv", process.platform === "win32" ? "Scripts/python.exe" : "bin/python");
+  const result = await execute(manager(), p, `${process.platform === "win32" ? "& " : ""}${quote(python)} -I -B ${quote(script)}`);
+  expect(result.status, JSON.stringify(result)).toBe("completed");
+  expect(String(result.output)).toContain("host-output-denied:");
+  expect(String(result.output)).toContain("python-ok");
+  expect(readFileSync(join(p.artifactRoot, "python.txt"), "utf8")).toBe("artifact");
+  expect(existsSync(join(p.outputDirectory, "escaped"))).toBe(false);
+}, 30_000);
