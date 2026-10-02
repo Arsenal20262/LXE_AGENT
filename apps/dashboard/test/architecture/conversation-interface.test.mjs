@@ -290,9 +290,8 @@ test("nothing pads the header away from the transcript", () => {
   // between the header and the first message that no rule asked for.
   assert.match(styles, /\.conversation-view \{[^}]*gap:\s*0;/s);
   assert.match(styles, /\.session-detail \{[^}]*gap:\s*12px;/s);
-  // min-height above the row's own content is pure padding: a 30px button
-  // inside 7px of padding needs 44.
-  assert.match(styles, /\.conversation-header \{[^}]*min-height:\s*44px;/s);
+  // The conversation title follows the compact sidebar title-bar height.
+  assert.match(styles, /\.conversation-header \{[^}]*min-height:\s*var\(--app-titlebar-height\);/s);
   assert.match(view, /className="conversation-header-actions"[\s\S]*?<PreviewHeaderActions \/>/);
 });
 

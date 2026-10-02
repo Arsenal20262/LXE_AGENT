@@ -427,11 +427,13 @@ app.whenReady().then(async () => {
       const expanded = () => js("document.querySelector('.app-sidebar').classList.contains('is-expanded')");
       await load(sidebarQuery);
       await waitFor("document.querySelectorAll('.workspace-group').length === 3", "workspace list ready");
+      const railWidth = (await rect(".app-navigation")).width;
       await step("navigation is separate from the workspace list and preserves its expansion", async () => {
         assert.equal(await js("document.querySelectorAll('.app-navigation nav button').length"), 5);
-        assert.equal((await rect(".app-navigation")).width, 56);
-        assert.equal((await rect(".app-sidebar")).left, 56);
-        assert.equal((await rect(".main-panel")).left, 312);
+        assert.ok(Math.abs(railWidth - 56 * 0.95) < 0.02);
+        assert.ok(Math.abs((await rect(".app-sidebar")).top - 44 * 0.95) < 0.02);
+        assert.equal((await rect(".app-sidebar")).left, railWidth);
+        assert.equal((await rect(".main-panel")).left, railWidth + 256);
         assert.ok((await rect(".workspace-index-scroll")).height > await js("innerHeight") * 0.72, "workspace list uses most of the available window height");
         await click(".tab-home");
         assert.equal(await js("document.querySelector('.tab-home').getAttribute('aria-current')"), "page");
@@ -442,7 +444,7 @@ app.whenReady().then(async () => {
       await step("collapsing only hides the list; navigation and settings remain usable", async () => {
         await click(".sidebar-toggle-button"); await delay(220);
         assert.equal(await js("document.querySelector('.app-sidebar').inert"), true);
-        assert.equal((await rect(".main-panel")).left, 56);
+        assert.equal((await rect(".main-panel")).left, railWidth);
         await click(".tab-home"); await click(".tab-sessions");
         assert.equal(await expanded(), false);
         await click(".sidebar-settings-button");
@@ -467,7 +469,7 @@ app.whenReady().then(async () => {
         const toggle = await rect(".sidebar-toggle-button");
         move(toggle.left + 10, toggle.top + 10);
         await waitFor("document.querySelector('.app-sidebar').classList.contains('is-peek')", "hover peek");
-        assert.equal((await rect(".main-panel")).left, 56);
+        assert.equal((await rect(".main-panel")).left, railWidth);
         const search = await rect(".sidebar-search-button");
         move(search.left + 10, search.top + 10);
         await click(".sidebar-search-button");
@@ -493,19 +495,19 @@ app.whenReady().then(async () => {
           JSON.stringify({ handle, before, after: await rect(".app-sidebar") }));
         await load(sidebarQuery);
         await waitFor("document.querySelectorAll('.workspace-group').length === 3", "reloaded list");
-        await waitFor(`document.querySelector('.main-panel').getBoundingClientRect().left === ${56 + before.width + 60}`, "restored width animation completed");
+        await waitFor(`document.querySelector('.main-panel').getBoundingClientRect().left === ${railWidth + before.width + 60}`, "restored width animation completed");
         assert.equal(await expanded(), true);
         assert.equal((await rect(".app-sidebar")).width, before.width + 60);
-        assert.equal((await rect(".main-panel")).left, 56 + before.width + 60);
+        assert.equal((await rect(".main-panel")).left, railWidth + before.width + 60);
         await focus(".sidebar-resizer"); await key("Left");
         assert.equal(await js("Number(localStorage.getItem('lxe.dashboard.sidebar.width'))"), before.width + 50);
       });
       await step("narrow windows use a dismissible drawer while keeping the rail accessible", async () => {
         win.setContentSize(800, 900); await delay(250);
-        assert.equal((await rect(".main-panel")).left, 56);
+        assert.equal((await rect(".main-panel")).left, railWidth);
         assert.equal(await js("getComputedStyle(document.querySelector('.sidebar-dismiss')).display"), "block");
         const panel = await rect(".app-sidebar");
-        assert.ok(panel.left > 56 && panel.right < 800);
+        assert.ok(panel.left > railWidth && panel.right < 800);
         await click(".sidebar-dismiss"); await delay(220);
         assert.equal(await expanded(), false);
         assert.equal(await js("document.documentElement.scrollWidth > innerWidth"), false);

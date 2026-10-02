@@ -346,7 +346,7 @@ button {
 }
 
 /* Windows already draws its native controls inside a 40px title-bar overlay.
-   Conversation pages reuse that row instead of stacking a second 44px header
+   Conversation pages reuse that row instead of stacking a second header
    below it. Other sections keep the generic title-bar clearance above. */
 .desktop-platform-win32:has(.app-shell.sessions-focus) > .desktop-window-drag-region {
   pointer-events: none;
@@ -2056,7 +2056,8 @@ button {
 }
 
 .app-shell {
-  --app-navigation-width: 56px;
+  --app-navigation-width: 53.2px;
+  --app-titlebar-height: 41.8px;
   --app-sidebar-width: 256px;
   --sidebar-control-left: calc(var(--app-navigation-width) + 8px);
   --navigation-bg: #272321;
@@ -2241,8 +2242,8 @@ button {
   grid-column: 2;
   grid-row: 1;
   width: var(--app-sidebar-width);
-  height: calc(100vh - 44px);
-  margin-top: 44px;
+  height: calc(100vh - var(--app-titlebar-height));
+  margin-top: var(--app-titlebar-height);
   padding-top: 8px;
   border-top: 1px solid var(--sidebar-border);
   border-radius: 14px 0 0 0;
@@ -8483,15 +8484,14 @@ pre {
   position: relative;
   z-index: 8;
   display: grid;
-  /* The row's own content is 44px: a 30px button inside 7px of padding. Asking
-     for more than that only pads the title away from the conversation. */
-  min-height: 44px;
+  /* Keep the title row aligned with the sidebar while retaining 30px controls. */
+  min-height: var(--app-titlebar-height);
   flex-shrink: 0;
   container-type: inline-size;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 9px;
-  padding: 7px 18px;
+  padding: calc((var(--app-titlebar-height) - 30px) / 2) 18px;
   /* No rule underneath. A line has to be drawn because the content is sliced
      off at a hard edge; fading it out instead removes the thing the line was
      there to explain. The fade lives on .conversation-scroll-area::before. */
