@@ -5,7 +5,9 @@ export interface RegistryView { appPaths: Record<string, string>; records: Regis
 // A missing key returns null; access denied / command failures remain real errors.
 const SCRIPT = `
 $ErrorActionPreference='Stop'
+$ProgressPreference='SilentlyContinue'
 [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+try {
 $appPaths=@{}; $records=New-Object System.Collections.Generic.List[object]
 foreach ($entry in @(
   @('CurrentUser','Software\\Microsoft\\Windows\\CurrentVersion\\App Paths','apps'),
@@ -14,7 +16,7 @@ foreach ($entry in @(
   @('LocalMachine','SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall','records'),
   @('LocalMachine','SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall','records')
 )) {
-  $hive=[Microsoft.Win32.Registry]::OpenBaseKey([Enum]::Parse([Microsoft.Win32.RegistryHive],$entry[0]),[Microsoft.Win32.RegistryView]::Registry64)
+  $hive=[Microsoft.Win32.RegistryKey]::OpenBaseKey([Enum]::Parse([Microsoft.Win32.RegistryHive],$entry[0]),[Microsoft.Win32.RegistryView]::Registry64)
   try {
     $root=$hive.OpenSubKey($entry[1])
     if ($null -eq $root) { continue }
@@ -36,6 +38,10 @@ foreach ($entry in @(
   } finally { $hive.Dispose() }
 }
 @{appPaths=$appPaths;records=@($records.ToArray())} | ConvertTo-Json -Depth 5 -Compress
+} catch {
+  [Console]::Error.WriteLine(($_ | Out-String))
+  exit 1
+}
 `;
 export async function readRegistry(execute = run, env = process.env): Promise<RegistryView> {
   const command = join(env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');

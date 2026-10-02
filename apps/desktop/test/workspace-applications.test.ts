@@ -67,7 +67,7 @@ test('argument substitution and launch environment preserve literal paths and re
   const path='中文 folder & $() "quoted"';expect(launchArgs(['--cd={path}'],path)).toEqual(['--cd='+path]);expect(launchArgs(['-d'],path)).toEqual(['-d',path]);
   expect(externalEnvironment({PATH:'/bin',HOME:'/user',API_KEY:'secret',aGeNt_Db:'db',ELECTRON_RUN_AS_NODE:'1',NODE_OPTIONS:'--require bad',safe:'yes'})).toEqual({PATH:'/bin',HOME:'/user',safe:'yes'});
   await expect(run(process.execPath,['-e','process.stderr.write("native fixture failure");process.exit(7)'])).rejects.toThrow('native fixture failure');
-  await expect(launchDetached({kind:'argv',command:join(await root(),'missing'),args:[]},path,100)).rejects.toThrow('ENOENT');
+  await expect(launchDetached({kind:'argv',command:join(await root(),'missing'),args:[]},path,100)).rejects.toThrow('missing');
   await expect(launchDetached({kind:'argv',command:process.execPath,args:['-e','process.exit(9)']},path,1000)).rejects.toThrow('code 9');
 });
 

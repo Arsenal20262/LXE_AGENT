@@ -14,7 +14,7 @@ export function diagnostic(error: unknown): string {
 }
 export const run = (file: string, args: readonly string[], timeout = 10000): Promise<string> => new Promise((resolve, reject) => {
   execFile(file, [...args], { windowsHide: true, encoding: 'utf8', timeout, maxBuffer: 8 * 1024 * 1024, env: externalEnvironment() }, (error, stdout, stderr) => {
-    if (error) reject(new Error(diagnostic([error.message, stderr.trim()].filter(Boolean).join('\n')), { cause: error }));
+    if (error) reject(new Error(diagnostic([stderr.trim(), error.message].filter(Boolean).join('\n')), { cause: error }));
     else resolve(stdout.replace(/^\uFEFF/, ''));
   });
 });
