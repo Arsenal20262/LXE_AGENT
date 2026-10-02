@@ -30,7 +30,7 @@ PR5 从个人仓库 PR4 `codex/vietnam-stock-pr4-workflow` 的 `b2bff2f6a5df4349
 
 回滚先核对 previous 的文件摘要并重跑内容预检，再在锁内交换两个指针；原 current 完整时成为新的 previous，支持再次切换。若原 current 已损坏，恢复有效 previous 后不把损坏文件保留为可再次启用的 previous。回滚时也要先复验 current 的摘要、大小和内容，才能决定是否把它保留为新的 previous；无 previous 或 previous 损坏时拒绝回滚，current 不变。PR4 的生成流程在同一把锁保护下读取清单、复制并校验私有快照，然后释放锁再导出雅仓；替换或回滚不会改变已经开始的一轮生成。
 
-资产列表继续由 Python `assets list` 提供，对越南 SKU 槽持同一跨进程锁读取、复验并一次构造 current/previous 的文件大小和展示信息，不能先取得路径再在锁外 `stat`；协议透传 `management`。Desktop 资产页只给该槽显示上传和回滚按钮，回滚仅在存在 previous 时可用，并显示具体成功或失败结果。旧模板槽的说明改为历史兼容，避免提示用户上传完整模板。
+资产列表继续由 Python `assets list` 提供，对越南 SKU 槽持同一跨进程锁读取、复验并一次构造 current/previous 的文件大小和展示信息，不能先取得路径再在锁外 `stat`；协议透传 `management`。若清单结构有效但 current 损坏，列表仍返回清单 revision、有效 previous、current=null 和实际完整性错误，使 Desktop 能以 revision 安全回滚；previous 损坏时返回其实际错误并禁用回滚。清单本身损坏时该槽返回错误且不提供可操作 revision，其余槽仍可展示，生成和写入均拒绝此状态。上传恢复损坏 current 时只保留已验证的 previous；不能把损坏的旧 current 变成 previous。Desktop 资产页只给该槽显示上传和回滚按钮，回滚仅在存在有效 previous 和 revision 时可用，并显示具体成功或失败结果。旧模板槽的说明改为历史兼容，避免提示用户上传完整模板。
 
 ## 四参数长期设置与生效顺序
 
