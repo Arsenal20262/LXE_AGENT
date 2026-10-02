@@ -32,3 +32,11 @@
 `composer-reference-fixture-dark.png` 与 `composer-reference-menu-fixture-dark.png` 是**生产组件测试夹具**截图，不是用户的生产聊天记录。macOS 输出在 `/tmp/lxe-composer-captures/`，Windows 输出在 `D:\projects\composer-reference-captures\`。
 
 Windows 最终版本同步 Query 修复及最新侧栏变更后，再次执行受影响范围：**19 项测试通过、0 失败**，包括 44 组对话交互、18 组文件查看器场景，以及 Query／传输／架构测试。全工作区类型检查和 Dashboard／Electron 构建再次退出码 0。日志为 `D:\projects\lxe-composer-win.log` 与 `D:\projects\lxe-composer-win-final.log`。
+
+## 候选菜单对齐（2026-10-02）
+
+对照 dsh 的 `ui-input-trigger/MenuView` 与 `ui-reference`，改为单行名称与右侧说明；根目录不重复路径，其他文件只显示父目录，目录下钻后以固定面包屑提供路径。目录选中行显示 Tab 提示；技能候选不额外加图标。菜单与输入框等宽，上限 400px，按窗口和输入框高度收缩。鼠标按下即选择并保留编辑焦点，鼠标移动才更换高亮。
+
+macOS：真实 Electron 的 **13 组引用交互**与原有 **5 组输入框交互**通过，另通过 Dashboard 类型检查、模块边界检查和生产构建。新增检查覆盖裸 `@`／`/`、父目录展示、鼠标选择、带引号的下钻／返回根目录、20 项列表键盘滚动、短窗口、输入框增高和聊天滚动保持。这是输入框局部修改，按仓库简单修改流程在干净的 main 开发并做定向验证。
+
+截图 `at-root-menu-fixture-light.png`、`skill-menu-fixture-light.png` 和 `composer-reference-menu-fixture-dark.png` 位于 `/tmp/lxe-menu-captures/`，均为**生产组件测试夹具**。日志为 `/tmp/lxe-menu-ui.log`、`/tmp/lxe-menu-ui-references.log` 与 `/tmp/lxe-menu-build.log`。

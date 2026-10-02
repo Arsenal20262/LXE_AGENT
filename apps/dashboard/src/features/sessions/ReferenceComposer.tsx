@@ -5,17 +5,16 @@ import { registerPlainText } from "@lexical/plain-text";
 import { registerHistory, createEmptyHistoryState } from "@lexical/history";
 import { registerLexicalTextEntity } from "@lexical/text";
 import { mergeRegister } from "@lexical/utils";
-import { ChevronRight, File as FileIcon, Folder, Sparkles } from "lucide-react";
 import { activeAtToken, formatFileMention, rankSkills } from "@lxe/desktop-protocol/composer-references";
 import type { SkillPayload } from "@lxe/desktop-protocol";
 import { useComposerDiscovery } from "../../api/queries";
 import { usePreviewSidebar } from "../file-preview/Sidebar";
 import { FileReferenceNode, SkillReferenceNode } from "./composer-reference-nodes";
-import { useUiText } from "../../shared/i18n";
+import { ComposerCandidateMenu, type ComposerCandidate } from "./ComposerCandidateMenu";
 import "./reference-composer.css";
 
 type Hit = { key: string; start: number; end: number; prefix: string; trigger: "@" | "/"; query: string; quoted: boolean };
-type Candidate = { name: string; description?: string; path?: string; kind: "file" | "directory" | "skill" };
+type Candidate = ComposerCandidate;
 const entries = new Map<string, { editor: LexicalEditor; stop(): void }>();
 const forgotten = new Set<string>();
 export function forgetComposerEditor(session: string) {
@@ -62,7 +61,6 @@ export const ReferenceComposer = forwardRef<HTMLDivElement, {
   session: string; value: string; onChange(text: string): void; onSubmit(): void;
   onFiles(files: File[]): void; disabled: boolean; placeholder: string;
 }>(function ReferenceComposer(props, forwarded) {
-  const t = useUiText().composerReferences;
   const { skills: fetchSkills, files: fetchFiles } = useComposerDiscovery();
   const composingUntil = useRef(0);
   const editor = editorFor(props.session), element = useRef<HTMLDivElement>(null), box = useRef<HTMLDivElement>(null);
@@ -75,20 +73,22 @@ export const ReferenceComposer = forwardRef<HTMLDivElement, {
   const [items, setItems] = useState<Candidate[]>([]), [busy, setBusy] = useState(false), [selected, setSelected] = useState(0);
   const menu = useRef({ items, busy, selected }); menu.current = { items, busy, selected };
   const dismissed = useRef(""); const signature = (h?: Hit) => h ? JSON.stringify(h) : "";
+  const drilled = useRef(false);
   const generation = useRef(0), catalogGeneration = useRef(0), accepted = useRef<EditorState | undefined>(undefined);
   useImperativeHandle(forwarded, () => element.current!, [editor]);
-  const close = () => { dismissed.current = signature(hitNow.current); hitNow.current = undefined; setHit(undefined); generation.current++; };
+  const close = () => { dismissed.current = signature(hitNow.current); hitNow.current = undefined; drilled.current = false; setHit(undefined); generation.current++; };
   const choose = (item: Candidate, drill = false) => {
     const current = hitNow.current; if (!current) return;
     editor.update(() => {
       const node = $getNodeByKey(current.key);
       if (!$isTextNode(node) || node.getTextContent().slice(current.start, current.end) !== current.prefix) return;
+      drilled.current = drill;
       const selection = node.select(current.start, current.end);
       if (item.kind === "skill") selection.insertText("/" + item.name + " ");
       else {
         let ref = formatFileMention({ path: item.path!, kind: item.kind }, current.quoted);
         if (!ref) return;
-        if (item.kind === "directory" && drill) selection.insertText(item.path === "" ? "@" : ref);
+        if (item.kind === "directory" && drill) selection.insertText(item.path === "" ? (current.quoted ? '@"' : "@") : ref);
         else {
           if (item.kind === "directory" && ref.startsWith('@"')) ref += '"';
           selection.insertNodes([new FileReferenceNode(ref, item.kind === "directory"), $createTextNode(" ")]);
@@ -112,6 +112,7 @@ export const ReferenceComposer = forwardRef<HTMLDivElement, {
         accepted.current = editorState;
         if (text !== propsNow.current.value) propsNow.current.onChange(text);
         if (editor.isComposing() || signature(next) === dismissed.current) next = undefined;
+        if (next?.trigger !== "@") drilled.current = false;
         if (signature(next) !== signature(hitNow.current)) { hitNow.current = next; setHit(next); }
       }),
       editor.registerCommand(KEY_DOWN_COMMAND, event => {
@@ -165,13 +166,13 @@ export const ReferenceComposer = forwardRef<HTMLDivElement, {
     const rev = ++generation.current; setSelected(0);
     if (!hit || !referenceSession || props.disabled) { setItems([]); setBusy(false); return; }
     if (hit.trigger === "/") { setItems(rankSkills(skills, hit.query).map(s => ({ name: s.name, description: s.description, kind: "skill" }))); setBusy(false); return; }
+    setItems(previous => previous.filter(item => item.kind !== "skill"));
     setBusy(true);
     void fetchFiles(referenceSession, hit.query).then(result => {
       if (rev === generation.current) setItems(result.items.filter(file => formatFileMention(file, hit.quoted) !== undefined).map(file => ({ ...file, name: file.path.split("/").at(-1)! })));
     }, error => { if (rev === generation.current) { console.error("File candidates:", error); setItems([]); } }).finally(() => { if (rev === generation.current) setBusy(false); });
     return () => { generation.current++; };
   }, [hit, skills, referenceSession, props.disabled, fetchFiles]);
-  useEffect(() => { box.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest" }); }, [selected]);
   const activate = (event: React.MouseEvent) => {
     if (event.button || event.detail > 1 || window.getSelection()?.isCollapsed === false) return;
     const target = event.target as HTMLElement;
@@ -184,14 +185,6 @@ export const ReferenceComposer = forwardRef<HTMLDivElement, {
   return <div className="reference-composer" ref={box} onClick={activate}>
     <div ref={element} className="reference-editor" role="textbox" data-session={props.session} data-maxlength="8192" aria-disabled={props.disabled} aria-label={props.placeholder} aria-multiline aria-autocomplete="list" aria-expanded={!!hit} aria-controls={hit ? "composer-candidates" : undefined} aria-activedescendant={hit && items[selected] ? "composer-candidate-" + selected : undefined} contentEditable={!props.disabled} onCompositionEnd={() => { composingUntil.current = Date.now() + 10; }} suppressContentEditableWarning data-placeholder={props.placeholder} data-empty={!props.value} onBlur={event => { if (!box.current?.contains(event.relatedTarget)) close(); }} />
     {Object.entries(decorators).map(([key, value]) => { const element = editor.getElementByKey(key); return element ? createPortal(value, element, key) : null; })}
-    {hit ? <div className="composer-candidates" id="composer-candidates" role="listbox" aria-label={hit.trigger === "@" ? t.files : t.skills} onMouseDown={e => e.preventDefault()}>
-      {hit.trigger === "@" && hit.query.includes("/") ? <div className="composer-crumbs"><button type="button" onClick={() => chooseNow.current({ kind: "directory", name: "", path: "" }, true)}>{t.workspace}</button>{hit.query.slice(0, hit.query.lastIndexOf("/")).split("/").map((name, i, parts) => <button type="button" key={i} onClick={() => chooseNow.current({ kind: "directory", name, path: parts.slice(0, i + 1).join("/") }, true)}>{name}/</button>)}</div> : null}
-      {busy ? <div role="status" className="composer-candidate-status">{t.loading}</div> : null}
-      {items.map((item, i) => { const Icon = item.kind === "directory" ? Folder : item.kind === "file" ? FileIcon : Sparkles; return <div id={"composer-candidate-" + i} key={item.path ?? item.name} role="option" aria-selected={i === selected} className="composer-candidate" onMouseEnter={() => setSelected(i)} onClick={() => { if (!busy) choose(item); }}>
-        <Icon size={16} /><span><strong>{item.name}{item.kind === "directory" ? "/" : ""}</strong><small>{item.description ?? item.path}</small></span>
-        {item.kind === "directory" ? <button type="button" aria-label={t.enter(item.name)} onClick={e => { e.stopPropagation(); if (!busy) choose(item, true); }}><ChevronRight size={15} /></button> : null}
-      </div>; })}
-      {!busy && !items.length ? <div className="composer-candidate-status">{t.empty}</div> : null}
-    </div> : null}
+    {hit ? <ComposerCandidateMenu trigger={hit.trigger} query={hit.query} drilled={drilled.current} items={items} busy={busy} selected={selected} onSelect={setSelected} onChoose={choose} /> : null}
   </div>;
 });

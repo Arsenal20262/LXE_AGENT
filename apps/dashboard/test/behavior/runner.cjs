@@ -154,7 +154,70 @@ app.whenReady().then(async () => {
     } else if (suite === "references") {
       const draft = () => js("sessionStorage.getItem('lxe.composer-draft.' + document.querySelector('.reference-editor').dataset.session) || ''");
       const mount = async () => { await js("behavior.mountReferences()"); await settle(); };
-      const options = () => waitFor("document.querySelectorAll('.composer-candidate').length > 0 && !document.querySelector('.composer-candidate-status')", "candidates ready");
+      const options = () => waitFor("document.querySelectorAll('.composer-candidate').length > 0 && document.querySelector('.composer-candidate-viewport').getAttribute('aria-busy') === 'false'", "candidates ready");
+      const pointer = async selector => {
+        const point = await js(`(() => { const r = document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect(); return {x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)} })()`);
+        win.webContents.sendInputEvent({ type: "mouseMove", ...point });
+        win.webContents.sendInputEvent({ type: "mouseDown", button: "left", clickCount: 1, ...point });
+        win.webContents.sendInputEvent({ type: "mouseUp", button: "left", clickCount: 1, ...point });
+        await settle();
+      };
+      const captureMenu = async name => {
+        const dir = process.env.LXE_COMPOSER_CAPTURE_DIR; if (!dir) return;
+        const rect = await js("(() => { const r=document.querySelector('.composer-candidates').getBoundingClientRect(); return {x:Math.floor(r.x),y:Math.floor(r.y),width:Math.ceil(r.width),height:Math.ceil(r.height)} })()");
+        require('node:fs').mkdirSync(dir,{recursive:true});
+        require('node:fs').writeFileSync(require('node:path').join(dir, name), (await win.webContents.capturePage(rect)).toPNG());
+      };
+      await step("bare triggers show compact rows without redundant root paths or skill icons", async () => {
+        await mount(); await type("@"); await options();
+        assert.equal(await js("document.querySelectorAll('.composer-candidate').length"), 3);
+        assert.equal(await js("document.querySelectorAll('.composer-candidate-description').length"), 0);
+        assert.equal(await js("document.querySelector('.composer-candidate').getBoundingClientRect().height"), 34);
+        assert.equal(await js("document.querySelector('.composer-candidate kbd').getBoundingClientRect().width > 0"), true);
+        assert.equal(await js("Math.abs(document.querySelector('.composer-candidates').getBoundingClientRect().width - document.querySelector('.reference-composer').getBoundingClientRect().width) < 1"), true);
+        await captureMenu("at-root-menu-fixture-light.png");
+        await pointer('#composer-candidate-1'); assert.equal(await draft(), "@销售.md ");
+        assert.equal(await js("document.activeElement.classList.contains('reference-editor')"), true);
+        await mount(); await type("/"); await options();
+        assert.equal(await js("document.querySelectorAll('.composer-candidate').length"), 3);
+        assert.equal(await js("document.querySelectorAll('.composer-candidate svg').length"), 0);
+        assert.equal(await js("[...document.querySelectorAll('.composer-candidate')].every(el=>{const a=el.querySelector('.composer-candidate-name').getBoundingClientRect(),b=el.querySelector('.composer-candidate-description').getBoundingClientRect();return Math.abs(a.y+a.height/2-b.y-b.height/2)<1})"), true);
+        await captureMenu("skill-menu-fixture-light.png");
+      });
+      await step("file locations only name parents; breadcrumbs appear after drilling and preserve quoting", async () => {
+        await mount(); await js('behavior.referenceCandidates([{path:"归档/销售.md",kind:"file"}])'); await type("@销售"); await options();
+        assert.equal(await js("document.querySelector('.composer-candidate-description').textContent"), "归档");
+        await mount(); await type("@报表/"); await options();
+        assert.equal(await js("Boolean(document.querySelector('.composer-crumbs'))"), false);
+        assert.equal(await js("document.querySelector('.composer-candidate-description').textContent"), "报表");
+        await mount(); await type('@"报'); await options(); await pointer('.composer-candidate-trailing button'); await options();
+        assert.equal(await draft(), '@"报表/');
+        assert.equal(await js("document.querySelectorAll('.composer-candidate-description').length"), 0);
+        assert.equal(await js("document.querySelector('.composer-crumbs [aria-current]').disabled"), true);
+        assert.equal(await js("document.querySelector('[role=listbox]').contains(document.querySelector('.composer-crumbs'))"), false);
+        await pointer('.composer-crumbs button'); await options(); assert.equal(await draft(), '@"');
+        assert.equal(await js("Boolean(document.querySelector('.composer-crumbs'))"), false);
+        await key("Tab"); await options(); await key("Enter"); assert.equal(await draft(), '@"报表/销售 统计.md" ');
+      });
+      await step("long menus fit above the composer and keyboard scrolling leaves the chat in place", async () => {
+        await mount(); await js('behavior.referenceCandidates(Array.from({length:20},(_,i)=>({path:`报表/这是需要截断的长文件名称-${i}.md`,kind:"file"})))'); await type("@"); await options();
+        assert.equal(await js("document.querySelector('.composer-candidates').getBoundingClientRect().height <= 400"), true);
+        const scroll = await js("window.scrollY");
+        const point = await js("(()=>{const r=document.querySelector('#composer-candidate-0').getBoundingClientRect();return{x:Math.round(r.x+30),y:Math.round(r.y+15)}})()");
+        win.webContents.sendInputEvent({type:"mouseMove",...point}); await settle();
+        for (let i=0;i<19;i++) await key("Down");
+        assert.equal(await js("document.querySelector('.composer-candidate[aria-selected=true]').id"), "composer-candidate-19");
+        assert.equal(await js("(()=>{const r=document.querySelector('#composer-candidate-19').getBoundingClientRect(),v=document.querySelector('.composer-candidate-viewport').getBoundingClientRect();return r.top>=v.top && r.bottom<=v.bottom+1})()"), true);
+        assert.equal(await js("window.scrollY"), scroll);
+        assert.equal(await js("document.querySelector('.composer-candidates').hasAttribute('data-overflow-below')"), false);
+        await key("Down"); assert.equal(await js("document.querySelector('.composer-candidate[aria-selected=true]').id"), "composer-candidate-0");
+        assert.equal(await js("document.querySelector('.composer-candidates').hasAttribute('data-overflow-below')"), true);
+        win.setSize(1200, 430); await settle();
+        assert.equal(await js("document.querySelector('.composer-candidates').getBoundingClientRect().top >= 83"), true);
+        await js("document.querySelector('.reference-editor').style.height='160px'"); await settle();
+        assert.equal(await js("document.querySelector('.composer-candidates').getBoundingClientRect().top >= 83"), true);
+        win.setSize(1200, 900); await settle();
+      });
       await step("file selection serializes the path and Enter does not send while picking", async () => {
         await mount(); await type("@销售"); await options(); await key("Enter");
         assert.equal(await draft(), "@销售.md "); assert.equal((await state()).sends.length, 0);

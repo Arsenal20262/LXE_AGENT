@@ -19,6 +19,7 @@ const calls: { operation: string; input?: unknown }[] = [];
 const workspaceMode = new URLSearchParams(location.search).has("workspaces");
 let referenceMode = false;
 let slowCandidates = false;
+let candidateOverride: { path: string; kind: "file" | "directory" }[] | undefined;
 const pendingCandidates: (() => void)[] = [];
 const referenceSkills = ["office-xlsx", "office-docx", "office-pptx"].map(name => ({ name, description: "Office fixture skill", type: "default", commands: [], references: [], location: "/skills/" + name + "/SKILL.md" }));
 let chosenFile = "";
@@ -178,6 +179,7 @@ const dashboard = {
     if (call.operation === "skills.list") return { items: referenceMode ? referenceSkills : [], total: referenceMode ? 3 : 0 };
     if (call.operation === "sessions.files.candidates" && referenceMode) {
       if (slowCandidates) await new Promise<void>(resolve => pendingCandidates.push(resolve));
+      if (candidateOverride) return { items: candidateOverride };
       const query = String(call.input.query);
       const items = query.startsWith("报表/") ? [{ path: "报表/销售 统计.md", kind: "file" }] : [{ path: "报表", kind: "directory" }, { path: "销售.md", kind: "file" }, { path: "missing.txt", kind: "file" }].filter(f => !query || f.path.includes(query));
       return { items };
@@ -240,7 +242,7 @@ function composer() {
 }
 function renderComposer() {
   flushSync(() => root!.render(<I18nContext.Provider value={UI_TEXT.en}>
-    <QueryClientProvider client={queryClient!}>{referenceMode ? <div style={{height:650}}><FilePreviewLayout sessionId={conversationKey}><div data-test-ui="composer reference fixture" style={{display:"flex",flexDirection:"column",justifyContent:"flex-end",height:"100%"}}><UserReferenceText text={'历史 @销售.md /office-xlsx /unknown'} skills={["office-xlsx"]} />{composer()}</div></FilePreviewLayout></div> : composer()}</QueryClientProvider>
+    <QueryClientProvider client={queryClient!}>{referenceMode ? <div style={{height:"min(650px, 100dvh)"}}><FilePreviewLayout sessionId={conversationKey}><div data-test-ui="composer reference fixture" style={{display:"flex",flexDirection:"column",justifyContent:"flex-end",height:"100%"}}><UserReferenceText text={'历史 @销售.md /office-xlsx /unknown'} skills={["office-xlsx"]} />{composer()}</div></FilePreviewLayout></div> : composer()}</QueryClientProvider>
   </I18nContext.Provider>));
 }
 function Dialog({ name, close, children }: { name: string; close: () => void; children?: React.ReactNode }) {
@@ -290,7 +292,8 @@ const fixture = {
   slowCandidates(value: boolean) { slowCandidates = value; },
   releaseCandidates() { slowCandidates = false; pendingCandidates.splice(0).forEach(resolve => resolve()); },
   referenceSession(session: string) { conversationKey = session; renderComposer(); },
-  mountReferences() { referenceMode = true; reset(); composerOptions = {}; conversationKey = `references-${++serial}`; renderComposer(); },
+  referenceCandidates(items: typeof candidateOverride) { candidateOverride = items; },
+  mountReferences() { referenceMode = true; candidateOverride = undefined; reset(); composerOptions = {}; conversationKey = `references-${++serial}`; renderComposer(); },
   mountDialog(empty = false) { reset(); flushSync(() => root!.render(<DialogFixture empty={empty} />)); },
   mountComposer(options: ComposerOptions = {}) {
     reset(); composerOptions = options; conversationKey = `behavior-${++serial}`; renderComposer();
