@@ -40,3 +40,5 @@ Windows 最终版本同步 Query 修复及最新侧栏变更后，再次执行�
 macOS：真实 Electron 的 **13 组引用交互**与原有 **5 组输入框交互**通过，另通过 Dashboard 类型检查、模块边界检查和生产构建。新增检查覆盖裸 `@`／`/`、父目录展示、鼠标选择、带引号的下钻／返回根目录、20 项列表键盘滚动、短窗口、输入框增高和聊天滚动保持。这是输入框局部修改，按仓库简单修改流程在干净的 main 开发并做定向验证。
 
 截图 `at-root-menu-fixture-light.png`、`skill-menu-fixture-light.png` 和 `composer-reference-menu-fixture-dark.png` 位于 `/tmp/lxe-menu-captures/`，均为**生产组件测试夹具**。日志为 `/tmp/lxe-menu-ui.log`、`/tmp/lxe-menu-ui-references.log` 与 `/tmp/lxe-menu-build.log`。
+
+Windows x64：同步同一提交后，以上 **18 组 Electron 交互**、Dashboard 类型检查和完整桌面构建均通过；已核对 Windows 菜单截图。日志为 `D:\projects\lxe-menu-win-test.log`、`lxe-menu-win-types.log`、`lxe-menu-win-build.log`，截图在 `D:\projects\lxe-menu-captures\`。macOS 的 Electron 构建也通过；本次未重新发布安装器。
