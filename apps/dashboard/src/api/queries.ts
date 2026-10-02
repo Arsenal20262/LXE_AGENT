@@ -505,3 +505,26 @@ export function useUserSkillMutation(onRecycled: (id: string, path: string) => v
     onSettled: () => client.invalidateQueries({ queryKey: dashboardQueryKeys.skills.all }),
   });
 }
+
+/** Imperative completion reads share Query's cache/single-flight transport; the
+ * editor owns the short-lived caret request generation, not the server state. */
+export function useComposerDiscovery() {
+  const client = useQueryClient();
+  const skills = useCallback((session_id: string) => client.fetchQuery({
+    queryKey: ["composer", "skills", session_id],
+    queryFn: async ({ signal }) => {
+      const result = await callDashboard({ operation: "skills.list", input: { session_id } });
+      signal.throwIfAborted(); return result;
+    },
+    ...SKILL_QUERY_OPTIONS, gcTime: 0,
+  }), [client]);
+  const files = useCallback((session_id: string, query: string) => client.fetchQuery({
+    queryKey: ["composer", "files", session_id, query],
+    queryFn: async ({ signal }) => {
+      const result = await callDashboard({ operation: "sessions.files.candidates", input: { session_id, query } });
+      signal.throwIfAborted(); return result;
+    },
+    staleTime: 0, gcTime: 0, retry: false,
+  }), [client]);
+  return { skills, files };
+}

@@ -8,7 +8,7 @@ import { mergeRegister } from "@lexical/utils";
 import { ChevronRight, File as FileIcon, Folder, Sparkles } from "lucide-react";
 import { activeAtToken, formatFileMention, rankSkills } from "@lxe/desktop-protocol/composer-references";
 import type { SkillPayload } from "@lxe/desktop-protocol";
-import { callDashboard } from "../../api/client";
+import { useComposerDiscovery } from "../../api/queries";
 import { usePreviewSidebar } from "../file-preview/Sidebar";
 import { FileReferenceNode, SkillReferenceNode } from "./composer-reference-nodes";
 import { useUiText } from "../../shared/i18n";
@@ -63,10 +63,12 @@ export const ReferenceComposer = forwardRef<HTMLDivElement, {
   onFiles(files: File[]): void; disabled: boolean; placeholder: string;
 }>(function ReferenceComposer(props, forwarded) {
   const t = useUiText().composerReferences;
+  const { skills: fetchSkills, files: fetchFiles } = useComposerDiscovery();
   const composingUntil = useRef(0);
   const editor = editorFor(props.session), element = useRef<HTMLDivElement>(null), box = useRef<HTMLDivElement>(null);
   const propsNow = useRef(props); propsNow.current = props;
   const panel = usePreviewSidebar(), panelNow = useRef(panel); panelNow.current = panel;
+  const referenceSession = panel?.session ?? props.session;
   const [decorators, setDecorators] = useState<Record<string, ReactNode>>({});
   const [hit, setHit] = useState<Hit>(); const hitNow = useRef<Hit | undefined>(undefined); hitNow.current = hit;
   const [skills, setSkills] = useState<SkillPayload[]>([]), skillNames = useRef<string[]>([]);
@@ -145,12 +147,12 @@ export const ReferenceComposer = forwardRef<HTMLDivElement, {
     if (current !== props.value || editor.getEditorState().isEmpty()) editor.update(() => replaceText(props.value), { tag: "history-merge" });
   }, [editor, props.value]);
   useEffect(() => {
-    if (props.disabled) return;
+    if (props.disabled || !referenceSession) return;
     let active = true;
     const load = async () => {
       const rev = ++catalogGeneration.current;
       try {
-        const result = await callDashboard({ operation: "skills.list", input: { session_id: props.session } });
+        const result = await fetchSkills(referenceSession);
         if (!active || rev !== catalogGeneration.current) return;
         skillNames.current = result.items.map(s => s.name); setSkills(result.items);
         editor.update(() => { for (const node of $getRoot().getAllTextNodes()) node.markDirty(); });
@@ -158,25 +160,25 @@ export const ReferenceComposer = forwardRef<HTMLDivElement, {
     };
     skillNames.current = []; setSkills([]); void load(); window.addEventListener("focus", load);
     return () => { active = false; catalogGeneration.current++; window.removeEventListener("focus", load); close(); };
-  }, [editor, props.session, props.disabled]);
+  }, [editor, referenceSession, props.disabled, fetchSkills]);
   useEffect(() => {
     const rev = ++generation.current; setSelected(0);
-    if (!hit) { setItems([]); setBusy(false); return; }
+    if (!hit || !referenceSession || props.disabled) { setItems([]); setBusy(false); return; }
     if (hit.trigger === "/") { setItems(rankSkills(skills, hit.query).map(s => ({ name: s.name, description: s.description, kind: "skill" }))); setBusy(false); return; }
     setBusy(true);
-    void callDashboard({ operation: "sessions.files.candidates", input: { session_id: props.session, query: hit.query } }).then(result => {
+    void fetchFiles(referenceSession, hit.query).then(result => {
       if (rev === generation.current) setItems(result.items.filter(file => formatFileMention(file, hit.quoted) !== undefined).map(file => ({ ...file, name: file.path.split("/").at(-1)! })));
     }, error => { if (rev === generation.current) { console.error("File candidates:", error); setItems([]); } }).finally(() => { if (rev === generation.current) setBusy(false); });
     return () => { generation.current++; };
-  }, [hit, skills, props.session]);
+  }, [hit, skills, referenceSession, props.disabled, fetchFiles]);
   useEffect(() => { box.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest" }); }, [selected]);
   const activate = (event: React.MouseEvent) => {
     if (event.button || event.detail > 1 || window.getSelection()?.isCollapsed === false) return;
     const target = event.target as HTMLElement;
     const file = target.closest<HTMLElement>("[data-file-reference]");
-    if (file && file.dataset.folder !== "true") void panelNow.current?.open({ session_id: props.session, kind: "workspace", path: file.dataset.fileReference! });
+    if (file && file.dataset.folder !== "true") void panelNow.current?.open({ session_id: referenceSession, kind: "workspace", path: file.dataset.fileReference! });
     else if (target.closest("[data-skill-reference]")) editor.read(() => {
-      const node = $getNearestNodeFromDOMNode(target); if (node instanceof SkillReferenceNode) void panelNow.current?.open({ session_id: props.session, kind: "skill", id: node.getTextContent().slice(1) }, node.getTextContent().slice(1) + "/SKILL.md");
+      const node = $getNearestNodeFromDOMNode(target); if (node instanceof SkillReferenceNode) void panelNow.current?.open({ session_id: referenceSession, kind: "skill", id: node.getTextContent().slice(1) }, node.getTextContent().slice(1) + "/SKILL.md");
     });
   };
   return <div className="reference-composer" ref={box} onClick={activate}>
