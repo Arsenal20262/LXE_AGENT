@@ -1054,3 +1054,5 @@ export function isAgentResponse(message: AgentWireMessage): message is AgentResp
 export function isAgentEvent(message: AgentWireMessage): message is AgentNotification {
   return "method" in message && !("id" in message) && agentEventTypes.has(message.method as AgentEvent["type"]);
 }
+
+export * from "./composer-references";

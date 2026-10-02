@@ -1,3 +1,4 @@
+import { forgetComposerEditor } from "./features/sessions/ReferenceComposer";
 import { moveConversationAttachments, forgetConversationAttachments } from "./features/sessions/attachment-draft";
 import { forgetPreviewSession } from "./features/file-preview/reading-state";
 import { FilePreviewLayout } from "./features/file-preview/Sidebar";
@@ -500,7 +501,7 @@ function App({
       operation: "sessions.delete",
       input: { session_id: session.session_id },
     });
-    forgetPreviewSession(session.session_id);
+    forgetPreviewSession(session.session_id); forgetComposerEditor(session.session_id);
     forgetConversationAttachments(session.session_id);
     queryClient.removeQueries({ queryKey: dashboardQueryKeys.sessions.detailSession(session.session_id) });
     queryClient.removeQueries({ queryKey: dashboardQueryKeys.sessions.activity(session.session_id) });

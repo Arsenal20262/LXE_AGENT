@@ -1,5 +1,6 @@
 /** Desktop-only file viewing. References never accept arbitrary host paths. */
 export type SessionFileRef = { session_id: string } & (
+  | { kind: "skill"; id: string }
   | { kind: "artifact"; id: string }
   | { kind: "attachment"; id: string }
   | { kind: "workspace"; path: string }

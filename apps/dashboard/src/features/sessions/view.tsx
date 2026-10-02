@@ -1,3 +1,5 @@
+import { ReferenceComposer } from "./ReferenceComposer";
+import { UserReferenceText } from "./UserReferenceText";
 import { FileAvailabilityBadge } from "../file-preview/FileFailure";
 import { PreviewHeaderActions, usePreviewSidebar } from "../file-preview/Sidebar";
 import { OpenFileButton } from "../file-preview/OpenFileButton";
@@ -447,11 +449,11 @@ function MessageContent({ content, message }: { content: unknown; message: Sessi
   const toolCalls = message.tool_calls;
   return (
     <div className="message-content">
-      {typeof content === "string" ? <MessageMarkdown text={content} /> : null}
+      {typeof content === "string" ? message.role === "user" ? <UserReferenceText text={content} skills={Array.isArray(message.invoked_skills) ? message.invoked_skills : []} /> : <MessageMarkdown text={content} /> : null}
       {Array.isArray(content) ? (
         <div className="message-block-list">
           {content.map((block, index) => (
-            <MessageBlock block={block} key={index} />
+            message.role === "user" && isRecord(block) && block.type === "text" ? <UserReferenceText key={index} text={String(block.text ?? "")} skills={Array.isArray(message.invoked_skills) ? message.invoked_skills : []} /> : <MessageBlock block={block} key={index} />
           ))}
         </div>
       ) : null}
@@ -1172,7 +1174,7 @@ export function ConversationComposer({
   });
   const attachments = attachmentDraft.items;
   const [dragActive, setDragActive] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const textareaRef = useRef<HTMLDivElement>(null);
   const previousConversationKey = useRef(conversationKey);
   const currentConversationKey = useRef(conversationKey);
   currentConversationKey.current = conversationKey;
@@ -1275,44 +1277,16 @@ export function ConversationComposer({
           <InputAttachmentList draft attachments={attachments} onRemove={sending ? undefined : removeAttachment} />
         ) : null}
         {attachmentDraft.pending > 0 ? <span className="conversation-input-hint" role="status">{t.conversation.preparingAttachments}</span> : null}
-        <textarea
-          onPaste={(event) => {
-            const files = Array.from(event.clipboardData.files);
-            if (!files.length && !Array.from(event.clipboardData.types).some((type) => type === "Files" || type === "text/uri-list")) return;
-            if (files.length) event.preventDefault();
+        <ReferenceComposer ref={textareaRef} session={conversationKey} value={text} onChange={setText}
+          disabled={!runtimeReady} placeholder={runtimeReady ? t.conversation.placeholder : runtimeUnavailableMessage}
+          onSubmit={() => void submit()} onFiles={files => {
             if (!runtimeReady || sending) return;
-            const pastedText = event.clipboardData.getData("text/plain");
-            if (files.length && pastedText) {
-              const start = event.currentTarget.selectionStart;
-              const end = event.currentTarget.selectionEnd;
-              const next = (text.slice(0, start) + pastedText + text.slice(end)).slice(0, 8192);
-              setText(next);
-              requestAnimationFrame(() => textareaRef.current?.setSelectionRange(Math.min(start + pastedText.length, next.length), Math.min(start + pastedText.length, next.length)));
-            }
             setError("");
             void attachmentDraft.stage(async () => {
               if (!window.lxe) throw new Error(t.conversation.unavailable);
               return window.lxe.desktop.stagePastedConversationFiles(files);
             });
-          }}
-          aria-label={t.conversation.placeholder}
-          disabled={!runtimeReady}
-          maxLength={8192}
-          onChange={(event) => {
-            setText(event.target.value);
-            event.target.style.height = "auto";
-            event.target.style.height = `${Math.min(event.target.scrollHeight, 180)}px`;
-          }}
-          onKeyDown={(event) => {
-            if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;
-            event.preventDefault();
-            void submit();
-          }}
-          placeholder={runtimeReady ? t.conversation.placeholder : runtimeUnavailableMessage}
-          ref={textareaRef}
-          rows={1}
-          value={text}
-        />
+          }} />
         <div className="conversation-compose-actions">
           <div className="conversation-compose-leading">
             <button
@@ -1466,7 +1440,7 @@ export const UnifiedConversationRow = React.memo(function UnifiedConversationRow
     return <div className="message-with-meta role-user has-sent-attachments">
       <SentAttachmentList attachments={message.attachments} sessionId={attachmentSessionId}
         ready={row.status !== "sending" && !row.error} onOpen={onOpenAttachment} />
-      {text.trim() ? <article className="message-card role-user"><MessageMarkdown text={text} /></article> : null}
+      {text.trim() ? <article className="message-card role-user"><UserReferenceText text={text} skills={Array.isArray(message.invoked_skills) ? message.invoked_skills : []} /></article> : null}
       {row.error ? <div role="alert">{row.error}</div> : row.status === "error" ? <div role="status">{stateLabel}</div> : null}
       {["sending", "queued"].includes(row.status ?? "") ? <div className="optimistic-message-state">{stateLabel}</div> : null}
       <MessageMeta createdAt={Number(message.created_at ?? row.createdAt / 1000)} role={role} text={text} />

@@ -3117,3 +3117,78 @@ test.each(["read", "text", "mcp", "failed", "storage-failed", "cancelled"] as co
     expect(seen.size).toBe(scenario === "read" ? 2 : 0);
   } finally { await runtime.stop(); }
 });
+
+describe("explicit composer skill invocations", () => {
+  test("injects only direct input, exposes owned tools, persists immutable load evidence and avoids replay loads", async () => {
+    const store = new MemoryStore(), tools = new ToolRegistry(), looked: string[] = [];
+    store.messages = [{ role: "user", content: "/history-skill" }];
+    store.pendingEvents = [{ type: "notice", text: "/event-skill" }];
+    tools.register({ name: "office_action", description: "fixture", input_schema: { type: "object" }, exposure: "deferred", ownerSkills: ["office-xlsx"], execute: async () => ({ content: [] }) });
+    let calls = 0;
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy, store, tools, systemPrompt: "test",
+      emitter: { emit: async () => {}, typing: async () => {} },
+      resolveInvokedSkill: async name => { looked.push(name); return name === "office-xlsx" ? { name, root: "/skills/office-xlsx", content: "Unique instructions" } : undefined; },
+      provider: { summarize, turn: async request => {
+        if (calls++ === 0) {
+          expect(request.tools.some(t => t.name === "office_action")).toBe(true);
+          expect(JSON.stringify(request.messages)).toContain("Unique instructions");
+          expect(request.messages.filter(m => m.role === "user" && typeof m.content === "string" && m.content.startsWith("<skill_content"))).toHaveLength(1);
+        }
+        return messageFixture({ stopReason: "stop", content: [{ type: "text", text: "done" }] });
+      } },
+    });
+    await runtime.start();
+    try {
+      await runtime.runTurn(job({ user_input: "use /office-xlsx /office-xlsx /missing-skill", user_content_blocks: [{ type: "text", text: "attachment /attachment-skill" }] }), handle());
+      expect(looked).toEqual(["office-xlsx", "missing-skill"]);
+      const user = store.messages.find(m => m.role === "user" && m.message_id === "m1");
+      expect(user && "invoked_skills" in user && user.invoked_skills).toEqual(["office-xlsx"]);
+      expect(store.messageReasons.filter(r => r === "skill_invocation")).toHaveLength(1);
+      expect(JSON.stringify(store.metrics)).toContain('"skill":"office-xlsx"');
+      await runtime.runTurn(job({ job_id: "j2", user_input: "continue" }), handle());
+      expect(looked).toEqual(["office-xlsx", "missing-skill"]);
+    } finally { await runtime.stop(); }
+  });
+  test("real skill-load errors stop before provider and are not reported as success", async () => {
+    const store = new MemoryStore(); let calls = 0;
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy, store, tools: new ToolRegistry(), systemPrompt: "test",
+      emitter: { emit: async () => {}, typing: async () => {} },
+      resolveInvokedSkill: async () => { throw new Error("EACCES: SKILL.md read failed"); },
+      provider: { summarize, turn: async () => { calls++; return messageFixture(); } },
+    });
+    await runtime.start();
+    try {
+      const result = await runtime.runTurn(job({ user_input: "/office-xlsx work" }), handle());
+      expect(result.status).toBe("error"); expect(calls).toBe(0);
+      expect(store.messages.some(m => m.role === "user" && m.content === "/office-xlsx work")).toBe(true);
+      expect(JSON.stringify(store.turnErrors)).toContain("EACCES: SKILL.md read failed");
+    } finally { await runtime.stop(); }
+  });
+});
+
+test("explicit skills deduplicate a steering batch and never scan tool output", async () => {
+  const store = new MemoryStore(), tools = new ToolRegistry(), looked: string[] = [];
+  const queue: ReturnType<RuntimeHandle["drainSteering"]> = [];
+  let round = 0, invalidations = 0;
+  tools.register({ name: "fixture", description: "fixture", input_schema: { type: "object" }, execute: async () => ({ content: [{ type: "text", text: "/tool-output-skill" }] }) });
+  const runtime = new TypeScriptAgentRuntime({ permissionPolicy, store, tools, systemPrompt: "test",
+    emitter: { emit: async () => {}, typing: async () => {} },
+    onToolResult: () => { invalidations++; },
+    toolExposure: { allowedSkills: new Set(["one", "two"]) },
+    resolveInvokedSkill: async name => { looked.push(name); return { name, root: "/skills/" + name, content: "Instructions " + name }; },
+    provider: { summarize, turn: async request => {
+      if (round++ === 0) {
+        queue.push({ text: "/one /two /blocked" }, { text: "/two continue" });
+        return messageFixture({ stopReason: "toolUse", content: [{ type: "tool_call", id: "c", name: "fixture", arguments: {} }] });
+      }
+      expect(request.messages.filter(m => m.role === "user" && typeof m.content === "string" && m.content.startsWith("<skill_content"))).toHaveLength(2);
+      return messageFixture({ stopReason: "stop", content: [{ type: "text", text: "done" }] });
+    } },
+  });
+  await runtime.start();
+  try {
+    expect((await runtime.runTurn(job(), { ...handle(), drainSteering: () => queue.splice(0) })).status).toBe("completed");
+    expect(looked).toEqual(["one", "two"]); expect(invalidations).toBeGreaterThan(0);
+    expect(store.messageReasons.filter(reason => reason === "skill_invocation")).toHaveLength(2);
+  } finally { await runtime.stop(); }
+});

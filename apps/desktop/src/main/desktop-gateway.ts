@@ -150,6 +150,7 @@ export class DesktopGateway {
       if (!this.runtime) throw new Error("Agent runtime is unavailable");
       return {
         resolveWorkspaceDirectory: session => this.runtime!.resolveWorkspaceDirectory(session),
+        resolveSkill: async (session_id, name) => (await this.runtime!.dashboardCall({ operation: "skills.content", input: { session_id, name } })).location,
         resolveArtifact: (session, id) => this.runtime!.resolveArtifact(session, id),
         resolveAttachment: async (session, id) => await this.runtime!.resolveAttachment(session, id)
           ?? this.composition?.parts.conversations.resolveAttachmentPreview(session, id),

@@ -21,7 +21,7 @@ export interface ConversationRow {
 export const userDisplayId = (message: { client_message_id?: string; message_id?: string; display_id?: string }): string =>
   `user:${message.client_message_id || message.message_id || message.display_id}`;
 export const isInternalMessage = (message: SessionMessage): boolean =>
-  message.source_reason === "turn_aborted" || message.source_reason === "environment_context" || (message.role === "user" && isRecord(message.environmentContext));
+  message.source_reason === "skill_invocation" || message.source_reason === "turn_aborted" || message.source_reason === "environment_context" || (message.role === "user" && isRecord(message.environmentContext));
 const toolDisplayId = (turnId: string, groupId: string, callId: string): string =>
   `tool:${encodeURIComponent(turnId || groupId)}:${encodeURIComponent(callId)}`;
 

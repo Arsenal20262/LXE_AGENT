@@ -34,7 +34,7 @@ app.whenReady().then(async () => {
       if (await js(code)) return;
       await delay(25);
     }
-    throw new Error(`Timed out: ${label}\n${JSON.stringify(await state())}\n${await js("document.body.innerText.slice(0, 3000)")}`);
+    throw new Error(`Timed out: ${label}\n${JSON.stringify({...(await state()),sessions:undefined})}\n${await js("document.body.innerText.slice(0, 3000)")}`);
   };
   const load = async (query = "") => {
     await win.loadURL(url + query);
@@ -59,8 +59,8 @@ app.whenReady().then(async () => {
     await settle();
   };
   const type = async text => {
-    await focus("textarea"); await win.webContents.insertText(text); await settle();
-    assert.equal(await js("document.querySelector('textarea').value"), text, "native input reached the controlled textarea");
+    await focus(".reference-editor"); await win.webContents.insertText(text); await settle();
+    assert.equal(await js("(sessionStorage.getItem('lxe.composer-draft.' + document.querySelector('.reference-editor').dataset.session) || '')"), text, "native input reached the controlled textarea");
   };
   const step = async (name, run) => {
     try { await run(); assert.deepEqual(errors, [], "renderer console/network errors"); passed.push(name); }
@@ -103,13 +103,13 @@ app.whenReady().then(async () => {
     } else if (suite === "composer") {
       await step("IME confirmation does not send; Shift+Enter inserts a line; Enter sends once", async () => {
         await js("behavior.mountComposer()"); await type("中文");
-        assert.equal(await js("document.querySelector('textarea').maxLength"), 8192);
+        assert.equal(await js("Number(document.querySelector('.reference-editor').dataset.maxlength)"), 8192);
         // Synthetic composition metadata covers React's nativeEvent.isComposing;
         // normal Enter/Tab/Shift+Enter use Chromium native input below.
         await js("behavior.composeEnter()"); await settle();
         assert.equal((await state()).sends.length, 0);
         await key("Enter", ["shift"]);
-        assert.equal(await js("document.querySelector('textarea').value"), "中文\n");
+        assert.equal(await js("(sessionStorage.getItem('lxe.composer-draft.' + document.querySelector('.reference-editor').dataset.session) || '')"), "中文\n");
         assert.equal((await state()).sends.length, 0);
         await key("Enter");
         assert.deepEqual((await state()).sends, [{ text: "中文", attachments: [] }]);
@@ -119,14 +119,14 @@ app.whenReady().then(async () => {
         await key("Enter"); await key("Enter"); await click(".conversation-send-button");
         assert.equal((await state()).sends.length, 1);
         await js("behavior.releaseSend()"); await settle();
-        assert.equal(await js("document.querySelector('textarea').value"), "");
+        assert.equal(await js("(sessionStorage.getItem('lxe.composer-draft.' + document.querySelector('.reference-editor').dataset.session) || '')"), "");
       });
       await step("running work changes the action button to stop", async () => {
         await js("behavior.mountComposer({running:true})"); await type("queued draft");
         await click(".conversation-send-button");
         assert.equal((await state()).stops, 1); assert.equal((await state()).sends.length, 0);
         // Enter intentionally queues a new message during an existing turn.
-        await focus("textarea"); await key("Enter");
+        await focus(".reference-editor"); await key("Enter");
         assert.equal((await state()).sends.length, 1);
       });
       await step("model/thinking saves block both click and keyboard submission", async () => {
@@ -134,22 +134,104 @@ app.whenReady().then(async () => {
           await js(`behavior.mountComposer({${flag}:true})`); await type("wait for settings");
           await key("Enter"); await click(".conversation-send-button");
           assert.equal((await state()).sends.length, 0, flag);
-          await js(`behavior.updateComposer({${flag}:false})`); await focus("textarea"); await key("Enter");
+          await js(`behavior.updateComposer({${flag}:false})`); await focus(".reference-editor"); await key("Enter");
           assert.equal((await state()).sends.length, 1, `${flag} recovery`);
         }
       });
       await step("offline composer retains draft and blocks send, file selection and drops", async () => {
         await js("behavior.mountComposer()"); await type("offline draft");
         await js("behavior.updateComposer({runtimeReady:false})"); await settle();
-        assert.equal(await js("document.querySelector('textarea').disabled"), true);
-        assert.equal(await js("document.querySelector('textarea').placeholder"), "Fixture runtime unavailable");
+        assert.equal(await js("(document.querySelector('.reference-editor').contentEditable === 'false')"), true);
+        assert.equal(await js("document.querySelector('.reference-editor').dataset.placeholder"), "Fixture runtime unavailable");
         await click(".conversation-send-button"); await key("Enter");
         await click(".conversation-attach-button"); await js("behavior.drop()"); await settle();
         assert.deepEqual((await state()).sends, []); assert.deepEqual((await state()).calls, []);
-        await js("behavior.updateComposer({runtimeReady:true})"); await focus("textarea"); await key("Enter");
+        await js("behavior.updateComposer({runtimeReady:true})"); await focus(".reference-editor"); await key("Enter");
         assert.deepEqual((await state()).sends, [{ text: "offline draft", attachments: [] }]);
         await js("behavior.drop()"); await settle();
         assert.deepEqual((await state()).calls, [{ operation: "dropFiles", input: ["fixture.txt"] }], "drop listener is exercised after recovery");
+      });
+    } else if (suite === "references") {
+      const draft = () => js("sessionStorage.getItem('lxe.composer-draft.' + document.querySelector('.reference-editor').dataset.session) || ''");
+      const mount = async () => { await js("behavior.mountReferences()"); await settle(); };
+      const options = () => waitFor("document.querySelectorAll('.composer-candidate').length > 0 && !document.querySelector('.composer-candidate-status')", "candidates ready");
+      await step("file selection serializes the path and Enter does not send while picking", async () => {
+        await mount(); await type("@销售"); await options(); await key("Enter");
+        assert.equal(await draft(), "@销售.md "); assert.equal((await state()).sends.length, 0);
+        assert.equal(await js("document.querySelectorAll('[data-file-reference]').length"), 1);
+        await key("Enter"); assert.equal((await state()).sends[0].text, "@销售.md");
+      });
+      await step("directory Tab drills; Enter selects a quoted file without losing spaces", async () => {
+        await mount(); await type("@报"); await options(); await key("Tab"); await options();
+        assert.equal(await draft(), "@报表/");
+        await key("Enter"); assert.equal(await draft(), '@"报表/销售 统计.md" ');
+        await mount(); await type("@报"); await options(); await key("Enter");
+        assert.equal(await draft(), "@报表/ ");
+        await click('[data-folder="true"]'); assert.equal(await js("Boolean(document.querySelector('.file-sidebar'))"), false);
+      });
+      await step("skill suggestions and manually entered names share editable decoration", async () => {
+        await mount(); await type("/office-xl"); await options(); await key("Enter");
+        assert.equal(await draft(), "/office-xlsx "); assert.equal((await state()).sends.length, 0);
+        assert.equal(await js("document.querySelector('[data-skill-reference]')?.textContent"), "/office-xlsx");
+        await mount(); await type("请使用 /office-xlsx 做表");
+        await waitFor("Boolean(document.querySelector('[data-skill-reference]'))", "manual skill decorated");
+        await key("Enter"); assert.equal((await state()).sends[0].text, "请使用 /office-xlsx 做表");
+      });
+      await step("file and skill chips open the existing sidebar without changing the draft", async () => {
+        await mount(); await type("@销售"); await options(); await key("Enter");
+        await click('[data-file-reference]'); await waitFor("document.querySelector('.file-sidebar')?.textContent.includes('Reference preview content')", "file preview");
+        assert.equal(await draft(), "@销售.md ");
+        await mount(); await type("/office-xlsx ");
+        await waitFor("Boolean(document.querySelector('[data-skill-reference]'))", "skill chip");
+        await click('[data-skill-reference]'); await waitFor("document.querySelector('.file-sidebar')?.textContent.includes('Reference preview content')", "skill preview");
+        assert.equal(await draft(), "/office-xlsx ");
+        assert((await state()).calls.some(c => c.input?.ref?.kind === "skill"));
+      });
+      await step("unknown skills remain prose; deleted files can still be sent and preview shows missing", async () => {
+        await mount(); await type("/unknown do it"); await key("Enter");
+        assert.equal((await state()).sends[0].text, "/unknown do it");
+        await mount(); await type("@missing"); await options(); await key("Enter");
+        await click('[data-file-reference]'); await waitFor("Boolean(document.querySelector('.file-failure-panel'))", "missing file empty state");
+        await focus('.reference-editor'); await key("Enter"); assert.equal((await state()).sends[0].text, "@missing.txt");
+      });
+      await step("Escape preserves query, IME does not pick/send, and stale candidates cannot win", async () => {
+        await mount(); await type("@报"); await options(); await js("behavior.composeEnter()"); await settle();
+        assert.equal((await state()).sends.length, 0); assert.equal(await draft(), "@报");
+        await key("Escape"); assert.equal(await draft(), "@报");
+        await mount(); await js("behavior.slowCandidates(true)"); await type("@销");
+        await key("Enter"); assert.equal((await state()).sends.length, 0);
+        await win.webContents.insertText("售"); await settle(); await js("behavior.releaseCandidates()"); await options();
+        assert.equal(await draft(), "@销售"); await key("Enter"); assert.equal(await draft(), "@销售.md ");
+      });
+      await step("atomic file references support undo, redo and plain-text copy", async () => {
+        await mount(); await type("@销售"); await options(); await key("Enter");
+        const mod = process.platform === "darwin" ? "meta" : "control";
+        await key("z", [mod]); assert.equal(await draft(), "@销售");
+        await key("z", [mod, "shift"]); assert.equal(await draft(), "@销售.md ");
+        await key("a", [mod]); win.webContents.copy(); await settle();
+        assert.equal(require('electron').clipboard.readText(), "@销售.md ");
+        await key("Backspace"); assert.equal(await draft(), "");
+      });
+      await step("draft session switches and remount keep canonical references and preview actions", async () => {
+        await mount(); await type("@销售"); await options(); await key("Enter");
+        const owner = await js("document.querySelector('.reference-editor').dataset.session");
+        await js("behavior.referenceSession('other-reference-session')"); await settle(); assert.equal(await draft(), "");
+        await js(`behavior.referenceSession(${JSON.stringify(owner)})`); await settle(); assert.equal(await draft(), "@销售.md ");
+        assert.equal(await js("document.querySelectorAll('[data-file-reference]').length"), 1);
+        await click('.message-reference'); await waitFor("Boolean(document.querySelector('.file-sidebar'))", "history file preview");
+      });
+      await step("serialized length never exceeds 8192 and emails/paths do not trigger menus", async () => {
+        await mount(); await type("a@b.test /usr/bin 5/8"); assert.equal(await js("Boolean(document.querySelector('.composer-candidates'))"), false);
+        await mount(); await type("x".repeat(8192)); await win.webContents.insertText("y"); await settle(); assert.equal((await draft()).length, 8192);
+      });
+      await step("narrow/dark layouts retain candidate actions and file chip ellipsis", async () => {
+        await mount(); win.setSize(420, 650); await js("document.documentElement.dataset.theme='dark'"); await type("@报"); await options();
+        assert.equal(await js("document.querySelector('.composer-candidates').getBoundingClientRect().right <= innerWidth && document.querySelector('.composer-candidates').getBoundingClientRect().top >= 0"), true);
+        const captureDir = process.env.LXE_COMPOSER_CAPTURE_DIR;
+        if (captureDir) { require('node:fs').mkdirSync(captureDir,{recursive:true}); require('node:fs').writeFileSync(require('node:path').join(captureDir,'composer-reference-menu-fixture-dark.png'),(await win.webContents.capturePage()).toPNG()); }
+        await key("Tab"); await options(); await key("Enter"); assert.equal(await draft(), '@"报表/销售 统计.md" ');
+        const dir = process.env.LXE_COMPOSER_CAPTURE_DIR;
+        if (dir) { require('node:fs').mkdirSync(dir,{recursive:true}); require('node:fs').writeFileSync(require('node:path').join(dir,'composer-reference-fixture-dark.png'),(await win.webContents.capturePage()).toPNG()); }
       });
     } else if (suite === "readiness") {
       for (const [section, expected] of [
@@ -184,14 +266,14 @@ app.whenReady().then(async () => {
         await waitFor("Boolean(document.querySelector('.desktop-onboarding-skip'))", "onboarding skip");
         await click(".desktop-onboarding-skip");
         await click(".session-new-button");
-        await waitFor("Boolean(document.querySelector('textarea'))", "conversation after skipping");
-        assert.equal(await js("document.querySelector('textarea').disabled"), true);
-        const placeholder = await js("document.querySelector('textarea').placeholder");
+        await waitFor("Boolean(document.querySelector('.reference-editor'))", "conversation after skipping");
+        assert.equal(await js("(document.querySelector('.reference-editor').contentEditable === 'false')"), true);
+        const placeholder = await js("document.querySelector('.reference-editor').dataset.placeholder");
         assert.match(placeholder, /model/i);
         assert.deepEqual((await state()).calls.filter(call => call.operation.includes(".")), []);
         await js("behavior.setHealth({gateway:'ready',agent_cli:'ready'})");
         await waitFor("document.querySelectorAll('.welcome-metrics dd').length > 0", "welcome statistics after runtime recovery");
-        assert.equal(await js("document.querySelector('textarea').disabled"), false);
+        assert.equal(await js("(document.querySelector('.reference-editor').contentEditable === 'false')"), false);
         assert.equal(await js("document.querySelector('.welcome-metrics dd').textContent"), "7");
       });
     } else if (suite === "sidebar") {
@@ -364,7 +446,7 @@ app.whenReady().then(async () => {
       await step("cancel, choose, open and failed send preserve the draft and actual directory", async () => {
         await js("behavior.chooseDirectory(null)");
         await click(".conversation-workspace button[aria-label='Choose workspace']");
-        assert.equal(await js("document.querySelector('textarea').value"), "Prepare the project report");
+        assert.equal(await js("(sessionStorage.getItem('lxe.composer-draft.' + document.querySelector('.reference-editor').dataset.session) || '')"), "Prepare the project report");
         assert.equal(await js("document.querySelector('.conversation-workspace select').value"), "/fixture/shop");
         await js('behavior.chooseDirectory("D:\\\\资料\\\\采购")');
         await click(".conversation-workspace button[aria-label='Choose workspace']");
@@ -373,12 +455,12 @@ app.whenReady().then(async () => {
         await click(".conversation-workspace button[aria-label='Open folder']");
         assert.equal((await state()).calls.findLast(call => call.operation === "openWorkspace").input, selected);
         await js("behavior.failWorkspaceSend(true)");
-        await focus("textarea"); await key("Enter");
+        await focus(".reference-editor"); await key("Enter");
         await waitFor("document.body.textContent.includes('EACCES: fixture directory denied')", "actual failure displayed");
         const sent = (await state()).calls.findLast(call => call.operation === "sessions.send").input;
         assert.equal(sent.directory, undefined);
         assert.equal((await state()).sessions.find(row => row.session_id === sent.session_id).workspace.directory, selected);
-        assert.equal(await js("document.querySelector('textarea').value"), "Prepare the project report");
+        assert.equal(await js("(sessionStorage.getItem('lxe.composer-draft.' + document.querySelector('.reference-editor').dataset.session) || '')"), "Prepare the project report");
         assert.equal(await js("document.querySelector('.conversation-workspace select').disabled"), false);
       });
       await step("pending first send locks its directory and a late reply cannot switch a newer draft", async () => {
@@ -392,7 +474,7 @@ app.whenReady().then(async () => {
         await js("behavior.releaseWorkspaceSend()");
         await settle();
         await waitFor("Boolean(document.querySelector('.conversation-workspace select')) && document.querySelector('.conversation-workspace select').value === '/fixture/shop'", "new draft retained");
-        assert.equal(await js("document.querySelector('textarea').value"), "");
+        assert.equal(await js("(sessionStorage.getItem('lxe.composer-draft.' + document.querySelector('.reference-editor').dataset.session) || '')"), "");
       });
       await step("global search labels the directory and an existing chat cannot change it", async () => {
         await click(".sidebar-search-button");
@@ -486,11 +568,11 @@ app.whenReady().then(async () => {
         await js('behavior.chooseDirectory("/fixture/retry"); behavior.failRegistration(true)');
         await click('.conversation-workspace button[aria-label="Choose workspace"]');
         await waitFor('document.querySelector(".conversation-workspace")?.textContent.includes("SQLITE_FULL")', 'registration failure');
-        assert.equal(await js('document.querySelector("textarea").value'), 'Keep my draft');
+        assert.equal(await js('(sessionStorage.getItem("lxe.composer-draft." + document.querySelector(".reference-editor").dataset.session) || "")'), 'Keep my draft');
         assert.equal(await js('document.querySelector(".conversation-workspace select").value'), '/fixture/shop');
         await js('behavior.failRegistration(false)'); await click('.conversation-workspace button[aria-label="Choose workspace"]');
         await waitFor('document.querySelector(".conversation-workspace select").value === "/fixture/retry"', 'retry registered');
-        assert.equal(await js('document.querySelector("textarea").value'), 'Keep my draft');
+        assert.equal(await js('(sessionStorage.getItem("lxe.composer-draft." + document.querySelector(".reference-editor").dataset.session) || "")'), 'Keep my draft');
       });
       await step('late registration cannot switch a newer draft or pull the user off another page', async () => {
         await js('behavior.chooseDirectory("/fixture/late"); behavior.holdRegistration(true)');
@@ -513,20 +595,20 @@ app.whenReady().then(async () => {
         await waitFor('document.querySelectorAll(".input-attachment-draft .input-attachment-chip").length === 1', 'first attachment');
         await js('behavior.chooseDirectory("/fixture/merge-b")'); await click('.workspace-index-heading button');
         await waitFor('document.querySelector(".conversation-workspace select")?.value === "/fixture/merge-b"', 'second blank');
-        assert.equal(await js('document.querySelector("textarea").value'), '');
+        assert.equal(await js('(sessionStorage.getItem("lxe.composer-draft." + document.querySelector(".reference-editor").dataset.session) || "")'), '');
         assert.equal(await js('document.querySelectorAll(".input-attachment-draft .input-attachment-chip").length'), 0);
         await type('Draft B'); await js('behavior.chooseFile("b.txt"); behavior.chooseDirectory("/fixture/merge-a")');
         await click('[aria-label="Add files"]');
         await waitFor('document.querySelectorAll(".input-attachment-draft .input-attachment-chip").length === 1', 'second attachment');
         await click('.conversation-workspace button[aria-label="Choose workspace"]');
         await waitFor('document.querySelector(".conversation-workspace select")?.value === "/fixture/merge-a"', 'merged blank');
-        assert.equal(await js('document.querySelector("textarea").value'), 'Draft A\n\nDraft B');
+        assert.equal(await js('(sessionStorage.getItem("lxe.composer-draft." + document.querySelector(".reference-editor").dataset.session) || "")'), 'Draft A\n\nDraft B');
         assert.equal(await js('document.querySelectorAll(".input-attachment-draft .input-attachment-chip").length'), 2);
       });
       await step('blank creation failure preserves the selected draft and attachments', async () => {
         await js('behavior.failCreation(true)'); await click('.session-new-button');
         await waitFor('document.body.textContent.includes("SQLITE_FULL: fixture session creation failed")', 'creation error');
-        assert.equal(await js('document.querySelector("textarea").value'), 'Draft A\n\nDraft B');
+        assert.equal(await js('(sessionStorage.getItem("lxe.composer-draft." + document.querySelector(".reference-editor").dataset.session) || "")'), 'Draft A\n\nDraft B');
         assert.equal(await js('document.querySelectorAll(".input-attachment-draft .input-attachment-chip").length'), 2);
         await js('behavior.failCreation(false)');
       });

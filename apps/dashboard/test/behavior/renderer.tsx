@@ -1,3 +1,5 @@
+import { FilePreviewLayout } from "../../src/features/file-preview/Sidebar";
+import { UserReferenceText } from "../../src/features/sessions/UserReferenceText";
 /// <reference path="../../src/vite-env.d.ts" />
 import React, { useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -15,6 +17,10 @@ import "../../src/styles.css";
 // dialog focus management are production code, running in Chromium.
 const calls: { operation: string; input?: unknown }[] = [];
 const workspaceMode = new URLSearchParams(location.search).has("workspaces");
+let referenceMode = false;
+let slowCandidates = false;
+const pendingCandidates: (() => void)[] = [];
+const referenceSkills = ["office-xlsx", "office-docx", "office-pptx"].map(name => ({ name, description: "Office fixture skill", type: "default", commands: [], references: [], location: "/skills/" + name + "/SKILL.md" }));
 let chosenFile = "";
 let chosenDirectory: string | null = "/fixture/chosen";
 let sendFailure = false;
@@ -169,6 +175,13 @@ const desktop = {
 } satisfies Partial<LxeDesktopBridge["desktop"]>;
 const dashboard = {
   async call(call: { operation: string; input: Record<string, unknown> }) {
+    if (call.operation === "skills.list") return { items: referenceMode ? referenceSkills : [], total: referenceMode ? 3 : 0 };
+    if (call.operation === "sessions.files.candidates" && referenceMode) {
+      if (slowCandidates) await new Promise<void>(resolve => pendingCandidates.push(resolve));
+      const query = String(call.input.query);
+      const items = query.startsWith("报表/") ? [{ path: "报表/销售 统计.md", kind: "file" }] : [{ path: "报表", kind: "directory" }, { path: "销售.md", kind: "file" }, { path: "missing.txt", kind: "file" }].filter(f => !query || f.path.includes(query));
+      return { items };
+    }
     calls.push(structuredClone(call));
     if (workspaceMode || ["sessions.create", "sessions.detail", "sessions.activity", "sessions.execTasks", "sessions.status.list"].includes(call.operation)) {
       const result = workspaceRpc(call);
@@ -192,10 +205,19 @@ const dashboard = {
   },
 };
 const files = {
-  async call(call: { operation: string; input: unknown }) {
-    if (call.operation === "focus-preview") return;
+  async call(call: { operation: string; input: any }) {
+    if (["focus-preview", "release"].includes(call.operation)) return { ok: true, value: undefined };
+    if (!referenceMode) throw new Error(`Unexpected fixture file operation: ${call.operation}`);
+    calls.push(structuredClone(call));
+    const ref = call.input.ref;
+    if (ref?.path === "missing.txt") return { ok: false, error: { kind: "not_found", operation: call.operation, diagnostic: "ENOENT: fixture missing.txt" } };
+    const metadata = { key: ref?.id ?? ref?.path, name: ref?.kind === "skill" ? "SKILL.md" : ref?.path, displayPath: "/fixture/" + (ref?.id ?? ref?.path), size: 20, version: "1", kind: "markdown", extension: ".md", source: "current_file" };
+    if (call.operation === "stat") return { ok: true, value: metadata };
+    if (call.operation === "applications") return { ok: true, value: [] };
+    if (call.operation === "prepare") return { ok: true, value: { handle: "fixture-handle", metadata, missingFonts: [] } };
     throw new Error(`Unexpected fixture file operation: ${call.operation}`);
   },
+  async readText() { return { ok: true, value: { text: "# Reference preview content\n", page: 1, offset: 1, lines: 1, next: 2, eof: true, version: "1" } }; },
 };
 window.lxe = { desktop, dashboard, files } as unknown as LxeDesktopBridge;
 
@@ -218,7 +240,7 @@ function composer() {
 }
 function renderComposer() {
   flushSync(() => root!.render(<I18nContext.Provider value={UI_TEXT.en}>
-    <QueryClientProvider client={queryClient!}>{composer()}</QueryClientProvider>
+    <QueryClientProvider client={queryClient!}>{referenceMode ? <div style={{height:650}}><FilePreviewLayout sessionId={conversationKey}><div data-test-ui="composer reference fixture" style={{display:"flex",flexDirection:"column",justifyContent:"flex-end",height:"100%"}}><UserReferenceText text={'历史 @销售.md /office-xlsx /unknown'} skills={["office-xlsx"]} />{composer()}</div></FilePreviewLayout></div> : composer()}</QueryClientProvider>
   </I18nContext.Provider>));
 }
 function Dialog({ name, close, children }: { name: string; close: () => void; children?: React.ReactNode }) {
@@ -265,6 +287,10 @@ const fixture = {
   failWorkspaceSend(value: boolean) { sendFailure = value; },
   holdWorkspaceSend(value: boolean) { holdWorkspaceSend = value; },
   releaseWorkspaceSend() { releaseWorkspaceSend?.(); },
+  slowCandidates(value: boolean) { slowCandidates = value; },
+  releaseCandidates() { slowCandidates = false; pendingCandidates.splice(0).forEach(resolve => resolve()); },
+  referenceSession(session: string) { conversationKey = session; renderComposer(); },
+  mountReferences() { referenceMode = true; reset(); composerOptions = {}; conversationKey = `references-${++serial}`; renderComposer(); },
   mountDialog(empty = false) { reset(); flushSync(() => root!.render(<DialogFixture empty={empty} />)); },
   mountComposer(options: ComposerOptions = {}) {
     reset(); composerOptions = options; conversationKey = `behavior-${++serial}`; renderComposer();
@@ -282,7 +308,7 @@ const fixture = {
     window.dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: data }));
   },
   composeEnter() {
-    const input = document.querySelector("textarea")!;
+    const input = document.querySelector(".reference-editor")!;
     input.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true, data: "中" }));
     input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", bubbles: true, cancelable: true, isComposing: true }));
     input.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true, data: "中" }));

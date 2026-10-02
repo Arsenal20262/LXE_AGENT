@@ -267,6 +267,7 @@ export function createAgentRuntimeHost(
       return workspaceInstances.reload(assertWorkspaceAvailable(session.workspace), "dashboard_diagnostic");
     },
   });
+  runtimeServices.push({ start: async () => {}, stop: async () => dashboardService.dispose() });
   workspaceInstances = new WorkspaceInstanceManager({
     createSearch: root => new WorkspaceSearchService(root, environment.LXE_FD_PATH ? { fdPath: environment.LXE_FD_PATH } : {}),
     soulPath: options.agentSoulPath,
@@ -286,6 +287,11 @@ export function createAgentRuntimeHost(
     }),
     tools,
     workspaceInstances,
+    onToolResult: session => dashboardService.invalidateFileCandidates(session),
+    resolveInvokedSkill: async name => {
+      await skillCatalog.refreshForUse();
+      return skillCatalog.get(name, { allowedTypes: allowedSkillTypes });
+    },
     contextWindowTokens: providerDescriptor.contextWindowTokens,
     display: {
       model: providerDescriptor.model,

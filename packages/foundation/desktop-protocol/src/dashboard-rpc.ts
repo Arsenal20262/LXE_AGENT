@@ -541,6 +541,7 @@ export interface DashboardRpcSpec {
     input: { session_id: string; attachment_id: string; variant?: "thumbnail" | "expanded" };
     result: { data_url: string; source: "history" | "current_file" };
   };
+  "sessions.files.candidates": { input: { session_id: string; query: string }; result: { items: Array<{ path: string; kind: "file" | "directory" }> } };
   "sessions.workspace.reload": {
     input: { session_id: string };
     result: WorkspaceReloadPayload;
@@ -549,8 +550,8 @@ export interface DashboardRpcSpec {
   "skills.user.content": { input: { id: string; path?: string }; result: UserSkillContentPayload };
   "skills.user.setEnabled": { input: { id: string; version: string; enabled: boolean }; result: UserSkillPayload };
   "skills.user.delete": { input: { id: string; version: string }; result: { id: string; deleted: boolean; recycled_path: string } };
-  "skills.list": { input: DashboardRpcEmptyInput; result: ApiList<SkillPayload> };
-  "skills.content": { input: { name: string }; result: SkillContentPayload };
+  "skills.list": { input: { session_id?: string }; result: ApiList<SkillPayload> };
+  "skills.content": { input: { name: string; session_id?: string }; result: SkillContentPayload };
   "skills.reference": {
     input: { name: string; path: string };
     result: SkillReferenceContentPayload;
@@ -827,8 +828,14 @@ export function parseDashboardRpcCall(value: unknown): DashboardRpcCall {
     case "sessions.workspace.reload":
       exactKeys(input, ["session_id"], `${operation}.input`);
       return { operation, input: { session_id: textValue(input.session_id, `${operation}.session_id`)! } };
-    case "skills.user.list":
+    case "sessions.files.candidates":
+      exactKeys(input, ["session_id", "query"], `${operation}.input`);
+      if (typeof input.query !== "string" || input.query.length > 8192) throw new DashboardRpcError("invalid_request", "Invalid file query");
+      return { operation, input: { session_id: textValue(input.session_id, `${operation}.session_id`)!, query: input.query } };
     case "skills.list":
+      exactKeys(input, ["session_id"], `${operation}.input`);
+      return { operation, input: input.session_id === undefined ? {} : { session_id: textValue(input.session_id, `${operation}.session_id`)! } };
+    case "skills.user.list":
     case "commands.list":
     case "toolsets.list":
     case "mcp.servers.list":
@@ -848,8 +855,8 @@ export function parseDashboardRpcCall(value: unknown): DashboardRpcCall {
       exactKeys(input, ["id", "version"], `${operation}.input`);
       return { operation, input: { id: textValue(input.id, `${operation}.id`)!, version: textValue(input.version, `${operation}.version`)! } };
     case "skills.content":
-      exactKeys(input, ["name"], `${operation}.input`);
-      return { operation, input: { name: textValue(input.name, `${operation}.name`)! } };
+      exactKeys(input, ["name", "session_id"], `${operation}.input`);
+      return { operation, input: { name: textValue(input.name, `${operation}.name`)!, ...(input.session_id === undefined ? {} : { session_id: textValue(input.session_id, `${operation}.session_id`)! }) } };
     case "skills.reference":
       exactKeys(input, ["name", "path"], `${operation}.input`);
       return { operation, input: {
