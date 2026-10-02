@@ -5,9 +5,8 @@ from __future__ import annotations
 from copy import copy
 from dataclasses import dataclass
 from datetime import date, datetime
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from importlib.resources import files
-from math import isfinite
 from pathlib import Path
 import re
 from typing import Mapping
@@ -18,11 +17,8 @@ from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.formula import ArrayFormula
 
 from .asset_contract import REQUIRED_SHEETS, SkuParameters
+from .numeric_contract import WorkbookInputError, excel_number
 from .yacang_sources import VietnamSources
-
-
-class WorkbookInputError(ValueError):
-    """Current source data or explicit inputs cannot yield a complete workbook."""
 
 
 @dataclass(frozen=True)
@@ -67,27 +63,7 @@ def canonical_product_time(value: object) -> str:
         raise WorkbookInputError(f"仓库产品 创建时间无效: {exc}") from exc
 
 
-def _number(value: object, sku: str, field: str, *, positive: bool = False) -> Decimal:
-    if value is None or isinstance(value, str) and not value.strip():
-        raise WorkbookInputError(f"SKU {sku} 的 {field} 缺失")
-    if isinstance(value, bool):
-        raise WorkbookInputError(f"SKU {sku} 的 {field} 不是有限非负数：布尔值")
-    try:
-        result = Decimal(str(value))
-    except (InvalidOperation, TypeError, ValueError) as exc:
-        raise WorkbookInputError(f"SKU {sku} 的 {field} 不是数字: {type(exc).__name__}: {exc}") from exc
-    if not result.is_finite() or result < 0 or positive and result == 0:
-        constraint = "有限正数" if positive else "有限非负数"
-        raise WorkbookInputError(f"SKU {sku} 的 {field} 必须是{constraint}")
-    if len(result.normalize().as_tuple().digits) > 15:
-        raise WorkbookInputError(f"SKU {sku} 的 {field} 超出 Excel 精度（15 位有效数字）")
-    try:
-        as_float = float(result)
-    except (OverflowError, ValueError) as exc:
-        raise WorkbookInputError(f"SKU {sku} 的 {field} 超出 Excel 数值范围") from exc
-    if not isfinite(as_float) or result != 0 and as_float == 0 or Decimal(str(as_float)) != result:
-        raise WorkbookInputError(f"SKU {sku} 的 {field} 无法精确写入 Excel 数值单元格")
-    return result
+_number = excel_number
 
 
 def _map_time_agrees(sku: str, listed_at: object, canonical: str) -> None:
@@ -186,7 +162,7 @@ def _validated_rows(
     return tuple(result)
 
 
-def _validated_config(config: RecommendationConfig) -> tuple[Decimal, Decimal, Decimal, Decimal]:
+def validate_recommendation_config(config: RecommendationConfig) -> tuple[Decimal, Decimal, Decimal, Decimal]:
     if not isinstance(config, RecommendationConfig):
         raise WorkbookInputError("推荐参数必须是 RecommendationConfig")
     return (
@@ -262,7 +238,7 @@ def write_vietnam_workbook(
     if output.exists():
         raise FileExistsError(output)
     rows = _validated_rows(sources, parameters)
-    input_config = _validated_config(config)
+    input_config = validate_recommendation_config(config)
     book = _load_skeleton()
     try:
         if tuple(book.sheetnames) != REQUIRED_SHEETS:
@@ -315,5 +291,6 @@ def write_vietnam_workbook(
 
 __all__ = [
     "RecommendationConfig", "WorkbookInputError", "canonical_product_time",
+    "validate_recommendation_config",
     "write_vietnam_workbook",
 ]
