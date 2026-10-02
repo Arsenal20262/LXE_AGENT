@@ -57,4 +57,4 @@
 .desktop-usage-error { margin-top: 18px; color: var(--muted); font-size: 0.75rem; }
 .desktop-usage-error p { margin: 0 0 8px; }
 .desktop-usage-error summary { cursor: pointer; }
-.desktop-usage-error pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
+.desktop-usage-error pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; font-family: var(--font-mono); }

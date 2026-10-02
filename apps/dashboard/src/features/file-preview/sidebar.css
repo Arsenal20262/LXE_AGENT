@@ -246,7 +246,12 @@
   position:relative}
 .file-excel-workbook .fortune-container {
   width:100%;
-  height:100%}
+  height:100%;
+  /* Viewer controls follow the app. Cell fonts are drawn by FortuneSheet from
+     workbook data; do not override its canvas or cell-editing surfaces. */
+  font-family:var(--font-sans)}
+.file-excel-workbook .fortune-toolbar-subtext {
+  font-family:var(--font-sans)}
 .file-open-control {
   position:relative;
   flex:none;
