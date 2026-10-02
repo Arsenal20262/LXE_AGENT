@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 import re
 
 from openpyxl import load_workbook
+from openpyxl.utils import get_column_letter
 
 
 REQUIRED_SHEETS = (
@@ -50,6 +53,15 @@ class AssetContractError(ValueError):
 class TemplateContract:
     sheet_names: tuple[str, ...]
     main_rows: int
+
+
+@dataclass(frozen=True)
+class SkuParameters:
+    cost: Decimal | None = None
+    cross_border_price: Decimal | None = None
+    discount_price: Decimal | None = None
+    hot_flag: int | None = None
+    listed_at: str | None = None
 
 
 def validate_template(path: str | Path) -> TemplateContract:
@@ -115,4 +127,134 @@ def validate_template(path: str | Path) -> TemplateContract:
         workbook.close()
 
 
-__all__ = ["AssetContractError", "TemplateContract", "validate_template"]
+_PARAMETER_HEADERS = ("SKU", "成本", "跨境价", "折扣价", "热销标记")
+
+
+def _blank(value: object) -> bool:
+    return value is None or isinstance(value, str) and not value.strip()
+
+
+def load_sku_parameters(path: str | Path) -> dict[str, SkuParameters]:
+    """Read explicit SKU inputs from the first sheet; never infer missing values."""
+    try:
+        workbook = load_workbook(path, read_only=True, data_only=False)
+    except Exception as exc:
+        raise AssetContractError(f"读取 SKU 参数表失败: {type(exc).__name__}: {exc}") from exc
+
+    try:
+        sheet = workbook.worksheets[0]
+        name = sheet.title
+        first_row = next(sheet.iter_rows(min_row=1, max_row=1), ())
+        columns: dict[str, int] = {}
+        for index, cell in enumerate(first_row, 1):
+            if not isinstance(cell.value, str) or not cell.value.strip():
+                continue
+            header = cell.value.strip()
+            if header in columns:
+                raise AssetContractError(
+                    f"{name}!{get_column_letter(index)}1: 重复表头 {header!r}"
+                )
+            columns[header] = index
+        for header in _PARAMETER_HEADERS:
+            if header not in columns:
+                raise AssetContractError(f"{name}!1: 缺少表头 {header!r}")
+
+        def cell_at(row: tuple, row_number: int, header: str):
+            column = columns[header]
+            cell = row[column - 1]
+            coordinate = f"{name}!{get_column_letter(column)}{row_number}"
+            if cell.data_type == "f":
+                raise AssetContractError(f"{coordinate}: {header} 输入格不能是公式，实际为 {cell.value!r}")
+            return cell.value, coordinate
+
+        def number_at(row: tuple, row_number: int, header: str) -> Decimal | None:
+            value, coordinate = cell_at(row, row_number, header)
+            if _blank(value):
+                return None
+            if isinstance(value, bool):
+                raise AssetContractError(f"{coordinate}: {header} 必须是有限非负数，实际为布尔值")
+            try:
+                result = Decimal(str(value))
+            except (InvalidOperation, ValueError, TypeError) as exc:
+                raise AssetContractError(
+                    f"{coordinate}: {header} 不是数字: {type(exc).__name__}: {exc}"
+                ) from exc
+            if not result.is_finite() or result < 0:
+                raise AssetContractError(f"{coordinate}: {header} 必须是有限非负数")
+            return result
+
+        result: dict[str, SkuParameters] = {}
+        first_rows: dict[str, int] = {}
+        for row_number, row in enumerate(sheet.iter_rows(min_row=2), 2):
+            if all(_blank(cell.value) for cell in row):
+                continue
+            sku_value, sku_coordinate = cell_at(row, row_number, "SKU")
+            if not isinstance(sku_value, str) or not sku_value.strip():
+                raise AssetContractError(f"{sku_coordinate}: SKU 必须是非空文本")
+            sku = sku_value.strip()
+            if sku in result:
+                original = f"{name}!{get_column_letter(columns['SKU'])}{first_rows[sku]}"
+                raise AssetContractError(f"{sku_coordinate}: SKU 与 {original} 重复")
+
+            cost = number_at(row, row_number, "成本")
+            cross_border_price = number_at(row, row_number, "跨境价")
+            discount_price = number_at(row, row_number, "折扣价")
+            hot_value = number_at(row, row_number, "热销标记")
+            if hot_value is not None and hot_value not in (1, 2):
+                coordinate = f"{name}!{get_column_letter(columns['热销标记'])}{row_number}"
+                raise AssetContractError(f"{coordinate}: 热销标记只能是 1 或 2")
+
+            listed_at = None
+            if "上架时间" in columns:
+                listed_value, coordinate = cell_at(row, row_number, "上架时间")
+                if not _blank(listed_value):
+                    if isinstance(listed_value, str):
+                        listed_at = listed_value.strip()
+                        if not re.match(r"^\d{4}-\d{2}-\d{2}(?:$|[ T])", listed_at):
+                            raise AssetContractError(
+                                f"{coordinate}: 上架时间文本必须以 ISO YYYY-MM-DD 开头"
+                            )
+                        try:
+                            if len(listed_at) == 10:
+                                date.fromisoformat(listed_at)
+                            else:
+                                datetime.fromisoformat(listed_at)
+                        except ValueError as exc:
+                            raise AssetContractError(
+                                f"{coordinate}: 上架时间日期或时间无效: {type(exc).__name__}: {exc}"
+                            ) from exc
+                    elif isinstance(listed_value, date):
+                        listed_cell = row[columns["上架时间"] - 1]
+                        listed_at = (
+                            listed_value.date().isoformat()
+                            if isinstance(listed_value, datetime)
+                            and listed_cell.number_format == "yyyy-mm-dd"
+                            else str(listed_value).strip()
+                        )
+                    else:
+                        raise AssetContractError(f"{coordinate}: 上架时间必须是文本或日期")
+
+            result[sku] = SkuParameters(
+                cost=cost,
+                cross_border_price=cross_border_price,
+                discount_price=discount_price,
+                hot_flag=int(hot_value) if hot_value is not None else None,
+                listed_at=listed_at,
+            )
+            first_rows[sku] = row_number
+        return result
+    except AssetContractError:
+        raise
+    except Exception as exc:
+        raise AssetContractError(f"读取 SKU 参数表失败: {type(exc).__name__}: {exc}") from exc
+    finally:
+        workbook.close()
+
+
+__all__ = [
+    "AssetContractError",
+    "SkuParameters",
+    "TemplateContract",
+    "load_sku_parameters",
+    "validate_template",
+]

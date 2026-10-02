@@ -13,6 +13,8 @@
 ## Global Constraints
 
 - Final output sheets are exactly `越南备货清单`, `雅仓库存`, `雅仓动销`, `数据更改`, `库存商品信息`. The supplied nine-sheet workbook is an allowed input template; output pruning belongs to the workbook task, not this PR.
+- The template's 8,300 historical SKU rows are input history only. The final workbook must contain only SKUs from the current VN8806 雅仓 exports; the output row set is never copied wholesale from the template.
+- The later operations-facing SKU workbook is derived from the same current VN8806 SKU set. Its editable columns cover only SKU-level business inputs absent from the three 雅仓 exports; template history can be shown as reference but must not silently become an explicit map override. Missing or conflicting values stay visibly unresolved for operations to check. Generating and merging that workbook belongs to a later PR, after the current three exports are available.
 - Asset slots are `vietnam_replenishment_template` and `vietnam_sku_parameter_map`; the first is required at runtime and the second is optional.
 - Parameter precedence is explicit SKU map value, then historical value for the same SKU in the full template, then an explicit business default (`热销=2`), then missing.
 - SKU is the exact key. No style, color, suffix, model-number, or LLM guess may fill a missing value.
@@ -40,7 +42,7 @@ validate_template(path: str | Path) -> TemplateContract
 load_sku_parameters(path: str | Path) -> dict[str, SkuParameters]
 ```
 
-Later modules use these functions on copied run-local assets, merge the current VN8806 exports, produce exactly five sheets, recalculate with `shared.office`, and expose one Vietnam business command. Those modules have separate PR and test cycles.
+Later modules use these functions on copied run-local assets, merge the current VN8806 exports, produce exactly five sheets, recalculate with `shared.office`, and expose one Vietnam business command. They also extract an operations-facing SKU workbook from only the current VN8806 SKU set and the SKU-level fields missing from 雅仓. Those modules have separate PR and test cycles.
 
 ### Task 1: Validate the full business template
 
