@@ -11,14 +11,14 @@ import { readingState, forgetReadingTab, moveReadingTab } from "./reading-state"
 import { checkFile, fileRefKey } from "./application-state";
 import "./sidebar.css";
 function TabIcon({ name }: { name: string }) { const ext = name.split(".").pop()?.toLowerCase(); const Icon = ["xlsx", "xls", "csv", "tsv"].includes(ext ?? "") ? FileSpreadsheet : ["png", "jpg", "jpeg", "svg", "gif", "webp", "bmp"].includes(ext ?? "") ? Image : ["pdf", "md", "txt", "doc", "docx"].includes(ext ?? "") ? FileText : File; return <Icon size={14} />; }
-interface Controls { session: string; shown: boolean; open(ref: SessionFileRef, name?: string): Promise<void>; tree(): void; toggle(): void }
+interface Controls { session: string; shown: boolean; open(ref: SessionFileRef, name?: string): Promise<void>; toggle(): void }
 const Context = createContext<Controls | null>(null);
 export const usePreviewSidebar = () => useContext(Context);
 function storage() { try { return window.localStorage; } catch { return undefined; } }
 export function PreviewHeaderActions() {
   const panel = usePreviewSidebar(), t = useUiText().filePreview;
   if (!panel?.session) return null;
-  return <div className="file-header-actions"><button type="button" title={t.files} aria-label={t.files} onClick={panel.tree}><FolderOpen size={16} /></button><button type="button" title={t.toggle} aria-label={t.toggle} aria-expanded={panel.shown} onClick={panel.toggle}><PanelRight size={16} /></button></div>;
+  return <div className="file-header-actions"><button type="button" title={t.toggle} aria-label={t.toggle} aria-expanded={panel.shown} onClick={panel.toggle}><PanelRight size={16} /></button></div>;
 }
 export function FilePreviewLayout({ sessionId, children }: { sessionId: string; children: ReactNode }) {
   const t = useUiText().filePreview, toolsText = useUiText().manualTools, frame = useRef<HTMLDivElement>(null), sessionNow = useRef(sessionId); sessionNow.current = sessionId;
@@ -60,8 +60,7 @@ export function FilePreviewLayout({ sessionId, children }: { sessionId: string; 
       return openTab({ ...current, tabs: current.tabs.filter(tab => !existing || tab.key !== existing.key || existing.key === key) }, { key, name: name ?? existing?.name ?? metadata?.name ?? (ref.kind === "workspace" ? ref.path.split(/[\\/]/).pop()! : ref.id), ref });
     });
   }, [update]);
-  const tree = useCallback(() => { ++intent.current; update(current => openTab(current, { key: "tree", name: t.files })); }, [update, t.files]);
-  const controls = useMemo<Controls>(() => ({ session: sessionId, shown: layout.shown, open, tree, toggle: () => { ++intent.current; update(current => current.tabs.length ? { ...current, shown: !current.shown } : openTab(current, { key: "start", name: toolsText.start, kind: "start" })); } }), [sessionId, layout.shown, open, tree, update, toolsText.start]);
+  const controls = useMemo<Controls>(() => ({ session: sessionId, shown: layout.shown, open, toggle: () => { ++intent.current; update(current => current.tabs.length ? { ...current, shown: !current.shown } : openTab(current, { key: "start", name: toolsText.start, kind: "start" })); } }), [sessionId, layout.shown, open, update, toolsText.start]);
   const active = layout.tabs.find(tab => tab.key === layout.active), full = layout.expanded || room < 720;
   const width = Math.min(layout.width, Math.max(320, room - 400));
   useLayoutEffect(() => { tabsRef.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest", inline: "nearest" }); }, [layout, room, sessionId]);
