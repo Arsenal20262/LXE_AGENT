@@ -64,6 +64,8 @@ bun scripts/verify-file-preview.ts
 
 HTML 界面测试使用生产文件服务、IPC、preload、CSP 和真实 Electron iframe；本机 HTTP 夹具验证网络资源与 CORS，不依赖公网网站。它同时覆盖生产 `app://` 与开发 HTTP 来源、源码切换、依赖刷新、错误重试、会话切换和资源释放。可用 `LXE_HTML_SCREENSHOT` 保存测试窗口截图。
 
+Windows 解包后可执行 `bun scripts/verify-packaged-html.ts dist/desktop-unpacked/win-unpacked`。脚本复制实际可执行文件到独立临时目录，关联原包资源，以独立 `var` 启动真正的打包程序；通过本机调试接口驱动生产 Runtime、文件 IPC 和 iframe，验证相对资源、交互及隔离，保存截图与 `report.json`。不调用模型，不读取原安装目录的数据，不连接紫鸟；测试结束退出应用。主界面完整刷新或 Renderer 退出时，主进程也会释放预览，避免依赖 React 卸载回调才能清理。
+
 `scripts/verify-preview-native.ts` 可先用 Bun 打包为 Node CJS（将 `electron` 保持 external），再用目标平台的 Electron 执行。它检查真实默认应用、指定应用、图标、文件定位和工作区打开，并生成 `report.json`。Windows 需在已登录的桌面会话中执行；SSH 的 Session 0 不能代表交互式 Shell 行为。
 
 界面验收截图来自生产查看器组件与测试夹具组成的窗口，左侧按钮及示例草稿是测试入口，不是生产聊天界面。

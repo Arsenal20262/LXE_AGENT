@@ -45,6 +45,7 @@ import {
 import { IPC_CHANNELS } from "./ipc-channels";
 import { registerDashboardProtocol } from "./main/app-protocol";
 import { DASHBOARD_CSP, HTML_PREVIEW_SCHEME, registerHtmlPreviewProtocol } from "./main/file-preview/html-protocol";
+import { trackFilePreviewLifecycle } from "./main/file-preview/lifecycle";
 import { createTrayIcon } from "./main/brand";
 import { resolveDesktopBrandAssets } from "./main/brand-assets";
 import { DesktopConversationAttachmentService } from "./main/conversation-attachments";
@@ -602,6 +603,7 @@ async function bootstrap(): Promise<void> {
     },
   });
   if (desktopPlatform !== "darwin") window.setMenuBarVisibility(false);
+  trackFilePreviewLifecycle(window.webContents, () => gateway.releaseFilePreviews());
   window.webContents.on("context-menu", (_event, params) => {
     const template = editableContextMenuTemplate(params);
     const ownerWindow = window;

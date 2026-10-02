@@ -67,6 +67,7 @@ app.whenReady().then(async () => {
   const step = async (name, work) => { await work(); passed.push(name); console.log('PASS ' + name); };
   const openWindow = async url => {
     win = new BrowserWindow({ show: true, width: 1000, height: 760, webPreferences: { preload: join(output, 'main/preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false } });
+    host.trackFilePreviewLifecycle(win.webContents, () => service.releaseAll());
     win.webContents.setWindowOpenHandler(() => { popups++; return { action: 'deny' }; });
     win.webContents.on('console-message', event => { if (event.level === 'error') messages.push(event.message); });
     await win.loadURL(url); await ready();
@@ -135,13 +136,19 @@ app.whenReady().then(async () => {
       await js("fixture.open('报告/中文 page.html')"); await ready(); const beforeRefresh = frame().url;
       await click('[data-preview-refresh]'); await wait(() => !!frame() && frame().url !== beforeRefresh, 'new frame after refresh'); await ready();
       await wait(() => service.handles.size === 1, 'no duplicate handles');
+      const beforeReload = frame().url; win.webContents.reload();
+      await wait(() => !!frame() && frame().url !== beforeReload, 'frame after full renderer reload'); await ready();
+      await assert.rejects(() => service.htmlDocument(new URL(beforeReload).pathname.slice(1)), /closed/);
+      await wait(() => service.handles.size === 1 && service.requests.size === 1, 'full reload clears previous requests');
     });
     await step('Frame fills resized preview; deleted sources become real errors', async () => {
-      await wait(async () => await inner('innerWidth') > 900, 'initial frame geometry');
-      const before = await inner('innerWidth'); win.show(); win.focus(); win.setSize(680, 580);
-      await wait(async () => await inner('innerWidth') < before, 'resized frame geometry').catch(async error => {
-        console.error(JSON.stringify({ bounds: win.getBounds(), before, inner: await inner('innerWidth'), geometry: await js("({width:innerWidth,root:document.querySelector('#root').getBoundingClientRect().width,iframe:document.querySelector('iframe').getBoundingClientRect().width,section:document.querySelector('.file-document').getBoundingClientRect().width})") })); throw error;
-      });
+      win.show(); win.focus(); win.setSize(680, 580);
+      // Resize the containing panel, as sidebar dragging does. OS window managers
+      // can constrain outer-window sizes independently of the renderer layout.
+      await js("document.querySelector('#root').style.width='480px'");
+      await wait(async () => await inner('innerWidth') === 480, 'wide panel geometry');
+      await js("document.querySelector('#root').style.width='320px'");
+      await wait(async () => await inner('innerWidth') === 320, 'narrow panel geometry');
       assert.ok(await js("document.querySelector('iframe').getBoundingClientRect().height>400"));
       if (process.env.LXE_HTML_SCREENSHOT) writeFileSync(process.env.LXE_HTML_SCREENSHOT, (await win.webContents.capturePage()).toPNG());
       rmSync(rootFile); await wait(() => js("document.querySelector('.file-error-details pre')?.textContent.includes('ENOENT')"), 'deleted root');

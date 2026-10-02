@@ -279,5 +279,6 @@ export class FilePreviewService {
     const request = this.requests.get(id); this.requests.delete(id); request?.controller.abort(); request?.cacheRelease?.();
     if (request?.handle) { this.handles.get(request.handle)?.watcher?.close(); this.handles.delete(request.handle); }
   }
-  async dispose(): Promise<void> { clearInterval(this.timer); for (const id of this.requests.keys()) this.release(id); for (const id of this.directoryWatches.keys()) this.release(id); await this.office.dispose(); this.versions.clear(); this.applications.clear(); }
+  releaseAll(): void { for (const id of this.requests.keys()) this.release(id); for (const id of this.directoryWatches.keys()) this.release(id); }
+  async dispose(): Promise<void> { clearInterval(this.timer); this.releaseAll(); await this.office.dispose(); this.versions.clear(); this.applications.clear(); }
 }
