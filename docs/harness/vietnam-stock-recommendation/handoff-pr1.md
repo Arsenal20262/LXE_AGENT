@@ -3,9 +3,9 @@
 ## 接手位置
 
 - 分支：`codex/vietnam-stock-recommendation`。
-- Worktree：`/Users/hym/PycharmProjects/LXE_AGENT1/.worktrees/pool-1`；主工作区仍在 `main`。
-- `origin` 是老大的 `LXE123/LXE_AGENT`，本轮不得向它 push、建 PR 或 merge。个人仓库是其 fork：`Arsenal20262/LXE_AGENT`，尚未配置为本地 remote。当前按“先在个人仓库提 PR，之后由用户处理老大仓库的 PR”路线准备；push 和创建 PR 仍须分别获批。
-- 本地 `main` 是 `805d1ef1`，已 fetch 的 `origin/main` 是 `dbf598fc`，个人 fork 的 `main` 是 `efd39316`，比老大 `main` 落后 164 个提交。当前功能与交接截至 `9d6fcbb3` 共六个提交，仍以旧基线为祖先；rebase 尚未执行，须另获批准后检查冲突。
+- Worktree：仓库根目录下的 `.worktrees/pool-1`；主工作区仍在 `main`。
+- `origin` 是老大的 `LXE123/LXE_AGENT`，本轮不得向它 push、建 PR 或 merge。`fork` 是个人仓库 `Arsenal20262/LXE_AGENT`。PR1 的目标是个人仓库的 `main`；用户之后自行处理向老大仓库提出的 PR。
+- 本地 `main` 保持在 `805d1ef1`，没有在主分支开发。功能分支已无冲突地 rebase 到上游 `origin/main` 的 `dbf598fc`。推送前核对发现个人 `fork/main` 为 `efd39316`，没有独有提交，可快进到同一基线；实际远端状态以创建 PR 时的核对为准。
 - 目标：只完成完整模板与 SKU 参数表的资产身份、只读校验和读取。下一模块不得继续堆在本分支；PR1 收口后应在新聊天窗口领取新分支。
 
 ## 已完成的契约
@@ -35,12 +35,13 @@
 - 修改共享 `catalog.json` 后，Python 的 `tests/lxeskill` 与 `tests/infra`：`374 passed, 2 skipped`；本地测试服务器需允许监听 `127.0.0.1`。
 - Bun 的 `packages/agent/runtime/test/tooling/lxeskill-command.test.ts`：`9 passed`。
 - 提供的真实模板只读探测：九张表、主表 8,300 个非空 SKU 行，结构校验成功；文件本身未更改。
-- `git diff --check` 通过。前五个提交完成后工作区曾检查为干净；本交接文件尚待独立提交。全量测试按项目规则留到合并 `main` 前、最终 rebase 后只执行一次。
+- 最终 rebase 后，从 worktree 根运行完整 Python 测试：`2023 passed, 4 skipped, 30 warnings`；Bun 定向契约测试：`9 passed`。此前的 55、68、374 项测试也均在功能实现阶段通过。
+- rebase 后 `git diff origin/main...HEAD --check` 通过；PR 差异为 12 个文件，新增行的常见密钥形状扫描为零，未包含真实 XLSX。本次交接修订只涉及文档，代码未变，不重复全量测试。
 
 ## 已知边界与下一步
 
-1. **PR1 收口**：先把个人 `main` 快进同步到老大最新 `main`，避免把 164 个上游提交带入个人 PR diff。获批后将当前功能分支同步到同一基线、检查冲突和 PR diff；如 rebase 实际引入基线变化，按项目规则重跑受影响测试。更新本交接的 Git 状态后，分别取得向个人仓库 push 和创建 PR 的明确批准。本轮不向老大仓库 `origin` push 或建 PR；合并另需单独批准。
-2. **PR2，在新窗口/新分支**：复用现有雅仓导出取得 `VN8806` 的库存动销、库存列表，以及全局仓库产品资料；第三份只能按当前越南 SKU 过滤。逐 SKU 合并参数并生成运营核对/回填表。不能根据款号、名称或 SKU 后缀猜成本和价格；缺失实时库存或销量需单独诊断，不能让运营映射表伪造。
+1. **PR1 收口**：先只读刷新两个远端并确认个人 `main` 可快进；将个人 `main` 快进到上游基线，再向个人仓库推送功能分支，检查 PR diff，创建以个人 `main` 为 base 的 PR。不得向老大仓库 `origin` push 或建 PR；不在本轮 merge。
+2. **下一开发模块，在新窗口/新分支形成新的功能 PR**：复用现有雅仓导出取得 `VN8806` 的库存动销、库存列表，以及全局仓库产品资料；第三份只能按当前越南 SKU 过滤。逐 SKU 合并参数并生成运营核对/回填表。不能根据款号、名称或 SKU 后缀猜成本和价格；缺失实时库存或销量需单独诊断，不能让运营映射表伪造。
 3. **待业务口径确认**：本轮 SKU 集合取库存列表、库存动销的并集还是其他规则；两份雅仓报表中哪一列是权威总在途；`上架时间` 是否由运营显式提供（雅仓 `创建时间` 不能默认等同）；缺成本/价格时完整运营表如何标缺失；运营回填是全量映射表还是带版本校验的补丁合并。
 4. **后续模块**：五表生成与 LibreOffice 重算、Workflow/Skill、Desktop 绑定与四参数、端到端回归分别评审。LibreOffice 对原模板中的 WPS 单元格图片需另做目标客户端验证，不能仅凭计算成功判定成品无损。
 
