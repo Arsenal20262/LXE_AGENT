@@ -8,6 +8,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { DesktopHealth, DesktopInputAttachmentPayload, LxeDesktopBridge, SessionPayload, WorkspaceSummaryPayload } from "@lxe/desktop-protocol";
 import { ConversationComposer } from "../../src/features/sessions/view";
 import { useDialogFocus } from "../../src/shared/ui/use-dialog-focus";
+import { MermaidBlock } from "../../src/shared/ui/markdown";
 import { I18nContext, LANGUAGE_STORAGE_KEY, UI_TEXT } from "../../src/shared/i18n";
 import { setupState, cloudState } from "../desktop/settings-fixture-data";
 import { modelRow, modelOption } from "../features/models/source-fixtures";
@@ -276,6 +277,14 @@ function reset() {
   calls.length = 0; sends.length = 0; stops = 0; releaseSend = undefined;
 }
 const fixture = {
+  mountMermaid(charts: string[]) {
+    reset();
+    flushSync(() => root!.render(<div className="message-markdown" style={{ padding: 24 }}>
+      {charts.map((chart, index) => <div id={`mermaid-fixture-${index}`} key={index}>
+        <MermaidBlock chart={chart} />
+      </div>)}
+    </div>));
+  },
   chooseFile(value: string) { chosenFile = value; },
   failCreation(value: boolean) { creationFailure = value; },
   holdCreation(value: boolean) { holdCreation = value; },

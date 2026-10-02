@@ -68,7 +68,76 @@ app.whenReady().then(async () => {
   };
   try {
     await load();
-    if (suite === "dialog") {
+    if (suite === "mermaid") {
+      const chart = 'flowchart TD\nA[会话模式与固定工作区] --> C[统一策略服务]\nB[宿主提供的临时目录和产物目录] --> C\nC --> D[本次调用的实际策略]\nD --> E[exec：构建进程沙箱]\nD --> F[write/edit：检查目标路径]\nD --> G[模型上下文：说明当前权限]';
+      const sequence = 'sequenceDiagram\nparticipant A as 用户\nparticipant B as Agent\nA->>B: 请求\nNote over B: 执行任务\nB-->>A: 返回结果';
+      const custom = 'flowchart LR\nA[重点]:::highlight --> B[默认]\nclassDef highlight fill:#345678,color:#ffffff,stroke:#789abc';
+      const mount = charts => js(`behavior.mountMermaid(${JSON.stringify(charts)})`);
+      const setTheme = theme => js(`document.documentElement.dataset.theme=${JSON.stringify(theme)}`);
+      const palette = () => js(`(() => {
+        const css = selector => getComputedStyle(document.querySelector(selector));
+        return {
+          node: css('#mermaid-fixture-0 .node rect').fill,
+          text: css('#mermaid-fixture-0 .nodeLabel').color,
+          line: css('#mermaid-fixture-0 .flowchart-link').stroke,
+          arrow: css('#mermaid-fixture-0 marker path').fill,
+          background: css('.mermaid-block').backgroundColor,
+          actor: css('#mermaid-fixture-1 rect.actor').fill,
+          actorText: css('#mermaid-fixture-1 text.actor > tspan').fill,
+          note: css('#mermaid-fixture-1 rect.note').fill,
+          noteText: css('#mermaid-fixture-1 .noteText').fill,
+        };
+      })()`);
+      const luminance = color => {
+        const channels = color.match(/[\d.]+/g).slice(0, 3).map(Number).map(c => {
+          c /= 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+        });
+        return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+      };
+      const contrast = (a, b) => (Math.max(luminance(a), luminance(b)) + 0.05) / (Math.min(luminance(a), luminance(b)) + 0.05);
+      const ready = theme => waitFor(`document.querySelectorAll('.mermaid-block svg').length === 2
+        && getComputedStyle(document.querySelector('#mermaid-fixture-0 .node rect')).fill === ${JSON.stringify(theme === "dark" ? "rgb(48, 47, 46)" : "rgb(244, 244, 244)")}`, `${theme} diagrams`);
+      await step("light and dark diagrams have neutral nodes and readable labels, arrows and sequence notes", async () => {
+        for (const theme of ["light", "dark"]) {
+          await setTheme(theme); await mount([chart, sequence]); await ready(theme);
+          const colors = await palette();
+          assert.equal(colors.actor, colors.node);
+          assert.equal(colors.arrow, colors.line);
+          assert.ok(contrast(colors.text, colors.node) >= 4.5, JSON.stringify(colors));
+          assert.ok(contrast(colors.actorText, colors.actor) >= 4.5, JSON.stringify(colors));
+          assert.ok(contrast(colors.noteText, colors.note) >= 4.5, JSON.stringify(colors));
+          assert.ok(contrast(colors.line, colors.background) >= 3);
+          assert.notEqual(colors.note, "rgb(255, 245, 173)");
+          if (process.env.LXE_MERMAID_SCREENSHOT) {
+            await js("document.fonts.ready.then(() => undefined)"); await settle();
+            const bounds = await js("document.querySelector('.mermaid-block').getBoundingClientRect().toJSON()");
+            const screenshot = await win.webContents.capturePage({ x: Math.floor(bounds.x), y: Math.floor(bounds.y), width: Math.ceil(bounds.width), height: Math.ceil(bounds.height) });
+            require("node:fs").writeFileSync(process.env.LXE_MERMAID_SCREENSHOT.replace(/\.png$/, `-${theme}.png`), screenshot.toPNG());
+          }
+        }
+      });
+      await step("mounted diagrams follow theme and font changes without stale renders", async () => {
+        await setTheme("light"); await ready("light");
+        await setTheme("dark"); await settle(); await setTheme("light"); await settle(); await setTheme("dark");
+        await ready("dark");
+        await js("document.documentElement.dataset.fontSize='large'");
+        await waitFor("document.querySelector('#mermaid-fixture-0 svg') && getComputedStyle(document.querySelector('#mermaid-fixture-0 svg')).fontSize === '18px'", "large diagram text");
+        await js("document.documentElement.dataset.fontSize='standard'");
+        await waitFor("document.querySelector('#mermaid-fixture-0 svg') && getComputedStyle(document.querySelector('#mermaid-fixture-0 svg')).fontSize === '16px'", "standard diagram text");
+        assert.equal(await js("document.querySelectorAll('#mermaid-fixture-0 .node').length"), 7);
+        assert.ok((await js("getComputedStyle(document.querySelector('#mermaid-fixture-0 svg')).fontFamily")).includes("HarmonyOS Sans SC"));
+      });
+      await step("explicit diagram colors survive theme changes", async () => {
+        await mount([custom]);
+        for (const theme of ["light", "dark"]) {
+          await setTheme(theme);
+          await waitFor(`document.querySelector('#mermaid-fixture-0 .node:not(.highlight) rect')
+            && getComputedStyle(document.querySelector('#mermaid-fixture-0 .node:not(.highlight) rect')).fill === ${JSON.stringify(theme === "dark" ? "rgb(48, 47, 46)" : "rgb(244, 244, 244)")}`, "custom diagram rendered in current theme");
+          await settle();
+          assert.equal(await js("getComputedStyle(document.querySelector('#mermaid-fixture-0 .highlight rect')).fill"), "rgb(52, 86, 120)");
+        }
+      });
+    } else if (suite === "dialog") {
       await step("focus enters the first visible control and wraps in both directions", async () => {
         await js("behavior.mountDialog()"); await click("#opener");
         assert.equal((await state()).active, "first", "initial focus skips hidden and disabled controls");
