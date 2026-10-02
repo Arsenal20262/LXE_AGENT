@@ -28,3 +28,11 @@ bun test apps/dashboard/test/features/workspace-apps/renderer.test.ts
 第二条会验证真实 Electron 检测、图标和界面，但默认不启动外部应用。显式设置 `LXE_WORKSPACE_NATIVE_OPEN=1` 后，再运行它可执行本机文件管理器、VS Code 和已安装终端的打开检查。测试使用临时目录，不调用模型。
 
 Windows 打包后可运行 `bun scripts/verify-packaged-workspace-apps.ts dist/desktop-unpacked/win-unpacked`，使用独立应用数据验证实际打包程序的 IPC、应用检测、图标、启动和错误诊断，产出 JSON 报告。
+
+## macOS 图标修正
+
+用户截图暴露了此前图标验收的遗漏：`app.getFileIcon(.app)` 在当前 Mac 上为 Finder、VS Code、Terminal 返回完全相同的通用应用图标。原测试只检查了图片 URL 存在，不能据此认定应用图标正确。
+
+macOS 改用 dsh 的方式，从应用 `Info.plist` 定位 `Resources/*.icns`，用系统 `sips` 转成 128px PNG；没有声明图标时扫描 Resources。转换使用临时目录并在成功、失败后清理，失败仍保留实际诊断和通用图标降级。Windows 继续走现有的原生文件图标接口。
+
+真实 Electron 回归现在会比较这些应用的解码像素，拒绝把同一个占位图当作三个应用图标；同时把真实图片放进菜单，检查加载并截取明暗主题。新增断言在修复前以 `1 !== 3` 失败，修复后通过，已人工检查两种主题下的实际显示。

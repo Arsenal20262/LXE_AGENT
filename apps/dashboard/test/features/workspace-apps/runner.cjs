@@ -1,4 +1,4 @@
-const {app,BrowserWindow,protocol,session}=require('electron');
+const {app,BrowserWindow,protocol,session,nativeImage}=require('electron');
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const [profile,output]=process.argv.slice(2),passed=[];
 app.disableHardwareAcceleration();app.setPath('userData',profile);
@@ -75,6 +75,19 @@ app.whenReady().then(async()=>{
    const apps=await js('fixture.native.desktop.getWorkspaceApplications()');
    assert.ok(apps.some(a=>a.id===(process.platform==='darwin'?'finder':'explorer')));assert.ok(apps.every(a=>!a.icon||a.icon.startsWith('data:image/')));
    console.log('NATIVE_APPS='+JSON.stringify(apps.map(a=>({id:a.id,icon:!!a.icon}))));
+   if(process.platform==='darwin'){
+    const known=apps.filter(a=>['finder','vscode','terminal'].includes(a.id));
+    const pixels=known.map(a=>{assert.ok(a.icon,a.id+' has an icon');const image=nativeImage.createFromDataURL(a.icon);assert.equal(image.isEmpty(),false,a.id+' decodes');return image.toBitmap().toString('base64');});
+    assert.equal(new Set(pixels).size,known.length,'Finder, VS Code and Terminal must have distinct application icons, not the same generic bundle icon');
+   }
+   await js(`fixture.apps(${JSON.stringify(apps)})`);
+   for(const theme of apps.length>1?['light','dark']:[]){
+    await js(`document.documentElement.dataset.theme='${theme}'`);
+    await click('#new .workspace-open-split button:last-child');
+    await wait(`document.querySelectorAll('.workspace-open-menu img').length===${apps.filter(a=>a.icon).length} && [...document.querySelectorAll('.workspace-open-menu img')].every(img=>img.complete&&img.naturalWidth>0)`,'real icons render');
+    if(process.env.LXE_WORKSPACE_SCREENSHOT)fs.writeFileSync(path.join(process.env.LXE_WORKSPACE_SCREENSHOT,'native-icons-'+theme+'.png'),(await win.webContents.capturePage()).toPNG());
+    await js("document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))");
+   }
    if(process.env.LXE_WORKSPACE_NATIVE_OPEN){
     const folder=fs.mkdtempSync(path.join(require('node:os').tmpdir(),'lxe-open-中文 & '));console.log('NATIVE_FOLDER='+folder);
     const ids=[process.platform==='darwin'?'finder':'explorer','vscode',...(process.platform==='darwin'?['terminal']:['windowsterminal','gitbash'])].filter(id=>apps.some(a=>a.id===id));

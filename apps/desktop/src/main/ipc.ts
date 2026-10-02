@@ -26,6 +26,7 @@ import type {
 import { IPC_CHANNELS } from "../ipc-channels";
 import { workspaceDirectory } from "./workspace-directory";
 import { WorkspaceApplications } from "./workspace-apps/service";
+import { bundleIconDataUrl } from "./workspace-apps/icons";
 import { readClipboardFilePaths } from "./clipboard-files";
 import {
   validateDraftImagePreviewVariant,
@@ -99,7 +100,7 @@ const stringArray = (value: unknown, label: string): string[] => {
 };
 
 export function registerDesktopIpc(application: DesktopIpcApplication): () => void {
-  const workspaceApps = new WorkspaceApplications({ openPath: path => shell.openPath(path), icon: async path => (await app.getFileIcon(path, { size: "normal" })).toDataURL() });
+  const workspaceApps = new WorkspaceApplications({ openPath: path => shell.openPath(path), icon: path => process.platform === "darwin" ? bundleIconDataUrl(path) : app.getFileIcon(path, { size: "normal" }).then(image => image.toDataURL()) });
   const trustedWorkspaceSender = (event: Electron.IpcMainInvokeEvent) => { if (!application.isTrustedFileSender(event)) throw new Error("Workspace applications are only available to the desktop main frame"); };
   ipcMain.handle(IPC_CHANNELS.fileCall, (event, call) => fileResult(typeof call?.operation === "string" ? call.operation : "call", () => {
     if (!application.isTrustedFileSender(event)) throw new Error("File previews are only available to the desktop main frame");
