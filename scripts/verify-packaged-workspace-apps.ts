@@ -1,6 +1,6 @@
 /** Starts the actual packaged app with isolated test state; no model calls or external browser automation. */
 import { strict as assert } from 'node:assert';
-import { mkdtempSync, readdirSync, cpSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
+import { closeSync, openSync, readFileSync, mkdtempSync, readdirSync, cpSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 if (process.platform !== 'win32' || !process.argv[2]) throw new Error('Usage on Windows: bun scripts/verify-packaged-workspace-apps.ts <win-unpacked-directory>');
@@ -13,10 +13,12 @@ for (const entry of readdirSync(source, {withFileTypes:true})) {
 symlinkSync(join(source, 'resources'), join(root, 'resources'), 'junction');
 const workspace = join(root, 'workspace 中文'); mkdirSync(workspace);
 const env = {...process.env}; delete env.ELECTRON_RUN_AS_NODE;
-const child = Bun.spawn([join(root, 'LXE Agent.exe'), '--inspect=127.0.0.1:0', '--disable-gpu'], {env, stdout:'pipe', stderr:'pipe'});
+// External Windows GUI processes can retain inherited output handles. Do not wait for pipe EOF.
+const stdoutPath=join(root,'stdout.log'), stderrPath=join(root,'stderr.log');
+const stdoutFd=openSync(stdoutPath,'w'), stderrFd=openSync(stderrPath,'w');
+const child = Bun.spawn([join(root, 'LXE Agent.exe'), '--inspect=127.0.0.1:0', '--disable-gpu'], {env, stdout:stdoutFd, stderr:stderrFd});
 let logs = '', debuggerAddress: string | undefined;
-const collect = async (stream: ReadableStream<Uint8Array>) => {for await(const chunk of stream) { logs += new TextDecoder().decode(chunk); debuggerAddress ??= logs.match(/ws:\/\/127\.0\.0\.1:\d+\/[a-z\d-]+/)?.[0]; }};
-void collect(child.stdout); void collect(child.stderr);
+const collect = () => { logs=readFileSync(stdoutPath,'utf8')+'\n'+readFileSync(stderrPath,'utf8');debuggerAddress ??= logs.match(/ws:\/\/127\.0\.0\.1:\d+\/[a-z\d-]+/)?.[0]; };
 const delay = (ms: number) => new Promise(r=>setTimeout(r,ms));
 async function wait(fn:()=>unknown|Promise<unknown>, label:string) {const end=Date.now()+45000;while(Date.now()<end){if(await fn())return;await delay(100)}throw new Error('Timed out: '+label)}
 let socket: WebSocket | undefined, sequence=0;
@@ -35,7 +37,7 @@ async function evaluate(expression: string):Promise<any> {
 }
 const renderer = (code:string) => evaluate(`workspaceTestElectron.BrowserWindow.getAllWindows()[0].webContents.executeJavaScript(${JSON.stringify(code)})`);
 try {
-  await wait(()=>debuggerAddress,'packaged app inspector');
+  await wait(()=>{collect();return debuggerAddress},'packaged app inspector');
   socket=new WebSocket(debuggerAddress!); await new Promise<void>((resolve,reject)=>{socket!.onopen=()=>resolve();socket!.onerror=reject});
   socket.onmessage=event=>{const message=JSON.parse(String(event.data)), task=pending.get(message.id);if(!task)return;pending.delete(message.id);if(message.error||message.result?.exceptionDetails)task.reject(new Error(JSON.stringify(message.error||message.result.exceptionDetails)));else task.resolve(message.result?.result?.value)};
   await delay(2000);
@@ -55,5 +57,5 @@ try {
   assert.equal(report.packaged,true);writeFileSync(join(root,'report.json'),JSON.stringify(report,null,2));console.log('LXE_PACKAGED_WORKSPACE_RESULT='+JSON.stringify(report));
   await evaluate('(setTimeout(()=>workspaceTestElectron.app.quit(),100),true)'); socket.close();
   await Promise.race([child.exited,delay(15000).then(()=>{throw new Error('Packaged app did not quit')})]);
-} catch(error) {writeFileSync(join(root,'failure.log'),logs);console.error('Packaged test directory: '+root);throw error}
-finally {socket?.close();if(child.exitCode===null){child.kill();await child.exited}}
+} catch(error) {collect();writeFileSync(join(root,'failure.log'),logs);console.error('Packaged test directory: '+root);throw error}
+finally {socket?.close();if(child.exitCode===null){child.kill();await child.exited}closeSync(stdoutFd);closeSync(stderrFd)}
