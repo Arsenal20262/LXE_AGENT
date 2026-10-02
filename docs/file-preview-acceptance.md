@@ -11,6 +11,8 @@
 
 Windows 实际打包程序另由 `scripts/verify-packaged-html.ts` 验证。脚本使用原包的可执行文件及资源，以独立 `var` 启动，调用生产 Runtime 创建空会话，经生产 preload／IPC 准备中文路径的 HTML 与相对 CSS／JS，再在受生产 CSP 约束的 iframe 中确认交互和隔离，最后释放句柄、删除测试会话并退出。此截图是实际打包程序中的验收 iframe；查看器工具栏与模式切换由上述组件夹具另行验证。
 
+最终 Windows `Unpacked -Offline` 构建及实际打包程序验收均退出码 0。报告保存在验收机 `C:\Users\Administrator\AppData\Local\Temp\lxe-packaged-html-PWHpvn\report.json`，包位于 `D:\projects\LXE_AGENT\.worktrees\pool-1\dist\desktop-unpacked\win-unpacked`。全量验证后 `main` 另合入了独立的资源体积统计调整；再次 rebase 后，相关资源统计及 Windows 打包路线的 12 项定向测试通过，HTML 代码没有再改动。
+
 日期：2026-10-01。Kit 固定 0.1.3；React 保持 LXE 原有的 19，未引入第二份 React。
 
 ## macOS ARM64
