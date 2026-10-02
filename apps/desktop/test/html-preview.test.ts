@@ -68,6 +68,10 @@ test("external artifacts stay in their directory and recheck session authorizati
 test("missing, invalid UTF-8, oversized and cancelled bundles report real errors without publishing", async () => {
   const f = await fixture();
   await expect(f.prepare([{ kind: "script", reference: "absent.js" }])).rejects.toThrow("ENOENT");
+  const { fileResult } = await import("../src/main/file-preview/errors");
+  const missing = await fileResult("html.prepare", () => f.prepare([{ kind: "script", reference: "absent.js" }]));
+  expect(missing.ok).toBe(false);
+  if (!missing.ok) { expect(missing.error.kind).toBe("unknown"); expect(missing.error.diagnostic).toContain("absent.js"); expect(missing.error.diagnostic).toContain("ENOENT"); }
   await writeFile(join(f.workspace, "code.js"), Buffer.from([255, 254, 0])); await expect(f.prepare([js])).rejects.toThrow();
   await writeFile(join(f.workspace, "code.js"), Buffer.alloc(HTML_ASSET_BYTES + 1)); await expect(f.prepare([js])).rejects.toThrow("limit");
   await expect(f.prepare(Array.from({ length: 65 }, (_, i) => ({ kind: "script", reference: `${i}.js` })))).rejects.toThrow("64 resources");

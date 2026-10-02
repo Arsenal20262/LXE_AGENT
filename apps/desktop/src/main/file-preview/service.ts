@@ -247,8 +247,9 @@ export class FilePreviewService {
     return value;
   }
   private async htmlCurrentVersion(value: Handle): Promise<string> {
-    if (!value.html) throw new Error("HTML preview has not been prepared");
-    const current = await this.describe(value.ref), bundle = value.html;
+    const bundle = value.html;
+    if (!bundle) throw new Error("HTML preview has not been prepared");
+    const current = await this.describe(value.ref);
     if (current.path !== value.path) return "source-changed";
     const dependencies = await Promise.all(bundle.dependencies.map(asset => htmlDependency(value.path, bundle.root, asset)));
     value.signal.throwIfAborted();
