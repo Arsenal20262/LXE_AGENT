@@ -1,11 +1,11 @@
 # 越南备货 PR3 交接：内置骨架、五表生成与重算
 
-> 本页记录 PR3 已验证并分步提交的模块。用户已批准本地提交及向个人仓库推送；创建 PR 仍须单独确认。
+> 本页记录 PR3 已验证并分步提交的模块。个人仓库 PR [#3](https://github.com/Arsenal20262/LXE_AGENT/pull/3) 已创建，等待评审与前序 PR 合并。
 
 ## 接手位置和依赖
 
 - 当前分支：`codex/vietnam-stock-pr3-workbook`，worktree：`/Users/hym/.codex/worktrees/3062/LXE_AGENT1`，基于 PR2 提交 `405e5586`。未在 `main` 或 PR2 分支追加代码。
-- PR3 依赖个人仓库 PR2 的代码；PR2 又依赖 PR1。上次只读核对时，个人 PR1、PR2 尚未合并，PR3 的个人 PR 应以 PR2 分支为 base。推送前需重新核对远端提交和 PR 状态；向组长仓库提交须等待前序模块按序合并并分别获得用户批准。
+- PR3 依赖个人仓库 PR2 的代码；PR2 又依赖 PR1。个人 PR [#3](https://github.com/Arsenal20262/LXE_AGENT/pull/3) 以 `codex/vietnam-stock-pr2-yacang` 为 base，head 为 `codex/vietnam-stock-pr3-workbook`，创建时显示五个提交、14 个改动路径。合并前需确认前序 PR 已合并；若 PR2 采用 squash 或 rebase 合并，须先调整 PR3 的 base。向组长仓库提交须等待前序模块按序合并并分别获得用户批准。
 - 本模块只处理离线生成：传入同一轮 PR2 `VietnamSources`、运营 SKU 映射表和新输出路径。生产雅仓调用、Vietnam Skill、Desktop 上传入口、配置接线和 `send_files` 属于后续 PR。
 
 ## 本模块内容与调用链
@@ -40,4 +40,4 @@
 - 真实九表模板只在本机作只读公式与样式参考，不能进入 Git 或安装包；Windows 安装包本身尚未在本机验证。四项参数的聊天、设置优先级由后续接线实现。
 - 旧 `prepare_operator_sku_map(template_path, ...)` 和 `resolve_sku_parameters()` 仍保留 PR2 的历史模板辅助能力；PR3 完整五表生成绕开这些入口。清理旧模板槽与辅助接口须先证明没有调用方，单独评审。
 
-Git 状态：本模块共改动 14 个路径，代码已按三项独立功能提交：`8f03fcd0`（骨架）、`0da72799`（本轮数据写入）、`d01976b7`（Office 重算与校验）；设计与本交接页形成第四项文档提交。`git diff --check` 通过，13 个文本文件逐行空白符检查无问题，改动中的账号/密码/令牌关键词检查仅命中读取既有环境变量、合成脱敏测试和文档说明，未发现硬编码真实凭据或业务价格。分支已推送到个人仓库的 `codex/vietnam-stock-pr3-workbook`；远端 PR2 仍为本分支所依赖的 `405e5586`。尚未创建 PR；创建 PR 与 merge 仍须分别批准。PR3 收口后在新任务窗口继续 PR4。
+Git 状态：本模块共改动 14 个路径，代码已按三项独立功能提交：`8f03fcd0`（骨架）、`0da72799`（本轮数据写入）、`d01976b7`（Office 重算与校验）；设计与本交接页另行提交。`git diff --check` 通过，13 个文本文件逐行空白符检查无问题，改动中的账号/密码/令牌关键词检查仅命中读取既有环境变量、合成脱敏测试和文档说明，未发现硬编码真实凭据或业务价格。分支已推送到个人仓库的 `codex/vietnam-stock-pr3-workbook`；远端 PR2 仍为本分支所依赖的 `405e5586`。个人 PR #3 已创建且未合并；merge 须另行批准。PR3 收口后在新任务窗口继续 PR4。
