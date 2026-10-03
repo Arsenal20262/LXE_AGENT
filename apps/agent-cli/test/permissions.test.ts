@@ -1,9 +1,12 @@
-import { expect, test } from "bun:test";
-import { mkdtempSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { expect, spyOn, test } from "bun:test";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PermissionApprovalService, PermissionPolicyService, SqliteRuntimeStore, ToolRegistry, registerCodingTools } from "@lxe/runtime";
 import { DashboardService } from "../src/dashboard-service";
+import { repositoryRoot } from "@lxe/core";
+import { CodingProcessManager } from "../../../packages/agent/runtime/src/tooling/coding/process-manager";
+import { createAgentRuntimeHost } from "../src/runtime-host";
 
 test("dashboard mode and approval RPCs persist audit data, preserve pending targets and never restore executable approval", async () => {
   const root = mkdtempSync(join(tmpdir(), "lxe-permission-rpc-")), directory = join(root, "workspace"), db = join(root, "agent.sqlite3");
@@ -48,4 +51,29 @@ test("dashboard mode and approval RPCs persist audit data, preserve pending targ
     expect(() => restarted.decide({ session_id: id, request_id: request.request_id, decision: "allow" })).toThrow();
     expect(events).toContain(`mode:${id}`);
   } finally { await approvals.stop(); await processes.stop(); await store.stop(); service.dispose(); rmSync(root, { recursive: true, force: true }); }
+});
+
+test("host shutdown still stops processes and releases resources when approval audit cleanup fails", async () => {
+  const root = mkdtempSync(join(tmpdir(), "lxe-permission-shutdown-"));
+  const skills = join(root, "skills"), soul = join(root, "SOUL.md");
+  mkdirSync(skills); writeFileSync(soul, "Test instructions");
+  const host = createAgentRuntimeHost({
+    dataRoot: root, legacyWorkspace: { directory: root, worktree: root },
+    agentSoulPath: soul, skillsRoot: skills, userSkillsRoot: join(root, "user"),
+    llmConfigRoot: join(repositoryRoot(import.meta.dir), "config", "llm"),
+    lxeskillCatalogPath: join(root, "missing-catalog.json"),
+    environment: { LOCAL_LOGS_ENABLED: "0", LXE_DATA_SERVER_ENABLED: "0" },
+    emitter: { emit: async () => {}, typing: async () => {} },
+  });
+  const audit = spyOn(PermissionApprovalService.prototype, "stop").mockRejectedValueOnce(new Error("ENOSPC: transcript audit"));
+  const processes = spyOn(CodingProcessManager.prototype, "stop");
+  try {
+    await host.start();
+    await expect(host.stop()).rejects.toThrow("ENOSPC: transcript audit");
+    expect(processes).toHaveBeenCalledTimes(1);
+    expect(host.health().ready).toBe(false);
+  } finally {
+    audit.mockRestore(); processes.mockRestore(); await host.stop();
+    rmSync(root, { recursive: true, force: true });
+  }
 });

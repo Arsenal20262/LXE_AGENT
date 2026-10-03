@@ -329,10 +329,13 @@ export function createAgentRuntimeHost(
       started = true;
     },
     stop: async () => {
-      await approvals.stop();
-      await questions.stop();
-      await runtime.stop();
+      const errors: unknown[] = [];
+      // Audit failures must not leave processes or temporary grants alive.
+      for (const stop of [() => approvals.stop(), () => questions.stop(), () => runtime.stop()]) {
+        try { await stop(); } catch (error) { errors.push(error); }
+      }
       started = false;
+      if (errors.length) throw new AggregateError(errors, errors.map(String).join("; "));
     },
     runTurn: (job, handle) => runtime.runTurn(job, handle),
     ensureSession: (request) => store.ensureSession(request),
