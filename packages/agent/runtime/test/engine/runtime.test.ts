@@ -172,13 +172,13 @@ describe("TypeScriptAgentRuntime", () => {
     } finally { await runtime.stop(); }
   });
 
-  test("each tool obtains current session policy and model context uses that workspace's artifacts", async () => {
+  test.each(["read-only", "workspace-write"] as const)("each tool obtains current session policy and registry blocks a mid-turn switch to %s", async mode => {
     const store = new MemoryStore();
     const tools = new ToolRegistry();
     let executed = 0, requests = 0;
     tools.register({ name: "change_mode", description: "fixture", input_schema: { type: "object" }, execute: async (_input, context) => {
       expect(context.executionPolicy?.workspaceRoot).toBe(workspace.directory);
-      store.permissionMode = "read-only";
+      store.permissionMode = mode;
       return { content: [] };
     } });
     tools.register({ name: "write_fixture", description: "fixture", input_schema: { type: "object" }, execute: async () => {

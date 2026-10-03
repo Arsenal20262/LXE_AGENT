@@ -2,13 +2,12 @@ import {
   type BigIntStats,
   mkdirSync,
   readFileSync,
-  statSync,
   writeFileSync,
 } from "node:fs";
 import { open, readFile, stat } from "node:fs/promises";
 import { basename, dirname, extname, relative } from "node:path";
 import type { JsonObject } from "@lxe/protocol";
-import { recheckFileWriteTarget, resolveFileWriteTarget } from "../../permissions/file-write-policy";
+import { inspectFileWriteTarget, recheckFileWriteTarget, type FileWriteTarget } from "../../permissions/file-write-policy";
 import { detectReadImageMime, type ModelImageProcessor } from "../../providers/model-image";
 import { scanNumberedTextChunks, type NumberedTextRangeResult } from "../text-range";
 import type { ToolDefinition } from "../registry";
@@ -45,21 +44,10 @@ const assertActive = (signal: AbortSignal | undefined): void => {
   if (signal?.aborted) throw abortReason(signal);
 };
 
-const writeTargetVersion = (path: string): FileVersion | undefined => {
-  try {
-    const info = statSync(path, { bigint: true });
-    if (!info.isFile()) throw new Error(`path is not a regular file: ${path}`);
-    return fileVersionFromStats(info);
-  } catch (cause) {
-    if (!isMissingPathError(cause)) throw cause;
-    return undefined;
-  }
-};
-
-const assertWriteVersionUnchanged = (path: string, version: FileVersion | undefined): void => {
-  if (writeTargetVersion(path) !== version) {
-    throw new Error(`write 被拒绝：文件在写入前发生变化，请重新 read 确认最新内容: ${path}`);
-  }
+const writeTargetVersion = ({ path, info }: FileWriteTarget): FileVersion | undefined => {
+  if (!info) return undefined;
+  if (!info.isFile()) throw new Error(`path is not a regular file: ${path}`);
+  return fileVersionFromStats(info);
 };
 
 const readHeadBytes = async (path: string, count: number, signal?: AbortSignal): Promise<Buffer> => {
@@ -202,15 +190,19 @@ export function createFileTools(dependencies: FileToolDependencies): ToolDefinit
       execute: async (input, context) => {
         assertActive(context.handle.signal);
         const requested = paths.resolveWritable(context.workspace, input.file_path);
-        const path = resolveFileWriteTarget(context.executionPolicy, requested);
-        const version = writeTargetVersion(path);
-        if (version !== undefined) ledger.assertCurrent(context.session_id, requested, "write", path);
+        const target = inspectFileWriteTarget(context.executionPolicy, requested, true);
+        const { path } = target;
+        const version = writeTargetVersion(target);
+        if (version !== undefined) ledger.assertVersion(context.session_id, requested, "write", version);
         const content = inputText(input, "content");
         assertActive(context.handle.signal);
         mkdirSync(dirname(path), { recursive: true });
-        recheckFileWriteTarget(context.executionPolicy, requested, path);
-        assertWriteVersionUnchanged(path, version);
-        if (version !== undefined) ledger.assertCurrent(context.session_id, requested, "write", path);
+        const current = recheckFileWriteTarget(context.executionPolicy, requested, path);
+        const currentVersion = writeTargetVersion(current);
+        if (version === undefined && currentVersion !== undefined) {
+          throw new Error(`write 被拒绝：文件在写入前发生变化，请重新 read 确认最新内容: ${path}`);
+        }
+        if (version !== undefined) ledger.assertVersion(context.session_id, requested, "write", currentVersion);
         assertActive(context.handle.signal);
         writeFileSync(path, content, "utf8");
         ledger.recordCurrent(context.session_id, requested, path);
@@ -225,15 +217,15 @@ export function createFileTools(dependencies: FileToolDependencies): ToolDefinit
         assertActive(context.handle.signal);
         const args = validateEditInput(input);
         const requested = paths.resolveWritable(context.workspace, args.path);
-        const path = resolveFileWriteTarget(context.executionPolicy, requested);
-        const info = statSync(path);
-        if (!info.isFile()) throw new Error(`path is not a regular file: ${args.path}`);
-        ledger.assertCurrent(context.session_id, requested, "edit", path);
+        const target = inspectFileWriteTarget(context.executionPolicy, requested, false);
+        const { path } = target;
+        const version = writeTargetVersion(target);
+        ledger.assertVersion(context.session_id, requested, "edit", version);
         const source = readFileSync(path, "utf8");
         const prepared = prepareTextEdit(source, args.edits);
         const summary = summarizeTextEdit(relative(context.workspace.directory, requested), args.edits.length, prepared, toolOutputLimit);
-        recheckFileWriteTarget(context.executionPolicy, requested, path);
-        ledger.assertCurrent(context.session_id, requested, "edit", path);
+        const current = recheckFileWriteTarget(context.executionPolicy, requested, path);
+        ledger.assertVersion(context.session_id, requested, "edit", writeTargetVersion(current));
         assertActive(context.handle.signal);
         writeFileSync(path, prepared.content, "utf8");
         ledger.recordCurrent(context.session_id, requested, path);

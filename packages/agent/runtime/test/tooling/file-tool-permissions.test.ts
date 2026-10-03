@@ -1,4 +1,5 @@
 import { afterEach, expect, spyOn, test } from "bun:test";
+import * as fs from "node:fs";
 import { existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -196,8 +197,8 @@ test.each(["write", "edit"] as const)("%s rechecks links, versions and cancellat
     directoryLink(a, alias);
     const path = join(alias, "file");
     await f.read(path, ctx);
-    const original = f.ledger.assertCurrent.bind(f.ledger);
-    const hook = spyOn(f.ledger, "assertCurrent").mockImplementationOnce((...args) => {
+    const original = f.ledger.assertVersion.bind(f.ledger);
+    const hook = spyOn(f.ledger, "assertVersion").mockImplementationOnce((...args) => {
       original(...args);
       if (change === "hardlink") linkSync(join(a, "file"), join(f.root, "linked"));
       if (change === "version") writeFileSync(join(a, "file"), "before external change");
@@ -253,6 +254,32 @@ test("write refuses a file that appears after the initial missing-file check", a
   const input: JsonObject = { file_path: target, get content() { writeFileSync(target, "external"); return "after"; } };
   await expect(f.execute("write", input)).rejects.toThrow("重新 read");
   expect(readFileSync(target, "utf8")).toBe("external");
+});
+
+test("write refuses to recreate a file removed after the first observation", async () => {
+  const f = fixture(), target = join(f.workspace, "file");
+  writeFileSync(target, "before");
+  await f.read(target);
+  const input: JsonObject = { file_path: target, get content() { unlinkSync(target); return "after"; } };
+  await expect(f.execute("write", input)).rejects.toThrow("重新 read");
+  expect(existsSync(target)).toBe(false);
+});
+
+test("edit refuses to recreate a file removed after reading its edit source", async () => {
+  const f = fixture(), target = join(f.workspace, "file");
+  writeFileSync(target, "before");
+  await f.read(target);
+  const readSource = fs.readFileSync;
+  const readThenRemove = ((...args: Parameters<typeof fs.readFileSync>) => {
+    const content = readSource(...args);
+    unlinkSync(target);
+    return content;
+  }) as typeof fs.readFileSync;
+  const hook = spyOn(fs, "readFileSync").mockImplementationOnce(readThenRemove);
+  try {
+    await expect(f.execute("edit", edit(target))).rejects.toThrow("重新 read");
+    expect(existsSync(target)).toBe(false);
+  } finally { hook.mockRestore(); }
 });
 
 test("simultaneous sessions use their own workspace, temp and version ledger", async () => {

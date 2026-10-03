@@ -31,12 +31,12 @@ export class FileVersionLedger {
     if (version !== undefined) this.recordVersion(sessionId, path, version);
   }
 
-  assertCurrent(sessionId: string, path: string, action: string, actualPath = path): void {
+  assertVersion(sessionId: string, path: string, action: string, current: FileVersion | undefined): void {
     const key = `${sessionId}\0${path}`;
     const recorded = this.entries.get(key);
     if (recorded === undefined) throw new Error(`${action} 被拒绝：请先用 read 读取该文件再修改: ${path}`);
-    // Keep the read spelling as the ledger key, even when writes use a real path.
-    const current = currentFileVersion(actualPath);
+    // Compare the caller's fresh observation without another filesystem read.
+    // The ledger key remains the read spelling, even when writes use a real path.
     if (current !== recorded) {
       throw new Error(`${action} 被拒绝：文件在上次 read 之后被修改过，请重新 read 确认最新内容: ${path}`);
     }

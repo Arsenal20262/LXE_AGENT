@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ModelImageProcessor } from "../../src/providers/model-image";
 import { createFileTools } from "../../src/tooling/coding/file-tools";
-import { FileVersionLedger } from "../../src/tooling/coding/file-version-ledger";
+import { FileVersionLedger, type FileVersion } from "../../src/tooling/coding/file-version-ledger";
 import { CodingPathPolicy } from "../../src/tooling/coding/path-policy";
 import { ToolRegistry } from "../../src/tooling/registry";
 import { policyFor, workspaceFor } from "../workspace";
@@ -73,22 +73,23 @@ describe("edit file execution", () => {
   test("rechecks the version immediately before writing", async () => {
     class ChangingLedger extends FileVersionLedger {
       checks = 0;
-      override assertCurrent(session: string, path: string, action: string): void {
-        if (++this.checks === 2) writeFileSync(path, "external write before commit");
-        super.assertCurrent(session, path, action);
+      override assertVersion(session: string, path: string, action: string, current: FileVersion | undefined): void {
+        super.assertVersion(session, path, action, current);
+        // Change the file between observations, keeping the edit match valid.
+        if (++this.checks === 1) writeFileSync(path, "first\nsecond\nexternal write before commit");
       }
     }
     const { path, registry, context } = setup(new ChangingLedger());
     await registry.execute("read", { path }, context);
     await expect(registry.execute("edit", { path, edits: [{ oldText: "first", newText: "FIRST" }] }, context)).rejects.toThrow("重新 read");
-    expect(readFileSync(path, "utf8")).toBe("external write before commit");
+    expect(readFileSync(path, "utf8")).toBe("first\nsecond\nexternal write before commit");
   });
   test("observes cancellation before writing even after preparation", async () => {
     let cancel: () => void = () => {};
     class CancellingLedger extends FileVersionLedger {
       checks = 0;
-      override assertCurrent(session: string, path: string, action: string): void {
-        super.assertCurrent(session, path, action);
+      override assertVersion(session: string, path: string, action: string, current: FileVersion | undefined): void {
+        super.assertVersion(session, path, action, current);
         if (++this.checks === 2) cancel();
       }
     }

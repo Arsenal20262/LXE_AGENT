@@ -782,7 +782,6 @@ export class TypeScriptAgentRuntime implements AgentRuntime {
             const currentSession = await this.options.store.getSession(job.session_id);
             if (!currentSession || !sameWorkspaceContext(currentSession.workspace, workspace)) throw new Error("Session workspace changed before tool execution");
             const executionPolicy = this.options.permissionPolicy.resolve(currentSession);
-            assertPermissionExecutionAvailable(executionPolicy);
             const executed = await this.options.tools.execute(call.name, call.arguments, {
               executionPolicy,
               handle,
