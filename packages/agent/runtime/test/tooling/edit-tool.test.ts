@@ -32,7 +32,7 @@ describe("edit file execution", () => {
     const { path, registry, context } = setup();
     const schema = registry.definition("edit")!.input_schema;
     expect(schema.required).toEqual(["path", "edits"]);
-    expect(Object.keys(schema.properties as object)).toEqual(["path", "edits"]);
+    expect(Object.keys(schema.properties as object)).toEqual(["sandbox_permissions", "justification", "path", "edits"]);
     await registry.execute("read", { path }, context);
     for (const input of [
       { file_path: path, old_string: "first", new_string: "FIRST" },

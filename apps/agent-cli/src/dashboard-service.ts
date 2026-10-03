@@ -33,6 +33,7 @@ import {
   type SqliteRuntimeStore,
   type ToolRegistry,
   type UserQuestionService,
+  type PermissionApprovalService,
 } from "@lxe/runtime";
 
 type Environment = Record<string, string | undefined>;
@@ -40,6 +41,8 @@ type Environment = Record<string, string | undefined>;
 /** Agent-process dependencies required by the Dashboard query service. */
 interface DashboardServiceOptions {
   questions?: UserQuestionService;
+  approvals?: PermissionApprovalService;
+  onPermissionChanged?: (sessionId: string) => Promise<void> | void;
   /** Writable desktop/source state. */
   stateRoot: string;
   /** Read-only provider schemas and auth profile metadata. */
@@ -242,6 +245,17 @@ export class DashboardService {
     },
     "workspaces.rename": input => this.options.store.renameWorkspace(input.directory, input.display_name)
       ?? rpcError("not_found", "workspace not found"),
+    "sessions.permission.set": async input => {
+      this.options.store.setSessionPermissionMode(input.session_id, input.permission_mode);
+      const permission_mode = this.options.store.getSessionPermissionMode(input.session_id);
+      await this.options.onPermissionChanged?.(input.session_id);
+      return { session_id: input.session_id, permission_mode };
+    },
+    "sessions.approvals": () => ({ items: this.options.approvals?.snapshot() ?? [] }),
+    "sessions.approval.decide": input => {
+      if (!this.options.approvals) return rpcError("unavailable", "Single-operation approval is unavailable");
+      return this.options.approvals.decide(input);
+    },
     "sessions.questions": () => ({ items: this.options.questions?.snapshot() ?? [] }),
     "sessions.answer": input => {
       if (!this.options.questions) return rpcError("unavailable", "User questions are unavailable");
@@ -361,6 +375,7 @@ export class DashboardService {
       return rpcError("not_found", "session not found");
     }
     await this.options.terminateSession?.(input.session_id);
+    await this.options.approvals?.forgetSession(input.session_id);
     this.options.questions?.forgetSession(input.session_id);
     this.releaseFileCandidates(input.session_id);
     if (!await this.options.store.deleteSession(input.session_id)) {

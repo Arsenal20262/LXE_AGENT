@@ -78,7 +78,7 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
       "## Workspace",
       "Use the most recent environment_context for the current date, timezone, runtime, channel, model and workspace paths.",
       "Relative paths start from the working directory.",
-      "Local file, search, delivery, Shell, Python, and lxeskill operations inherit the LXE Agent process permissions. There is no filesystem or network sandbox; the workspace is only the default path base.",
+      "The latest environment context specifies the permission mode and approval channel for controlled local operations: exec, write and edit. Follow that mode and use the smallest sufficient permission for the operation. This file-write policy makes no additional restrictions or guarantees for reads, searches, networking, MCP, or external platform operations.",
     ].join("\n"),
   ].filter(Boolean).join("\n\n");
   const fileReferences = 'Tokens prefixed with @ are paths the user referenced. Relative paths resolve from the current workspace. A trailing / marks a directory: list it when its contents matter. Read referenced files when needed before claiming to have inspected them. @"..." quotes paths containing spaces.';

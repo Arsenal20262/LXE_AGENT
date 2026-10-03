@@ -1,3 +1,5 @@
+import { useApprovalsQuery } from "../../src/api/queries";
+import type { PendingApproval, PendingUserQuestion, PermissionMode } from "@lxe/desktop-protocol";
 import { FilePreviewLayout } from "../../src/features/file-preview/Sidebar";
 import { UserReferenceText } from "../../src/features/sessions/UserReferenceText";
 /// <reference path="../../src/vite-env.d.ts" />
@@ -37,7 +39,7 @@ let holdRegistration = false;
 let releaseRegistration: (() => void) | undefined;
 let invalidateDashboard: (() => void) | undefined;
 function workspaceSession(id: string, directory: string, pinned = false): SessionPayload {
-  return { session_id: id, title: id, workspace: { directory, worktree: directory },
+  return { session_id: id, permission_mode: "workspace-write", title: id, workspace: { directory, worktree: directory },
     pinned_at: pinned ? 1 : 0, created_at: 1, last_active_at: 100, source: { platform: "desktop" },
     source_summary: { platform: "desktop", chat_type: "p2p" }, model: "fixture-model", reasoning_effort: "",
     model_config: {}, message_count: 0, tool_call_count: 0, input_tokens: 0, output_tokens: 0, api_call_count: 0 };
@@ -176,6 +178,11 @@ const desktop = {
   stagePastedConversationFiles: async () => { calls.push({ operation: "pasteFiles" }); return []; },
   discardConversationFiles: async () => {},
 } satisfies Partial<LxeDesktopBridge["desktop"]>;
+const permissionModes = new Map<string, PermissionMode>();
+let approvalRequests: PendingApproval[] = [];
+let fixtureQuestion: PendingUserQuestion | undefined;
+let failPermission = false, holdPermission = false;
+let releasePermission: (() => void) | undefined;
 const dashboard = {
   async call(call: { operation: string; input: Record<string, unknown> }) {
     if (call.operation === "skills.list") return { items: referenceMode ? referenceSkills : [], total: referenceMode ? 3 : 0 };
@@ -187,6 +194,21 @@ const dashboard = {
       return { items };
     }
     calls.push(structuredClone(call));
+    if (call.operation === "sessions.permission.set") {
+      const id = String(call.input.session_id), mode = call.input.permission_mode as PermissionMode;
+      if (holdPermission) await new Promise<void>(resolve => { releasePermission = resolve; });
+      if (failPermission) throw new Error("fixture permission save failed");
+      permissionModes.set(id, mode);
+      const session = workspaceSessions.find(row => row.session_id === id); if (session) session.permission_mode = mode;
+      return { session_id: id, permission_mode: mode };
+    }
+    if (call.operation === "sessions.detail" && !workspaceMode) return { ...workspaceRpc(call) as object, session: { ...workspaceSession(String(call.input.session_id), "/fixture"), permission_mode: permissionModes.get(String(call.input.session_id)) ?? "workspace-write" }, messages: [] };
+    if (call.operation === "sessions.approvals") return { items: structuredClone(approvalRequests) };
+    if (call.operation === "sessions.approval.decide") {
+      approvalRequests = approvalRequests.filter(request => request.request_id !== call.input.request_id);
+      return { accepted: true, request_id: call.input.request_id };
+    }
+    if (call.operation === "sessions.stop" && !workspaceMode) { stops++; approvalRequests = []; return { stopped: true }; }
     if (workspaceMode || ["sessions.create", "sessions.detail", "sessions.activity", "sessions.execTasks", "sessions.status.list"].includes(call.operation)) {
       const result = workspaceRpc(call);
       if (result !== undefined) return result;
@@ -228,8 +250,12 @@ window.lxe = { desktop, dashboard, files } as unknown as LxeDesktopBridge;
 type ComposerOptions = { runtimeReady?: boolean; modelSaving?: boolean; thinkingSaving?: boolean; running?: boolean; holdSend?: boolean };
 let composerOptions: ComposerOptions = {};
 let conversationKey = "";
-function composer() {
+function composer() { return <ComposerFixture />; }
+function ComposerFixture() {
+  const query = useApprovalsQuery(composerOptions.runtimeReady ?? true, conversationKey);
   return <ConversationComposer
+    approvals={query.data?.items.filter(request => request.session_id === conversationKey) ?? []}
+    onApprovalChanged={() => { void query.refetch(); }} question={fixtureQuestion}
     contextDetail={null} activity={composerOptions.running ? { session_id: "fixture", active: null,
       latest: null, queued: [{ turn_id: "queued", message_id: "queued-message", text: "queued",
         state: "queued", started_at: 0, user_persisted_at: 0, settled_at: 0 }] } : null}
@@ -278,6 +304,17 @@ function reset() {
   calls.length = 0; sends.length = 0; stops = 0; releaseSend = undefined;
 }
 const fixture = {
+  mountPermissions() { reset(); composerOptions = { running: true }; conversationKey = "permissions-a"; permissionModes.clear(); approvalRequests = []; fixtureQuestion = undefined; failPermission = false; holdPermission = false; renderComposer(); },
+  permissionSession(id: string) { conversationKey = id; renderComposer(); },
+  permissionFailure(value: boolean) { failPermission = value; },
+  holdPermission(value: boolean) { holdPermission = value; },
+  releasePermission() { holdPermission = false; releasePermission?.(); },
+  remotePermission(mode: PermissionMode) { permissionModes.set(conversationKey, mode); void queryClient?.invalidateQueries({ queryKey: ["sessions"] }); },
+  permissionQuestion(value: boolean) { fixtureQuestion = value ? { request_id: "question", session_id: conversationKey, turn_id: "turn", tool_call_id: "q", questions: [{ id: "q", question: "Choose a store", options: [{ label: "A" }, { label: "B" }] }] } : undefined; renderComposer(); },
+  permissionApprovals() {
+    approvalRequests = ["exec", "write"].map((tool, index): PendingApproval => ({ request_id: `permission-${index}`, session_id: conversationKey, turn_id: "turn", tool_call_id: `call-${index}`, tool: tool as "exec" | "write", target_mode: "danger-full-access", justification: "Save the requested report", arguments: tool === "exec" ? { command: "python report.py --all", cwd: "/outside" } : { file_path: "/outside/report.txt", content: "Complete proposed contents" }, preview: tool === "exec" ? { command: "python report.py --all", cwd: "/outside" } : { path: "/outside/report.txt", content: "Complete proposed contents" } }));
+    void queryClient?.invalidateQueries({ queryKey: ["sessions", "approvals"] });
+  },
   mountMermaid(charts: string[]) {
     reset();
     flushSync(() => root!.render(<div className="message-markdown" style={{ padding: 24 }}>

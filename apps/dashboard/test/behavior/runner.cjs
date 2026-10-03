@@ -68,7 +68,82 @@ app.whenReady().then(async () => {
   };
   try {
     await load();
-    if (suite === "mermaid") {
+    if (suite === "permissions") {
+      await js("behavior.mountPermissions()");
+      const mode = () => js("document.querySelector('.permission-picker > button').innerText");
+      const choose = async value => {
+        await click(".permission-picker > button");
+        await js(`Array.from(document.querySelectorAll('.permission-menu button')).find(b=>b.innerText.includes(${JSON.stringify(value)})).click()`);
+        await settle();
+      };
+      await step("running session switches from workspace write to read only", async () => {
+        await waitFor("document.querySelector('.permission-picker > button')?.innerText.includes('Workspace Write')", "initial server mode");
+        assert.equal(await js("document.querySelector('.permission-picker > button').disabled"), false);
+        await choose("Read Only");
+        await waitFor("document.querySelector('.permission-picker > button').innerText.includes('Read Only')", "read only saved");
+        assert.equal((await state()).stops, 0);
+      });
+      await step("full access requires confirmation; cancel preserves mode", async () => {
+        await choose("Full access");
+        await waitFor("Boolean(document.querySelector('#permission-full-title'))", "confirmation shown");
+        await click(".session-delete-dialog footer button:first-child");
+        assert.match(await mode(), /Read Only/);
+        await choose("Full access");
+        await click(".session-delete-dialog footer button:last-child");
+        await waitFor("!document.querySelector('#permission-full-title') && document.querySelector('.permission-picker > button').innerText.includes('Full access')", "full saved");
+      });
+      await step("multiple approvals show full operation, keep picker visible, and decide separately", async () => {
+        await js("behavior.permissionApprovals()");
+        await waitFor("document.querySelector('.permission-approval')?.innerText.includes('python report.py --all')", "first approval");
+        assert.match(await js("document.querySelector('.permission-preview').innerText"), /outside/);
+        await choose("Read Only");
+        await waitFor("document.querySelector('.permission-picker > button').innerText.includes('Read Only')", "switch during approval");
+        assert.equal(await js("document.querySelector('.permission-approval').dataset.requestId"), "permission-0");
+        await click(".permission-approval footer button:last-child");
+        await waitFor("document.querySelector('.permission-approval')?.dataset.requestId === 'permission-1'", "second approval");
+        assert.match(await js("document.querySelector('.permission-preview').innerText"), /Complete proposed contents/);
+        await click(".permission-approval footer button:first-child");
+        await waitFor("!document.querySelector('.permission-approval')", "approvals completed");
+        const decisions = (await state()).calls.filter(call => call.operation === "sessions.approval.decide");
+        assert.deepEqual(decisions.map(call => call.input.decision), ["allow", "deny"]);
+      });
+      await step("save failure preserves confirmed value and actual error", async () => {
+        await js("behavior.permissionFailure(true)"); await choose("Workspace Write");
+        await waitFor("document.querySelector('.permission-error')?.innerText.includes('fixture permission save failed')", "actual save error");
+        assert.match(await mode(), /Read Only/);
+        await js("behavior.permissionFailure(false)"); await choose("Workspace Write");
+        await waitFor("document.querySelector('.permission-picker > button').innerText.includes('Workspace Write')", "retry saved");
+      });
+      await step("late save response cannot change another session", async () => {
+        await js("behavior.holdPermission(true)"); await choose("Read Only");
+        assert.equal(await js("document.querySelector('.permission-picker > button').disabled"), true);
+        await js("behavior.permissionSession('permissions-b')"); await settle();
+        assert.match(await mode(), /Workspace Write/);
+        await js("behavior.releasePermission()"); await settle();
+        assert.match(await mode(), /Workspace Write/);
+        await js("behavior.permissionSession('permissions-a')");
+        await waitFor("document.querySelector('.permission-picker > button').innerText.includes('Read Only')", "original saved value recovered");
+      });
+      await step("remote changes and reconnection query server state", async () => {
+        await js("behavior.updateComposer({runtimeReady:false})"); await settle();
+        assert.equal(await js("document.querySelector('.permission-picker > button').disabled"), true);
+        await js("behavior.remotePermission('workspace-write'); behavior.updateComposer({runtimeReady:true})");
+        await waitFor("document.querySelector('.permission-picker > button').innerText.includes('Workspace Write')", "reconnected value");
+        await js("behavior.remotePermission('read-only')");
+        await waitFor("document.querySelector('.permission-picker > button').innerText.includes('Read Only')", "other window change");
+        await js("behavior.permissionApprovals(); behavior.updateComposer({runtimeReady:false})"); await settle();
+        await js("behavior.updateComposer({runtimeReady:true})");
+        await waitFor("Boolean(document.querySelector('.permission-approval'))", "pending restored after reconnect");
+        await click(".permission-approval header button");
+        await waitFor("!document.querySelector('.permission-approval')", "stop clears requests");
+      });
+      await step("question card retains permission selector", async () => {
+        await js("behavior.permissionQuestion(true)"); await settle();
+        assert.ok(await js("Boolean(document.querySelector('.user-question-card'))"));
+        assert.equal(await js("document.querySelector('.permission-picker > button').disabled"), false);
+      });
+    }
+    else if (suite === "mermaid") {
       const chart = 'flowchart TD\nA[会话模式与固定工作区] --> C[统一策略服务]\nB[宿主提供的临时目录和产物目录] --> C\nC --> D[本次调用的实际策略]\nD --> E[exec：构建进程沙箱]\nD --> F[write/edit：检查目标路径]\nD --> G[模型上下文：说明当前权限]';
       const sequence = 'sequenceDiagram\nparticipant A as 用户\nparticipant B as Agent\nA->>B: 请求\nNote over B: 执行任务\nB-->>A: 返回结果';
       const custom = 'flowchart LR\nA[重点]:::highlight --> B[默认]\nclassDef highlight fill:#345678,color:#ffffff,stroke:#789abc';
@@ -210,15 +285,16 @@ app.whenReady().then(async () => {
       await step("offline composer retains draft and blocks send, file selection and drops", async () => {
         await js("behavior.mountComposer()"); await type("offline draft");
         await js("behavior.updateComposer({runtimeReady:false})"); await settle();
+        const beforeOffline = (await state()).calls;
         assert.equal(await js("(document.querySelector('.reference-editor').contentEditable === 'false')"), true);
         assert.equal(await js("document.querySelector('.reference-editor').dataset.placeholder"), "Fixture runtime unavailable");
         await click(".conversation-send-button"); await key("Enter");
         await click(".conversation-attach-button"); await js("behavior.drop()"); await settle();
-        assert.deepEqual((await state()).sends, []); assert.deepEqual((await state()).calls, []);
+        assert.deepEqual((await state()).sends, []); assert.deepEqual((await state()).calls, beforeOffline);
         await js("behavior.updateComposer({runtimeReady:true})"); await focus(".reference-editor"); await key("Enter");
         assert.deepEqual((await state()).sends, [{ text: "offline draft", attachments: [] }]);
         await js("behavior.drop()"); await settle();
-        assert.deepEqual((await state()).calls, [{ operation: "dropFiles", input: ["fixture.txt"] }], "drop listener is exercised after recovery");
+        assert.deepEqual((await state()).calls.filter(call => !call.operation.startsWith("sessions.")), [{ operation: "dropFiles", input: ["fixture.txt"] }], "drop listener is exercised after recovery");
       });
     } else if (suite === "references") {
       const draft = () => js("sessionStorage.getItem('lxe.composer-draft.' + document.querySelector('.reference-editor').dataset.session) || ''");

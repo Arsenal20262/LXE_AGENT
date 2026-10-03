@@ -33,7 +33,7 @@ import type {
 } from "../../src/engine/types";
 
 const workspace = resolveWorkspaceContext(repositoryRoot(import.meta.dir));
-const permissionPolicy = new PermissionPolicyService({ dataRoot: join(workspace.worktree, "var") });
+const permissionPolicy = new PermissionPolicyService();
 afterEach(() => setSystemTime());
 
 const job = (overrides: Partial<AgentJob> = {}): AgentJob => ({
@@ -157,22 +157,22 @@ const lxeSkillInvocationError = (details: JsonObject = {
 );
 
 describe("TypeScriptAgentRuntime", () => {
-  test.each(["read-only", "workspace-write"] as const)("refuses %s before contacting the model", async mode => {
+  test.each(["read-only", "workspace-write"] as const)("describes %s before contacting the model", async mode => {
     const store = new MemoryStore();
     store.permissionMode = mode;
     let contacted = false;
     const runtime = new TypeScriptAgentRuntime({ permissionPolicy, store, tools: new ToolRegistry(), systemPrompt: "test",
       emitter: { emit: async () => {}, typing: async () => {} },
-      provider: { summarize, turn: async () => { contacted = true; return messageFixture({}); } },
+      provider: { summarize, turn: async request => { contacted = true; expect(JSON.stringify(request.messages)).toContain(`permission_mode>${mode}`); return messageFixture({}); } },
     });
     await runtime.start();
     try {
-      await expect(runtime.runTurn(job(), handle())).rejects.toThrow("backends are not implemented");
-      expect(contacted).toBe(false);
+      await runtime.runTurn(job(), handle());
+      expect(contacted).toBe(true);
     } finally { await runtime.stop(); }
   });
 
-  test.each(["read-only", "workspace-write"] as const)("each tool obtains current session policy and registry blocks a mid-turn switch to %s", async mode => {
+  test.each(["read-only", "workspace-write"] as const)("each tool and subsequent model request obtain a mid-turn switch to %s", async mode => {
     const store = new MemoryStore();
     const tools = new ToolRegistry();
     let executed = 0, requests = 0;
@@ -181,13 +181,15 @@ describe("TypeScriptAgentRuntime", () => {
       store.permissionMode = mode;
       return { content: [] };
     } });
-    tools.register({ name: "write_fixture", description: "fixture", input_schema: { type: "object" }, execute: async () => {
+    tools.register({ name: "write_fixture", description: "fixture", input_schema: { type: "object" }, execute: async (_input, context) => {
+      expect(context.executionPolicy.mode).toBe(mode);
       executed++; return { content: [] };
     } });
     const runtime = new TypeScriptAgentRuntime({ permissionPolicy, store, tools, systemPrompt: "test",
       emitter: { emit: async () => {}, typing: async () => {} },
       provider: { summarize, turn: async request => {
         expect(JSON.stringify(request.messages)).toContain(JSON.stringify(join(workspace.directory, ".lxeagent", "artifacts")).slice(1, -1));
+        if (requests > 0) expect(JSON.stringify(request.messages)).toContain(`permission_mode>${mode}`);
         return requests++ === 0 ? messageFixture({ stopReason: "toolUse", content: [
           { type: "tool_call", id: "first", name: "change_mode", arguments: {} },
           { type: "tool_call", id: "second", name: "write_fixture", arguments: {} },
@@ -197,8 +199,8 @@ describe("TypeScriptAgentRuntime", () => {
     await runtime.start();
     try {
       await runtime.runTurn(job(), handle());
-      expect(executed).toBe(0);
-      expect(JSON.stringify(store.messages)).toContain("backends are not implemented");
+      expect(executed).toBe(1);
+      expect(JSON.stringify(store.messages)).not.toContain("backends are not implemented");
     } finally { await runtime.stop(); }
   });
 
@@ -3190,5 +3192,33 @@ test("explicit skills deduplicate a steering batch and never scan tool output", 
     expect((await runtime.runTurn(job(), { ...handle(), drainSteering: () => queue.splice(0) })).status).toBe("completed");
     expect(looked).toEqual(["one", "two"]); expect(invalidations).toBeGreaterThan(0);
     expect(store.messageReasons.filter(reason => reason === "skill_invocation")).toHaveLength(2);
+  } finally { await runtime.stop(); }
+});
+
+test("mode changes during provider retries and a removed environment baseline reach the next model request", async () => {
+  const store = new MemoryStore();
+  let requests = 0;
+  const modes: string[] = [];
+  const runtime = new TypeScriptAgentRuntime({ permissionPolicy, store, tools: new ToolRegistry(), systemPrompt: "test", approvalAvailable: true,
+    emitter: { emit: async () => {}, typing: async () => {} },
+    provider: { summarize, turn: async request => {
+      const environment = [...request.messages].reverse().find(message => message.role === "user" && message.environmentContext);
+      if (environment?.role === "user") modes.push(environment.environmentContext!.permission_mode!);
+      if (requests++ === 0) {
+        store.permissionMode = "read-only";
+        throw new RuntimeProviderError("retry", "custom", "temporary", "retry", true, 503);
+      }
+      return messageFixture({ stopReason: "stop", content: [{ type: "text", text: "done" }] });
+    } },
+  });
+  await runtime.start();
+  try {
+    await runtime.runTurn(job({ source: { platform: "desktop" } }), handle());
+    expect(modes).toEqual(["danger-full-access", "read-only"]);
+    store.messages = [{ role: "compactionSummary", summary: "previous work", tokensBefore: 1000, details: { readFiles: [], modifiedFiles: [] } }];
+    store.permissionMode = "workspace-write";
+    await runtime.runTurn(job({ source: { platform: "desktop" } }), handle());
+    expect(modes.at(-1)).toBe("workspace-write");
+    expect(JSON.stringify(store.messages)).toContain("Desktop single-operation approval is available");
   } finally { await runtime.stop(); }
 });

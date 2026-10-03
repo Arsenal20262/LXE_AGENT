@@ -25,6 +25,7 @@ export const ZH_TEXT = {
 
   skillDisplayName: (name: string) => skillDisplayName(name, "zh"),
   sessionStatus: {waiting_input:"等待回答",running:"运行中",stopping:"正在停止",queued:"排队中",completed:"已完成，尚未查看",error:"执行失败，尚未查看",cancelled:"已停止",idle:"暂无未查看结果",unknown:"上次运行结果未确认",unavailable:"状态暂不可用",syncError:"状态同步失败"},
+  permissions: { mode:"权限模式", readOnly:"不修改普通文件", workspaceWrite:"可写工作区和平台临时区域", fullAccess:"不施加文件沙箱限制", confirmTitle:"启用 Full access？", confirmBody:"允许本地工具在操作系统权限范围内修改文件，包括工作区以外的文件。", cancel:"取消", confirm:"启用 Full access", waiting:"等待单次审批", pending:"项待审批", arguments:"查看完整工具参数", stop:"停止本次任务", deny:"拒绝", allow:"允许一次" },
   userQuestions: {waiting:"等待回答",received:"回答已接收",done:"完成",retry:"重试提交",skip:"跳过",skipQuestion:"跳过当前问题",skipped:"已跳过",submitting:"正在提交…",stop:"停止本次任务",stopping:"正在停止…",pagination:"问题分页",previous:"上一题",next:"下一题",multiple:"可多选，也可以补充文字",custom:"自己的回答",customPlaceholder:"填写自己的回答…",freeText:"回答"},
   language: {
     label: "语言",
@@ -898,7 +899,8 @@ export const UI_TEXT: Record<Language, UiText> = {
     },
     skillDisplayName: (name: string) => skillDisplayName(name, "en"),
     sessionStatus: {waiting_input:"Waiting for answer",running:"Running",stopping:"Stopping",queued:"Queued",completed:"Completed, not viewed",error:"Failed, not viewed",cancelled:"Stopped",idle:"No unviewed results",unknown:"Previous run result unconfirmed",unavailable:"Status unavailable",syncError:"Status sync failed"},
-    userQuestions: {waiting:"Waiting for answer",received:"Answer received",done:"Done",retry:"Retry submission",skip:"Skip",skipQuestion:"Skip this question",skipped:"Skipped",submitting:"Submitting…",stop:"Stop this task",stopping:"Stopping…",pagination:"Question pages",previous:"Previous question",next:"Next question",multiple:"Choose any and optionally add text",custom:"Your own answer",customPlaceholder:"Write your own answer…",freeText:"Answer"},
+    permissions: { mode:"Permission mode", readOnly:"Do not modify ordinary files", workspaceWrite:"Write workspace and platform temporary regions", fullAccess:"No file sandbox restriction", confirmTitle:"Enable Full access?", confirmBody:"Allow local tools to modify files within operating-system permissions, including files outside the workspace.", cancel:"Cancel", confirm:"Enable Full access", waiting:"Waiting for approval", pending:"pending approvals", arguments:"View complete tool arguments", stop:"Stop this task", deny:"Deny", allow:"Allow once" },
+  userQuestions: {waiting:"Waiting for answer",received:"Answer received",done:"Done",retry:"Retry submission",skip:"Skip",skipQuestion:"Skip this question",skipped:"Skipped",submitting:"Submitting…",stop:"Stop this task",stopping:"Stopping…",pagination:"Question pages",previous:"Previous question",next:"Next question",multiple:"Choose any and optionally add text",custom:"Your own answer",customPlaceholder:"Write your own answer…",freeText:"Answer"},
     language: {
       label: "Language",
       zh: "中文",

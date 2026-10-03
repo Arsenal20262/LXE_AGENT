@@ -1,5 +1,5 @@
 import { omitImageData } from "../messages/image-content";
-import { parsePermissionMode, type PermissionMode } from "@lxe/protocol";
+import { DEFAULT_PERMISSION_MODE, parsePermissionMode, type PermissionMode } from "@lxe/protocol";
 import { validContextDisplaySnapshot, type ContextDisplaySnapshot } from "@lxe/protocol";
 import { existsSync, mkdirSync, statSync } from "node:fs";
 import { appendFile, mkdir, open, readFile, rename, stat, truncate, unlink } from "node:fs/promises";
@@ -617,15 +617,15 @@ export class SqliteRuntimeStore implements RuntimeStore {
       this.ensureWorkspace(workspace.directory);
       this.db().query(`
         INSERT INTO agent_sessions (
-          session_id, source, workspace_directory, workspace_worktree,
+          session_id, source, workspace_directory, workspace_worktree, permission_mode,
           created_at, last_active_at
-        ) VALUES (?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(session_id) DO UPDATE SET
           source = excluded.source,
           workspace_directory = excluded.workspace_directory,
           workspace_worktree = excluded.workspace_worktree,
           last_active_at = excluded.last_active_at
-      `).run(sessionId, JSON.stringify(source), workspace.directory, workspace.worktree, now, now);
+      `).run(sessionId, JSON.stringify(source), workspace.directory, workspace.worktree, DEFAULT_PERMISSION_MODE, now, now);
       if (request.entry_text !== undefined) {
         this.db().query("UPDATE agent_sessions SET blank = 0 WHERE session_id = ?").run(sessionId);
       }
@@ -642,8 +642,8 @@ export class SqliteRuntimeStore implements RuntimeStore {
       if (existing) return this.sessionPayload(existing);
       const id = randomUUID().replaceAll("-", ""), now = Date.now() / 1_000;
       this.db().query(`INSERT INTO agent_sessions
-        (session_id, source, workspace_directory, workspace_worktree, created_at, last_active_at, blank)
-        VALUES (?, ?, ?, ?, ?, ?, 1)`).run(id, JSON.stringify({ platform: "desktop", chat_type: "dm" }), workspace.directory, workspace.worktree, now, now);
+        (session_id, source, workspace_directory, workspace_worktree, permission_mode, created_at, last_active_at, blank)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 1)`).run(id, JSON.stringify({ platform: "desktop", chat_type: "dm" }), workspace.directory, workspace.worktree, DEFAULT_PERMISSION_MODE, now, now);
       return this.sessionPayload(this.getPrepared<Record<string, unknown>>("SELECT * FROM agent_sessions WHERE session_id = ?", id)!);
     })();
   }
@@ -666,7 +666,7 @@ export class SqliteRuntimeStore implements RuntimeStore {
     return { session_id: row.session_id, permission_mode: parsePermissionMode(row.permission_mode), source: parseObject(row.source), workspace };
   }
 
-  /** Internal settings API; never exposed as a tool state patch or dashboard mutation. */
+  /** Explicit session setting; never accepted via source metadata or tool state patches. */
   setSessionPermissionMode(sessionId: string, value: PermissionMode): void {
     const mode = parsePermissionMode(value);
     const result = this.db().query("UPDATE agent_sessions SET permission_mode = ? WHERE session_id = ?")
@@ -678,6 +678,15 @@ export class SqliteRuntimeStore implements RuntimeStore {
     const row = this.getPrepared<{ permission_mode: string }>("SELECT permission_mode FROM agent_sessions WHERE session_id = ?", text(sessionId));
     if (!row) throw new Error(`session not found: ${sessionId}`);
     return parsePermissionMode(row.permission_mode);
+  }
+
+  async appendApprovalEvent(sessionId: string, event: JsonObject): Promise<void> {
+    await this.enqueueSessionWrite(sessionId, async () => {
+      if (!await this.getSession(sessionId)) throw new Error(`session not found: ${sessionId}`);
+      await this.appendTranscriptEvent(sessionId, event);
+      this.replayCache.delete(sessionId);
+      await this.enqueueIndexSync(sessionId, this.transcriptPath(sessionId));
+    });
   }
 
   async appendPendingEvent(sessionId: string, event: JsonObject): Promise<void> {
@@ -1241,7 +1250,7 @@ export class SqliteRuntimeStore implements RuntimeStore {
       ...whereArgs,
     );
     const rows = this.allPrepared<Record<string, unknown>>(`
-      SELECT session_id, source, workspace_directory, workspace_worktree,
+      SELECT session_id, permission_mode, source, workspace_directory, workspace_worktree,
              model, reasoning_effort, model_config, created_at, last_active_at,
              blank, message_count, tool_call_count, input_tokens, output_tokens, title, pinned_at, api_call_count
       FROM agent_sessions ${where}
@@ -1273,7 +1282,7 @@ export class SqliteRuntimeStore implements RuntimeStore {
     ).run(pinned ? Date.now() / 1_000 : 0, safeSessionId);
     if (Number(result.changes ?? 0) !== 1) return undefined;
     const row = this.getPrepared<Record<string, unknown>>(`
-      SELECT session_id, source, workspace_directory, workspace_worktree,
+      SELECT session_id, permission_mode, source, workspace_directory, workspace_worktree,
              model, reasoning_effort, model_config, created_at, last_active_at,
              blank, message_count, tool_call_count, input_tokens, output_tokens, title, pinned_at, api_call_count
       FROM agent_sessions WHERE session_id = ?
@@ -1355,7 +1364,7 @@ export class SqliteRuntimeStore implements RuntimeStore {
     if (!exists) return undefined;
     const display = await this.loadTranscriptDisplayPage(safeSessionId, options);
     const row = this.getPrepared<Record<string, unknown>>(`
-      SELECT session_id, source, workspace_directory, workspace_worktree,
+      SELECT session_id, permission_mode, source, workspace_directory, workspace_worktree,
              model, reasoning_effort, model_config, created_at, last_active_at,
              blank, message_count, tool_call_count, input_tokens, output_tokens, title, pinned_at, api_call_count, context_display
       FROM agent_sessions WHERE session_id = ?
@@ -1402,6 +1411,7 @@ export class SqliteRuntimeStore implements RuntimeStore {
     if (!workspace) throw new Error(`session workspace is missing: ${text(row.session_id)}`);
     return {
       session_id: text(row.session_id),
+      permission_mode: parsePermissionMode(row.permission_mode),
       blank: row.blank === 1,
       title: text(row.title),
       pinned_at: Math.max(0, Number(row.pinned_at ?? 0)),

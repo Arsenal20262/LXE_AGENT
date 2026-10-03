@@ -1,3 +1,5 @@
+import type { ExecutionPaths } from "../../permissions/execution-paths";
+import type { PermissionApprovalService } from "../../permissions/approvals";
 import type { JsonObject } from "@lxe/protocol";
 import type { ExecShellAdapter } from "../exec-shell";
 import type { LxeSkillRuntimeStatus } from "../../operations/lxeskill-runtime";
@@ -12,6 +14,8 @@ export interface LxeSkillRecoveryCommand {
 export type ProcessStatus = "running" | "completed" | "failed" | "killed";
 
 export interface CodingToolOptions {
+  executionPaths?: ExecutionPaths;
+  approvals?: PermissionApprovalService;
   repositorySkillsRoot?: string;
   userSkillsRoot?: string;
   homeDirectory?: string;

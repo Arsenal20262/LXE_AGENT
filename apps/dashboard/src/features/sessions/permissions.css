@@ -1,0 +1,12 @@
+.permission-menu { min-width: 290px; }
+.permission-error { color: var(--danger, #b43c35); white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
+.permission-picker > .permission-error { position: absolute; bottom: 100%; background: var(--surface, #fff); padding: 10px; width: 300px; box-shadow: 0 4px 20px #0002; border-radius: 8px; z-index: 10; }
+.permission-approval { padding: 14px; min-width: 0; }
+.permission-approval header { display: flex; gap: 12px; align-items: center; }
+.permission-approval header span { flex: 1; font-size: 12px; opacity: .7; }
+.permission-approval header button { padding: 4px; border: 0; background: transparent; }
+.permission-approval p { margin: 10px 0; overflow-wrap: anywhere; }
+.permission-preview { max-height: 240px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; padding: 12px; background: #8881; border-radius: 8px; user-select: text; }
+.permission-approval footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+.permission-approval footer button { padding: 7px 14px; border: 1px solid #8885; border-radius: 8px; background: transparent; color: inherit; }
+.permission-approval footer button:last-child { background: var(--text, #333); color: var(--surface, #fff); }

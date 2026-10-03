@@ -6,11 +6,15 @@ import {
 } from "node:fs";
 import { open, readFile, stat } from "node:fs/promises";
 import { basename, dirname, extname, relative } from "node:path";
+import { canonicalPathCandidate } from "@lxe/core";
+import { join } from "node:path";
+import { ExecutionPaths } from "../../permissions/execution-paths";
+import { approveIfNeeded, requestedPolicy, permissionInputProperties, permissionToolDescription, type PermissionApprovalService } from "../../permissions/approvals";
 import type { JsonObject } from "@lxe/protocol";
 import { inspectFileWriteTarget, recheckFileWriteTarget, type FileWriteTarget } from "../../permissions/file-write-policy";
 import { detectReadImageMime, type ModelImageProcessor } from "../../providers/model-image";
 import { scanNumberedTextChunks, type NumberedTextRangeResult } from "../text-range";
-import type { ToolDefinition } from "../registry";
+import { ToolExecutionError, type ToolDefinition } from "../registry";
 import { isProbablyBinary } from "../workspace-search";
 import {
   type FileVersion,
@@ -103,6 +107,8 @@ const assertFileVersionUnchanged = async (path: string, expected: FileVersion): 
 
 export interface FileToolDependencies {
   paths: CodingPathPolicy;
+  executionPaths?: ExecutionPaths;
+  approvals?: PermissionApprovalService;
   ledger: FileVersionLedger;
   imageProcessor: ModelImageProcessor;
   toolOutputLimit: number;
@@ -110,7 +116,8 @@ export interface FileToolDependencies {
 
 export function createFileTools(dependencies: FileToolDependencies): ToolDefinition[] {
   const { paths, ledger, imageProcessor, toolOutputLimit } = dependencies;
-  return [
+  const executionPaths = dependencies.executionPaths ?? new ExecutionPaths(join(process.cwd(), "var"));
+  const tools: ToolDefinition[] = [
     {
       name: "read",
       description: "Read any text or image file accessible to the local LXE Agent process. Relative paths resolve from the session working directory. Reading records the file version required by edit/write.",
@@ -185,21 +192,30 @@ export function createFileTools(dependencies: FileToolDependencies): ToolDefinit
     },
     {
       name: "write",
-      description: "Create or overwrite any UTF-8 file writable by the local LXE Agent process. Relative paths resolve from the session working directory.",
-      input_schema: { type: "object", properties: { file_path: { type: "string" }, content: { type: "string" } }, required: ["file_path", "content"], additionalProperties: false },
+      description: "Create or overwrite a UTF-8 file. Relative paths resolve from the session working directory." + permissionToolDescription,
+      input_schema: { type: "object", properties: { ...permissionInputProperties, file_path: { type: "string" }, content: { type: "string" } }, required: ["file_path", "content"], additionalProperties: false },
       execute: async (input, context) => {
+        input = structuredClone(input);
+        const policy = requestedPolicy(input, context.executionPolicy);
         assertActive(context.handle.signal);
         const requested = paths.resolveWritable(context.workspace, input.file_path);
-        const target = inspectFileWriteTarget(context.executionPolicy, requested, true);
+        const target = inspectFileWriteTarget(policy, requested, true, executionPaths);
         const { path } = target;
         const version = writeTargetVersion(target);
         if (version !== undefined) ledger.assertVersion(context.session_id, requested, "write", version);
         const content = inputText(input, "content");
+        if (policy.mode !== context.executionPolicy.mode) {
+          const identity = canonicalPathCandidate(requested);
+          await approveIfNeeded(dependencies.approvals, "write", input, context, policy, { path: requested, content });
+          if (canonicalPathCandidate(requested) !== identity) throw new Error(`write target changed during approval; read it again: ${requested}`);
+          const after = recheckFileWriteTarget(policy, requested, target, executionPaths);
+          if (writeTargetVersion(after) !== version) throw new Error(`write target changed during approval; read it again: ${requested}`);
+        }
         assertActive(context.handle.signal);
         mkdirSync(dirname(path), { recursive: true });
-        const current = recheckFileWriteTarget(context.executionPolicy, requested, path);
+        const current = recheckFileWriteTarget(policy, requested, target, executionPaths);
         const currentVersion = writeTargetVersion(current);
-        if (version === undefined && currentVersion !== undefined) {
+        if (version !== currentVersion) {
           throw new Error(`write 被拒绝：文件在写入前发生变化，请重新 read 确认最新内容: ${path}`);
         }
         if (version !== undefined) ledger.assertVersion(context.session_id, requested, "write", currentVersion);
@@ -211,20 +227,28 @@ export function createFileTools(dependencies: FileToolDependencies): ToolDefinit
     },
     {
       name: "edit",
-      description: "Edit an existing UTF-8 file using edits[{oldText,newText}]. Read the file first; changes since the last read/write are rejected. Combine disjoint changes in one call: every oldText must uniquely match the same ORIGINAL file, and targets must not overlap. Exact matching is preferred, with normalized whitespace/Unicode matching as fallback. All edits are checked before writing. Returns a bounded diff summary. Relative paths resolve from the session working directory.",
+      description: "Edit an existing UTF-8 file using edits[{oldText,newText}]. Read the file first; changes since the last read/write are rejected. Combine disjoint changes in one call: every oldText must uniquely match the same ORIGINAL file, and targets must not overlap. Exact matching is preferred, with normalized whitespace/Unicode matching as fallback. All edits are checked before writing. Returns a bounded diff summary. Relative paths resolve from the session working directory." + permissionToolDescription,
       input_schema: editInputSchema,
       execute: async (input, context) => {
+        input = structuredClone(input);
+        const policy = requestedPolicy(input, context.executionPolicy);
         assertActive(context.handle.signal);
         const args = validateEditInput(input);
         const requested = paths.resolveWritable(context.workspace, args.path);
-        const target = inspectFileWriteTarget(context.executionPolicy, requested, false);
+        const target = inspectFileWriteTarget(policy, requested, false, executionPaths);
         const { path } = target;
         const version = writeTargetVersion(target);
         ledger.assertVersion(context.session_id, requested, "edit", version);
         const source = readFileSync(path, "utf8");
         const prepared = prepareTextEdit(source, args.edits);
         const summary = summarizeTextEdit(relative(context.workspace.directory, requested), args.edits.length, prepared, toolOutputLimit);
-        const current = recheckFileWriteTarget(context.executionPolicy, requested, path);
+        if (policy.mode !== context.executionPolicy.mode) {
+          const identity = canonicalPathCandidate(requested);
+          await approveIfNeeded(dependencies.approvals, "edit", input, context, policy, { path: requested, edits: args.edits.map(edit => ({ ...edit })) });
+          if (canonicalPathCandidate(requested) !== identity) throw new Error(`edit target changed during approval; read it again: ${requested}`);
+        }
+        const current = recheckFileWriteTarget(policy, requested, target, executionPaths);
+        if (writeTargetVersion(current) !== version) throw new Error(`edit 被拒绝：文件发生变化，请重新 read: ${path}`);
         ledger.assertVersion(context.session_id, requested, "edit", writeTargetVersion(current));
         assertActive(context.handle.signal);
         writeFileSync(path, prepared.content, "utf8");
@@ -233,4 +257,16 @@ export function createFileTools(dependencies: FileToolDependencies): ToolDefinit
       },
     },
   ];
+  return tools.map(tool => tool.name === "read" ? tool : { ...tool, execute: async (input, context) => {
+    try { return await tool.execute(input, context); }
+    catch (error) {
+      if (error instanceof ToolExecutionError && error.details?.type === "file_permission_denied") {
+        const hint = dependencies.approvals && context.platform === "desktop"
+          ? " If this operation is necessary, explicitly request the smallest sufficient wider sandbox_permissions with justification for a single approval."
+          : " Single-operation approval is unavailable on this channel.";
+        throw new ToolExecutionError(error.code, error.message + hint, error.details);
+      }
+      throw error;
+    }
+  } });
 }

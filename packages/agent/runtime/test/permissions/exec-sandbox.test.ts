@@ -1,10 +1,15 @@
+import { PermissionApprovalService } from "../../src/permissions/approvals";
+import { registerCodingTools } from "../../src/tooling/coding/register";
+import { ToolRegistry } from "../../src/tooling/registry";
+import { executionBoundary, recheckExecutionBoundary } from "../../src/permissions/boundaries";
+import { ExecutionPaths } from "../../src/permissions/execution-paths";
 import { afterEach, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { PermissionMode } from "@lxe/protocol";
-import { PermissionPolicyService, assertPermissionExecutionAvailable } from "../../src/permissions/policy";
-import { ExecSandbox, assertExecSandboxBoundaries, seatbeltProfile } from "../../src/permissions/exec-sandbox";
+import { PermissionPolicyService } from "../../src/permissions/policy";
+import { ExecSandbox, seatbeltProfile } from "../../src/permissions/exec-sandbox";
 import { CodingProcessManager } from "../../src/tooling/coding/process-manager";
 import { ExecShellAdapter } from "../../src/tooling/exec-shell";
 import { workspaceFor } from "../workspace";
@@ -12,15 +17,15 @@ import { workspaceFor } from "../workspace";
 const roots: string[] = [];
 const managers: CodingProcessManager[] = [];
 function fixture() {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), "lxe-exec-sandbox-")));
+  const root = realpathSync(mkdtempSync(join(process.cwd(), ".lxe-exec-sandbox-")));
   roots.push(root);
   const workspace = join(root, "work 中文 space");
   mkdirSync(workspace);
-  const service = new PermissionPolicyService({ dataRoot: join(root, "var") });
+  const service = new PermissionPolicyService();
   const policy = (mode: PermissionMode, id = "first") => service.resolve({
-    session_id: id, workspace: workspaceFor(workspace, root), permission_mode: mode,
+    session_id: `${root}:${id}`, workspace: workspaceFor(workspace, root), permission_mode: mode,
   });
-  return { root, workspace, policy };
+  return { root, workspace, policy, paths: new ExecutionPaths(join(root, "var")) };
 }
 
 afterEach(async () => {
@@ -28,44 +33,28 @@ afterEach(async () => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
-test("full access bypasses every platform backend; restricted sessions remain unavailable", () => {
-  const { policy } = fixture();
-  const command = { argv: ["program", "an argument"], detached: false };
+test("full access bypasses unavailable backends; restricted calls fail explicitly", async () => {
+  const { policy } = fixture(), command = { argv: ["program"], detached: false };
   const backend = new ExecSandbox({ platform: "linux", environment: {} });
-  expect(backend.prepare(policy("danger-full-access"), command)).toMatchObject({ ...command, sandbox: { backend: "none" } });
-  expect(() => backend.prepare(policy("workspace-write"), command)).toThrow("not implemented on linux");
-  for (const mode of ["read-only", "workspace-write"] as const) {
-    expect(() => assertPermissionExecutionAvailable(policy(mode))).toThrow("backends are not implemented");
-  }
+  expect(await backend.prepare(policy("danger-full-access"), command)).toMatchObject({ ...command, sandbox: { backend: "none" } });
+  await expect(backend.prepare(policy("workspace-write"), command)).rejects.toThrow("not implemented on linux");
+  await expect(new ExecSandbox({ platform: "win32", environment: {} }).prepare(policy("workspace-write"), command)).rejects.toThrow("launcher is unavailable");
 });
-
-test("Seatbelt only grants fixed workspace and session temp, with safely quoted paths", () => {
-  const { policy } = fixture();
-  const p = policy("workspace-write");
-  expect(seatbeltProfile(p)).toContain('(deny file-write*)');
-  expect(seatbeltProfile(p)).toContain(`(subpath ${JSON.stringify(p.workspaceRoot)})`);
-  expect(seatbeltProfile(p)).toContain(`(subpath ${JSON.stringify(p.temporaryDirectory)})`);
-  expect(seatbeltProfile(p)).not.toContain('(subpath "/tmp")');
-  expect(seatbeltProfile(policy("read-only"))).not.toContain("subpath");
-  expect(seatbeltProfile({ ...p, workspaceRoot: '/space/"quote\\line\n' })).toContain(JSON.stringify('/space/"quote\\line\n'));
+test("Seatbelt grants fixed workspace and canonical system temporary regions with safe quoting", () => {
+  const { policy, paths } = fixture(), p = policy("workspace-write");
+  const mac = new ExecutionPaths(paths.dataRoot, { platform: "darwin" });
+  const roots = executionBoundary(p, mac).roots;
+  const profile = seatbeltProfile(p, roots);
+  expect(profile).toContain('(deny file-write*)');
+  for (const root of roots) expect(profile).toContain(`(subpath ${JSON.stringify(root)})`);
+  expect(seatbeltProfile(policy("read-only"), roots)).not.toContain("subpath");
+  expect(seatbeltProfile(p, ['a"b'])).toContain(JSON.stringify('a"b'));
 });
-
-test("unavailable Windows helper fails before launching any command", () => {
-  const { policy } = fixture();
-  expect(() => new ExecSandbox({ platform: "win32", environment: {} }).prepare(policy("workspace-write"), { argv: ["cmd"], detached: false }))
-    .toThrow("Windows ACL sandbox launcher is unavailable");
-});
-
-test("reject diagnostics, forged write roots and symlink replacements before spawn", () => {
-  const { root, workspace, policy } = fixture();
-  const p = policy("workspace-write");
-  expect(() => assertExecSandboxBoundaries({ ...p, writeAccess: { kind: "roots", roots: [root, p.temporaryDirectory] } })).toThrow("write roots");
-  const overlap = new PermissionPolicyService({ dataRoot: join(workspace, "var") })
-    .resolve({ session_id: "s", workspace: workspaceFor(workspace), permission_mode: "workspace-write" });
-  expect(() => assertExecSandboxBoundaries(overlap)).toThrow("boundary conflict");
-  mkdirSync(join(root, "elsewhere"));
-  symlinkSync(join(root, "elsewhere"), join(workspace, ".lxeagent"), process.platform === "win32" ? "junction" : "dir");
-  expect(() => assertExecSandboxBoundaries(p)).toThrow("path changed");
+test("unrelated artifact links do not affect execution boundaries", () => {
+  const { root, workspace, policy, paths } = fixture();
+  const p = policy("workspace-write"), initial = executionBoundary(p, paths);
+  symlinkSync(root, join(workspace, ".lxeagent"), process.platform === "win32" ? "junction" : "dir");
+  expect(() => recheckExecutionBoundary(p, paths, initial)).not.toThrow();
 });
 
 const native = process.platform === "darwin" || (process.platform === "win32" && process.env.LXE_EXEC_SANDBOX_NATIVE_TEST === "1");
@@ -74,14 +63,15 @@ const quote = (text: string) => process.platform === "win32" ? `'${text.replaceA
 const node = process.env.LXE_EXEC_SANDBOX_NODE || Bun.which("node") || "";
 const invokeNode = (script: string) => `${process.platform === "win32" ? "& " : ""}${quote(node)} ${quote(script)}`;
 
-function manager() {
-  const value = new CodingProcessManager({ maxOutputBytes: 100_000, tailBytes: 2_000, shell: new ExecShellAdapter() });
+function manager(paths?: ExecutionPaths) {
+  if (!paths) { const root = mkdtempSync(join(process.cwd(), ".lxe-exec-output-")); roots.push(root); paths = new ExecutionPaths(root); }
+  const value = new CodingProcessManager({ maxOutputBytes: 100_000, tailBytes: 2_000, shell: new ExecShellAdapter(), sandbox: new ExecSandbox({ paths }) });
   managers.push(value);
   return value;
 }
 
 function execute(m: CodingProcessManager, p: ReturnType<ReturnType<typeof fixture>["policy"]>, command: string, cwd = p.workspaceRoot, yieldMs = 10_000) {
-  return m.execute({ executionPolicy: p, workspace: workspaceFor(p.workspaceRoot), command, cwd, sessionId: p.temporaryDirectory,
+  return m.execute({ executionPolicy: p, workspace: workspaceFor(p.workspaceRoot), command, cwd, sessionId: p.sessionId,
     responseRouteId: "test", toolCallId: "test", turnId: "test", yieldMs, signal: new AbortController().signal });
 }
 
@@ -91,9 +81,9 @@ nativeTest.each(["read-only", "workspace-write"] as const)("native %s enforces w
   writeFileSync(outside, "original");
   const script = join(workspace, "probe.cjs");
   writeFileSync(script, `const fs = require('node:fs'), path = require('node:path');
-    const targets = { workspace: path.join(${JSON.stringify(workspace)}, 'written'), temporary: path.join(process.env.TMPDIR, 'written'), outside: ${JSON.stringify(outside)} };
+    const targets = { workspace: path.join(${JSON.stringify(workspace)}, 'written'), temporary: path.join(process.env.TMPDIR, 'written-'+process.pid), outside: ${JSON.stringify(outside)} };
     const result = { read: fs.readFileSync(targets.outside, 'utf8'), cwd: process.cwd(), tmp: process.env.TMPDIR, errors: {} };
-    for (const [key, target] of Object.entries(targets)) { try { fs.writeFileSync(target, 'changed'); result[key] = true; } catch (e) { result[key] = false; result.errors[key] = e.message; } }
+    for (const [key, target] of Object.entries(targets)) { try { fs.writeFileSync(target, 'changed'); result[key] = true; if(key==='temporary') fs.unlinkSync(target); } catch (e) { result[key] = false; result.errors[key] = e.message; } }
     fs.writeSync(1, JSON.stringify(result)); fs.writeSync(2, 'real-stderr');`);
   const result = await execute(manager(), policy(mode), invokeNode(script), root);
   expect(result.status, JSON.stringify(result)).toBe("completed");
@@ -145,7 +135,7 @@ nativeTest("wait preserves output and cancellation kills a running descendant", 
   const deadline = Date.now() + 15_000;
   while (!existsSync(heartbeat) && Date.now() < deadline) await Bun.sleep(50);
   expect(existsSync(heartbeat)).toBe(true);
-  const stopped = await m.wait({ execId: String(first.exec_id), sessionId: p.temporaryDirectory, yieldMs: 1_000, terminate: true, signal: new AbortController().signal });
+  const stopped = await m.wait({ execId: String(first.exec_id), sessionId: p.sessionId, yieldMs: 1_000, terminate: true, signal: new AbortController().signal });
   expect(stopped.status).toBe("killed");
   const after = readFileSync(heartbeat, "utf8");
   await Bun.sleep(250);
@@ -185,7 +175,7 @@ nativeTest("native policy prevents deleting and renaming outside files, and host
   const p = policy("workspace-write"), m = manager();
   const result = await execute(m, p, invokeNode(script));
   expect(result.status, JSON.stringify(result)).toBe("completed");
-  const saved = await m.ensureOutputFile(String(result.exec_id), p.temporaryDirectory);
+  const saved = await m.ensureOutputFile(String(result.exec_id), p.sessionId);
   expect(saved.output_file_error).toBeUndefined();
   const snapshot = m.snapshots()[0]!;
   const output = readFileSync(String(snapshot.output_path), "utf8");
@@ -200,35 +190,67 @@ nativeTest("parallel commands in one workspace keep their temporary directories 
   const script = join(workspace, "temps.cjs");
   writeFileSync(script, `const fs=require('node:fs'), path=require('node:path');
     const file=path.join(process.env.TMPDIR, process.env.LXE_EXEC_SESSION_ID); fs.writeFileSync(file, 'before');
-    setTimeout(()=>{ fs.writeFileSync(file, 'after'); console.log('temp-ok:'+process.env.TMPDIR); }, 250);`);
+    setTimeout(()=>{ fs.writeFileSync(file, 'after'); fs.unlinkSync(file); console.log('temp-ok:'+process.env.TMPDIR); }, 250);`);
   const m = manager();
   const results = await Promise.all(["one", "two"].map(id => execute(m, policy("workspace-write", id), invokeNode(script))));
   for (const result of results) { expect(result.status, JSON.stringify(result)).toBe("completed"); expect(String(result.output)).toContain("temp-ok:"); }
-  expect(results[0]!.output).not.toBe(results[1]!.output);
+  if (process.platform === "win32") expect(results[0]!.output).not.toBe(results[1]!.output);
+  else expect(results[0]!.output).toBe(results[1]!.output);
   if (process.platform === "win32") {
     for (const result of results) {
       const temporary = String(result.output).match(/temp-ok:([^\r\n]+)/u)?.[1];
       expect(temporary).toBeTruthy();
-      expect(existsSync(temporary!)).toBe(false);
+      expect(existsSync(temporary!)).toBe(true);
     }
     const same = policy("workspace-write", "shared");
     const overlap = await Promise.all([1,2].map(() => execute(m, same, invokeNode(script))));
     for (const result of overlap) expect(result.status, JSON.stringify(result)).toBe("completed");
-    expect(overlap[0]!.output).not.toBe(overlap[1]!.output);
+    expect(overlap[0]!.output).toBe(overlap[1]!.output);
+    await m.stop();
+    for (const result of [...results, ...overlap]) expect(existsSync(String(result.output).match(/temp-ok:([^\r\n]+)/u)![1]!)).toBe(false);
   }
 }, 30_000);
 
 nativeTest("project Python writes artifacts and private temp but cannot write the host output directory", async () => {
-  const { workspace, policy } = fixture();
+  const { workspace, policy, paths } = fixture();
   const p = policy("workspace-write");
-  mkdirSync(p.outputDirectory, { recursive: true });
+  mkdirSync(paths.outputDirectory(p), { recursive: true });
   const script = join(workspace, "probe.py");
-  writeFileSync(script, `import os\nfrom pathlib import Path\nroot = Path(os.environ['LXE_WORKSPACE_ROOT']) / '.lxeagent' / 'artifacts'\nroot.mkdir(parents=True, exist_ok=True)\n(root / 'python.txt').write_text('artifact')\nPath(os.environ['TMPDIR'], 'python.tmp').write_text('temporary')\ntry:\n    Path(${JSON.stringify(join(p.outputDirectory, "escaped"))}).write_text('bad')\nexcept PermissionError as error:\n    print('host-output-denied:', error)\nelse:\n    raise RuntimeError('host output writable')\nprint('python-ok')\n`);
+  writeFileSync(script, `import os\nfrom pathlib import Path\nroot = Path(os.environ['LXE_WORKSPACE_ROOT']) / '.lxeagent' / 'artifacts'\nroot.mkdir(parents=True, exist_ok=True)\n(root / 'python.txt').write_text('artifact')\ntemporary = Path(os.environ['TMPDIR'], 'lxe-python-%s.tmp' % os.getpid())\ntemporary.write_text('temporary')\ntemporary.unlink()\ntry:\n    Path(${JSON.stringify(join(paths.outputDirectory(p), "escaped"))}).write_text('bad')\nexcept PermissionError as error:\n    print('host-output-denied:', error)\nelse:\n    raise RuntimeError('host output writable')\nprint('python-ok')\n`);
   const python = join(process.cwd(), ".venv", process.platform === "win32" ? "Scripts/python.exe" : "bin/python");
-  const result = await execute(manager(), p, `${process.platform === "win32" ? "& " : ""}${quote(python)} -I -B ${quote(script)}`);
+  const result = await execute(manager(paths), p, `${process.platform === "win32" ? "& " : ""}${quote(python)} -I -B ${quote(script)}`);
   expect(result.status, JSON.stringify(result)).toBe("completed");
   expect(String(result.output)).toContain("host-output-denied:");
   expect(String(result.output)).toContain("python-ok");
-  expect(readFileSync(join(p.artifactRoot, "python.txt"), "utf8")).toBe("artifact");
-  expect(existsSync(join(p.outputDirectory, "escaped"))).toBe(false);
+  expect(readFileSync(join(paths.artifactRoot(p), "python.txt"), "utf8")).toBe("artifact");
+  expect(existsSync(join(paths.outputDirectory(p), "escaped"))).toBe(false);
 }, 30_000);
+
+nativeTest("lxeskill preserves its real outside-state error and runs only after explicit full-access approval", async () => {
+  const { root, workspace, policy, paths } = fixture();
+  const dataRoot = join(root, "cli-state");
+  const approvals = new PermissionApprovalService({ changed() {}, audit: async () => {} });
+  const registry = new ToolRegistry();
+  const processes = registerCodingTools(registry, { executionPaths: paths, approvals,
+    execShell: new ExecShellAdapter({ environment: { ...process.env, LXE_DATA_ROOT: dataRoot, LOCAL_LOGS_ENABLED: "0", PYTHONDONTWRITEBYTECODE: "1" } }) });
+  managers.push(processes);
+  const context = { session_id: policy("workspace-write").sessionId, turn_id: "turn", tool_call_id: "cli", platform: "desktop",
+    executionPolicy: policy("workspace-write"), workspace: workspaceFor(workspace, process.cwd()),
+    handle: { signal: new AbortController().signal, cancelled: false, drainSteering: () => [], registerProcess: () => () => {} } };
+  try {
+    const denied = await registry.execute("exec", { command: "lxeskill list", "yield-time-ms": 10000 }, context);
+    const output = String(denied.content[0]?.text);
+    expect(output).toContain("status: failed");
+    expect(output).toMatch(/PermissionError|EACCES|Operation not permitted|Access is denied/i);
+    expect(existsSync(join(dataRoot, "lxeskill"))).toBe(false);
+    const call = registry.execute("exec", { command: "lxeskill list", "yield-time-ms": 10000, sandbox_permissions: "danger-full-access", justification: "Initialize the requested CLI state" }, context);
+    const deadline = Date.now() + 2000;
+    while (!approvals.snapshot().length && Date.now() < deadline) await Bun.sleep(1);
+    const request = approvals.snapshot()[0]!;
+    expect(request.tool).toBe("exec"); expect(existsSync(join(dataRoot, "lxeskill"))).toBe(false);
+    await approvals.decide({ session_id: context.session_id, request_id: request.request_id, decision: "allow" });
+    const allowed = await call;
+    expect(String(allowed.content[0]?.text)).toContain("status: completed");
+    expect(existsSync(join(dataRoot, "lxeskill"))).toBe(true);
+  } finally { await approvals.stop(); }
+}, 30000);

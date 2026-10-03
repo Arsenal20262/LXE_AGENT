@@ -1,3 +1,4 @@
+import { approveIfNeeded, requestedPolicy, permissionInputProperties, permissionToolDescription } from "../../permissions/approvals";
 import type { JsonObject } from "@lxe/protocol";
 import {
   DEFAULT_EXEC_YIELD_MS,
@@ -142,7 +143,7 @@ export interface ExecToolDependencies {
   maxOutputBytes: number;
   options: Pick<
     CodingToolOptions,
-    "businessCommands" | "businessCommandCatalog" | "execEnv" | "lxeSkillStatus"
+    "businessCommands" | "businessCommandCatalog" | "execEnv" | "lxeSkillStatus" | "approvals"
   >;
 }
 
@@ -168,10 +169,11 @@ export function createExecTools(dependencies: ExecToolDependencies): ToolDefinit
     {
       name: "exec",
       supportsParallelCalls: true,
-      description: execToolDescription(shellProfile, promptLimits),
+      description: execToolDescription(shellProfile, promptLimits) + permissionToolDescription,
       input_schema: {
         type: "object",
         properties: {
+          ...permissionInputProperties,
           command: {
             type: "string",
             description: execCommandParameterDescription(shellProfile),
@@ -204,6 +206,8 @@ export function createExecTools(dependencies: ExecToolDependencies): ToolDefinit
       },
       execute: async (input, context) => {
         if (!context.executionPolicy) throw new ToolExecutionError("failed_precondition", "exec requires a runtime execution policy");
+        input = structuredClone(input);
+        const policy = requestedPolicy(input, context.executionPolicy);
         const rawCommand = inputText(input, "command");
         if (!rawCommand.trim()) throw new Error("command 不能为空");
         // The standalone/composition rules keep lxeskill invocations parseable for
@@ -241,10 +245,13 @@ export function createExecTools(dependencies: ExecToolDependencies): ToolDefinit
         }
         const maxOutputTokens = outputTokenBudget(input);
         const command = execShell.normalizeCommand(context.workspace.worktree, rawCommand);
+        const cwd = paths.resolveExecutableCwd(context.workspace, input.cwd ?? ".");
+        const boundary = processes.boundary(policy);
+        if (policy.mode !== context.executionPolicy.mode) await approveIfNeeded(options.approvals, "exec", input, context, policy, { command, cwd, ...(command === rawCommand ? {} : { requested_command: rawCommand }) });
         const payload = await processes.execute({
-          executionPolicy: context.executionPolicy,
+          executionPolicy: policy, boundary,
           command,
-          cwd: paths.resolveExecutableCwd(context.workspace, input.cwd ?? "."),
+          cwd,
           sessionId: context.session_id,
           responseRouteId: context.response_route_id ?? "",
           workspace: context.workspace,

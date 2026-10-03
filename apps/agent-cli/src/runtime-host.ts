@@ -32,6 +32,8 @@ import {
   OfficialMcpConnector,
   OneShotCliRunner,
   PermissionPolicyService,
+  PermissionApprovalService,
+  ExecutionPaths,
   registerCodingTools,
   registerToolSearch,
   registerUserQuestionTool,
@@ -120,15 +122,8 @@ export function createAgentRuntimeHost(
   const databasePath = String(environment.LXE_AGENT_SQLITE_DB_PATH ?? "").trim()
     || join(options.dataRoot, "db", "agent.sqlite3");
   const store = new SqliteRuntimeStore(databasePath, { legacyWorkspace: options.legacyWorkspace });
-  const permissionPolicy = new PermissionPolicyService({
-    dataRoot: options.dataRoot,
-    privatePaths: [
-      databasePath,
-      options.llmConfigRoot,
-      ...(environment.LXE_SQLITE_DB_PATH ? [environment.LXE_SQLITE_DB_PATH] : []),
-      ...(environment.LXE_MCP_CONFIG_PATH ? [environment.LXE_MCP_CONFIG_PATH] : []),
-    ],
-  });
+  const permissionPolicy = new PermissionPolicyService();
+  const executionPaths = new ExecutionPaths(options.dataRoot);
   const providerManager = new AtomicRuntimeProviderManager(
     options.dataRoot,
     environment,
@@ -142,6 +137,13 @@ export function createAgentRuntimeHost(
   const questions = new UserQuestionService(sessionId => {
     void Promise.resolve().then(() => options.onSessionChanged?.(sessionId, "questions"))
       .catch(error => logger.warn("question_notification_failed", { session_id: sessionId, error }));
+  });
+  const approvals = new PermissionApprovalService({
+    audit: (sessionId, event) => store.appendApprovalEvent(sessionId, event),
+    changed: sessionId => {
+      void Promise.resolve().then(() => options.onSessionChanged?.(sessionId, "approvals"))
+        .catch(error => logger.warn("approval_notification_failed", { session_id: sessionId, error }));
+    },
   });
   registerUserQuestionTool(tools, questions);
   const skillCatalog = new SkillCatalog(options.dataRoot, options.userSkillsRoot, {
@@ -213,6 +215,7 @@ export function createAgentRuntimeHost(
     logger,
   });
   const processes = registerCodingTools(tools, {
+    executionPaths, approvals,
     ...(environment.LXE_FD_PATH ? { fdPath: environment.LXE_FD_PATH } : {}),
     repositorySkillsRoot: options.skillsRoot,
     userSkillsRoot: options.userSkillsRoot,
@@ -240,7 +243,8 @@ export function createAgentRuntimeHost(
   runtimeServices.push(mcpManager);
   let workspaceInstances!: WorkspaceInstanceManager;
   const dashboardService = new DashboardService({
-    questions,
+    questions, approvals,
+    onPermissionChanged: sessionId => options.onSessionChanged?.(sessionId, "permission"),
     stateRoot: options.dataRoot,
     llmConfigRoot: options.llmConfigRoot,
     skillsRoot: options.skillsRoot,
@@ -276,7 +280,7 @@ export function createAgentRuntimeHost(
   });
   const providerDescriptor = providerManager.acquire().descriptor;
   const runtime = new TypeScriptAgentRuntime({
-    permissionPolicy,
+    permissionPolicy, executionPaths, approvalAvailable: true,
     store,
     providerManager,
     environment,
@@ -325,6 +329,7 @@ export function createAgentRuntimeHost(
       started = true;
     },
     stop: async () => {
+      await approvals.stop();
       await questions.stop();
       await runtime.stop();
       started = false;

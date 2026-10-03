@@ -13,6 +13,6 @@ export const workspaceFor = (directory: string, worktree = directory): Workspace
 });
 
 export const policyFor = (directory: string, sessionId = "s1", worktree = directory) =>
-  new PermissionPolicyService({ dataRoot: join(directory, "var") }).resolve({
+  new PermissionPolicyService().resolve({
     session_id: sessionId, permission_mode: "danger-full-access", workspace: workspaceFor(directory, worktree),
   });

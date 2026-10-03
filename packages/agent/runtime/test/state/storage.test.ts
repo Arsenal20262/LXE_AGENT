@@ -23,7 +23,7 @@ describe("SqliteRuntimeStore", () => {
     let store = new SqliteRuntimeStore(path);
     await store.start();
     await store.ensureSession({ session_id: "legacy", source: {}, workspace: testWorkspace });
-    expect((await store.getSession("legacy"))?.permission_mode).toBe("danger-full-access");
+    expect((await store.getSession("legacy"))?.permission_mode).toBe("workspace-write");
     await store.stop();
     const legacy = new Database(path);
     legacy.exec("ALTER TABLE agent_sessions DROP COLUMN permission_mode");
@@ -33,7 +33,9 @@ describe("SqliteRuntimeStore", () => {
     try {
       expect(store.getSessionPermissionMode("legacy")).toBe("danger-full-access");
       const blank = store.createBlankSession(testWorkspace);
-      expect(store.getSessionPermissionMode(String(blank.session_id))).toBe("danger-full-access");
+      expect(store.getSessionPermissionMode(String(blank.session_id))).toBe("workspace-write");
+      store.setSessionPermissionMode(String(blank.session_id), "read-only");
+      expect(store.createBlankSession(testWorkspace).permission_mode).toBe("read-only");
       for (const mode of ["read-only", "workspace-write", "danger-full-access"] as const) {
         await store.ensureSession({ session_id: mode, source: {}, workspace: testWorkspace });
         store.setSessionPermissionMode(mode, mode);

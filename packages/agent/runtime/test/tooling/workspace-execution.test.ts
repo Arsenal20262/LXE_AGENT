@@ -1,3 +1,4 @@
+import { ExecutionPaths } from "../../src/permissions/execution-paths";
 import { expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -31,13 +32,15 @@ with tempfile.NamedTemporaryFile() as temporary:
         tmp=[os.environ[name] for name in ['TMP', 'TEMP', 'TMPDIR']])) )
 print('x' * 50000)
 `);
+  const executionPaths = new ExecutionPaths(dataRoot);
   const registry = new ToolRegistry();
   const processes = registerCodingTools(registry, {
+    executionPaths,
     execShell: new ExecShellAdapter({ environment: { ...process.env, LXE_DATA_ROOT: dataRoot,
       LXE_AGENT_SQLITE_DB_PATH: join(dataRoot, "db", "agent.sqlite3"), LXESKILL_SKILL_SCOPE: "stale" } }),
     execEnv: () => ({ LXESKILL_SKILL_SCOPE: "selected" }),
   });
-  const policies = new PermissionPolicyService({ dataRoot });
+  const policies = new PermissionPolicyService();
   try {
     const results = await Promise.all(["one", "two"].map(async sessionId => {
       const directory = join(root, sessionId);
@@ -52,14 +55,14 @@ print('x' * 50000)
       expect(text).toContain("status: completed");
       const spillPath = text.match(/^output_path: (.+)$/mu)?.[1];
       if (!spillPath) throw new Error(text);
-      expect(pathContains(executionPolicy.outputDirectory, spillPath)).toBe(true);
+      expect(pathContains(executionPaths.outputDirectory(executionPolicy), spillPath)).toBe(true);
       const transcript = readFileSync(spillPath, "utf8");
       const record = JSON.parse(transcript.match(/^\{.+\}$/mu)![0]);
-      expect(record).toMatchObject({ workspace: executionPolicy.workspaceRoot, artifacts: executionPolicy.artifactRoot,
-        output: join(executionPolicy.artifactRoot, "probe.txt"), internal: join(dataRoot, "lxeskill"),
+      expect(record).toMatchObject({ workspace: executionPolicy.workspaceRoot, artifacts: executionPaths.artifactRoot(executionPolicy),
+        output: join(executionPaths.artifactRoot(executionPolicy), "probe.txt"), internal: join(dataRoot, "lxeskill"),
         venv: join(worktree, ".venv"), cwd, scope: "selected", agent_db: null,
-        tmp: Array(3).fill(executionPolicy.temporaryDirectory) });
-      expect(pathContains(executionPolicy.temporaryDirectory, record.temporary)).toBe(true);
+        tmp: Array(3).fill(executionPaths.temporaryDirectory(executionPolicy)) });
+      expect(pathContains(executionPaths.temporaryDirectory(executionPolicy), record.temporary)).toBe(true);
       expect(readFileSync(record.output, "utf8")).toBe("result");
       return record;
     }));

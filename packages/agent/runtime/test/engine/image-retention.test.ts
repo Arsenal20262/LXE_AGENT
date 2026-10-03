@@ -56,7 +56,7 @@ for (const cancelled of [false, true]) {
       },
     };
     let store = new SqliteRuntimeStore(dbPath);
-    const makeRuntime = () => new TypeScriptAgentRuntime({ permissionPolicy: new PermissionPolicyService({ dataRoot: join(root, "var") }), store, tools, provider, systemPrompt: "test", emitter: { emit: async () => {}, typing: async () => {}, desktopStream: async batch => { stream.push(batch); } } });
+    const makeRuntime = () => new TypeScriptAgentRuntime({ permissionPolicy: new PermissionPolicyService(), store, tools, provider, systemPrompt: "test", emitter: { emit: async () => {}, typing: async () => {}, desktopStream: async batch => { stream.push(batch); } } });
     let runtime = makeRuntime();
     try {
       await runtime.start();

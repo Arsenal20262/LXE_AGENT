@@ -1,3 +1,5 @@
+export * from "./permissions/approvals";
+export * from "./permissions/execution-paths";
 export * from "./tooling/user-questions";
 export * from "./permissions/policy";
 export * from "./engine/context";

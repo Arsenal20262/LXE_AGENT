@@ -42,6 +42,9 @@ export interface RuntimeEnvironmentSnapshot {
   cwd: string;
   worktree: string;
   artifact_root?: string;
+  permission_mode?: string;
+  permission_description?: string;
+  permission_approvals?: string;
   user_skills_root?: string;
   os: string;
   bun_version: string;

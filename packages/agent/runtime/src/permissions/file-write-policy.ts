@@ -1,22 +1,25 @@
 import { type BigIntStats, statSync } from "node:fs";
 import { canonicalPathCandidate, pathContains } from "@lxe/core";
 import { ToolExecutionError } from "../tooling/registry";
-import { assertPermissionBoundaries, PermissionBoundaryError, samePath } from "./boundaries";
+import { executionBoundary, recheckExecutionBoundary, PermissionBoundaryError, samePath, type ExecutionBoundary } from "./boundaries";
+import type { ExecutionPaths } from "./execution-paths";
 import type { ExecutionPolicy } from "./policy";
 
 const denied = (policy: ExecutionPolicy, target: string, reason: string): never => {
-  throw new ToolExecutionError("permission_denied", `File write denied (mode=${policy.mode}, target=${target}): ${reason}`);
+  throw new ToolExecutionError("permission_denied", `File write denied (mode=${policy.mode}, target=${target}): ${reason}`, { type: "file_permission_denied" });
 };
 
 export interface FileWriteTarget {
   path: string;
   info: BigIntStats | undefined;
+  boundary: ExecutionBoundary;
 }
 
 /** One observation per check; callers reuse it for file type and version checks. */
-export function inspectFileWriteTarget(policy: ExecutionPolicy, target: string, allowMissing: boolean): FileWriteTarget {
+export function inspectFileWriteTarget(policy: ExecutionPolicy, target: string, allowMissing: boolean, paths: ExecutionPaths, expected?: ExecutionBoundary): FileWriteTarget {
+  let boundary: ExecutionBoundary;
   try {
-    assertPermissionBoundaries(policy);
+    boundary = expected ? recheckExecutionBoundary(policy, paths, expected) : executionBoundary(policy, paths);
   } catch (cause) {
     if (cause instanceof PermissionBoundaryError) denied(policy, target, cause.message);
     throw cause; // Preserve actual filesystem errors from boundary resolution.
@@ -25,7 +28,7 @@ export function inspectFileWriteTarget(policy: ExecutionPolicy, target: string, 
   // Full access keeps the original spelling and filesystem semantics.
   const path = policy.mode === "danger-full-access" ? target : canonicalPathCandidate(target);
   if (policy.mode !== "danger-full-access"
-    && (policy.writeAccess.kind !== "roots" || !policy.writeAccess.roots.some(root => pathContains(root, path)))) {
+    && !boundary.roots.some(root => pathContains(root, path))) {
     denied(policy, target, `resolved target is outside the session write roots: ${path}`);
   }
   try {
@@ -33,16 +36,16 @@ export function inspectFileWriteTarget(policy: ExecutionPolicy, target: string, 
     if (policy.mode !== "danger-full-access" && info.isFile() && info.nlink > 1n) {
       denied(policy, target, `regular file has multiple hard links: ${path}`);
     }
-    return { path, info };
+    return { path, info, boundary };
   } catch (cause) {
     if (!allowMissing || !(cause instanceof Error && "code" in cause && (cause.code === "ENOENT" || cause.code === "ENOTDIR"))) throw cause;
-    return { path, info: undefined };
+    return { path, info: undefined, boundary };
   }
 }
 
 /** Recheck the original spelling as well as its resolved destination before writing. */
-export function recheckFileWriteTarget(policy: ExecutionPolicy, target: string, checkedPath: string): FileWriteTarget {
-  const current = inspectFileWriteTarget(policy, target, true);
-  if (!samePath(current.path, checkedPath)) denied(policy, target, `resolved target changed since the initial check: ${checkedPath} -> ${current.path}`);
+export function recheckFileWriteTarget(policy: ExecutionPolicy, target: string, checked: FileWriteTarget, paths: ExecutionPaths): FileWriteTarget {
+  const current = inspectFileWriteTarget(policy, target, true, paths, checked.boundary);
+  if (!samePath(current.path, checked.path)) denied(policy, target, `resolved target changed since the initial check: ${checked.path} -> ${current.path}`);
   return current;
 }

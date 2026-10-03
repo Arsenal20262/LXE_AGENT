@@ -1,4 +1,4 @@
-import { assertPermissionExecutionAvailable, type ExecutionPolicy } from "../permissions/policy";
+import { type ExecutionPolicy } from "../permissions/policy";
 import { skillPathKey } from "./skill-files";
 import type { JsonObject, WorkspaceContext } from "@lxe/protocol";
 import type { RuntimeHandle, ToolExecutionResult, ToolSchema } from "../engine/types";
@@ -296,7 +296,6 @@ export class ToolRegistry {
     // a structured skill_not_in_scope error. The registry only gates tool
     // exposure; classifyInvocation stays an attribution concern.
     if (context.handle.signal.aborted) throw new DOMException("Turn cancelled", "AbortError");
-    assertPermissionExecutionAvailable(context.executionPolicy);
     return definition.execute(input, context);
   }
 }

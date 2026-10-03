@@ -33,7 +33,7 @@ test("real stdio MCP images are normalized before history and survive a cold nex
   let store = new SqliteRuntimeStore(join(root, "agent.sqlite3"));
   let count = 0;
   const requests: RuntimeMessage[][] = [], streams: unknown[] = [];
-  const createRuntime = () => new TypeScriptAgentRuntime({ permissionPolicy: new PermissionPolicyService({ dataRoot: join(root, "var") }), store, tools, systemPrompt: "test", provider: {
+  const createRuntime = () => new TypeScriptAgentRuntime({ permissionPolicy: new PermissionPolicyService(), store, tools, systemPrompt: "test", provider: {
     summarize: async () => { throw new Error("unexpected summary"); },
     turn: async request => {
       requests.push(structuredClone(request.messages));

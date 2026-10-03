@@ -1,10 +1,11 @@
+import { ApprovalGate, PermissionPicker } from "./permissions";
 import { ReferenceComposer } from "./ReferenceComposer";
 import { UserReferenceText } from "./UserReferenceText";
 import { FileAvailabilityBadge } from "../file-preview/FileFailure";
 import { PreviewHeaderActions, usePreviewSidebar } from "../file-preview/Sidebar";
 import { OpenFileButton } from "../file-preview/OpenFileButton";
 import { UserQuestionGate } from "./user-questions";
-import type { PendingUserQuestion } from "@lxe/desktop-protocol";
+import type { PendingUserQuestion, PendingApproval, PermissionMode } from "@lxe/desktop-protocol";
 import type { DesktopDraftAttachmentPayload } from "@lxe/desktop-protocol";
 import { conversationAttachments } from "./attachment-draft";
 import { useComposerDraft } from "./composer-draft";
@@ -1125,7 +1126,8 @@ function ConversationContextMeter({
 }
 
 export function ConversationComposer({
-  question, onQuestionAnswered,
+  permissionMode = "workspace-write", permissionSessionId,
+  question, onQuestionAnswered, approvals = [], onApprovalChanged,
   contextDetail,
   activity,
   conversationKey,
@@ -1141,8 +1143,12 @@ export function ConversationComposer({
   onSend,
   onStop,
 }: {
+  approvals?: PendingApproval[];
+  onApprovalChanged?: () => void;
   question?: PendingUserQuestion;
   onQuestionAnswered?: () => void;
+  permissionMode?: PermissionMode;
+  permissionSessionId?: string;
   contextDetail: SessionDetailPayload | null;
   activity: DesktopConversationActivityPayload | null;
   conversationKey: string;
@@ -1268,11 +1274,11 @@ export function ConversationComposer({
     }
   };
   return (
-    <UserQuestionGate request={runtimeReady ? question : undefined} conversationKey={runtimeReady ? conversationKey : "offline"}
-      onAnswered={onQuestionAnswered}>
     <div className={`conversation-composer ${dragActive ? "drag-active" : ""}`}>
       {dragActive ? <div className="conversation-drop-hint">{t.conversation.dropFiles}</div> : null}
       <div className="conversation-compose-box">
+        <ApprovalGate key={conversationKey} requests={approvals} ready={runtimeReady} onChanged={onApprovalChanged}>
+        <UserQuestionGate request={runtimeReady ? question : undefined} conversationKey={runtimeReady ? conversationKey : "offline"} onAnswered={onQuestionAnswered}>
         {attachments.length ? (
           <InputAttachmentList draft attachments={attachments} onRemove={sending ? undefined : removeAttachment} />
         ) : null}
@@ -1287,6 +1293,8 @@ export function ConversationComposer({
               return window.lxe.desktop.stagePastedConversationFiles(files);
             });
           }} />
+        </UserQuestionGate>
+        </ApprovalGate>
         <div className="conversation-compose-actions">
           <div className="conversation-compose-leading">
             <button
@@ -1304,6 +1312,7 @@ export function ConversationComposer({
             </span>
           </div>
           <div className="conversation-compose-trailing">
+            <PermissionPicker key={conversationKey} sessionId={permissionSessionId ?? conversationKey} initialMode={permissionMode} ready={runtimeReady} />
             <ConversationContextMeter activity={activity} currentModel={currentModel} detail={contextDetail} />
             <ConversationModelPicker
               current={currentModel}
@@ -1353,7 +1362,6 @@ export function ConversationComposer({
       ) : null}
       {error ? <div className="conversation-compose-error" role="alert">{error}</div> : null}
     </div>
-    </UserQuestionGate>
   );
 }
 
@@ -1461,7 +1469,7 @@ export const UnifiedConversationRow = React.memo(function UnifiedConversationRow
 
 export function SessionDetailView({
   workspaceControl,
-  question, onQuestionAnswered,
+  question, onQuestionAnswered, approvals = [], onApprovalChanged,
   fallbackSession,
   detail,
   activity,
@@ -1490,6 +1498,8 @@ export function SessionDetailView({
   pendingMessages, display, onFollowingChange,
 }: {
   workspaceControl?: React.ReactNode;
+  approvals?: PendingApproval[];
+  onApprovalChanged?: () => void;
   question?: PendingUserQuestion;
   onQuestionAnswered?: () => void;
   fallbackSession: SessionPayload | null;
@@ -1564,6 +1574,9 @@ export function SessionDetailView({
           onOpenFile={onOpenFile} onRevealFile={onRevealFile} onOpenAttachment={onOpenAttachment} attachmentSessionId={display?.sessionId || session?.session_id} />} />
       <div className="conversation-composer-dock">
         <ConversationComposer
+          permissionSessionId={session?.session_id ?? ""}
+          permissionMode={session?.permission_mode ?? "workspace-write"}
+          approvals={approvals} onApprovalChanged={onApprovalChanged}
           question={question}
           onQuestionAnswered={onQuestionAnswered}
           contextDetail={detail}

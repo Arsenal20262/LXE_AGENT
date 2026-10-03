@@ -1,3 +1,5 @@
+import { parsePermissionMode, type PermissionMode, type PendingApproval, type ApprovalDecision } from "@lxe/protocol";
+export type { PermissionMode, PendingApproval, ApprovalDecision } from "@lxe/protocol";
 import type { DesktopStreamMutation, DisplayMetrics, ToolStep, TurnProcessPart } from "@lxe/protocol";
 import type { BackgroundTaskChangedPayload } from "./index";
 import { parseUserQuestionSubmission, type PendingUserQuestion, type SubmitUserQuestionAnswer } from "@lxe/protocol/user-questions";
@@ -66,6 +68,7 @@ export type SourceSummary = {
 
 export type SessionPayload = {
   session_id: string;
+  permission_mode: PermissionMode;
   blank?: boolean;
   title: string;
   pinned_at: number;
@@ -485,6 +488,9 @@ export interface DashboardRpcSpec {
     input: { directory: string; display_name: string };
     result: WorkspaceSummaryPayload;
   };
+  "sessions.permission.set": { input: { session_id: string; permission_mode: PermissionMode }; result: { session_id: string; permission_mode: PermissionMode } };
+  "sessions.approvals": { input: DashboardRpcEmptyInput; result: { items: PendingApproval[] } };
+  "sessions.approval.decide": { input: ApprovalDecision; result: { accepted: true; request_id: string } };
   "sessions.questions": { input: DashboardRpcEmptyInput; result: { items: PendingUserQuestion[] } };
   "sessions.answer": { input: SubmitUserQuestionAnswer; result: { accepted: true; request_id: string } };
   "sessions.list": {
@@ -723,9 +729,18 @@ export function parseDashboardRpcCall(value: unknown): DashboardRpcCall {
         display_name: textValue(input.display_name, `${operation}.display_name`, { allowEmpty: true })!,
       } };
     case "sessions.workspaces":
+    case "sessions.approvals":
     case "sessions.questions":
       exactKeys(input, [], `${operation}.input`);
       return { operation, input: {} };
+    case "sessions.permission.set":
+      exactKeys(input, ["session_id", "permission_mode"], `${operation}.input`);
+      try { return { operation, input: { session_id: textValue(input.session_id, `${operation}.session_id`)!, permission_mode: parsePermissionMode(input.permission_mode) } }; }
+      catch (error) { return rpcError(error instanceof Error ? error.message : String(error)); }
+    case "sessions.approval.decide":
+      exactKeys(input, ["session_id", "request_id", "decision"], `${operation}.input`);
+      if (input.decision !== "allow" && input.decision !== "deny") return rpcError("approval decision must be allow or deny");
+      return { operation, input: { session_id: textValue(input.session_id, `${operation}.session_id`)!, request_id: textValue(input.request_id, `${operation}.request_id`)!, decision: input.decision } };
     case "sessions.answer":
       exactKeys(input, ["session_id", "request_id", "answers"], `${operation}.input`);
       try { return { operation, input: parseUserQuestionSubmission(input) }; }

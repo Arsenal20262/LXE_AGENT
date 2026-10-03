@@ -49,6 +49,7 @@ import { join } from 'node:path'
 
 import { win32 } from './acl/ffi.ts'
 import { AclSandbox, assertTempRootOutsideWorkspace } from './acl/index.ts'
+import { AclWriteGrant } from './acl/grant.ts'
 import { tempWriteSid, workspaceWriteSid } from './acl/workspace-sid.ts'
 
 const RUNNER_SIGNATURE = 'lxe-windows-acl-run'
@@ -113,6 +114,29 @@ function requireDirectory(label: string, path: string): void {
 }
 
 async function main(): Promise<number> {
+  const action = process.argv[2]
+  if (action === '--prepare-session' || action === '--release-session') {
+    const workspace = process.argv[3], temp = process.argv[4]
+    if (!workspace || !temp || process.argv.length !== 5) fail('session operation requires workspace and temporary directory')
+    requireDirectory('workspace', workspace)
+    requireDirectory('temporary directory', temp)
+    assertTempRootOutsideWorkspace(workspace, temp)
+    await win32()
+    const writeSid = workspaceWriteSid(workspace), privateSid = tempWriteSid(temp)
+    const workspaceGrant = AclWriteGrant.create(writeSid)
+    try {
+      const temporaryGrant = AclWriteGrant.create(privateSid)
+      try {
+        if (action === '--prepare-session') {
+          workspaceGrant.add(workspace, true)
+          // The Bun host owns revocation, including failure cleanup.
+          temporaryGrant.add(temp, true)
+          process.stdout.write(JSON.stringify({ writeSid, tempWriteSid: privateSid }))
+        } else temporaryGrant.revoke(temp)
+      } finally { temporaryGrant.dispose() }
+    } finally { workspaceGrant.dispose() }
+    return 0
+  }
   const parsed = parseArgs(process.argv.slice(2))
   // Both directories are validated in both modes: a provider bug that passes
   // a bogus root must fail loudly at the runner boundary, never mid-child.

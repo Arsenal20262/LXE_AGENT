@@ -107,6 +107,9 @@ export class AclWriteGrant {
     grantWrite(this.api, path, this.sidPtr, this.lowLabelSidPtr, this.worldSidPtr)
   }
 
+  /** Revoke an existing host-owned grant without reapplying it. */
+  revoke(path: string): void { revokeWrite(this.api, path, this.sidPtr) }
+
   /** Every directory currently carrying the grant, in grant order. */
   get paths(): readonly string[] {
     return [...this.standingPaths, ...this.revocablePaths]

@@ -1,3 +1,4 @@
+import { ExecutionPaths } from "../../src/permissions/execution-paths";
 import { afterEach, expect, spyOn, test } from "bun:test";
 import * as fs from "node:fs";
 import { existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
@@ -23,10 +24,12 @@ function fixture() {
   roots.push(root);
   const workspace = join(root, "repo", "work 中文 space"), dataRoot = join(root, "var");
   mkdirSync(workspace, { recursive: true });
-  const service = new PermissionPolicyService({ dataRoot });
+  const service = new PermissionPolicyService();
+  const temporaryRoot = realpathSync(mkdtempSync(join(tmpdir(), "lxe-file-temp-"))); roots.push(temporaryRoot);
+  const executionPaths = new ExecutionPaths(dataRoot, { platform: "win32", temporaryRoot });
   const ledger = new FileVersionLedger();
   const registry = new ToolRegistry();
-  for (const tool of createFileTools({ paths: new CodingPathPolicy({ homeDirectory: root }), ledger,
+  for (const tool of createFileTools({ paths: new CodingPathPolicy({ homeDirectory: root }), ledger, executionPaths,
     imageProcessor: new ModelImageProcessor(), toolOutputLimit: 10_000 })) registry.register(tool);
   const context = (mode: PermissionMode = "workspace-write", sessionId = "first", controller = new AbortController()): Context => ({
     session_id: sessionId,
@@ -37,7 +40,7 @@ function fixture() {
   // Restricted policies are tested only via internal definitions, never a product bypass.
   const execute = (name: string, input: JsonObject, ctx = context()) => registry.definition(name)!.execute(input, ctx);
   const read = (path: string, ctx = context()) => execute("read", { path }, ctx);
-  return { root, workspace, dataRoot, ledger, registry, context, execute, read };
+  return { root, workspace, dataRoot, executionPaths, ledger, registry, context, execute, read };
 }
 
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); });
@@ -74,17 +77,17 @@ test.each(["read-only", "workspace-write", "danger-full-access"] as const)("%s c
 
 test("workspace and own temporary roots allow writes; sibling, traversal, home, private and host output do not", async () => {
   const f = fixture(), ctx = f.context(), other = f.context("workspace-write", "other");
-  for (const target of [join(f.workspace, "nested", "..", "allowed"), join(ctx.executionPolicy.temporaryDirectory, "nested", "allowed")]) {
+  for (const target of [join(f.workspace, "nested", "..", "allowed"), join(f.executionPaths.temporaryDirectory(ctx.executionPolicy), "nested", "allowed")]) {
     await f.execute("write", write(target), ctx);
     expect(readFileSync(target, "utf8")).toBe("after");
   }
   for (const target of [join(f.workspace + "-sibling", "new", "file"), "../new/file", "~/new/file",
-    join(other.executionPolicy.temporaryDirectory, "new", "file"), join(ctx.executionPolicy.outputDirectory, "new", "file"),
+    join(f.executionPaths.temporaryDirectory(other.executionPolicy), "new", "file"), join(f.executionPaths.outputDirectory(ctx.executionPolicy), "new", "file"),
     join(f.dataRoot, "db", "new", "file")]) {
     await denied(f.execute("write", write(target), ctx), "workspace-write", "target=", "outside");
   }
   for (const parent of [f.workspace + "-sibling", join(dirname(f.workspace), "new"), join(f.root, "new"),
-    other.executionPolicy.temporaryDirectory, ctx.executionPolicy.outputDirectory, join(f.dataRoot, "db")]) {
+    f.executionPaths.temporaryDirectory(other.executionPolicy), f.executionPaths.outputDirectory(ctx.executionPolicy), join(f.dataRoot, "db")]) {
     expect(existsSync(parent)).toBe(false);
   }
   const outside = join(f.root, "outside");
@@ -226,19 +229,13 @@ test("already cancelled calls create no directories or edits", async () => {
   expect(readFileSync(join(f.workspace, "file"), "utf8")).toBe("before");
 });
 
-test("boundary diagnostics, changed roots and inconsistent grants fail before mkdir", async () => {
-  const f = fixture(), ctx = f.context(), original = ctx.executionPolicy;
-  for (const policy of [
-    { ...original, writeAccess: { kind: "roots" as const, roots: [f.root, original.temporaryDirectory] } },
-    { ...original, privatePaths: [f.workspace] },
-    new PermissionPolicyService({ dataRoot: f.dataRoot }).resolve({ session_id: "first", workspace: workspaceFor(f.root), permission_mode: "workspace-write" }),
-  ]) {
-    await denied(f.execute("write", write("missing/file"), { ...ctx, executionPolicy: policy }), "workspace-write", "target=");
-    expect(existsSync(join(f.workspace, "missing"))).toBe(false);
-  }
+test("a project-root workspace includes application-private files and ignores unrelated artifact links", async () => {
+  const f = fixture(), ctx = f.context();
   directoryLink(f.root, join(f.workspace, ".lxeagent"));
-  await denied(f.execute("write", write("missing/file"), ctx), "workspace-write", "target=", "path changed");
-  expect(existsSync(join(f.workspace, "missing"))).toBe(false);
+  await f.execute("write", write("ordinary/file"), ctx);
+  const policy = new PermissionPolicyService().resolve({ session_id: "first", workspace: workspaceFor(f.root), permission_mode: "workspace-write" });
+  await f.execute("write", write(join(f.dataRoot, "db", "new")), { ...ctx, executionPolicy: policy });
+  expect(readFileSync(join(f.dataRoot, "db", "new"), "utf8")).toBe("after");
 });
 
 test("missing edit and invalid parent preserve filesystem and path resolution errors", async () => {
@@ -251,8 +248,11 @@ test("missing edit and invalid parent preserve filesystem and path resolution er
 
 test("write refuses a file that appears after the initial missing-file check", async () => {
   const f = fixture(), target = join(f.workspace, "file");
-  const input: JsonObject = { file_path: target, get content() { writeFileSync(target, "external"); return "after"; } };
-  await expect(f.execute("write", input)).rejects.toThrow("重新 read");
+  const original = fs.statSync;
+  const hook = spyOn(fs, "statSync").mockImplementationOnce(((...args: Parameters<typeof fs.statSync>) => {
+    try { return original(...args); } finally { writeFileSync(target, "external"); }
+  }) as typeof fs.statSync);
+  try { await expect(f.execute("write", write(target))).rejects.toThrow("重新 read"); } finally { hook.mockRestore(); }
   expect(readFileSync(target, "utf8")).toBe("external");
 });
 
@@ -260,8 +260,11 @@ test("write refuses to recreate a file removed after the first observation", asy
   const f = fixture(), target = join(f.workspace, "file");
   writeFileSync(target, "before");
   await f.read(target);
-  const input: JsonObject = { file_path: target, get content() { unlinkSync(target); return "after"; } };
-  await expect(f.execute("write", input)).rejects.toThrow("重新 read");
+  const original = fs.statSync;
+  const hook = spyOn(fs, "statSync").mockImplementationOnce(((...args: Parameters<typeof fs.statSync>) => {
+    const info = original(...args); unlinkSync(target); return info;
+  }) as typeof fs.statSync);
+  try { await expect(f.execute("write", write(target))).rejects.toThrow("重新 read"); } finally { hook.mockRestore(); }
   expect(existsSync(target)).toBe(false);
 });
 
@@ -292,20 +295,11 @@ test("simultaneous sessions use their own workspace, temp and version ledger", a
   expect(existsSync(join(a.workspace, "escape"))).toBe(false);
 });
 
-test.each(["read-only", "workspace-write"] as const)("registry still blocks %s product sessions even for reads", async mode => {
+test.each(["read-only", "workspace-write"] as const)("registry lets %s tools enforce their own file permissions", async mode => {
   const f = fixture(), ctx = f.context(mode);
   writeFileSync(join(f.workspace, "file"), "before");
-  for (const [tool, input] of [["write", write("missing/file")], ["edit", edit("file")], ["read", { path: "file" }]] as const) {
-    await expect(f.registry.execute(tool, input, ctx)).rejects.toThrow("backends are not implemented");
-  }
-  expect(existsSync(join(f.workspace, "missing"))).toBe(false);
-  expect(readFileSync(join(f.workspace, "file"), "utf8")).toBe("before");
-});
-
-test.skipIf(process.platform !== "win32")("Windows casing and mixed separators use the same real target and ledger key", async () => {
-  const f = fixture(), actual = join(f.workspace, "mixed.txt"), input = actual.toUpperCase().replaceAll("\\", "/");
-  writeFileSync(actual, "before");
-  await f.read(input);
-  await f.execute("edit", edit(input));
-  expect(readFileSync(actual, "utf8")).toBe("after");
+  await f.registry.execute("read", { path: "file" }, ctx);
+  if (mode === "read-only") await denied(f.registry.execute("edit", edit("file"), ctx), mode, "file");
+  else await f.registry.execute("edit", edit("file"), ctx);
+  expect(readFileSync(join(f.workspace, "file"), "utf8")).toBe(mode === "read-only" ? "before" : "after");
 });

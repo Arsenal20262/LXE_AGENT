@@ -75,6 +75,24 @@ export function useUserQuestionsQuery(enabled: boolean, selectedSessionId: strin
   return query;
 }
 
+export function useApprovalsQuery(enabled: boolean, selectedSessionId: string) {
+  const query = useQuery({
+    queryKey: dashboardQueryKeys.sessions.approvals,
+    queryFn: async ({ signal }) => {
+      const result = await callDashboard({ operation: "sessions.approvals", input: {} });
+      signal.throwIfAborted();
+      return result;
+    },
+    enabled, retry: false, staleTime: 0,
+    refetchOnMount: "always", refetchOnWindowFocus: "always",
+    // Events are hints. Recover missed notifications and changes while unfocused.
+    refetchInterval: 5_000, refetchIntervalInBackground: true,
+  });
+  const refetch = query.refetch;
+  useEffect(() => { if (enabled) void refetch(); }, [enabled, selectedSessionId, refetch]);
+  return query;
+}
+
 export function useUserQuestionActions() {
   const answer = useMutation({ retry: false, mutationFn: (input: SubmitUserQuestionAnswer) =>
     callDashboard({ operation: "sessions.answer", input }) });
