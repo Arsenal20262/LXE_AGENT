@@ -8,6 +8,7 @@ import {
 import { open, readFile, stat } from "node:fs/promises";
 import { basename, dirname, extname, relative } from "node:path";
 import type { JsonObject } from "@lxe/protocol";
+import { recheckFileWriteTarget, resolveFileWriteTarget } from "../../permissions/file-write-policy";
 import { detectReadImageMime, type ModelImageProcessor } from "../../providers/model-image";
 import { scanNumberedTextChunks, type NumberedTextRangeResult } from "../text-range";
 import type { ToolDefinition } from "../registry";
@@ -42,6 +43,23 @@ const abortReason = (signal: AbortSignal | undefined): unknown =>
 
 const assertActive = (signal: AbortSignal | undefined): void => {
   if (signal?.aborted) throw abortReason(signal);
+};
+
+const writeTargetVersion = (path: string): FileVersion | undefined => {
+  try {
+    const info = statSync(path, { bigint: true });
+    if (!info.isFile()) throw new Error(`path is not a regular file: ${path}`);
+    return fileVersionFromStats(info);
+  } catch (cause) {
+    if (!isMissingPathError(cause)) throw cause;
+    return undefined;
+  }
+};
+
+const assertWriteVersionUnchanged = (path: string, version: FileVersion | undefined): void => {
+  if (writeTargetVersion(path) !== version) {
+    throw new Error(`write 被拒绝：文件在写入前发生变化，请重新 read 确认最新内容: ${path}`);
+  }
 };
 
 const readHeadBytes = async (path: string, count: number, signal?: AbortSignal): Promise<Buffer> => {
@@ -182,21 +200,21 @@ export function createFileTools(dependencies: FileToolDependencies): ToolDefinit
       description: "Create or overwrite any UTF-8 file writable by the local LXE Agent process. Relative paths resolve from the session working directory.",
       input_schema: { type: "object", properties: { file_path: { type: "string" }, content: { type: "string" } }, required: ["file_path", "content"], additionalProperties: false },
       execute: async (input, context) => {
-        const path = paths.resolveWritable(context.workspace, input.file_path);
-        let existing: ReturnType<typeof statSync> | undefined;
-        try {
-          existing = statSync(path);
-        } catch (cause) {
-          if (!isMissingPathError(cause)) throw cause;
-        }
-        if (existing) {
-          if (!existing.isFile()) throw new Error(`path is not a regular file: ${input.file_path}`);
-          ledger.assertCurrent(context.session_id, path, "write");
-        }
+        assertActive(context.handle.signal);
+        const requested = paths.resolveWritable(context.workspace, input.file_path);
+        const path = resolveFileWriteTarget(context.executionPolicy, requested);
+        const version = writeTargetVersion(path);
+        if (version !== undefined) ledger.assertCurrent(context.session_id, requested, "write", path);
+        const content = inputText(input, "content");
+        assertActive(context.handle.signal);
         mkdirSync(dirname(path), { recursive: true });
-        writeFileSync(path, inputText(input, "content"), "utf8");
-        ledger.recordCurrent(context.session_id, path);
-        return { content: textBlock(`Wrote ${relative(context.workspace.directory, path)}`) };
+        recheckFileWriteTarget(context.executionPolicy, requested, path);
+        assertWriteVersionUnchanged(path, version);
+        if (version !== undefined) ledger.assertCurrent(context.session_id, requested, "write", path);
+        assertActive(context.handle.signal);
+        writeFileSync(path, content, "utf8");
+        ledger.recordCurrent(context.session_id, requested, path);
+        return { content: textBlock(`Wrote ${relative(context.workspace.directory, requested)}`) };
       },
     },
     {
@@ -204,18 +222,21 @@ export function createFileTools(dependencies: FileToolDependencies): ToolDefinit
       description: "Edit an existing UTF-8 file using edits[{oldText,newText}]. Read the file first; changes since the last read/write are rejected. Combine disjoint changes in one call: every oldText must uniquely match the same ORIGINAL file, and targets must not overlap. Exact matching is preferred, with normalized whitespace/Unicode matching as fallback. All edits are checked before writing. Returns a bounded diff summary. Relative paths resolve from the session working directory.",
       input_schema: editInputSchema,
       execute: async (input, context) => {
+        assertActive(context.handle.signal);
         const args = validateEditInput(input);
-        const path = paths.resolveWritable(context.workspace, args.path);
+        const requested = paths.resolveWritable(context.workspace, args.path);
+        const path = resolveFileWriteTarget(context.executionPolicy, requested);
         const info = statSync(path);
         if (!info.isFile()) throw new Error(`path is not a regular file: ${args.path}`);
-        ledger.assertCurrent(context.session_id, path, "edit");
+        ledger.assertCurrent(context.session_id, requested, "edit", path);
         const source = readFileSync(path, "utf8");
         const prepared = prepareTextEdit(source, args.edits);
-        const summary = summarizeTextEdit(relative(context.workspace.directory, path), args.edits.length, prepared, toolOutputLimit);
-        ledger.assertCurrent(context.session_id, path, "edit");
+        const summary = summarizeTextEdit(relative(context.workspace.directory, requested), args.edits.length, prepared, toolOutputLimit);
+        recheckFileWriteTarget(context.executionPolicy, requested, path);
+        ledger.assertCurrent(context.session_id, requested, "edit", path);
         assertActive(context.handle.signal);
         writeFileSync(path, prepared.content, "utf8");
-        ledger.recordCurrent(context.session_id, path);
+        ledger.recordCurrent(context.session_id, requested, path);
         return { content: textBlock(summary) };
       },
     },

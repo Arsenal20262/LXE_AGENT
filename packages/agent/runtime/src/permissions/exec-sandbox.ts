@@ -1,6 +1,5 @@
 import { existsSync, statSync } from "node:fs";
-import { canonicalPathCandidate, pathContains } from "@lxe/core";
-import { parsePermissionMode } from "@lxe/protocol";
+import { assertPermissionBoundaries } from "./boundaries";
 import type { ExecSpawnSpec } from "../tooling/exec-shell";
 import type { ExecutionPolicy } from "./policy";
 
@@ -14,38 +13,8 @@ export interface SandboxedExecSpec extends ExecSpawnSpec {
   sandbox: ExecSandboxInfo;
 }
 
-const overlaps = (left: string, right: string) => pathContains(left, right) || pathContains(right, left);
-const samePath = (left: string, right: string) => pathContains(left, right) && pathContains(right, left);
-
-/** Recheck the resolved boundaries at launch; diagnostics alone never grant access. */
-export function assertExecSandboxBoundaries(policy: ExecutionPolicy): void {
-  if (!policy) throw new Error("Tool execution requires a session permission policy");
-  parsePermissionMode(policy.mode);
-  if (policy.mode === "danger-full-access") return;
-  if (policy.diagnostics.length) {
-    throw new Error(`Sandbox boundary conflict: ${JSON.stringify(policy.diagnostics)}`);
-  }
-  const paths = [policy.workspaceRoot, policy.temporaryDirectory, policy.outputDirectory, policy.artifactRoot];
-  for (const path of paths) {
-    if (!samePath(path, canonicalPathCandidate(path))) throw new Error(`Sandbox path changed after policy resolution: ${path}`);
-  }
-  if (!pathContains(policy.workspaceRoot, policy.artifactRoot)) throw new Error("Sandbox artifact directory escapes workspace");
-  if (overlaps(policy.workspaceRoot, policy.temporaryDirectory)
-    || overlaps(policy.workspaceRoot, policy.outputDirectory)
-    || overlaps(policy.temporaryDirectory, policy.outputDirectory)) {
-    throw new Error("Sandbox workspace, temporary and host output directories must be disjoint");
-  }
-  for (const privatePath of policy.privatePaths.map(canonicalPathCandidate)) {
-    for (const path of paths) {
-      if (overlaps(path, privatePath)) throw new Error(`Sandbox boundary overlaps application private path: ${path} / ${privatePath}`);
-    }
-  }
-  const expected = policy.mode === "workspace-write" ? [policy.workspaceRoot, policy.temporaryDirectory] : [];
-  if (policy.writeAccess.kind !== "roots" || policy.writeAccess.roots.length !== expected.length
-    || !expected.every((path) => policy.writeAccess.kind === "roots" && policy.writeAccess.roots.some(root => samePath(path, root)))) {
-    throw new Error("Sandbox write roots do not match the session mode");
-  }
-}
+// Retain the internal exec entry point while sharing its checks with file tools.
+export const assertExecSandboxBoundaries = assertPermissionBoundaries;
 
 const sbplString = (path: string) => JSON.stringify(path);
 

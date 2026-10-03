@@ -76,6 +76,6 @@ export class PermissionPolicyService {
 export function assertPermissionExecutionAvailable(policy: ExecutionPolicy): void {
   if (!policy) throw new Error("Tool execution requires a session permission policy");
   if (policy.mode !== "danger-full-access") {
-    throw new Error(`Permission mode ${policy.mode} cannot execute as a product session: non-exec tool and approval backends are not implemented. No operation was authorized.`);
+    throw new Error(`Permission mode ${policy.mode} cannot execute as a product session: remaining tool and approval backends are not implemented. No operation was authorized.`);
   }
 }
