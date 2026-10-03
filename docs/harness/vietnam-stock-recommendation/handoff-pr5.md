@@ -1,6 +1,6 @@
 # 越南备货 PR5 交接：Desktop 映射表与长期参数
 
-> 本页记录 PR5 已实现、验证和本地提交的范围；PR5 尚未推送、创建 PR 或合并。
+> 本页记录 PR5 已实现和验证的范围。截至 2026-10-04，分支已推送至个人 fork，并创建 [PR #5](https://github.com/Arsenal20262/LXE_AGENT/pull/5)；PR 尚未合并。
 
 ## 接手位置与依赖
 
@@ -53,11 +53,13 @@ Desktop 每次向子进程同时注入下表四项；Python 只有四项**全部
 | 内部 CLI 与 Desktop 资产服务实际调用 smoke | **上传、相同内容幂等、列表、回滚均跑通**；Desktop 服务还通过真实 Python CLI 完成幂等上传、回滚并读到切换后的 current 和 previous |
 | 四参数与 Office Kit 聚焦测试（已包含在 177 项中） | **59 passed, 0 skipped** |
 
+2026-10-04 在远端 PR #5 对应的 `0280d0c4` 上补充复验：配置项目 Office Kit 后，Python 越南备货、CLI 与 infra 定向套件 **573 passed, 2 skipped**；Desktop、协议、catalog 与相关 Dashboard 定向套件 **431 passed, 2 skipped**（跳过的是 Windows 系统 Shell 用例）。Desktop、Dashboard、Desktop 协议 typecheck 均通过；`uv build --wheel --offline` 成功。本机源码版绕过未完成的媒体工具准备后已启动 Vite、Electron、Gateway 和 Agent，`127.0.0.1:5173` 返回 HTTP 200；普通浏览器因没有 Electron preload 无法验收业务界面，原生窗口交互尚未人工确认。标准 `desktop:tools:mac` 的 ExifTool 下载遇到 `curl (18)` 传输中断，这属于本机依赖获取障碍，需在网络恢复后重试。空配置启动时云许可探测超时、马帮认证提示未配置；本次没有运行生产雅仓联调。
+
 Task 9 的合成集成已实际跑通：内部适配器安装 A、替换 B、回滚到 A 后，假雅仓单轮来源经项目 Office Kit 生成并校验五表；主表仍使用 A 的成本与价格，`数据更改` 和主表引用列均为非默认四值 `0.7 / 0.6 / 0.1 / 4000`，CLI `files` 仅列最终 XLSX。`uv build --wheel --offline` 成功，wheel 已核对包含新增命令、版本存储、catalog 与五表骨架。`git diff --check` 已通过；变更及未跟踪文件的凭据样式字面量、未跟踪尾空白扫描未发现异常。仓库全量测试按规范留待最终 rebase/合并前运行一次。
 
 ## 已知边界、Git 状态与下一步
 
 - Windows 是正式分发目标，但 Windows 文件占用、断电恢复、`os.replace` 行为和安装包内 Python 命令路由尚未现场验收。真实雅仓当前库存导出及最终五表与生产数据联调仍待现场完成；不能用本机合成测试声称完成这些验收。
 - 当前代码的候选文件校验、清单与摘要用于应用正常入口的可靠性和意外改动检测；同一系统用户若直接改写清单及版本文件，不属于本 PR 能用文件权限隔离的对抗边界。历史旧目录没有自动导入路径。
-- 本地提交从设计 `5bd72408` 起，依次为 Python 映射表存储 `46215b82`、Desktop 资产管理 `4e541114`、长期参数与工作流 `841e6375`；本页、设计补记和实施计划由第四笔文档提交收口。本次没有修改锁文件或无关模块，也没有 push、创建 PR 或 merge。以实际 `git status` 与 `git log` 确认最终本地状态。
-- 下一步需按仓库批准门槛在当前分支同步最新 `main` 检查冲突，再分别申请 push、以 PR4 分支为 base 创建 PR、merge 的确认。PR5 收口后用本页在新任务接手聊天临时覆盖等后续模块。
+- 本地提交从设计 `5bd72408` 起，依次为 Python 映射表存储 `46215b82`、Desktop 资产管理 `4e541114`、长期参数与工作流 `841e6375`，最后以 `0280d0c4` 提交本页、设计补记和实施计划。当前远端 PR #5 head 与本地均为 `0280d0c4`；没有修改锁文件或无关模块。后续状态以实际 `git status`、`git log` 和 PR 页面为准。
+- 下一步补齐 Electron 原生窗口的界面交互验收并审阅 PR #5；PR1–PR4 仍未合并，须按依赖顺序处理。待上游依赖进入 `main` 后，在当前分支核对最新 `main` 和冲突、运行合并前的全量验证，再单独申请合并确认。真实雅仓数据和 Windows 安装包仍需现场验收。PR5 收口后用本页在新任务接手聊天临时覆盖等后续模块。
