@@ -3,13 +3,13 @@ import { FileAvailabilityBadge } from "../file-preview/FileFailure";
 import { usePreviewSidebar } from "../file-preview/Sidebar";
 import { OpenFileButton } from "../file-preview/OpenFileButton";
 import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { Image as ImageIcon, LoaderCircle, X } from "lucide-react";
+import { Image as ImageIcon, LoaderCircle } from "lucide-react";
 import type { DesktopDraftAttachmentPayload, DesktopInputAttachmentPayload } from "@lxe/desktop-protocol";
 import { queryError, useAttachmentPreviewQuery, useDraftImagePreviewQuery } from "../../api/queries";
 import { useUiText } from "../../shared/i18n";
-import { useDialogFocus } from "../../shared/ui/use-dialog-focus";
+import { ImagePreviewDialog } from "../../shared/ui/image-preview-dialog";
 import { FileAttachmentIcon, FileAttachmentInfo } from "./file-attachment-display";
+export { ImagePreviewDialog } from "../../shared/ui/image-preview-dialog";
 
 export function partitionSentAttachments(items: readonly DesktopInputAttachmentPayload[]) {
   return {
@@ -36,24 +36,6 @@ export function DraftImagePreview({ attachment, onClose }: { attachment: Desktop
   const error = queryError(preview.error);
   return <ImagePreviewDialog attachment={attachment} url={preview.data?.data_url || attachment.preview_data_url || ""}
     error={error} loading={preview.isFetching} onClose={onClose} />;
-}
-
-export function ImagePreviewDialog({ attachment, url, error, loading = false, note, onClose }: {
-  attachment: Pick<DesktopInputAttachmentPayload, "name">; url: string; error: string; loading?: boolean; note?: string; onClose(): void;
-}) {
-  const t = useUiText();
-  const ref = useDialogFocus<HTMLDivElement>(true, onClose);
-  return createPortal(<div className="sent-image-backdrop" onClick={(event) => {
-    if (event.target === event.currentTarget) onClose();
-  }}>
-    <div className="sent-image-dialog" role="dialog" aria-modal="true" aria-label={attachment.name} ref={ref} tabIndex={-1}>
-      <header><span>{attachment.name}</span><button type="button" aria-label={t.detailModal.close} onClick={onClose}><X size={20} /></button></header>
-      {note ? <p className="image-view-note">{note}</p> : null}
-      {url ? <img src={url} alt={attachment.name} aria-busy={loading} /> : null}
-      {loading ? <LoaderCircle className="conversation-spinner" aria-label={t.sessionDetail.loading} size={20} /> : null}
-      {error ? <p role="alert">{error}</p> : null}
-    </div>
-  </div>, document.body);
 }
 
 function ImageAttachment({ attachment, sessionId, ready }: {
@@ -86,7 +68,7 @@ function ImageAttachment({ attachment, sessionId, ready }: {
   return <div className="sent-image-item" ref={ref}>
     <button className="sent-image-tile" type="button" title={attachment.name} aria-label={t.conversation.openFile(attachment.name)}
       disabled={!ready || (!preview.url && !preview.error)}
-      onClick={() => panel && sessionId ? void panel.open({ session_id: sessionId, kind: "attachment", id: attachment.attachment_id }, attachment.name) : setExpanded(true)}>
+      onClick={() => setExpanded(true)}>
       {preview.url ? <img src={preview.url} alt={attachment.name} /> : <>
         {ready && !preview.error ? <LoaderCircle className="conversation-spinner" size={20} /> : <ImageIcon size={24} />}
         <span>{attachment.name}</span>
