@@ -1,5 +1,5 @@
 import { clearResetStreams } from "../features/sessions/context-display";
-import type { DesktopConversationActivityPayload, SubmitUserQuestionAnswer, UserSkillPayload } from "@lxe/desktop-protocol";
+import type { ApprovalDecision, DesktopConversationActivityPayload, PermissionMode, SubmitUserQuestionAnswer, UserSkillPayload } from "@lxe/desktop-protocol";
 import {
   keepPreviousData,
   useInfiniteQuery,
@@ -91,6 +91,46 @@ export function useApprovalsQuery(enabled: boolean, selectedSessionId: string) {
   const refetch = query.refetch;
   useEffect(() => { if (enabled) void refetch(); }, [enabled, selectedSessionId, refetch]);
   return query;
+}
+
+export function useSessionPermissionQuery(sessionId: string, enabled: boolean) {
+  const query = useQuery({
+    queryKey: dashboardQueryKeys.sessions.permission(sessionId),
+    queryFn: async ({ signal }) => {
+      const detail = await callDashboard({ operation: "sessions.detail", input: { session_id: sessionId, message_limit: 1 } });
+      signal.throwIfAborted();
+      return detail.session.permission_mode;
+    },
+    enabled: enabled && Boolean(sessionId), retry: false, staleTime: 0,
+    refetchOnMount: "always", refetchOnWindowFocus: "always", refetchInterval: 5_000,
+  });
+  const refetch = query.refetch;
+  useEffect(() => { if (enabled && sessionId) void refetch(); }, [enabled, sessionId, refetch]);
+  return query;
+}
+
+export function useSessionPermissionMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    retry: false,
+    mutationFn: (input: { session_id: string; permission_mode: PermissionMode }) =>
+      callDashboard({ operation: "sessions.permission.set", input }),
+    onSuccess: async result => {
+      const queryKey = dashboardQueryKeys.sessions.permission(result.session_id);
+      await queryClient.cancelQueries({ queryKey, exact: true });
+      queryClient.setQueryData(queryKey, result.permission_mode);
+      // Reconcile competing changes and only update the response's own session.
+      await queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.sessions.all });
+    },
+  });
+}
+
+export function useApprovalActions() {
+  const decide = useMutation({ retry: false, mutationFn: (input: ApprovalDecision) =>
+    callDashboard({ operation: "sessions.approval.decide", input }) });
+  const stop = useMutation({ retry: false, mutationFn: (input: { session_id: string; turn_id: string }) =>
+    callDashboard({ operation: "sessions.stop", input }) });
+  return { decide: decide.mutateAsync, stop: stop.mutateAsync };
 }
 
 export function useUserQuestionActions() {

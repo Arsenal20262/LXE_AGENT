@@ -1,6 +1,7 @@
 export const dashboardQueryKeys = {
   sessions: {
     approvals: ["sessions", "approvals"] as const,
+    permission: (sessionId: string) => ["sessions", "permission", sessionId] as const,
     questions: ["sessions", "questions"] as const,
     all: ["sessions"] as const,
     lists: ["sessions", "list"] as const,

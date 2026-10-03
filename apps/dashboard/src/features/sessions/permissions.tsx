@@ -1,9 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Check, ChevronDown, Shield, ShieldAlert, ShieldCheck, X } from "lucide-react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { PendingApproval, PermissionMode } from "@lxe/desktop-protocol";
-import { callDashboard } from "../../api/client";
+import { useApprovalActions, useSessionPermissionMutation, useSessionPermissionQuery } from "../../api/queries";
 import { useUiText } from "../../shared/i18n";
 import { useDialogFocus } from "../../shared/ui/use-dialog-focus";
 import "./permissions.css";
@@ -15,14 +14,8 @@ const labels = { "read-only": "Read Only", "workspace-write": "Workspace Write",
 /** Mount by session id: responses for a previous session only update that session's query. */
 export function PermissionPicker({ sessionId, initialMode, ready }: { sessionId: string; initialMode: PermissionMode; ready: boolean }) {
   const t = useUiText().permissions;
-  const queryClient = useQueryClient();
-  const queryKey = ["sessions", "permission", sessionId] as const;
-  const query = useQuery({ queryKey, queryFn: async ({ signal }) => {
-    const detail = await callDashboard({ operation: "sessions.detail", input: { session_id: sessionId, message_limit: 1 } });
-    signal.throwIfAborted();
-    return detail.session.permission_mode;
-  }, enabled: ready && Boolean(sessionId), retry: false, staleTime: 0, refetchOnMount: "always", refetchOnWindowFocus: "always", refetchInterval: 5_000 });
-  useEffect(() => { if (ready && sessionId) void query.refetch(); }, [ready, sessionId]);
+  const query = useSessionPermissionQuery(sessionId, ready);
+  const mutation = useSessionPermissionMutation();
   const current = query.data ?? initialMode;
   const Icon = icons[current];
   const [open, setOpen] = useState(false), [confirm, setConfirm] = useState(false), [saving, setSaving] = useState(false), [error, setError] = useState("");
@@ -38,12 +31,8 @@ export function PermissionPicker({ sessionId, initialMode, ready }: { sessionId:
     if (!ready || busy.current) return;
     busy.current = true; setSaving(true); setOpen(false); setError("");
     try {
-      const result = await callDashboard({ operation: "sessions.permission.set", input: { session_id: sessionId, permission_mode: mode } });
-      await queryClient.cancelQueries({ queryKey, exact: true });
-      queryClient.setQueryData(queryKey, result.permission_mode);
+      await mutation.mutateAsync({ session_id: sessionId, permission_mode: mode });
       setConfirm(false);
-      // Reconcile other windows, including a competing change committed after this response.
-      await queryClient.invalidateQueries({ queryKey: ["sessions"] });
     } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
     finally { busy.current = false; setSaving(false); }
   };
@@ -88,17 +77,18 @@ export function ApprovalGate({ requests, ready, onChanged, children }: { request
 
 export function ApprovalCard({ request, count, onChanged, onBusy }: { request: PendingApproval; count: number; onChanged?(): void; onBusy?(busy: boolean): void }) {
   const t = useUiText().permissions;
+  const actions = useApprovalActions();
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const lock = useRef(false);
   const decide = async (decision: "allow" | "deny") => {
     if (lock.current) return;
     lock.current = true; setBusy(true); onBusy?.(true); setError("");
-    try { await callDashboard({ operation: "sessions.approval.decide", input: { session_id: request.session_id, request_id: request.request_id, decision } }); }
+    try { await actions.decide({ session_id: request.session_id, request_id: request.request_id, decision }); }
     catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
     finally { lock.current = false; setBusy(false); onBusy?.(false); onChanged?.(); }
   };
   const stop = async () => {
-    try { await callDashboard({ operation: "sessions.stop", input: { session_id: request.session_id, turn_id: request.turn_id } }); onChanged?.(); }
+    try { await actions.stop({ session_id: request.session_id, turn_id: request.turn_id }); onChanged?.(); }
     catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
   };
   return <section className="permission-approval" aria-label={t.waiting} data-request-id={request.request_id}>
