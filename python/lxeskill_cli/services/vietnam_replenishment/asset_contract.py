@@ -11,6 +11,8 @@ import re
 from openpyxl import load_workbook
 from openpyxl.utils import get_column_letter
 
+from .numeric_contract import WorkbookInputError, excel_number
+
 
 REQUIRED_SHEETS = (
     "越南备货清单",
@@ -251,10 +253,32 @@ def load_sku_parameters(path: str | Path) -> dict[str, SkuParameters]:
         workbook.close()
 
 
+def validate_complete_sku_parameters(path: str | Path) -> dict[str, SkuParameters]:
+    """Require an explicit, Excel-exact price trio for every mapped SKU."""
+    values = load_sku_parameters(path)
+    if not values:
+        raise AssetContractError("当前越南 SKU 参数映射表没有 SKU，请重新上传")
+    for sku, row in values.items():
+        for field, label in (
+            ("cost", "成本"),
+            ("cross_border_price", "跨境价"),
+            ("discount_price", "折扣价"),
+        ):
+            value = getattr(row, field)
+            if value is None:
+                raise AssetContractError(f"SKU {sku} 缺少{label}，请补全当前越南 SKU 参数映射表")
+            try:
+                excel_number(value, sku, label)
+            except WorkbookInputError as exc:
+                raise AssetContractError(str(exc)) from exc
+    return values
+
+
 __all__ = [
     "AssetContractError",
     "SkuParameters",
     "TemplateContract",
     "load_sku_parameters",
     "validate_template",
+    "validate_complete_sku_parameters",
 ]

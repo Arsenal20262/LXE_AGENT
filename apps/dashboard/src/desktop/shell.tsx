@@ -54,6 +54,9 @@ import {
 import {
   desktopSettingsForm,
   desktopSettingsFormAfterClear,
+  desktopSettingsFormAfterVietnamSave,
+  desktopVietnamRecommendationInput,
+  desktopYacangCredentialsChanged,
   type DesktopIntegrationName,
   type ErpIntegrationName,
   desktopCloudBindingSwitchAvailable,
@@ -574,6 +577,7 @@ function DesktopSettingsForm({
   form,
   health,
   headingRef,
+  saving,
   setup,
   platform,
   onChange,
@@ -584,12 +588,14 @@ function DesktopSettingsForm({
   onSelectZiniaoWebDriverDirectory,
   onOpenLogsDirectory,
   onClearIntegration,
+  onSaveVietnamRecommendation,
 }: {
   activeSection: DesktopSettingsFormSection;
   credentialBusy: boolean;
   form: SetupForm;
   health: DesktopHealth;
   headingRef: RefObject<HTMLHeadingElement | null>;
+  saving: boolean;
   setup: DesktopSetupState;
   platform: "win32" | "darwin" | "linux";
   onChange: (patch: Partial<SetupForm>) => void;
@@ -600,6 +606,7 @@ function DesktopSettingsForm({
   onSelectZiniaoWebDriverDirectory: () => void;
   onOpenLogsDirectory: () => void;
   onClearIntegration: (name: IntegrationName) => void;
+  onSaveVietnamRecommendation: () => void;
 }) {
   const t = useUiText();
   if (activeSection === "base") {
@@ -821,6 +828,26 @@ function DesktopSettingsForm({
                 onChange={event => onChange({ yacangPassword: event.target.value })} /></label>
           </div>
           {setup.yacang.managed ? <button className="desktop-clear-integration" onClick={() => onClearIntegration("yacang")} type="button"><Trash2 size={14} />{t.desktop.clearIntegration}</button> : null}
+          <div className="desktop-local-model-card">
+            <div className="desktop-local-model-heading">
+              <div><strong>{labels.vietnamTitle}</strong><span>{labels.vietnamDescription}</span></div>
+            </div>
+            <div className="desktop-field-grid">
+              <label><span>{labels.weight30d}</span><input inputMode="decimal" type="text" value={form.vietnamWeight30d}
+                onChange={event => onChange({ vietnamWeight30d: event.target.value })} /></label>
+              <label><span>{labels.weight15d}</span><input inputMode="decimal" type="text" value={form.vietnamWeight15d}
+                onChange={event => onChange({ vietnamWeight15d: event.target.value })} /></label>
+              <label><span>{labels.weight7d}</span><input inputMode="decimal" type="text" value={form.vietnamWeight7d}
+                onChange={event => onChange({ vietnamWeight7d: event.target.value })} /></label>
+              <label><span>{labels.exchangeRate}</span><input inputMode="decimal" type="text" value={form.vietnamExchangeRate}
+                onChange={event => onChange({ vietnamExchangeRate: event.target.value })} /></label>
+            </div>
+            <div className="desktop-local-model-actions">
+              <button className="desktop-primary-button" disabled={saving} onClick={onSaveVietnamRecommendation} type="button">
+                {saving ? labels.vietnamSaving : labels.vietnamSave}
+              </button>
+            </div>
+          </div>
         </div>
       </section>
     );
@@ -1295,6 +1322,14 @@ export function DesktopShell({
     setHealth(await desktop.getHealth());
     setAppGeneration((value) => value + 1);
   };
+  const refreshVietnamSetup = async (next: DesktopSetupState): Promise<void> => {
+    queryClient.clear();
+    setupComplete.current = next.complete;
+    setSetup(next);
+    setForm((current) => current ? desktopSettingsFormAfterVietnamSave(current, next) : setupForm(next));
+    setHealth(await desktop.getHealth());
+    setAppGeneration((value) => value + 1);
+  };
   const selectWorkspace = async (): Promise<void> => {
     const selected = await desktop.selectWorkspace();
     if (selected) updateForm({ workspaceRoot: selected });
@@ -1412,12 +1447,13 @@ export function DesktopShell({
       form.ziniaoWebDriverPath,
     ) || setup.ziniao.configured;
     const mabangTmsTouched = hasText(form.mabangTmsAccount, form.mabangTmsPassword) || setup.mabangTms.configured;
-    const yacangTouched = hasText(form.yacangMobile, form.yacangPassword) || setup.yacang.configured;
+    const yacangTouched = desktopYacangCredentialsChanged(form, setup);
     const shangmanTouched = hasText(form.shangmanTenantId, form.shangmanUsername, form.shangmanPassword) || setup.shangman.configured;
     const mabangTouched = hasText(form.mabangAccount, form.mabangPassword) || setup.mabang.configured;
     const feishuTouched = hasText(form.feishuAppId, form.feishuAppSecret) || setup.feishu.configured;
     return {
       ...baseInput(),
+      ...desktopVietnamRecommendationInput(form, form.workspaceRoot),
       ...(ziniaoTouched ? {
         ziniao: {
           action: "save" as const,
@@ -1457,6 +1493,20 @@ export function DesktopShell({
         },
       } : {}),
     };
+  };
+  const saveVietnamRecommendation = async (): Promise<void> => {
+    if (saving) return;
+    setSaving(true);
+    setError("");
+    try {
+      const next = await desktop.saveSetup(desktopVietnamRecommendationInput(form, setup.workspace_root || form.workspaceRoot));
+      await refreshVietnamSetup(next);
+      showSuccessNotice(t.desktop.yacang.vietnamSaved);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setSaving(false);
+    }
   };
   const saveLocalCredential = async (): Promise<void> => {
     const apiKey = form.localApiKey.trim();
@@ -1590,6 +1640,7 @@ export function DesktopShell({
       form={form}
       health={health}
       headingRef={sectionHeadingRef}
+      saving={saving}
       onChange={updateForm}
       onClearIntegration={clearIntegration}
       onDeleteLocalCredential={deleteLocalCredential}
@@ -1600,6 +1651,7 @@ export function DesktopShell({
       onSelectZiniaoApp={() => { void selectZiniaoApp(); }}
       onSelectZiniaoWebDriverDirectory={() => { void selectZiniaoWebDriverDirectory(); }}
       onSaveLocalCredential={() => { void saveLocalCredential(); }}
+      onSaveVietnamRecommendation={() => { void saveVietnamRecommendation(); }}
       platform={desktop.platform}
       setup={setup}
     />

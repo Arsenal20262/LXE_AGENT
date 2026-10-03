@@ -158,6 +158,7 @@ def test_config_overrides_four_inputs(tmp_path: Path) -> None:
     writer.write_vietnam_workbook(output, _sources(), _parameters(), config)
     book = load_workbook(output, read_only=True, data_only=False)
     try:
+        assert book.sheetnames == ["越南备货清单", "雅仓库存", "雅仓动销", "数据更改", "库存商品信息"]
         assert [book["数据更改"].cell(2, i).value for i in range(1, 5)] == [1.5, 2.5, 3.5, 4000]
     finally:
         book.close()
