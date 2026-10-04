@@ -11,9 +11,11 @@ from xml.etree import ElementTree as ET
 from zipfile import ZipFile
 
 from openpyxl import load_workbook
+from openpyxl.formula.translate import Translator
 import pytest
 
 from services.vietnam_replenishment.asset_contract import SkuParameters
+from services.vietnam_replenishment.formula_dependencies import mapping_formula_blank
 from services.vietnam_replenishment.workbook import (
     RecommendationConfig,
     canonical_product_time,
@@ -51,26 +53,50 @@ def _parameters() -> dict[str, SkuParameters]:
     }
 
 
-def _formula_caches(sources: VietnamSources, config: RecommendationConfig) -> dict[str, object]:
+def _formula_caches(
+    sources: VietnamSources,
+    config: RecommendationConfig,
+    parameters: dict[str, SkuParameters],
+) -> dict[str, object]:
     caches: dict[str, object] = {}
     for row_number, sku in enumerate(sources.skus, 2):
+        mapped = parameters.get(sku)
+        literals = {
+            "B": (2 if mapped.hot_flag is None else mapped.hot_flag) if mapped is not None else None,
+            "G": mapped.cost if mapped is not None else None,
+            "AE": mapped.cross_border_price if mapped is not None else None,
+            "AJ": mapped.discount_price if mapped is not None else None,
+        }
         caches.update({
-            f"H{row_number}": 0,
+            f"H{row_number}": None if mapped is None else 0,
             f"J{row_number}": 0,
             f"K{row_number}": 0,
             f"L{row_number}": 0,
             f"M{row_number}": 0,
+            f"N{row_number}": 0,
+            f"O{row_number}": 0,
+            f"P{row_number}": 0,
+            f"Q{row_number}": "无动销",
+            f"R{row_number}": None,
             f"S{row_number}": 0,
             f"T{row_number}": 0,
             f"U{row_number}": "无动销无库存",
+            f"V{row_number}": "VN",
+            f"X{row_number}": 0,
+            f"Y{row_number}": 0,
+            f"Z{row_number}": 0,
             f"AA{row_number}": canonical_product_time(sources.products[sku]["创建时间"]),
             f"AB{row_number}": "#DIV/0!",
-            f"AC{row_number}": 0,
+            f"AC{row_number}": None if mapped is None else 0,
             f"AV{row_number}": config.weight_30d,
             f"AW{row_number}": config.weight_15d,
             f"AX{row_number}": config.weight_7d,
             f"AY{row_number}": config.exchange_rate,
         })
+        for column in ("AF", "AG", "AH", "AI", "AK", "AL", "AM"):
+            caches[f"{column}{row_number}"] = (
+                None if mapping_formula_blank(column, literals) else 1
+            )
     return caches
 
 
@@ -97,7 +123,7 @@ def _set_formula_caches(path: Path, caches: dict[str, object]) -> None:
                     cached = cell.find(f"{{{namespace}}}v")
                     if cached is None:
                         cached = ET.SubElement(cell, f"{{{namespace}}}v")
-                    cached.text = str(value)
+                    cached.text = None if value is None else str(value)
                     found.add(coordinate)
                 assert found == set(caches)
                 data = ET.tostring(root, encoding="utf-8", xml_declaration=True)
@@ -116,18 +142,21 @@ def _calculated_fixture(
     current_parameters = parameters if parameters is not None else _parameters()
     current_config = config if config is not None else RecommendationConfig()
     write_vietnam_workbook(path, current_sources, current_parameters, current_config)
-    _set_formula_caches(path, _formula_caches(current_sources, current_config))
+    _set_formula_caches(path, _formula_caches(current_sources, current_config, current_parameters))
     return path
 
 
-def _edit_formula_workbook(path: Path, edit) -> None:
+def _edit_formula_workbook(
+    path: Path, edit, *, parameters: dict[str, SkuParameters] | None = None,
+) -> None:
     workbook = load_workbook(path, data_only=False)
     try:
         edit(workbook)
         workbook.save(path)
     finally:
         workbook.close()
-    _set_formula_caches(path, _formula_caches(_sources(), RecommendationConfig()))
+    current_parameters = parameters if parameters is not None else _parameters()
+    _set_formula_caches(path, _formula_caches(_sources(), RecommendationConfig(), current_parameters))
 
 
 def _validate(path: Path, *, parameters: dict[str, SkuParameters] | None = None) -> None:
@@ -135,6 +164,218 @@ def _validate(path: Path, *, parameters: dict[str, SkuParameters] | None = None)
         path, sources=_sources(), parameters=parameters or _parameters(),
         config=RecommendationConfig(),
     )
+
+
+def test_sparse_map_validates_only_independent_and_present_price_results(tmp_path: Path) -> None:
+    parameters = {"VN-A": _parameters()["VN-A"]}
+    path = _calculated_fixture(tmp_path / "sparse.xlsx", parameters=parameters)
+    _validate(path, parameters=parameters)
+
+
+@pytest.mark.parametrize("coordinate", ("N2", "O2", "P2", "X2", "Y2", "Z2", "AB2"))
+def test_independent_numeric_formula_cache_cannot_be_blank(
+    tmp_path: Path, coordinate: str,
+) -> None:
+    path = _calculated_fixture(tmp_path / "missing-independent-cache.xlsx")
+    _set_formula_caches(path, {coordinate: None})
+    with pytest.raises(recalculation.WorkbookGenerationError, match=f"VN-A.*{coordinate}"):
+        _validate(path)
+
+
+@pytest.mark.parametrize("cached", (None, "未知状态", 0))
+def test_trend_text_cache_must_be_known_nonblank_status(tmp_path: Path, cached: object) -> None:
+    path = _calculated_fixture(tmp_path / "bad-trend.xlsx")
+    _set_formula_caches(path, {"Q2": cached})
+    with pytest.raises(recalculation.WorkbookGenerationError, match="VN-A.*Q2"):
+        _validate(path)
+
+
+@pytest.mark.parametrize(
+    ("status", "cached"),
+    (("无动销", 1), ("平稳", None), ("平稳", 0.9), ("平稳", "1")),
+)
+def test_trend_multiplier_cache_matches_status(
+    tmp_path: Path, status: str, cached: object,
+) -> None:
+    path = _calculated_fixture(tmp_path / "bad-multiplier.xlsx")
+    _set_formula_caches(path, {"Q2": status, "R2": cached})
+    with pytest.raises(recalculation.WorkbookGenerationError, match="VN-A.*R2"):
+        _validate(path)
+
+
+@pytest.mark.parametrize(
+    ("status", "cached"),
+    (
+        ("持续上升", 1.2), ("近期回升", 1.1), ("平稳", 1),
+        ("近期回落", 0.9), ("持续下滑", 0.8),
+    ),
+)
+def test_valid_trend_multiplier_cache_is_accepted(
+    tmp_path: Path, status: str, cached: object,
+) -> None:
+    path = _calculated_fixture(tmp_path / "trend-multiplier.xlsx")
+    _set_formula_caches(path, {"Q2": status, "R2": cached})
+    _validate(path)
+
+
+def test_source_based_v_cache_cannot_be_lost(tmp_path: Path) -> None:
+    path = _calculated_fixture(tmp_path / "missing-v.xlsx")
+    _set_formula_caches(path, {"V2": None})
+    with pytest.raises(recalculation.WorkbookGenerationError, match="VN-A.*V2"):
+        _validate(path)
+
+
+def test_short_leading_dash_sku_may_have_blank_v_and_w(tmp_path: Path) -> None:
+    base = _sources()
+    sku = "-A"
+    sources = replace(
+        base,
+        skus=(sku,),
+        sales={sku: {**base.sales["VN-A"], "SKU": sku}},
+        inventory={sku: {**base.inventory["VN-A"], "SKU": sku}},
+        products={sku: {**base.products["VN-A"], "SKU": sku}},
+        in_transit={sku: base.in_transit["VN-A"]},
+    )
+    parameters = {sku: _parameters()["VN-A"]}
+    path = _calculated_fixture(
+        tmp_path / "blank-category.xlsx", sources=sources, parameters=parameters,
+    )
+    _set_formula_caches(path, {"V2": None, "W2": None})
+    recalculation.validate_recalculated_workbook(
+        path, sources=sources, parameters=parameters, config=RecommendationConfig(),
+    )
+
+
+@pytest.mark.parametrize("coordinate", ("H2", "AC2", "AF2", "AH2"))
+def test_mapping_result_text_zero_is_not_numeric_cache(tmp_path: Path, coordinate: str) -> None:
+    path = _calculated_fixture(tmp_path / "text-zero.xlsx")
+    _set_formula_caches(path, {coordinate: "0"})
+    workbook = load_workbook(path, data_only=True)
+    try:
+        cell = workbook["越南备货清单"][coordinate]
+        assert cell.value == "0" and cell.data_type == "s"
+    finally:
+        workbook.close()
+    with pytest.raises(recalculation.WorkbookGenerationError, match=f"VN-A.*{coordinate}"):
+        _validate(path)
+
+
+@pytest.mark.parametrize("coordinate", ("H3", "AC3", "AF3", "AK3"))
+@pytest.mark.parametrize("cache", (0, " "))
+def test_unmapped_dependent_cache_must_be_empty(
+    tmp_path: Path, coordinate: str, cache: object,
+) -> None:
+    parameters = {"VN-A": _parameters()["VN-A"]}
+    path = _calculated_fixture(tmp_path / "wrong-blank-cache.xlsx", parameters=parameters)
+    _set_formula_caches(path, {coordinate: cache})
+    with pytest.raises(recalculation.WorkbookGenerationError) as error:
+        _validate(path, parameters=parameters)
+    assert "VN-B" in str(error.value)
+    assert coordinate in str(error.value)
+
+
+def test_unmapped_formula_error_is_not_treated_as_blank(tmp_path: Path) -> None:
+    parameters = {"VN-A": _parameters()["VN-A"]}
+    path = _calculated_fixture(tmp_path / "error-cache.xlsx", parameters=parameters)
+    _set_formula_caches(path, {"AF3": "#VALUE!"})
+    with pytest.raises(recalculation.WorkbookGenerationError) as error:
+        _validate(path, parameters=parameters)
+    assert "VN-B" in str(error.value)
+    assert "AF3" in str(error.value)
+
+
+@pytest.mark.parametrize("coordinate", ("H3", "AF3"))
+def test_unmapped_guarded_formula_cannot_be_removed(tmp_path: Path, coordinate: str) -> None:
+    parameters = {"VN-A": _parameters()["VN-A"]}
+    path = _calculated_fixture(tmp_path / "unguarded.xlsx", parameters=parameters)
+
+    def remove_guard(book):
+        original = recalculation._load_skeleton()
+        try:
+            source_coordinate = f"{coordinate[:-1]}2"
+            base = original["越南备货清单"][source_coordinate].value
+            book["越南备货清单"][coordinate] = Translator(
+                base, origin=source_coordinate,
+            ).translate_formula(coordinate)
+        finally:
+            original.close()
+
+    _edit_formula_workbook(path, remove_guard, parameters=parameters)
+    with pytest.raises(recalculation.WorkbookGenerationError) as error:
+        _validate(path, parameters=parameters)
+    assert "VN-B" in str(error.value)
+    assert coordinate in str(error.value)
+
+
+def test_present_price_financial_cache_must_be_numeric(tmp_path: Path) -> None:
+    path = _calculated_fixture(tmp_path / "missing-finance-cache.xlsx")
+    _set_formula_caches(path, {"AF2": None})
+    with pytest.raises(recalculation.WorkbookGenerationError) as error:
+        _validate(path)
+    assert "VN-A" in str(error.value)
+    assert "AF2" in str(error.value)
+
+
+def test_partial_discount_keeps_other_financial_results_numeric(tmp_path: Path) -> None:
+    parameters = _parameters()
+    parameters["VN-B"] = replace(parameters["VN-B"], discount_price=None)
+    path = _calculated_fixture(tmp_path / "partial-discount.xlsx", parameters=parameters)
+    _validate(path, parameters=parameters)
+    _set_formula_caches(path, {"AK3": 0})
+    with pytest.raises(recalculation.WorkbookGenerationError, match="VN-B.*AK3"):
+        _validate(path, parameters=parameters)
+
+
+@pytest.mark.parametrize(
+    ("missing_field", "blank_columns", "numeric_columns"),
+    (
+        ("cost", ("AG", "AH", "AL", "AM"), ("AF", "AI", "AK")),
+        ("cross_border_price", ("AF", "AG", "AH", "AI"), ("AK", "AL", "AM")),
+        ("discount_price", ("AK", "AL", "AM"), ("AF", "AG", "AH", "AI")),
+    ),
+)
+def test_partial_price_dependency_matrix(
+    tmp_path: Path, missing_field: str,
+    blank_columns: tuple[str, ...], numeric_columns: tuple[str, ...],
+) -> None:
+    parameters = _parameters()
+    parameters["VN-B"] = replace(parameters["VN-B"], **{missing_field: None})
+    path = _calculated_fixture(tmp_path / "partial-price.xlsx", parameters=parameters)
+    _validate(path, parameters=parameters)
+    workbook = load_workbook(path, data_only=True)
+    try:
+        main = workbook["越南备货清单"]
+        assert all(main[f"{column}3"].value is None for column in blank_columns)
+        assert all(main[f"{column}3"].value == 1 for column in numeric_columns)
+    finally:
+        workbook.close()
+
+
+@pytest.mark.parametrize("coordinate", ("H3", "AC3"))
+def test_mapped_replenishment_cache_cannot_be_blank(tmp_path: Path, coordinate: str) -> None:
+    path = _calculated_fixture(tmp_path / "missing-replenishment-cache.xlsx")
+    _set_formula_caches(path, {coordinate: None})
+    with pytest.raises(recalculation.WorkbookGenerationError, match=f"VN-B.*{coordinate}"):
+        _validate(path)
+
+
+def test_zero_price_with_missing_cost_still_has_blank_margin(tmp_path: Path) -> None:
+    parameters = _parameters()
+    parameters["VN-B"] = replace(
+        parameters["VN-B"], cost=None,
+        cross_border_price=Decimal("0"), discount_price=Decimal("0"),
+    )
+    path = _calculated_fixture(tmp_path / "zero-with-missing-cost.xlsx", parameters=parameters)
+    _validate(path, parameters=parameters)
+    workbook = load_workbook(path, data_only=True)
+    try:
+        main = workbook["越南备货清单"]
+        assert main["AE3"].value == 0
+        assert main["AJ3"].value == 0
+        assert main["AH3"].value is None
+        assert main["AM3"].value is None
+    finally:
+        workbook.close()
 
 
 def test_packaged_writer_with_two_skus_passes_cached_result_validation(tmp_path: Path) -> None:
