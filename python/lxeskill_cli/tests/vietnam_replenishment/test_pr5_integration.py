@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from decimal import Decimal
 import json
 import os
@@ -50,6 +51,46 @@ def _sources() -> VietnamSources:
         in_transit={sku: Decimal("3")}, missing_in_transit=(),
         in_transit_mismatch=(sku,), artifacts={},
     )
+
+
+def _three_sources() -> VietnamSources:
+    base = _sources()
+    sales = dict(base.sales)
+    inventory = dict(base.inventory)
+    products = dict(base.products)
+    in_transit = dict(base.in_transit)
+    for sku in ("VN-B", "VN-C"):
+        sales[sku] = {
+            **sales["VN-A"], "SKU": sku,
+            "7天销量": 7, "15天销量": 15, "30天销量": 30,
+        }
+        inventory[sku] = {
+            **inventory["VN-A"], "SKU": sku,
+            "库存数量": 12, "占用数量": 2,
+            "在途数量": 2, "可用库存": 10,
+        }
+        products[sku] = {
+            **products["VN-A"], "SKU": sku,
+            "中文标题": f"合成产品 {sku}", "创建时间": "2026-09-20 10:00",
+        }
+        in_transit[sku] = Decimal("2")
+    return replace(
+        base, skus=("VN-A", "VN-B", "VN-C"),
+        sales=sales, inventory=inventory, products=products,
+        in_transit=in_transit, in_transit_mismatch=(),
+    )
+
+
+def _sparse_map(path: Path) -> Path:
+    book = Workbook()
+    try:
+        book.active.append(("SKU", "成本", "跨境价", "折扣价", "热销标记"))
+        book.active.append(("VN-A", 10, 20, 15, None))
+        book.active.append(("VN-B", 5, 25, None, None))
+        book.save(path)
+    finally:
+        book.close()
+    return path
 
 
 def _managed_slot() -> dict:
@@ -153,5 +194,71 @@ def test_install_list_replace_rollback_then_generate_one_final_workbook(
         assert [main.cell(2, column).value for column in range(48, 52)] == [
             0.7, 0.6, 0.1, 4000,
         ]
+    finally:
+        book.close()
+
+
+@pytest.mark.skipif(
+    not (os.environ.get("LXE_OFFICE_NODE") and os.environ.get("LXE_OFFICE_CLI")),
+    reason="Host Office Kit paths are not configured",
+)
+def test_sparse_map_keeps_partial_and_unmapped_yacang_skus(
+    tmp_path: Path, isolated_state: Path,
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.delenv("LXESKILL_SKILL_SCOPE", raising=False)
+    for name, value in {
+        "LXE_VIETNAM_WEIGHT_30D": "0.7",
+        "LXE_VIETNAM_WEIGHT_15D": "0.6",
+        "LXE_VIETNAM_WEIGHT_7D": "0.1",
+        "LXE_VIETNAM_EXCHANGE_RATE": "4000",
+    }.items():
+        monkeypatch.setenv(name, value)
+    export_calls: list[str] = []
+
+    def fake_export() -> VietnamSources:
+        export_calls.append("VN8806")
+        return _three_sources()
+
+    monkeypatch.setattr(workflow, "export_vietnam_sources", fake_export)
+    installed = install_map({"source_path": str(_sparse_map(tmp_path / "sparse.xlsx")), "expected_revision": ""})
+    assert installed["success"] is True
+
+    assert lxeskill.main(["vietnam", "stock", "recommend"]) == 0
+    records = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.strip()]
+    assert len(records) == 1
+    result = records[0]
+    assert result["type"] == "result" and result["ok"] is True
+    assert result["data"]["sku_count"] == 3
+    output = Path(result["data"]["output_xlsx"])
+    assert output.is_relative_to(isolated_state)
+    assert result["files"] == [str(output)]
+    assert export_calls == ["VN8806"]
+    assert output.is_file() and output.stat().st_size > 0
+    assert not list(output.parent.glob(".vietnam-workbook-*"))
+
+    book = load_workbook(output, data_only=True)
+    try:
+        assert book.sheetnames == [
+            "越南备货清单", "雅仓库存", "雅仓动销", "数据更改", "库存商品信息",
+        ]
+        main = book["越南备货清单"]
+        assert [main[f"E{row}"].value for row in (2, 3, 4)] == ["VN-A", "VN-B", "VN-C"]
+        for name, column in (("雅仓库存", "B"), ("雅仓动销", "A"), ("库存商品信息", "B")):
+            assert [book[name][f"{column}{row}"].value for row in (2, 3, 4)] == ["VN-A", "VN-B", "VN-C"]
+
+        assert main["B3"].value == 2
+        assert main["AJ3"].value is None
+        assert all(main[f"{column}3"].value is not None for column in ("H", "AC", "AF", "AG", "AH", "AI"))
+        assert all(main[f"{column}3"].value in (None, "") for column in ("AK", "AL", "AM"))
+
+        assert all(main[f"{column}4"].value in (None, "") for column in (
+            "B", "G", "AE", "AJ", "H", "AC", "AF", "AG", "AH", "AI", "AK", "AL", "AM",
+        ))
+        assert main["F4"].value == "合成产品 VN-C"
+        assert main["J4"].value == 10
+        assert main["K4"].value == 30
+        assert main["AN4"].value == 2
+        assert main["AA4"].value == "2026-09-20 10:00"
     finally:
         book.close()
