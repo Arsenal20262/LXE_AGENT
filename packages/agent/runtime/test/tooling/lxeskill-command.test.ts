@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   loadLxeSkillCommandCatalog,
@@ -147,6 +148,33 @@ test("Vietnam recommendation accepts no inputs and delivers only the final workb
   });
   expect(loadLxeSkillDatasets(path).find(entry => entry.id === "vietnam_recommendations")?.dir)
     .toBe("vietnam/recommendations");
+});
+
+test("Vietnam chat SKU binding accepts one XLSX attachment without a generic asset slot", () => {
+  const path = join(process.cwd(), "python/lxeskill_cli/lxeskill/catalog.json");
+  const entry = loadLxeSkillCommandCatalog(path).find(item => item.name === "vietnam_replenishment_bind_sku");
+  expect(entry).toMatchObject({
+    command: "lxeskill vietnam sku bind",
+    module: "services.agent_cli.vietnam_replenishment.bind_sku",
+    visibility: "business",
+    ownerSkills: ["vietnam-stock-recommendation"],
+    attributionSkill: "vietnam-stock-recommendation",
+  });
+  expect(entry?.artifactPaths).toBeUndefined();
+
+  const document = JSON.parse(readFileSync(path, "utf8")) as {
+    entries: Array<{
+      name: string;
+      exposed?: boolean;
+      input_schema?: { properties?: { source_path?: Record<string, unknown> } };
+    }>;
+  };
+  const raw = document.entries.find(item => item.name === "vietnam_replenishment_bind_sku");
+  expect(raw?.exposed).toBe(true);
+  expect(raw?.input_schema?.properties?.source_path?.["x-lxe-file-input"]).toMatchObject({
+    accepted_extensions: [".xlsx"],
+  });
+  expect(raw?.input_schema?.properties?.source_path?.["x-lxe-asset-slot"]).toBeUndefined();
 });
 
 test("Mabang TMS exposes one export command with its own deliverable dataset", () => {

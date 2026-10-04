@@ -69,7 +69,10 @@ describe("skill context", () => {
     expect(references).toHaveLength(5);
     expect(skills.find((skill) => skill.name === "replenishment-workflow-map")?.commands).toEqual([]);
     expect(skills.find((skill) => skill.name === "southeast-asia-replenishment-workflow-map")?.commands).toEqual([]);
-    expect(skills.find((skill) => skill.name === "vietnam-stock-recommendation")?.commands).toEqual(["lxeskill vietnam stock recommend"]);
+    expect(skills.find((skill) => skill.name === "vietnam-stock-recommendation")?.commands).toEqual([
+      "lxeskill vietnam sku bind",
+      "lxeskill vietnam stock recommend",
+    ]);
     expect(skills.find((skill) => skill.name === "vietnam-stock-recommendation")?.description).toContain("生成越南备货清单");
     expect(skills.find((skill) => skill.name === "shangman-goods-export")?.commands).toEqual(["lxeskill shangman export run"]);
     expect(skills.find((skill) => skill.name === "shangman-login")?.commands).toHaveLength(4);
