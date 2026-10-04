@@ -1,3 +1,4 @@
+import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -9,7 +10,8 @@ delete environment.LXE_DATA_ROOT;
 environment.LXE_SOURCE_ROOT = sourceRoot;
 environment.LXE_DESKTOP_PREVIEW = "1";
 
-const electron = Bun.spawn(["bunx", "electron", "."], {
+const electronPath = createRequire(import.meta.url)("electron") as string;
+const electron = Bun.spawn([electronPath, "."], {
   cwd: desktopRoot,
   stdout: "inherit",
   stderr: "inherit",
