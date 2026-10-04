@@ -74,6 +74,15 @@ describe("skill context", () => {
       "lxeskill vietnam stock recommend",
     ]);
     expect(skills.find((skill) => skill.name === "vietnam-stock-recommendation")?.description).toContain("生成越南备货清单");
+    const vietnamPolicy = skills.find((skill) => skill.name === "vietnam-stock-recommendation")?.content ?? "";
+    expect(vietnamPolicy).toContain("当前消息恰好只有一个附件，且它是 `.xlsx` `local_file`");
+    expect(vietnamPolicy).toContain("紧邻上一条用户消息");
+    expect(vietnamPolicy).toContain("确认、澄清或继续处理该附件");
+    expect(vietnamPolicy).toContain("不要求先询问用途");
+    expect(vietnamPolicy).toContain("不跨多轮复用历史附件");
+    expect(vietnamPolicy).toContain("多附件必须先确认");
+    expect(vietnamPolicy).toContain("包括其中只有一份 `.xlsx` 的情况");
+    expect(vietnamPolicy).not.toContain("且你已询问用途");
     expect(skills.find((skill) => skill.name === "shangman-goods-export")?.commands).toEqual(["lxeskill shangman export run"]);
     expect(skills.find((skill) => skill.name === "shangman-login")?.commands).toHaveLength(4);
   });
