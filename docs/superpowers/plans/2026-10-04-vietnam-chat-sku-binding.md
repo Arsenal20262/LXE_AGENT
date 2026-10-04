@@ -1,20 +1,20 @@
 # 越南备货 PR7：聊天绑定 SKU 表实施记录
 
-> 本文原为执行计划。PR7 首次实现、合成回归和首轮业务文档已在本地提交；本轮附件规则收口尚未提交。下面按实际状态记录，不把计划步骤或尚未进行的真实聊天验收写成通过。设计边界见[PR7 规格](../specs/2026-10-04-vietnam-chat-sku-binding-design.md)，接手信息与最新验收状态见[PR7 交接](../../harness/vietnam-stock-recommendation/handoff-pr7.md)。
+> 本文原为执行计划。PR7 首次实现、合成回归、业务文档与附件规则收口均已在本地提交。下面按实际状态记录，不把计划步骤或尚未进行的真实聊天验收写成通过。设计边界见[PR7 规格](../specs/2026-10-04-vietnam-chat-sku-binding-design.md)，接手信息与最新验收状态见[PR7 交接](../../harness/vietnam-stock-recommendation/handoff-pr7.md)。
 
 ## 目标与边界
 
-从 PR6 的 `bbd62a66` 开始，只改变越南 SKU 参数表的业务上传入口：业务人员在聊天中附上 `.xlsx` 并明确请求绑定；工作台保留当前版、上一版和回滚展示，移除 SKU 上传按钮与已停用的完整模板卡片。生成命令仍无参数，并从受信 current 读取表。其他业务资产、雅仓导出、五表计算、Desktop 内部 IPC 和四项长期参数不在 PR7 改动范围。
+当前基线为 PR6 的 `cc77bf20`，只改变越南 SKU 参数表的业务上传入口：业务人员在聊天中附上 `.xlsx` 并明确请求绑定；工作台保留当前版、上一版和回滚展示，移除 SKU 上传按钮与已停用的完整模板卡片。生成命令仍无参数，并从受信 current 读取表。其他业务资产、雅仓导出、五表计算、Desktop 内部 IPC 和四项长期参数不在 PR7 改动范围。
 
 ## 实施状态
 
 | 步骤 | 当前状态 | 本地提交与主要文件 |
 | --- | --- | --- |
-| 设计规格 | 原版已提交；本轮附件规则修订待提交 | `362336fa`；`docs/superpowers/specs/2026-10-04-vietnam-chat-sku-binding-design.md` |
-| 工作台展示 | 已实现并提交 | `32f9b634`；`apps/dashboard/src/features/workbench/input-assets-view.tsx`、`apps/dashboard/src/main.tsx`、界面文案与定向测试 |
-| 聊天绑定命令和 Skill 契约 | 首次实现已提交；本轮 Skill 附件规则与文本契约测试待提交 | `2e78eb6d`；`services/agent_cli/vietnam_replenishment/bind_sku.py`、`lxeskill/catalog.json`、`skills/vietnam-stock-recommendation/SKILL.md` 和定向测试 |
-| 合成绑定到生成回归 | 已实现并提交 | `edba8838`；`python/lxeskill_cli/tests/vietnam_replenishment/test_pr5_integration.py` |
-| 现行业务说明与交接 | 首轮已提交；本轮校正状态 | `a3ea9b16`；越南业务文档、Skill 清单、文档入口和 PR7 交接 |
+| 设计规格 | 原版及附件规则修订均已提交 | `820fb17f`、`5a2fb049`；`docs/superpowers/specs/2026-10-04-vietnam-chat-sku-binding-design.md` |
+| 工作台展示 | 已实现并提交 | `c2212f42`；`apps/dashboard/src/features/workbench/input-assets-view.tsx`、`apps/dashboard/src/main.tsx`、界面文案与定向测试 |
+| 聊天绑定命令和 Skill 契约 | 首次实现、Skill 附件规则与文本契约测试均已提交 | `684b4652`、`5a2fb049`；`services/agent_cli/vietnam_replenishment/bind_sku.py`、`lxeskill/catalog.json`、`skills/vietnam-stock-recommendation/SKILL.md` 和定向测试 |
+| 合成绑定到生成回归 | 已实现并提交 | `63efca9a`；`python/lxeskill_cli/tests/vietnam_replenishment/test_pr5_integration.py` |
+| 现行业务说明与交接 | 首轮已提交；状态修正纳入本次独立文档提交 | `c5afe1c3`；越南业务文档、Skill 清单、文档入口和 PR7 交接 |
 | 真实 Agent/Runtime 聊天行为验收 | 未完成；脱敏本地预演完成，真实模型调用仍被自动审批阻断 | 当前轮附件选择、bind 与 generate 顺序、失败停止、交付和路由终止均未取得真实模型结果；详见交接 |
 
 最初计划里的“先运行失败测试”属于开发步骤；本文不保留未核对的红灯结果或未勾选的已完成任务。PR7 功能范围已经收敛，不因后续发现的其他模块问题扩大本 PR。
@@ -46,7 +46,7 @@
 ## 尚需收口
 
 1. 真实 Agent/Runtime 聊天行为仍是发布限制。只有在完全不外发非公开仓库内容且通过正常自动审批的条件下才能重试；不得绕过当前拒绝，也不得以直接 CLI、固定模型或本地脱敏预演代替真实模型行为。
-2. 检查相对 PR6 的 PR7 差异、文档、敏感文件、`git diff --check` 与工作区状态；本轮不执行 Git 状态修改。
+2. 推送前检查相对 PR6 的 PR7 差异、文档、敏感文件、`git diff --check` 与工作区状态。
 3. 推送和创建 PR 需分别获得用户批准，并以 PR6 为评审基线。最终同步 `main` 后、合并前按仓库规范做一次完整回归；当前历史定向结果不冒充最终全量结果。
 
 原计划的临时 Office Kit 绝对路径已经移除。运行时路径由当前环境配置提供，不应把另一 worktree 或缓存目录写成可复用命令。
