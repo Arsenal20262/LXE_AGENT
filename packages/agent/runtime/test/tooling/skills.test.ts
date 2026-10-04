@@ -74,11 +74,17 @@ describe("skill context", () => {
       "lxeskill vietnam stock recommend",
     ]);
     expect(skills.find((skill) => skill.name === "vietnam-stock-recommendation")?.description).toContain("生成越南备货清单");
+    expect(skills.find((skill) => skill.name === "vietnam-stock-recommendation")?.description).toContain("越南补货建议");
+    expect(skills.find((skill) => skill.name === "vietnam-stock-recommendation")?.description).toContain("越南补货量");
     const vietnamPolicy = skills.find((skill) => skill.name === "vietnam-stock-recommendation")?.content ?? "";
     expect(vietnamPolicy).toContain("当前消息恰好只有一个附件，且它是 `.xlsx` `local_file`");
     expect(vietnamPolicy).toContain("紧邻上一条用户消息");
     expect(vietnamPolicy).toContain("确认、澄清或继续处理该附件");
     expect(vietnamPolicy).toContain("查询或生成越南备货清单");
+    expect(vietnamPolicy).toContain("帮我出一份越南备货单");
+    expect(vietnamPolicy).toContain("按越南库存和销量算要补多少");
+    expect(vietnamPolicy).toContain("只问当前 SKU 表绑定状态或版本时");
+    expect(vietnamPolicy).toContain("只问流程、所需资料或历史文件时");
     expect(vietnamPolicy).toContain("本条恰好只有一个附件，且该附件为 `.xlsx`");
     expect(vietnamPolicy).toContain("只有用户明确要求查询或生成");
     expect(vietnamPolicy).toContain("先绑定该附件，成功后再生成");
@@ -94,7 +100,9 @@ describe("skill context", () => {
     expect(vietnamPolicy).not.toContain("且你已询问用途");
     expect(vietnamPolicy).not.toContain("用户要求绑定时");
     const southeastPolicy = skills.find((skill) => skill.name === "southeast-asia-replenishment-workflow-map")?.content ?? "";
+    expect(skills.find((skill) => skill.name === "southeast-asia-replenishment-workflow-map")?.description).toContain("越南补货建议");
     expect(southeastPolicy).toContain("查询越南备货");
+    expect(southeastPolicy).toContain("看看越南库存");
     expect(southeastPolicy).toContain("恰好一个附件且为 XLSX");
     expect(southeastPolicy).toContain("交由 `vietnam-stock-recommendation` 判断并优先绑定");
     expect(skills.find((skill) => skill.name === "shangman-goods-export")?.commands).toEqual(["lxeskill shangman export run"]);

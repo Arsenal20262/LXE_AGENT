@@ -1,6 +1,6 @@
 # 越南备货 PR7：聊天绑定 SKU 表实施记录
 
-> 本文原为执行计划。PR7 首次实现、合成回归、业务文档与第一轮附件规则已提交并推送到个人 fork 的现有 PR7；本次继续收口“附表查询/生成先绑定”。下面按实际状态记录，不把计划步骤或尚未进行的真实聊天验收写成通过。设计边界见[PR7 规格](../specs/2026-10-04-vietnam-chat-sku-binding-design.md)，接手信息与最新验收状态见[PR7 交接](../../harness/vietnam-stock-recommendation/handoff-pr7.md)。
+> 本文原为执行计划。PR7 首次实现、合成回归、业务文档、附件规则与附表查询自动绑定均已提交并推送到个人 fork 的现有 PR7；本页一并记录业务提示词覆盖的扩充。下面按实际状态记录，不把计划步骤或尚未进行的真实聊天验收写成通过。设计边界见[PR7 规格](../specs/2026-10-04-vietnam-chat-sku-binding-design.md)，接手信息与最新验收状态见[PR7 交接](../../harness/vietnam-stock-recommendation/handoff-pr7.md)。
 
 ## 目标与边界
 
@@ -12,7 +12,7 @@
 | --- | --- | --- |
 | 设计规格 | 原版及附件规则修订均已提交 | `820fb17f`、`5a2fb049`；`docs/superpowers/specs/2026-10-04-vietnam-chat-sku-binding-design.md` |
 | 工作台展示 | 已实现并提交 | `c2212f42`；`apps/dashboard/src/features/workbench/input-assets-view.tsx`、`apps/dashboard/src/main.tsx`、界面文案与定向测试 |
-| 聊天绑定命令和 Skill 契约 | 首次实现与第一轮附件规则已提交；本次补附表查询/生成自动绑定规则 | `684b4652`、`5a2fb049`；`services/agent_cli/vietnam_replenishment/bind_sku.py`、`lxeskill/catalog.json`、两个相关 Skill 和定向测试 |
+| 聊天绑定命令和 Skill 契约 | 首次实现、附件规则和附表查询自动绑定已提交；本次补业务提示词路由 | `684b4652`、`5a2fb049`、`f505512d`；`services/agent_cli/vietnam_replenishment/bind_sku.py`、`lxeskill/catalog.json`、两个相关 Skill 和定向测试 |
 | 合成绑定到生成回归 | 已实现并提交 | `63efca9a`；`python/lxeskill_cli/tests/vietnam_replenishment/test_pr5_integration.py` |
 | 现行业务说明与交接 | 首轮及状态修正已提交；本次同步自动绑定口径 | `c5afe1c3`、`74ab272d`；越南业务文档、Skill 清单和 PR7 交接 |
 | 真实 Agent/Runtime 聊天行为验收 | 未完成；脱敏本地预演完成，真实模型调用仍被自动审批阻断 | 当前轮附件选择、bind 与 generate 顺序、失败停止、交付和路由终止均未取得真实模型结果；详见交接 |
@@ -37,7 +37,9 @@
 
 此次仅为 PR7 附件规则增加现有 Skill 发现测试中的文本契约断言：当前消息恰好一个附件且为 XLSX、紧邻上一条用户消息的明确确认/澄清/继续、禁止更早历史，以及多附件即使只有一份 XLSX 也先确认。修改 Skill 前该测试文件 `12 passed, 1 failed`，修改后 `13 passed, 0 failed`。它验证 Skill 声明可以加载且文字包含这些边界，不是四个真实模型场景的执行验收。
 
-本次自动绑定修订继续在同一测试里增加文字断言：附表查询/生成先绑定、失败不沿用旧 `current`、没有待处理新附件或紧邻附件已成功绑定时沿用 `current`，以及东南亚入口转交越南 Skill。从仓库根运行修改后的整个 `skills.test.ts`，结果 `13 passed, 0 failed`；静态断言仍不能证明真实模型会做出这些选择。
+自动绑定修订在同一测试里增加文字断言：附表查询/生成先绑定、失败不沿用旧 `current`、没有待处理新附件或紧邻附件已成功绑定时沿用 `current`，以及东南亚入口转交越南 Skill。从仓库根运行修改后的整个 `skills.test.ts`，结果 `13 passed, 0 failed`；静态断言仍不能证明真实模型会做出这些选择。
+
+本次业务提示词扩展在相同测试里增加“出越南备货单、做补货建议、算补货量”及流程/历史文件/绑定状态/原始报表边界的文本断言。修改 Skill 前得到 `12 passed, 1 failed`，修改后 `13 passed, 0 failed`。这仍是静态路由契约，不是模型对这些说法的真实决策验收。
 
 此前收口回合还用固定脚本代替模型决策，经真实 `TypeScriptAgentRuntime.runTurn` 回放六种合成场景，结果 `6/6` 符合固定脚本预期：成功时读当时的 Skill、绑定、生成、发送最终文件；没有可选附件、双附件、CSV 在读 Skill 后停；绑定失败和错误 XLSX 在绑定后停。没有可选附件的场景并非明确确认紧邻唯一附件；此项此次未复跑，也未覆盖该例外，只证明 Runtime 分发与固定脚本的终态控制，不能当作真实模型验收。
 
@@ -48,7 +50,7 @@
 ## 尚需收口
 
 1. 真实 Agent/Runtime 聊天行为仍是发布限制。只有在完全不外发非公开仓库内容且通过正常自动审批的条件下才能重试；不得绕过当前拒绝，也不得以直接 CLI、固定模型或本地脱敏预演代替真实模型行为。
-2. 本次修订提交前检查相对 PR6 的 PR7 差异、文档、敏感文件、`git diff --check` 与工作区状态；后续提交只更新个人 fork 的现有 PR7，不创建新 PR。
+2. 每次更新现有 PR7 前检查相对 PR6 的差异、文档、敏感文件、`git diff --check` 与工作区状态；后续提交只更新个人 fork 的现有 PR7，不创建新 PR。
 3. PR7 以 PR6 为评审基线；合并前须按仓库规范完成最终同步 `main` 与一次完整回归，当前定向结果不冒充最终全量结果。合并仍需用户单独批准。
 
 原计划的临时 Office Kit 绝对路径已经移除。运行时路径由当前环境配置提供，不应把另一 worktree 或缓存目录写成可复用命令。
