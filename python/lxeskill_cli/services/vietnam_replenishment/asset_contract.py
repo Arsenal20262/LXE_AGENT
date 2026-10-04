@@ -253,8 +253,8 @@ def load_sku_parameters(path: str | Path) -> dict[str, SkuParameters]:
         workbook.close()
 
 
-def validate_complete_sku_parameters(path: str | Path) -> dict[str, SkuParameters]:
-    """Require an explicit, Excel-exact price trio for every mapped SKU."""
+def validate_usable_sku_parameters(path: str | Path) -> dict[str, SkuParameters]:
+    """Require mapped SKUs and Excel-exact nonblank prices."""
     values = load_sku_parameters(path)
     if not values:
         raise AssetContractError("当前越南 SKU 参数映射表没有 SKU，请重新上传")
@@ -266,7 +266,7 @@ def validate_complete_sku_parameters(path: str | Path) -> dict[str, SkuParameter
         ):
             value = getattr(row, field)
             if value is None:
-                raise AssetContractError(f"SKU {sku} 缺少{label}，请补全当前越南 SKU 参数映射表")
+                continue
             try:
                 excel_number(value, sku, label)
             except WorkbookInputError as exc:
@@ -280,5 +280,5 @@ __all__ = [
     "TemplateContract",
     "load_sku_parameters",
     "validate_template",
-    "validate_complete_sku_parameters",
+    "validate_usable_sku_parameters",
 ]

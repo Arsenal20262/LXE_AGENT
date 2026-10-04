@@ -123,22 +123,35 @@ def test_empty_current_stops_before_export(tmp_path: Path, monkeypatch: pytest.M
 @pytest.mark.parametrize(
     ("field", "values"),
     [
-        ("成本", {"cost": None}),
-        ("跨境价", {"price": None}),
-        ("折扣价", {"discount": None}),
+        ("cost", {"cost": None}),
+        ("cross_border_price", {"price": None}),
+        ("discount_price", {"discount": None}),
     ],
 )
-def test_blank_required_sku_price_stops_before_export(
+def test_blank_sku_price_reaches_export_from_trusted_current(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, field: str, values: dict[str, None]
 ) -> None:
-    invalid = _sku_map(tmp_path / "incomplete.xlsx", **values)
-    version = _current(monkeypatch, _sku_map(tmp_path / "valid.xlsx"))
-    version.write_bytes(invalid.read_bytes())
-    _no_export(monkeypatch)
+    _current(monkeypatch, _sku_map(tmp_path / "incomplete.xlsx", **values))
+    monkeypatch.setattr(workflow, "dataset_dir", lambda *parts: tmp_path / "artifacts" / parts[-1])
+    export_calls: list[str] = []
 
-    with pytest.raises(workflow.VietnamWorkflowError, match=f"VN-A.*{field}") as error:
-        workflow.generate_current_vietnam_recommendation()
-    assert error.value.code == "sku_parameter_map_invalid"
+    def fake_export() -> VietnamSources:
+        export_calls.append("VN8806")
+        return _sources()
+
+    def fake_generate(map_path: Path, output_path: Path, *, sources: VietnamSources,
+                      config: RecommendationConfig) -> Path:
+        assert getattr(load_sku_parameters(map_path)["VN-A"], field) is None
+        assert sources.skus == ("VN-A",)
+        output_path.parent.mkdir(parents=True)
+        output_path.write_bytes(b"synthetic final workbook")
+        return output_path
+
+    monkeypatch.setattr(workflow, "export_vietnam_sources", fake_export)
+    monkeypatch.setattr(workflow, "generate_vietnam_workbook", fake_generate)
+    result = workflow.generate_current_vietnam_recommendation()
+    assert result.sku_count == 1
+    assert export_calls == ["VN8806"]
 
 
 def test_snapshot_is_private_stable_and_removed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

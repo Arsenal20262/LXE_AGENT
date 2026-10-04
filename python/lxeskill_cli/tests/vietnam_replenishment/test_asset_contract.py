@@ -13,7 +13,7 @@ from services.vietnam_replenishment.asset_contract import (
     AssetContractError,
     SkuParameters,
     load_sku_parameters,
-    validate_complete_sku_parameters,
+    validate_usable_sku_parameters,
     validate_template,
 )
 
@@ -367,30 +367,37 @@ def test_sku_parameters_keep_actual_workbook_read_error(tmp_path: Path) -> None:
 
 
 
-def test_complete_sku_map_accepts_explicit_zero_prices(tmp_path: Path) -> None:
-    path = _sku_map(tmp_path / "zero.xlsx", (0, None, "VN-A", 0, 0))
-    values = validate_complete_sku_parameters(path)
-    assert values["VN-A"].cost == Decimal("0")
-    assert values["VN-A"].discount_price == Decimal("0")
+def test_sku_map_accepts_blank_prices_and_preserves_explicit_zero(tmp_path: Path) -> None:
+    path = _sku_map(
+        tmp_path / "sparse.xlsx",
+        (None, None, "VN-A", 1, 2),
+        (None, None, "VN-B", None, None),
+        (0, None, "VN-C", 0, 0),
+    )
+    values = validate_usable_sku_parameters(path)
+    assert values["VN-A"].discount_price is None
+    assert values["VN-B"] == SkuParameters()
+    assert values["VN-C"].cost == Decimal("0")
+    assert values["VN-C"].cross_border_price == Decimal("0")
+    assert values["VN-C"].discount_price == Decimal("0")
 
 
 @pytest.mark.parametrize(
     ("row", "message"),
     [
-        ((None, None, "VN-A", 1, 2), "折扣价"),
         ((1, None, "VN-A", "1234567890123456", 2), "Excel 精度"),
         ((1, None, "VN-A", "1e-400", 2), "精确写入"),
     ],
 )
-def test_complete_sku_map_rejects_missing_or_inexact_prices(
+def test_sku_map_rejects_inexact_nonblank_prices(
     tmp_path: Path, row: tuple[object, ...], message: str,
 ) -> None:
     path = _sku_map(tmp_path / "bad.xlsx", row)
     with pytest.raises(AssetContractError, match=message):
-        validate_complete_sku_parameters(path)
+        validate_usable_sku_parameters(path)
 
 
-def test_complete_sku_map_rejects_empty_first_sheet(tmp_path: Path) -> None:
+def test_usable_sku_map_rejects_empty_first_sheet(tmp_path: Path) -> None:
     path = _sku_map(tmp_path / "empty.xlsx")
     with pytest.raises(AssetContractError, match="没有 SKU"):
-        validate_complete_sku_parameters(path)
+        validate_usable_sku_parameters(path)
