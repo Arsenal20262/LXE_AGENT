@@ -708,6 +708,7 @@ app.whenReady().then(async () => {
       const menu = '.windows-titlebar-menu [role="menuitem"]';
       await load("?app=1&workspaces=1&section=sessions&platform=win32");
       await waitFor("Boolean(document.querySelector('.windows-titlebar-menu'))", "caption mounted");
+      win.show(); win.focus(); await delay(100);
       await step("all Windows columns begin below one caption in either theme and sidebar state", async () => {
         for (const theme of ["light", "dark"]) {
           await js(`document.documentElement.dataset.theme='${theme}'`);
@@ -719,6 +720,32 @@ app.whenReady().then(async () => {
             assert.equal((await rect(menu)).left, 48);
             assert.equal(await js("getComputedStyle(document.querySelector('.windows-titlebar-menu')).webkitAppRegion"), "no-drag");
             assert.equal(await js("document.documentElement.scrollHeight>innerHeight"), false);
+            if (i === 1) {
+              // Use a real pointer: DOM clicks alone do not exercise :hover or delayed peek.
+              await js("document.activeElement.blur()");
+              win.webContents.sendInputEvent({ type: 'mouseMove', x: 800, y: 400 });
+              await delay(220);
+              win.webContents.sendInputEvent({ type: 'mouseMove', x: 26, y: 20 });
+              await waitFor("document.querySelector('.app-sidebar').classList.contains('is-peek')", 'caption hover peek');
+              await delay(180);
+              const contrast = await js(`(() => {
+                const button = document.querySelector('.sidebar-toggle-button');
+                const rgb = value => value.match(/[\\d.]+/g).map(Number);
+                const ink = rgb(getComputedStyle(button.querySelector('svg')).stroke);
+                const fill = rgb(getComputedStyle(button).backgroundColor);
+                const rail = rgb(getComputedStyle(document.querySelector('.app-navigation')).backgroundColor);
+                const alpha = fill[3] ?? 1;
+                const luminance = color => color.slice(0, 3).map(v => v / 255)
+                  .map(v => v <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4)
+                  .reduce((sum, v, i) => sum + v * [.2126, .7152, .0722][i], 0);
+                const a = luminance(ink), b = luminance(fill.map((v, i) => v * alpha + rail[i] * (1 - alpha)));
+                return (Math.max(a, b) + .05) / (Math.min(a, b) + .05);
+              })()`);
+              if (process.env.LXE_TITLEBAR_SCREENSHOT) {
+                require('node:fs').writeFileSync(process.env.LXE_TITLEBAR_SCREENSHOT.replace(/\.png$/, '-hover-' + theme + '.png'), (await win.webContents.capturePage()).toPNG());
+              }
+              assert.ok(contrast >= 3, `${theme} caption icon must remain visible while peeking (contrast ${contrast})`);
+            }
             await click('.sidebar-toggle-button'); await delay(220);
           }
         }
@@ -728,7 +755,6 @@ app.whenReady().then(async () => {
         }
         await click('.tab-sessions');
       });
-      win.show(); win.focus(); await delay(100);
       await step("caption menus preserve input selection for pointer and keyboard activation", async () => {
         await js(`window.lxe.desktop.showTitlebarMenu=async request=>{ window.captionRequest=request; window.captionFocus=document.activeElement.className; window.captionSelection=getSelection().toString(); return null; };undefined`);
         await waitFor("Boolean(document.querySelector('.reference-editor'))", "composer mounted");

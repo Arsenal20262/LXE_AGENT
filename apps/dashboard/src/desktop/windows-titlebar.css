@@ -41,15 +41,16 @@
   color: var(--sidebar-ink-soft);
 }
 
-.desktop-platform-win32 .app-shell .sidebar-toggle-button {
+/* The caption stays dark when collapsed; outrank the shared content-area toggle styles. */
+.desktop-platform-win32 .app-shell .sidebar-window-controls .sidebar-icon-button.sidebar-toggle-button {
   width: 28px;
   height: 28px;
   color: var(--sidebar-ink-soft);
   border-radius: 6px;
 }
 
-.desktop-platform-win32 .app-shell .sidebar-toggle-button:hover,
-.desktop-platform-win32 .app-shell .sidebar-toggle-button:focus-visible {
+.desktop-platform-win32 .app-shell .sidebar-window-controls .sidebar-icon-button.sidebar-toggle-button:hover,
+.desktop-platform-win32 .app-shell .sidebar-window-controls .sidebar-icon-button.sidebar-toggle-button:focus-visible {
   color: var(--sidebar-ink);
   background: var(--sidebar-hover);
 }
