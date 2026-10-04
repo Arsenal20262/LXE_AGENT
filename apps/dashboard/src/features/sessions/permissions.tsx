@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Check, ChevronDown, Shield, ShieldAlert, ShieldCheck, X } from "lucide-react";
+import { Check, ChevronDown, Shield, ShieldAlert, ShieldCheck } from "lucide-react";
 import type { PendingApproval, PermissionMode } from "@lxe/desktop-protocol";
 import { useApprovalActions, useSessionPermissionMutation, useSessionPermissionQuery } from "../../api/queries";
 import { useUiText } from "../../shared/i18n";
@@ -87,17 +87,38 @@ export function ApprovalCard({ request, count, onChanged, onBusy }: { request: P
     catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
     finally { lock.current = false; setBusy(false); onBusy?.(false); onChanged?.(); }
   };
-  const stop = async () => {
-    try { await actions.stop({ session_id: request.session_id, turn_id: request.turn_id }); onChanged?.(); }
-    catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
-  };
-  return <section className="permission-approval" aria-label={t.waiting} data-request-id={request.request_id}>
-    <header><strong>{request.tool} · {labels[request.target_mode]}</strong><span>{count > 1 ? `${count} ${t.pending}` : t.waiting}</span>
-      <button type="button" onClick={() => void stop()} aria-label={t.stop} title={t.stop}><X size={16} /></button></header>
-    <p>{request.justification}</p>
-    <pre className="permission-preview">{JSON.stringify(request.preview, null, 2)}</pre>
-    <details><summary>{t.arguments}</summary><pre className="permission-preview">{JSON.stringify(request.arguments, null, 2)}</pre></details>
+  return <section className="permission-approval" aria-label={t.waiting} aria-busy={busy} data-request-id={request.request_id}>
+    <header className="permission-approval-status"><span className="permission-status-dot" aria-hidden="true" />{t.waiting}
+      {count > 1 ? <span className="permission-approval-count">{count} {t.pending}</span> : null}</header>
+    <div className="permission-approval-body">
+      <p className="permission-approval-reason">{t.request(labels[request.target_mode])} {request.justification}</p>
+      <ApprovalOperation request={request} />
+    </div>
     {error ? <p role="alert" className="permission-error">{error}</p> : null}
     <footer><button type="button" disabled={busy} onClick={() => void decide("deny")}>{t.deny}</button><button type="button" disabled={busy} onClick={() => void decide("allow")}>{t.allow}</button></footer>
   </section>;
+}
+
+/** Render the frozen host preview, without rereading files or changing the operation. */
+function ApprovalOperation({ request }: { request: PendingApproval }) {
+  const t = useUiText().permissions;
+  const { preview } = request;
+  if (request.tool === "exec") return <div className="permission-operation">
+    <pre className="permission-command">{String(preview.command ?? "")}</pre>
+    <p className="permission-target">{t.cwd} <code>{String(preview.cwd ?? "")}</code></p>
+    {typeof preview.requested_command === "string" && preview.requested_command !== preview.command ?
+      <details className="permission-operation-details"><summary>{t.originalCommand}</summary><pre>{preview.requested_command}</pre></details> : null}
+  </div>;
+  const edits = (Array.isArray(preview.edits) ? preview.edits : []) as { oldText: string; newText: string }[];
+  return <div className="permission-operation">
+    <p className="permission-target">{request.tool === "write" ? t.write : t.edit} <code>{String(preview.path ?? "")}</code></p>
+    <details className="permission-operation-details">
+      <summary>{request.tool === "write" ? t.viewContents : t.viewChanges}</summary>
+      {request.tool === "write" ? <pre>{String(preview.content ?? "")}</pre> : edits.map((edit, index) =>
+        <div className="permission-edit" key={index}>
+          <div><span>{t.before}</span><pre>{edit.oldText}</pre></div>
+          <div><span>{t.after}</span><pre>{edit.newText}</pre></div>
+        </div>)}
+    </details>
+  </div>;
 }

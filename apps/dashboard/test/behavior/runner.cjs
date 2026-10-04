@@ -92,20 +92,32 @@ app.whenReady().then(async () => {
         await click(".session-delete-dialog footer button:last-child");
         await waitFor("!document.querySelector('#permission-full-title') && document.querySelector('.permission-picker > button').innerText.includes('Full access')", "full saved");
       });
-      await step("multiple approvals show full operation, keep picker visible, and decide separately", async () => {
+      await step("approval takeover hides the toolbar and restores drafts after separate decisions", async () => {
+        await type("Keep this draft");
+        await js("behavior.chooseFile('draft.txt')"); await click('[aria-label="Add files"]');
         await js("behavior.permissionApprovals()");
         await waitFor("document.querySelector('.permission-approval')?.innerText.includes('python report.py --all')", "first approval");
-        assert.match(await js("document.querySelector('.permission-preview').innerText"), /outside/);
-        await choose("Read Only");
-        await waitFor("document.querySelector('.permission-picker > button').innerText.includes('Read Only')", "switch during approval");
+        assert.equal(await js("document.querySelector('.permission-command').textContent"), "python report.py --all");
+        assert.match(await js("document.querySelector('.permission-target').innerText"), /outside/);
+        assert.equal(await js("document.querySelectorAll('.permission-picker, .conversation-compose-actions, .reference-editor, .permission-approval header button').length"), 0);
+        assert.deepEqual(await js("Array.from(document.querySelectorAll('.permission-approval button')).map(b=>b.innerText)"), ["Reject", "Allow once"]);
+        const fileCalls = (await state()).calls.filter(call => call.operation === "dropFiles").length;
+        await js("behavior.drop(); behavior.remotePermission('read-only')"); await settle();
+        assert.equal((await state()).calls.filter(call => call.operation === "dropFiles").length, fileCalls);
         assert.equal(await js("document.querySelector('.permission-approval').dataset.requestId"), "permission-0");
         await click(".permission-approval footer button:last-child");
         await waitFor("document.querySelector('.permission-approval')?.dataset.requestId === 'permission-1'", "second approval");
-        assert.match(await js("document.querySelector('.permission-preview').innerText"), /Complete proposed contents/);
+        assert.equal(await js("document.querySelector('.permission-operation-details').open"), false);
+        await click(".permission-operation-details summary");
+        assert.equal(await js("document.querySelector('.permission-operation-details pre').textContent"), "Complete proposed contents");
         await click(".permission-approval footer button:first-child");
         await waitFor("!document.querySelector('.permission-approval')", "approvals completed");
         const decisions = (await state()).calls.filter(call => call.operation === "sessions.approval.decide");
         assert.deepEqual(decisions.map(call => call.input.decision), ["allow", "deny"]);
+        assert.equal((await state()).stops, 0, "rejecting an operation does not stop the turn");
+        assert.equal(await js("document.querySelector('.reference-editor').textContent"), "Keep this draft");
+        assert.match(await js("document.querySelector('.conversation-compose-box').innerText"), /draft.txt/);
+        await waitFor("document.querySelector('.permission-picker > button')?.innerText.includes('Read Only')", "latest mode restored with toolbar");
       });
       await step("save failure preserves confirmed value and actual error", async () => {
         await js("behavior.permissionFailure(true)"); await choose("Workspace Write");
@@ -134,13 +146,76 @@ app.whenReady().then(async () => {
         await js("behavior.permissionApprovals(); behavior.updateComposer({runtimeReady:false})"); await settle();
         await js("behavior.updateComposer({runtimeReady:true})");
         await waitFor("Boolean(document.querySelector('.permission-approval'))", "pending restored after reconnect");
-        await click(".permission-approval header button");
-        await waitFor("!document.querySelector('.permission-approval')", "stop clears requests");
+        await click(".permission-approval footer button:first-child");
+        await waitFor("document.querySelector('.permission-approval')?.dataset.requestId === 'permission-1'", "next pending approval");
+        await click(".permission-approval footer button:first-child");
+        await waitFor("!document.querySelector('.permission-approval')", "requests rejected");
+        await click(".conversation-send-button[data-mode='stop']");
+        assert.equal((await state()).stops, 1, "normal stop is available after rejection");
       });
       await step("question card retains permission selector", async () => {
         await js("behavior.permissionQuestion(true)"); await settle();
         assert.ok(await js("Boolean(document.querySelector('.user-question-card'))"));
         assert.equal(await js("document.querySelector('.permission-picker > button').disabled"), false);
+        await js("behavior.permissionQuestion(false)");
+      });
+      const request = (id, tool, preview) => ({ request_id: id, session_id: "permissions-a", turn_id: "turn", tool_call_id: id,
+        tool, target_mode: "workspace-write", justification: "创建测试文件，验证权限申请流程。", arguments: {}, preview });
+      const show = async value => {
+        await js(`behavior.permissionRequests([${JSON.stringify(value)}])`);
+        await waitFor(`document.querySelector('.permission-approval')?.dataset.requestId === ${JSON.stringify(value.request_id)}`, "approval preview");
+      };
+      await step("failed and delayed decisions preserve the card without duplicate submissions or toolbar flashes", async () => {
+        await show(request("delayed", "write", { path: "/work/report.txt", content: "Exact contents\nnext line" }));
+        await js("behavior.approvalFailure(true)"); await click(".permission-approval footer button:last-child");
+        await waitFor("document.querySelector('.permission-error')?.innerText.includes('ENOSPC: fixture approval audit failed')", "actual approval error");
+        assert.equal(await js("document.querySelectorAll('.conversation-compose-actions').length"), 0);
+        await js("behavior.approvalFailure(false); behavior.holdApproval(true)");
+        await click(".permission-approval footer button:last-child");
+        await waitFor("document.querySelector('.permission-approval')?.getAttribute('aria-busy') === 'true'", "decision in progress");
+        assert.equal(await js("Array.from(document.querySelectorAll('.permission-approval button')).every(b=>b.disabled)"), true);
+        assert.equal(await js("document.querySelectorAll('.conversation-compose-box').length"), 0);
+        await js("document.querySelector('.permission-approval footer button:last-child').click()");
+        assert.equal((await state()).calls.filter(call => call.operation === "sessions.approval.decide" && call.input.request_id === "delayed").length, 2, "only failed attempt and explicit retry");
+        await js("behavior.releaseApproval()");
+        await waitFor("Boolean(document.querySelector('.reference-editor'))", "composer restored after acknowledgement");
+      });
+      await step("file and edit previews preserve exact text and reset collapsed state across requests", async () => {
+        await show(request("write-preview", "write", { path: "D:\\work\\订单分析\\hello.txt", content: "第一行\n\n<script>visible text</script>\n最后一行\n" }));
+        assert.equal(await js("document.querySelector('.permission-operation-details').open"), false);
+        assert.equal(await js("document.querySelector('.permission-target code').textContent"), "D:\\work\\订单分析\\hello.txt");
+        await click(".permission-operation-details summary");
+        assert.equal(await js("document.querySelector('.permission-operation-details pre').textContent"), "第一行\n\n<script>visible text</script>\n最后一行\n");
+        await show(request("edit-preview", "edit", { path: "/work/hello.txt", edits: [{ oldText: "old\nline", newText: "new\nline" }, { oldText: "remove", newText: "" }] }));
+        assert.equal(await js("document.querySelector('.permission-operation-details').open"), false);
+        await click(".permission-operation-details summary");
+        assert.deepEqual(await js("Array.from(document.querySelectorAll('.permission-edit pre')).map(p=>p.textContent)"), ["old\nline", "new\nline", "remove", ""]);
+        await show(request("normalized-exec", "exec", { command: "/venv/bin/python -m lxeskill list", cwd: "/work", requested_command: "lxeskill list" }));
+        assert.equal(await js("document.querySelector('.permission-command').textContent"), "/venv/bin/python -m lxeskill list");
+        await click(".permission-operation-details summary");
+        assert.equal(await js("document.querySelector('.permission-operation-details pre').textContent"), "lxeskill list");
+      });
+      await step("compact approval cards fit narrow light and dark views while long contents remain readable", async () => {
+        await js("behavior.composerLanguage('zh')");
+        const value = request("visual-write", "write", { path: "/work/订单分析/hello.txt", content: "你好，世界！\n这是一个用于验证权限审批界面的测试文件。\n".repeat(40) });
+        for (const theme of ["light", "dark"]) {
+          await js(`document.documentElement.dataset.theme=${JSON.stringify(theme)}`);
+          await show({ ...value, request_id: `visual-${theme}` }); await settle();
+          assert.match(await js("document.querySelector('.permission-approval-status').innerText"), /等待审批/);
+          assert.ok(await js("document.querySelector('.permission-approval').getBoundingClientRect().height < 240"));
+          if (process.env.LXE_APPROVAL_SCREENSHOT) {
+            await js("document.fonts.ready.then(() => undefined)"); await settle();
+            const bounds = await js("document.querySelector('.permission-approval').getBoundingClientRect().toJSON()");
+            const screenshot = await win.webContents.capturePage({ x: Math.floor(bounds.x), y: Math.floor(bounds.y), width: Math.ceil(bounds.width), height: Math.ceil(bounds.height) });
+            require("node:fs").writeFileSync(process.env.LXE_APPROVAL_SCREENSHOT.replace(/\.png$/, `-${theme}.png`), screenshot.toPNG());
+          }
+          win.setSize(480, 650); await settle();
+          await click(".permission-operation-details summary");
+          assert.equal(await js("document.querySelector('.permission-operation-details pre').textContent"), value.preview.content);
+          assert.ok(await js("(() => { const body=document.querySelector('.permission-approval-body'); return body.scrollHeight > body.clientHeight && body.scrollWidth <= body.clientWidth + 1; })()"));
+          assert.ok(await js("document.querySelector('.permission-approval footer').getBoundingClientRect().bottom <= innerHeight"));
+          win.setSize(1200, 900); await settle();
+        }
       });
     }
     else if (suite === "mermaid") {

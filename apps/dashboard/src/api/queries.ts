@@ -128,9 +128,7 @@ export function useSessionPermissionMutation() {
 export function useApprovalActions() {
   const decide = useMutation({ retry: false, mutationFn: (input: ApprovalDecision) =>
     callDashboard({ operation: "sessions.approval.decide", input }) });
-  const stop = useMutation({ retry: false, mutationFn: (input: { session_id: string; turn_id: string }) =>
-    callDashboard({ operation: "sessions.stop", input }) });
-  return { decide: decide.mutateAsync, stop: stop.mutateAsync };
+  return { decide: decide.mutateAsync };
 }
 
 export function useUserQuestionActions() {

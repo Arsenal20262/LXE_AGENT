@@ -1197,7 +1197,7 @@ export function ConversationComposer({
     });
   };
   const stageDroppedFiles = useCallback((files: File[]) => {
-    if (!runtimeReady || question || sending) return;
+    if (!runtimeReady || question || sending || !textareaRef.current) return;
     setError("");
     return attachmentDraft.stage(async () => {
       if (!window.lxe) throw new Error(t.conversation.unavailable);
@@ -1215,7 +1215,7 @@ export function ConversationComposer({
     const dragOver = (event: DragEvent) => {
       if (!event.dataTransfer?.types.includes("Files")) return;
       event.preventDefault();
-      if (!runtimeReady || question) {
+      if (!runtimeReady || question || !textareaRef.current) {
         event.dataTransfer.dropEffect = "none";
         return;
       }
@@ -1229,7 +1229,7 @@ export function ConversationComposer({
       if (!event.dataTransfer?.files.length) return;
       event.preventDefault();
       setDragActive(false);
-      if (!runtimeReady || question) return;
+      if (!runtimeReady || question || !textareaRef.current) return;
       void stageDroppedFiles(Array.from(event.dataTransfer.files));
     };
     window.addEventListener("dragover", dragOver);
@@ -1275,9 +1275,9 @@ export function ConversationComposer({
   };
   return (
     <div className={`conversation-composer ${dragActive ? "drag-active" : ""}`}>
+      <ApprovalGate key={conversationKey} requests={approvals} ready={runtimeReady} onChanged={onApprovalChanged}>
       {dragActive ? <div className="conversation-drop-hint">{t.conversation.dropFiles}</div> : null}
       <div className="conversation-compose-box">
-        <ApprovalGate key={conversationKey} requests={approvals} ready={runtimeReady} onChanged={onApprovalChanged}>
         <UserQuestionGate request={runtimeReady ? question : undefined} conversationKey={runtimeReady ? conversationKey : "offline"} onAnswered={onQuestionAnswered}>
         {attachments.length ? (
           <InputAttachmentList draft attachments={attachments} onRemove={sending ? undefined : removeAttachment} />
@@ -1294,7 +1294,6 @@ export function ConversationComposer({
             });
           }} />
         </UserQuestionGate>
-        </ApprovalGate>
         <div className="conversation-compose-actions">
           <div className="conversation-compose-leading">
             <button
@@ -1361,6 +1360,7 @@ export function ConversationComposer({
         </div>
       ) : null}
       {error ? <div className="conversation-compose-error" role="alert">{error}</div> : null}
+      </ApprovalGate>
     </div>
   );
 }

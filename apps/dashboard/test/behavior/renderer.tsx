@@ -183,6 +183,9 @@ let approvalRequests: PendingApproval[] = [];
 let fixtureQuestion: PendingUserQuestion | undefined;
 let failPermission = false, holdPermission = false;
 let releasePermission: (() => void) | undefined;
+let failApproval = false, holdApproval = false;
+let releaseApproval: (() => void) | undefined;
+let composerLanguage: "en" | "zh" = "en";
 const dashboard = {
   async call(call: { operation: string; input: Record<string, unknown> }) {
     if (call.operation === "skills.list") return { items: referenceMode ? referenceSkills : [], total: referenceMode ? 3 : 0 };
@@ -205,7 +208,12 @@ const dashboard = {
     if (call.operation === "sessions.detail" && !workspaceMode) return { ...workspaceRpc(call) as object, session: { ...workspaceSession(String(call.input.session_id), "/fixture"), permission_mode: permissionModes.get(String(call.input.session_id)) ?? "workspace-write" }, messages: [] };
     if (call.operation === "sessions.approvals") return { items: structuredClone(approvalRequests) };
     if (call.operation === "sessions.approval.decide") {
+      if (failApproval) throw new Error("ENOSPC: fixture approval audit failed");
       approvalRequests = approvalRequests.filter(request => request.request_id !== call.input.request_id);
+      if (holdApproval) {
+        void queryClient?.invalidateQueries({ queryKey: ["sessions", "approvals"] });
+        await new Promise<void>(resolve => { releaseApproval = resolve; });
+      }
       return { accepted: true, request_id: call.input.request_id };
     }
     if (call.operation === "sessions.stop" && !workspaceMode) { stops++; approvalRequests = []; return { stopped: true }; }
@@ -269,7 +277,7 @@ function ComposerFixture() {
     }} onStop={async () => { stops++; }} />;
 }
 function renderComposer() {
-  flushSync(() => root!.render(<I18nContext.Provider value={UI_TEXT.en}>
+  flushSync(() => root!.render(<I18nContext.Provider value={UI_TEXT[composerLanguage]}>
     <QueryClientProvider client={queryClient!}>{referenceMode ? <div style={{height:"min(650px, 100dvh)"}}><FilePreviewLayout sessionId={conversationKey}><div data-test-ui="composer reference fixture" style={{display:"flex",flexDirection:"column",justifyContent:"flex-end",height:"100%"}}><UserReferenceText text={'历史 @销售.md /office-xlsx /unknown'} skills={["office-xlsx"]} />{composer()}</div></FilePreviewLayout></div> : composer()}</QueryClientProvider>
   </I18nContext.Provider>));
 }
@@ -304,7 +312,12 @@ function reset() {
   calls.length = 0; sends.length = 0; stops = 0; releaseSend = undefined;
 }
 const fixture = {
-  mountPermissions() { reset(); composerOptions = { running: true }; conversationKey = "permissions-a"; permissionModes.clear(); approvalRequests = []; fixtureQuestion = undefined; failPermission = false; holdPermission = false; renderComposer(); },
+  mountPermissions() { reset(); composerOptions = { running: true }; conversationKey = "permissions-a"; permissionModes.clear(); approvalRequests = []; fixtureQuestion = undefined; failPermission = false; holdPermission = false; failApproval = false; holdApproval = false; composerLanguage = "en"; renderComposer(); },
+  permissionRequests(requests: PendingApproval[]) { approvalRequests = requests; void queryClient?.invalidateQueries({ queryKey: ["sessions", "approvals"] }); },
+  approvalFailure(value: boolean) { failApproval = value; },
+  holdApproval(value: boolean) { holdApproval = value; },
+  releaseApproval() { holdApproval = false; releaseApproval?.(); },
+  composerLanguage(value: "en" | "zh") { composerLanguage = value; renderComposer(); },
   permissionSession(id: string) { conversationKey = id; renderComposer(); },
   permissionFailure(value: boolean) { failPermission = value; },
   holdPermission(value: boolean) { holdPermission = value; },
