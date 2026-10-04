@@ -215,7 +215,8 @@ button {
 
 /* Decision A: the sidebar sits below the content plane rather than above it, so
    the "chrome recedes, content is the stage" relationship survives the switch. */
-:root[data-theme="dark"] .app-shell {
+:root[data-theme="dark"] .app-shell,
+:root[data-theme="dark"] .desktop-platform-win32 {
   --navigation-bg: #242322;
   --sidebar-bg: #1c1b1a;
   --sidebar-border: rgba(255, 255, 255, 0.065);
@@ -342,19 +343,6 @@ button {
 }
 
 .desktop-platform-darwin .app-shell.sessions-focus > .main-panel {
-  padding-top: 0;
-}
-
-/* Windows already draws its native controls inside a 40px title-bar overlay.
-   Conversation pages reuse that row instead of stacking a second header
-   below it. Other sections keep the generic title-bar clearance above. */
-.desktop-platform-win32:has(.app-shell.sessions-focus) > .desktop-window-drag-region {
-  pointer-events: none;
-  app-region: no-drag;
-  -webkit-app-region: no-drag;
-}
-
-.desktop-platform-win32 .app-shell.sessions-focus > .main-panel {
   padding-top: 0;
 }
 
@@ -2055,6 +2043,7 @@ button {
   line-height: 1.45;
 }
 
+.desktop-platform-win32,
 .app-shell {
   --app-navigation-width: 53.2px;
   --app-titlebar-height: 41.8px;
@@ -2068,6 +2057,9 @@ button {
   --sidebar-accent: #d9a488;
   --sidebar-hover: rgba(255, 255, 255, 0.06);
   --sidebar-active: rgba(255, 255, 255, 0.1);
+}
+
+.app-shell {
   position: relative;
   display: grid;
   width: 100%;
@@ -8507,43 +8499,22 @@ pre {
    so the click never reaches the DOM. Stacking cannot rescue it either — the
    regions are unioned and subtracted in document order, not by z-index, and the
    header comes after the toggle, so its rectangle would be added back last. */
-.desktop-platform-darwin .sessions-focus .conversation-header,
-.desktop-platform-win32 .sessions-focus .conversation-header {
+.desktop-platform-darwin .sessions-focus .conversation-header {
   z-index: 21;
   background: var(--bg);
   app-region: no-drag;
   -webkit-app-region: no-drag;
 }
 
-.desktop-platform-darwin .sessions-focus .conversation-header-copy,
-.desktop-platform-win32 .sessions-focus .conversation-header-copy {
+.desktop-platform-darwin .sessions-focus .conversation-header-copy {
   app-region: drag;
   -webkit-app-region: drag;
 }
 
 /* Declared after the title text so the subtraction lands on top of it. */
-.desktop-platform-darwin .sessions-focus .conversation-header button,
-.desktop-platform-win32 .sessions-focus .conversation-header button {
+.desktop-platform-darwin .sessions-focus .conversation-header button {
   app-region: no-drag;
   -webkit-app-region: no-drag;
-}
-
-/* Windows draws its native controls inside the title-bar overlay, so the row
-   keeps clear of them on the right. */
-.desktop-platform-win32 .sessions-focus .conversation-header {
-  min-height: 40px;
-  padding-top: 5px;
-  padding-right: calc(
-    18px + max(
-      138px,
-      calc(
-        100vw
-        - env(titlebar-area-x, 0px)
-        - env(titlebar-area-width, calc(100vw - 138px))
-      )
-    )
-  );
-  padding-bottom: 5px;
 }
 
 .desktop-window-frame .app-shell.sidebar-collapsed.sessions-focus .conversation-header {

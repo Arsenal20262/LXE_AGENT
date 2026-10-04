@@ -1,3 +1,4 @@
+import { validateTitlebarMenu } from "./titlebar-menu";
 import { fileResult } from "./file-preview/errors";
 import { mkdirSync } from "node:fs";
 import { app, dialog, ipcMain, shell } from "electron";
@@ -43,6 +44,7 @@ import {
 } from "./ipc-validation";
 
 export interface DesktopIpcApplication {
+  showTitlebarMenu?(request: import("@lxe/desktop-protocol").DesktopTitlebarMenuRequest): Promise<import("@lxe/desktop-protocol").DesktopTitlebarAction>;
   isTrustedFileSender(event: import("electron").IpcMainInvokeEvent): boolean;
   fileCall?<K extends keyof import("@lxe/desktop-protocol").DesktopFileOperations>(call: import("@lxe/desktop-protocol").DesktopFileCall<K>): Promise<import("@lxe/desktop-protocol").DesktopFileOperations[K]["result"]>;
   fileRead?(handle: string, relativeImage?: string): Promise<Uint8Array>;
@@ -122,6 +124,11 @@ export function registerDesktopIpc(application: DesktopIpcApplication): () => vo
     if (!application.fileRead) throw new Error("File previews are unavailable");
     return application.fileRead(handle, relativeImage);
   }));
+  ipcMain.handle(IPC_CHANNELS.showTitlebarMenu, (event, input: unknown) => {
+    if (!application.isTrustedFileSender(event)) throw new Error("Titlebar menus are only available to the desktop main frame");
+    if (!application.showTitlebarMenu) throw new Error("Windows titlebar menus are unavailable");
+    return application.showTitlebarMenu(validateTitlebarMenu(input));
+  });
   ipcMain.handle(IPC_CHANNELS.getUpdateState, () => application.getUpdateState?.() ?? {phase:"unsupported"});
   ipcMain.handle(IPC_CHANNELS.checkForUpdate, () => application.checkForUpdate?.() ?? {phase:"unsupported"});
   ipcMain.handle(IPC_CHANNELS.installUpdate, () => application.installUpdate?.() ?? {phase:"unsupported"});

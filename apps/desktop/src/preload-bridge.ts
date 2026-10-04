@@ -50,6 +50,7 @@ export function createDesktopBridge(
     },
     desktop: {
       platform,
+      showTitlebarMenu: request => ipc.invoke(IPC_CHANNELS.showTitlebarMenu, request),
       getUpdateState: () => ipc.invoke(IPC_CHANNELS.getUpdateState),
       checkForUpdate: () => ipc.invoke(IPC_CHANNELS.checkForUpdate),
       installUpdate: () => ipc.invoke(IPC_CHANNELS.installUpdate),

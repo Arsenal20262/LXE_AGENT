@@ -653,12 +653,15 @@ export interface DesktopUsageBalance {
 
 export interface WorkspaceApplication { id: string; name: string; icon: string | null }
 
+export type { DesktopTitlebarAction, DesktopTitlebarMenuRequest } from "./titlebar";
+
 export interface LxeDesktopBridge {
   tools?: import("./manual-tools").ManualToolsBridge;
   files: import("./file-preview").DesktopFilesBridge;
   dashboard: DashboardTransport;
   desktop: {
     readonly platform: DesktopPlatform;
+    showTitlebarMenu?(request: import("./titlebar").DesktopTitlebarMenuRequest): Promise<import("./titlebar").DesktopTitlebarAction>;
     getUpdateState?(): Promise<import("./updates").DesktopUpdateState>;
     checkForUpdate?(): Promise<import("./updates").DesktopUpdateState>;
     installUpdate?(): Promise<import("./updates").DesktopUpdateState>;

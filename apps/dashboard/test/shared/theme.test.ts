@@ -10,8 +10,10 @@ import {
 const styles = readFileSync(new URL("../../src/styles.css", import.meta.url), "utf8");
 
 function tokens(selector: string): Record<string, string> {
-  const block = styles.slice(styles.indexOf(`${selector} {`));
-  const body = block.slice(0, block.indexOf("\n}"));
+  const rules = styles.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^}]*)\}/g);
+  const rule = [...rules].find(match => match[1]!.split(",").some(value => value.trim() === selector));
+  if (!rule) throw new Error(`No palette rule found for ${selector}`);
+  const body = rule[2]!;
   return Object.fromEntries(
     [...body.matchAll(/(--[a-z0-9-]+):\s*(#[0-9a-fA-F]{6})/g)].map((m) => [m[1], m[2]]),
   );

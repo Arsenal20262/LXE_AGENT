@@ -1,3 +1,6 @@
+import { sendEditingShortcut, titlebarMenuTemplate } from "./main/titlebar-menu";
+import { WINDOWS_TITLEBAR_COLOURS } from "./main/window-options";
+import type { DesktopTitlebarAction } from "@lxe/desktop-protocol";
 import { ManualToolsService } from "./main/manual-tools/service";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -436,7 +439,35 @@ async function bootstrap(): Promise<void> {
   });
   activeUpdates = updates;
   updates.start();
+  let captionMenuOpen = false;
   const ipcApplication: DesktopIpcApplication = {
+    showTitlebarMenu: async request => {
+      const owner = window;
+      if (desktopPlatform !== "win32" || !owner || owner.isDestroyed()) throw new Error("Windows titlebar menus are unavailable");
+      if (captionMenuOpen) return null;
+      const zoom = owner.webContents.getZoomFactor();
+      const [width = 0, height = 0] = owner.getContentSize();
+      const x = Math.round(request.x * zoom), y = Math.round(request.y * zoom);
+      if (x > width || y > height) throw new Error("Titlebar menu anchor is outside the window");
+      captionMenuOpen = true;
+      try {
+        return await new Promise<DesktopTitlebarAction>(resolve => {
+          let selected: DesktopTitlebarAction = null;
+          const finish = () => { owner.removeListener("closed", finish); resolve(selected); };
+          owner.once("closed", finish);
+          Menu.buildFromTemplate(titlebarMenuTemplate(request, {
+            select: action => { selected = action; },
+            canCheckUpdates: !["unsupported", "checking", "downloading", "verifying", "installing"].includes(updates.state().phase),
+            edit: key => {
+              if (owner.isDestroyed()) return;
+              owner.webContents.focus();
+              sendEditingShortcut(event => owner.webContents.sendInputEvent(event), key);
+            },
+            quit: () => { void shutdownApplication(); },
+          })).popup({ window: owner, x, y, callback: finish });
+        });
+      } finally { captionMenuOpen = false; }
+    },
     getUpdateState: () => updates.state(),
     checkForUpdate: () => updates.check(),
     installUpdate: () => updates.install(),
@@ -449,7 +480,7 @@ async function bootstrap(): Promise<void> {
       if (!window || window.isDestroyed()) return;
       window.setBackgroundColor(palette.color);
       if (desktopPlatform === "darwin") return;
-      window.setTitleBarOverlay({ ...palette, height: DESKTOP_TITLEBAR_HEIGHT });
+      window.setTitleBarOverlay({ ...(desktopPlatform === "win32" ? WINDOWS_TITLEBAR_COLOURS[appearance] : palette), height: DESKTOP_TITLEBAR_HEIGHT });
     },
     dashboardCall: async <O extends DashboardRpcOperation>(
       call: DashboardRpcCall<O>,

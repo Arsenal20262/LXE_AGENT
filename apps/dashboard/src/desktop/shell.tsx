@@ -1,3 +1,4 @@
+import { WindowsTitlebar } from "./windows-titlebar";
 import { UsagePanel } from "./usage-panel";
 import { ErpSettingsTabs } from "./erp-settings-tabs";
 import { DeviceContextPanel } from "./device-context-panel";
@@ -1178,6 +1179,7 @@ export function DesktopShell({
   const [activeErp, setActiveErp] = useState<ErpIntegrationName>("mabangTms");
   const [activeSettingsSection, setActiveSettingsSection] = useState<DesktopSettingsSection>("cloud");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [updateCheckRequest, setUpdateCheckRequest] = useState(0);
   const [saving, setSaving] = useState(false);
   const [credentialBusy, setCredentialBusy] = useState(false);
   const [restarting, setRestarting] = useState(false);
@@ -1204,6 +1206,7 @@ export function DesktopShell({
     setCloudPassword("");
     setCloudEnrollmentError("");
     setSettingsOpen(false);
+    setUpdateCheckRequest(0);
   };
   const settingsDialogRef = useDialogFocus<HTMLFormElement>(settingsOpen, closeSettings);
 
@@ -1745,6 +1748,11 @@ export function DesktopShell({
   return (
     <div className={frameClassName} data-lxe-root-state="ready">
       {dragRegion}
+      {desktop.platform === "win32" ? <WindowsTitlebar language={language} onAction={action => {
+        if (!action) return;
+        if (!settingsOpen) openSettings();
+        if (action === "check-updates") setUpdateCheckRequest(value => value + 1);
+      }} /> : null}
       <div key={appGeneration}>{children({ cloud, health, openSettings, setupComplete: setup.complete })}</div>
       {notice && !settingsOpen ? (
         <DesktopNoticeMessage
@@ -1799,7 +1807,7 @@ export function DesktopShell({
             <footer>
               <div className="desktop-version-updates">
                 <span className="desktop-version">{health?.version ? `v${health.version}` : "—"}</span>
-                <UpdateControl manual />
+                <UpdateControl manual checkRequest={updateCheckRequest} />
               </div>
               {activeSettingsSection !== "status"
                 && activeSettingsSection !== "appearance"

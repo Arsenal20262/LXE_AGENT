@@ -151,7 +151,7 @@ const desktop = {
   selectWorkspace: async () => { calls.push({ operation: "chooseWorkspace" }); return chosenDirectory; },
   getWorkspaceApplications: async () => [{ id: "finder", name: "Finder", icon: null }],
   openWorkspace: async (directory: string) => { calls.push({ operation: "openWorkspace", input: directory }); },
-  platform: navigator.userAgent.includes("Windows") ? "win32" as const : "darwin" as const,
+  platform: (new URLSearchParams(location.search).get("platform") === "win32" || navigator.userAgent.includes("Windows")) ? "win32" as const : "darwin" as const,
   getSetupState: async () => setupState({ complete }),
   getHealth: async () => ({ ...health }),
   getCloudState: async () => cloudState(),

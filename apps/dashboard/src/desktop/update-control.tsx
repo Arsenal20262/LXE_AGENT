@@ -5,7 +5,7 @@ import type {DesktopUpdateState} from "@lxe/desktop-protocol";
 import {useDialogFocus} from "../shared/ui/use-dialog-focus";
 import {useUiText} from "../shared/i18n";
 
-export function UpdateControl({manual=false}:{manual?:boolean}){
+export function UpdateControl({manual=false,checkRequest=0}:{manual?:boolean;checkRequest?:number}){
  const t=useUiText().updates;
  const [state,setState]=useState<DesktopUpdateState>({phase:"unsupported"});
  const [open,setOpen]=useState(false);
@@ -49,6 +49,12 @@ export function UpdateControl({manual=false}:{manual?:boolean}){
   catch(error){setState({phase:"error",message:String(error)});}
   finally{revision.current++;actionPending.current=false;setBusy(false);setInstallPending(false);}
  };
+ const handledCheck=useRef(0);
+ useEffect(()=>{
+  if(!manual||!checkRequest||handledCheck.current===checkRequest)return;
+  handledCheck.current=checkRequest;
+  void action();
+ },[checkRequest,manual]);
  if(state.phase==="unsupported")return null;
  const ring=working;
  const percent=state.phase==="downloading"&&Number.isFinite(state.percent)?Math.min(100,Math.max(0,state.percent!)):undefined;
