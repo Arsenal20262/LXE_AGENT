@@ -1,4 +1,4 @@
-"""One synthetic Desktop-map-to-CLI run through the managed Office Kit."""
+"""Synthetic managed-map and chat-bind runs through the Office Kit."""
 
 from __future__ import annotations
 
@@ -202,7 +202,7 @@ def test_install_list_replace_rollback_then_generate_one_final_workbook(
     not (os.environ.get("LXE_OFFICE_NODE") and os.environ.get("LXE_OFFICE_CLI")),
     reason="Host Office Kit paths are not configured",
 )
-def test_sparse_map_keeps_partial_and_unmapped_yacang_skus(
+def test_chat_bind_sparse_map_then_generate_keeps_all_yacang_skus(
     tmp_path: Path, isolated_state: Path,
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -221,8 +221,20 @@ def test_sparse_map_keeps_partial_and_unmapped_yacang_skus(
         return _three_sources()
 
     monkeypatch.setattr(workflow, "export_vietnam_sources", fake_export)
-    installed = install_map({"source_path": str(_sparse_map(tmp_path / "sparse.xlsx")), "expected_revision": ""})
-    assert installed["success"] is True
+    sparse_path = _sparse_map(tmp_path / "sparse.xlsx")
+    assert lxeskill.main([
+        "vietnam", "sku", "bind", "--source-path", str(sparse_path),
+    ]) == 0
+    bind_events = [
+        json.loads(line) for line in capsys.readouterr().out.splitlines() if line.strip()
+    ]
+    bind_result = next(event for event in reversed(bind_events) if event["type"] == "result")
+    assert bind_result["ok"] is True
+    assert bind_result["data"]["success"] is True
+    assert bind_result["data"]["status"] == "installed"
+    assert bind_result["files"] == []
+    assert _managed_slot()["current"]["file_name"] == sparse_path.name
+    assert export_calls == []
 
     assert lxeskill.main(["vietnam", "stock", "recommend"]) == 0
     records = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.strip()]
