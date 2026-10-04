@@ -147,26 +147,32 @@ Windows 受管接入由 Main 请求 UAC，安装或复用 WireGuard，并建立 
 
 ## 本地开发
 
-安装固定依赖：
+macOS（Apple Silicon／Intel）和 Windows x64 使用相同的源码启动入口。先安装仓库 `package.json` 锁定的 Bun（当前为 1.4.2）和 uv；macOS 还需要独立 Node.js >=22.19，Windows 使用自动准备的私有 Node，无需全局 Node。然后在仓库根目录安装固定依赖：
 
 ```bash
 bun install --frozen-lockfile
 uv sync --frozen --all-groups --python 3.12.10
 ```
 
-启动完整 Electron 开发环境：
-
-```bash
-bun run desktop:dev
-```
-
-预览构建后的生产 Renderer，同时继续使用源码 Gateway 和 Agent Runtime：
+日常预览从仓库根目录执行，无需 `--cwd` 或单独运行沙箱准备命令：
 
 ```bash
 bun run desktop:preview
 ```
 
-生产预览不启动 Vite 或本地 Dashboard HTTP Server，页面从 `app://lxe/` 加载。其配置、加密凭据、日志、数据库和 Electron 会话统一写入当前仓库或 worktree 的 `var/`；它不替代 Unpacked 或安装包验收。
+该命令依次准备资源、构建 Dashboard、构建并启动 Electron。首次准备需要联网，Windows 会准备完整受管运行时，耗时较长；之后沿用资源模块的校验和缓存。任一步骤失败立即停止，终端保留实际错误。
+
+需要 Vite 热更新时执行，共用相同的资源准备流程：
+
+```bash
+bun run desktop:dev
+```
+
+也可用 `bun run desktop:prepare` 只准备资源。macOS 依次准备 ExifTool、fd 和 Office，进程沙箱使用系统组件；Windows x64 先准备完整运行时，再构建沙箱启动器。沙箱依赖按锁文件复用，启动器每次重建。其他平台明确报错。
+
+源码资源固定在当前 checkout 的 `build/desktop-runtime/<平台>-<架构>/`，Windows 沙箱启动器在 `build/exec-sandbox/`；Windows 下载缓存和描述文件分别位于 `build/desktop-runtime-cache/win32-x64/` 和 `build/desktop-runtime-inputs.json`。准备入口和 Desktop 共用路径解析；正式打包的目录配置能力保持不变。源码 Python 始终使用当前 checkout 自己的 `.venv`，不共享其他 worktree 的虚拟环境。低层资源准备命令仍保留，供单独维护使用。
+
+生产预览不启动 Vite 或本地 Dashboard HTTP Server，页面从 `app://lxe/` 加载，同时使用源码 Gateway 和 Agent Runtime。其配置、加密凭据、日志、数据库和 Electron 会话统一写入当前仓库或 worktree 的 `var/`；它不替代 Unpacked 或安装包验收。
 
 四条桌面运行与验证路线按边界逐级增强：
 

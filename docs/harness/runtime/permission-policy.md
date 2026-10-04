@@ -47,7 +47,7 @@ Windows 在系统临时根下使用包含运行时随机 UUID 和会话哈希的
 
 删除会话或关闭运行时时，先结束相关进程和准备任务，再撤销临时授权、清理该运行时的会话临时目录（包括文件工具创建而尚未用于 exec 的目录）。授权或清理失败保留实际错误。工作区 ACL、继承的删除限制和 Low 完整性标签继续持久保留，退出不恢复；这是已经选定的 DSH 行为。Windows 必须保证工作区与其专用临时目录分离。
 
-macOS 使用 `/usr/bin/sandbox-exec`，Windows 使用独立 Node、Koffi 3.1.1 和受限令牌。Desktop 注入 `LXE_EXEC_SANDBOX_NODE`、`LXE_EXEC_SANDBOX_RUNNER`，模型不能选择启动器。开发执行 `bun scripts/prepare-exec-sandbox.ts` 构建，打包包含原生依赖和 MIT 许可证。Full access 跳过沙箱和受限授权；后端缺失或失败明确报错，不降级执行。
+macOS 使用 `/usr/bin/sandbox-exec`，Windows 使用独立 Node、Koffi 3.1.1 和受限令牌。Desktop 注入 `LXE_EXEC_SANDBOX_NODE`、`LXE_EXEC_SANDBOX_RUNNER`，模型不能选择启动器。源码启动 `bun run desktop:preview` 或 `bun run desktop:dev` 自动准备所需资源；也可用 `bun run desktop:prepare` 只做准备。低层 `bun scripts/prepare-exec-sandbox.ts` 保留供单独维护，打包包含原生依赖和 MIT 许可证。Full access 跳过沙箱和受限授权；后端缺失或失败明确报错，不降级执行。
 
 Windows 仍有 DSH 机制本身的限制：工作区硬链接别名、Everyone 等环境 ACL、Low 标签对其他进程的影响、继承管道和 PowerShell 的兼容性。结果中 `sandbox.enforcement` 标为 `partial`；macOS 标为 `file-write`，Full access 为 `none`。这不是读取、网络或进程可见性隔离。
 

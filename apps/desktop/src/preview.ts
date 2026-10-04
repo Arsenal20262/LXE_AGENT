@@ -9,6 +9,7 @@ delete environment.LXE_DASHBOARD_DEV_URL;
 delete environment.LXE_DATA_ROOT;
 environment.LXE_SOURCE_ROOT = sourceRoot;
 environment.LXE_DESKTOP_PREVIEW = "1";
+environment.LXE_AGENT_CLI_COMMAND = environment.LXE_AGENT_CLI_COMMAND?.trim() || process.execPath;
 
 const electronPath = createRequire(import.meta.url)("electron") as string;
 const electron = Bun.spawn([electronPath, "."], {

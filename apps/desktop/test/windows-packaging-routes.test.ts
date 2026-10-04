@@ -27,8 +27,9 @@ describe("Windows desktop packaging routes", () => {
     expect(workspaceScripts["verify:platform:mac"]).toBe(
       "bun scripts/assert-host-platform.ts darwin && bun run desktop:tools:mac && bun run verify:source && bun scripts/verify-desktop-macos-media.ts",
     );
-    expect(workspaceScripts["desktop:dev"]).toStartWith("bun run desktop:tools:mac");
-    expect(workspaceScripts["desktop:preview"]).toStartWith("bun run desktop:tools:mac");
+    expect(workspaceScripts["desktop:prepare"]).toBe("bun scripts/prepare-desktop-source.ts");
+    expect(workspaceScripts["desktop:dev"]).toStartWith("bun run desktop:prepare");
+    expect(workspaceScripts["desktop:preview"]).toStartWith("bun run desktop:prepare");
     expect(workspaceScripts["desktop:validate:config"]).toBeUndefined();
   });
 

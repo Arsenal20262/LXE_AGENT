@@ -1,8 +1,9 @@
 import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { sourceRuntimePaths } from "../apps/desktop/src/main/source-runtime-paths";
 
 /** Build a self-contained Node launcher; native dependencies stay outside Bun's executable. */
-export async function prepareExecSandbox(root: string, destination = join(root, "build", "exec-sandbox")): Promise<string> {
+export async function prepareExecSandbox(root: string, destination = sourceRuntimePaths(root).sandboxRoot): Promise<string> {
   const config = join(root, "config", "desktop-runtime", "exec-sandbox");
   const vendor = join(root, "packages", "agent", "runtime", "native", "windows-sandbox");
   mkdirSync(destination, { recursive: true });

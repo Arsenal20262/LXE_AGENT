@@ -210,9 +210,7 @@ export class DesktopGateway {
       LXE_MANAGED_PYTHON: this.options.paths.managedPythonPath,
       LXE_OFFICE_NODE: this.options.paths.officeNodePath,
       LXE_EXEC_SANDBOX_NODE: this.options.paths.officeNodePath,
-      LXE_EXEC_SANDBOX_RUNNER: this.options.packaged
-        ? join(process.resourcesPath, "runtime", "exec-sandbox", "runner.mjs")
-        : join(this.options.paths.sourceRoot, "build", "exec-sandbox", "runner.mjs"),
+      LXE_EXEC_SANDBOX_RUNNER: this.options.paths.execSandboxRunnerPath,
       LXE_OFFICE_CLI: this.options.paths.officeCliPath,
       PYTHONDONTWRITEBYTECODE: "1",
       PYTHONNOUSERSITE: "1",
