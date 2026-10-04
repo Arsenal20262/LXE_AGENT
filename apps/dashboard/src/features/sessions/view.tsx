@@ -1306,12 +1306,10 @@ export function ConversationComposer({
             >
               <Paperclip size={17} />
             </button>
-            <span className="conversation-input-hint">
-              {runtimeReady ? t.conversation.inputHint : runtimeUnavailableMessage}
-            </span>
+            <PermissionPicker key={conversationKey} sessionId={permissionSessionId ?? conversationKey} initialMode={permissionMode} ready={runtimeReady} />
+            {!runtimeReady ? <span className="conversation-input-hint">{runtimeUnavailableMessage}</span> : null}
           </div>
           <div className="conversation-compose-trailing">
-            <PermissionPicker key={conversationKey} sessionId={permissionSessionId ?? conversationKey} initialMode={permissionMode} ready={runtimeReady} />
             <ConversationContextMeter activity={activity} currentModel={currentModel} detail={contextDetail} />
             <ConversationModelPicker
               current={currentModel}

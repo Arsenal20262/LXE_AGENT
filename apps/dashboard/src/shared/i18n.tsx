@@ -337,7 +337,6 @@ export const ZH_TEXT = {
     error: "执行失败",
     unavailable: "Gateway 或 Agent 尚未就绪",
     modelUnavailable: "模型未配置，对话暂不可用",
-    inputHint: "Enter 发送，Shift + Enter 换行",
     characterCount: (count: string, maximum: string) => `${count} / ${maximum}`,
     contextMeter: {
       noData: "暂无数据",
@@ -1211,7 +1210,6 @@ export const UI_TEXT: Record<Language, UiText> = {
       error: "Run failed",
       unavailable: "Gateway or Agent is not ready",
       modelUnavailable: "No model configured. Chat is unavailable.",
-      inputHint: "Enter to send, Shift + Enter for a new line",
       characterCount: (count: string, maximum: string) => `${count} / ${maximum}`,
       contextMeter: {
       noData: "No data",

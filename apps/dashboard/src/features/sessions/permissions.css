@@ -1,4 +1,4 @@
-.permission-menu { min-width: 290px; }
+.permission-picker .permission-menu { left: 0; right: auto; min-width: min(290px, calc(100vw - 96px)); max-width: calc(100vw - 96px); }
 .permission-error { color: var(--danger); white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
 .permission-picker > .permission-error { position: absolute; bottom: 100%; background: var(--surface); padding: 10px; width: 300px; box-shadow: 0 4px 20px #0002; border-radius: 8px; z-index: 10; }
 
