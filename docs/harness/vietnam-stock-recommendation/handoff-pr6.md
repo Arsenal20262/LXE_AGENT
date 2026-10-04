@@ -4,7 +4,7 @@
 
 ## 接手位置与依赖
 
-- 分支：`codex/vietnam-stock-pr6-partial-mapping`；worktree：`/Users/hym/.codex/worktrees/cf36/LXE_AGENT1`。从 PR5 提交 `dbde3e56` 开始；PR5 仍是开放的 [PR #5](https://github.com/Arsenal20262/LXE_AGENT/pull/5)，PR6 应以 PR5 分支为 base。没有在 `main` 开发。
+- 分支：`codex/vietnam-stock-pr6-partial-mapping`；在该分支所属 worktree 操作。从 PR5 提交 `dbde3e56` 开始；PR5 仍是开放的 [PR #5](https://github.com/Arsenal20262/LXE_AGENT/pull/5)，PR6 应以 PR5 分支为 base。没有在 `main` 开发。
 - 已批准设计在 `docs/superpowers/specs/2026-10-04-vietnam-partial-sku-mapping-design.md`，本地实施计划在 `docs/superpowers/plans/2026-10-04-vietnam-partial-sku-mapping.md`。设计已作为独立提交 `f159a2d5` 保存。接手时先核对项目规范、分支状态和这两份文件。
 - PR6 只改变当前 SKU 映射缺行、单项价格留空时的五表行为，以及对应的重算校验和说明。Desktop 仍只有一个 SKU 映射表槽；聊天命令仍无参数；没有新增推断匹配、历史数据回填或临时参数覆盖。
 
@@ -26,19 +26,16 @@ Desktop 上传 `.xlsx` → `lxeskill assets vietnam sku install` → 安全 ZIP�
 - 此 worktree 单独运行过 `uv sync --frozen`；未复用其他 checkout 的 `.venv`，未改锁文件。测试从仓库根以 `uv run --frozen --no-sync pytest` 执行，`UV_CACHE_DIR` 指向私有临时缓存。
 - Office 测试使用现有构建中的 `LXE_OFFICE_NODE`、`LXE_OFFICE_CLI` 只读路径。实际运行 `test_pr5_integration.py` 的新缺项用例，结果 **1 passed**；假雅仓只导出一次，三条 SKU 保留在主表与三个来源表，验证了独立结果和空白依赖结果。Office 用例没有被跳过。
 - 越南备货测试目录加两个业务 CLI 测试文件的定向回归结果为 **238 passed, 0 skipped**（8.00 秒）。这包括 Office Kit 重算与最终五表校验，没有连接生产雅仓。
-- 复跑上述定向回归时，从仓库根运行以下命令。本次 Office Kit 路径来自本机已有构建，仅作只读测试资源；若该构建已移走，先换成项目当前可用的配套路径。
+- 复跑上述定向回归时，先将 `LXE_OFFICE_NODE` 和 `LXE_OFFICE_CLI` 指向当前环境中同一套项目 Office Kit 的可用路径，再从仓库根运行以下命令。Office Kit 仅作为只读测试资源；若不可用，应报告环境限制，不能把跳过的用例计为通过。
 
   ```sh
-  LXE_OFFICE_NODE=/Users/hym/.codex/worktrees/3062/LXE_AGENT1/build/desktop-runtime/darwin-arm64/node/node \
-  LXE_OFFICE_CLI=/Users/hym/.codex/worktrees/3062/LXE_AGENT1/build/desktop-runtime/darwin-arm64/office/node_modules/@deepseek-ai/libreoffice-kit/lib/cli.js \
-  UV_CACHE_DIR=/private/tmp/lxe-pr6-uv-cache \
   uv run --frozen --no-sync pytest \
     python/lxeskill_cli/tests/vietnam_replenishment \
     python/lxeskill_cli/tests/lxeskill/test_vietnam_recommendation_cli.py \
     python/lxeskill_cli/tests/lxeskill/test_vietnam_sku_management_cli.py -q -rs
   ```
 - `uv build --wheel --offline` 成功；wheel 包含新增 `formula_dependencies.py` 和内置 `skeleton.xlsx`。`dist/` 受 Git 忽略。
-- 只读检查一份工作区外的既有运营映射表：1108 个 SKU，其中 2 个折扣价留空；新校验器接受该文件。该表没有复制到仓库或交给生产雅仓。`git diff --check` 已通过。
+- 只读检查一份工作区外的既有运营映射表，其中有空白折扣价；新校验器接受该文件。该表没有复制到仓库或交给生产雅仓。`git diff --check` 已通过。
 - 仓库全量测试按规范留待上游 PR 合并、最终同步 `main` 后仅运行一次；本次不把定向结果称为全量验收。
 
 四项长期参数仍由 Desktop 注入 `LXE_VIETNAM_WEIGHT_30D`、`LXE_VIETNAM_WEIGHT_15D`、`LXE_VIETNAM_WEIGHT_7D`、`LXE_VIETNAM_EXCHANGE_RATE`；数据根目录用 `LXE_DATA_ROOT`。雅仓凭据只走现有配置，不进入代码、交接页或 Git。PR6 不新增环境变量。
