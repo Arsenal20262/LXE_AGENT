@@ -8,6 +8,8 @@ const path=resolve(process.argv[2]??"");
 const record=JSON.parse(readFileSync(path,"utf8"));
 if(!record.appId.startsWith("com.lxe.agent.updatequalification.")||!record.cache.startsWith("lxe-update-qualification-"))throw new Error("Qualification identity required");
 const folder=join(record.output,"download-app");mkdirSync(folder,{recursive:true});
+record.cache=record.cache.replace(/-updater$/,"-download-updater");
+const downloadRecord=join(folder,"qualification.json");writeFileSync(downloadRecord,JSON.stringify(record));
 // Exercise ShellExecute's acknowledged launch with a harmless real process,
 // including spaces/Unicode in the argument and no change to a real application.
 const probe=join(folder,"提权 launch.txt");
@@ -21,5 +23,5 @@ if(!result.success)throw new AggregateError(result.logs,"Failed to bundle native
 writeFileSync(join(folder,"package.json"),JSON.stringify({name:record.cache.replace(/-updater$/,""),version:"0.0.2",type:"module",main:"index.js"}));
 writeFileSync(join(folder,"dev-app-update.yml"),`updaterCacheDirName: ${record.cache}\n`);
 const require=createRequire(resolve("apps/desktop/package.json")),env={...process.env};delete env.ELECTRON_RUN_AS_NODE;
-const child=Bun.spawn([require("electron"),folder,path],{env,stdout:"inherit",stderr:"inherit"});
+const child=Bun.spawn([require("electron"),folder,downloadRecord],{env,stdout:"inherit",stderr:"inherit"});
 process.exit(await child.exited);
