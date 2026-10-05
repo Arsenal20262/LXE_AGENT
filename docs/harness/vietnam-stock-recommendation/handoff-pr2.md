@@ -2,9 +2,9 @@
 
 ## 接手位置和依赖
 
-- 开发分支：`codex/vietnam-stock-pr2-yacang`，worktree：`/Users/hym/.codex/worktrees/18f8/LXE_AGENT1`。没有在 `main` 开发。
-- PR2 从 PR1 分支 `codex/vietnam-stock-recommendation` 的 `575e73c1` 建立。2026-10-02 只读查询远端：个人 `fork/main` 与组长 `origin/main` 均为 `dbf598fc`，个人 PR1 分支仍为 `575e73c1`。本地普通主工作区 `main` 为旧提交 `805d1ef1`，不是 PR base。
-- [个人仓库 PR1](https://github.com/Arsenal20262/LXE_AGENT/pull/1) 尚未进入个人 `main`。个人 PR2 创建时以 PR1 分支为 base，只展示 PR2 差异；PR1 合并后按实际 merge/squash/rebase 方式调整 PR2 基底。组长仓库要按 PR1 → PR2 顺序分别评审，PR1 进入组长最新 `main` 后才准备 PR2；本轮不向 `origin` push、建 PR 或 merge。
+- 开发分支：`codex/vietnam-stock-pr2-yacang`，在该分支的独立 worktree 中开发；没有在 `main` 开发。
+- PR2 从 PR1 分支 `codex/vietnam-stock-recommendation` 的 `575e73c1` 建立，以 PR1 分支为 base；本地主工作区 `main` 不是 PR base。
+- [个人仓库 PR #2](https://github.com/Arsenal20262/LXE_AGENT/pull/2) 已创建且开放，原始代码收口提交为 `405e5586`；本地 HEAD 以当前分支核对，远端 head 以 PR 页面为准。PR2 依赖[个人仓库 PR #1](https://github.com/Arsenal20262/LXE_AGENT/pull/1)。组长仓库尚无对应 PR2；PR1 合并后按实际 merge/squash/rebase 方式调整 PR2 基底。组长仓库仍须按 PR1 → PR2 顺序分别评审，PR1 进入组长最新 `main` 后才准备 PR2。
 
 ## 本模块交付
 
@@ -24,12 +24,12 @@
 ## 验证与限制
 
 - 从此 worktree 根目录运行 `uv run --frozen --no-sync pytest -q python/lxeskill_cli/tests/vietnam_replenishment python/lxeskill_cli/tests/yacang`：**138 passed**。雅仓原有测试要绑定本地 `127.0.0.1` 模拟服务，因此该次测试在允许本地监听的环境运行；纯沙箱运行会报 `PermissionError: [Errno 1] Operation not permitted`，与代码无关。
-- `git diff --check` 对已跟踪的导航文档通过；未跟踪的 PR2 新文件已逐个检查行尾空格。新增范围没有 `.xlsx`、`.env`、数据库或常见密钥字面量。最终暂存后还需用 `git diff --cached --check` 检查完整改动。
+- PR2 模块收口时，`git diff --check` 与新增文本文件行尾空格检查通过。新增范围没有 `.xlsx`、`.env`、数据库或常见密钥字面量。
 - 未调用生产雅仓；真实当前库存列表尚无现场样本验收。服务接口尚未注册 Vietnam Skill 或 Desktop 上传入口；五表生成、LibreOffice 重算、备货结果和对用户发文件均属于后续独立 PR。
 - 没有新增环境变量；雅仓既有配置 `LXE_YACANG_MOBILE` / `LXE_YACANG_PASSWORD` 仍由现有 workflow 使用，不写入本模块或日志。
 
 ## Git 状态和下一步
 
-PR2 采用四个独立提交：`e69ba550`（雅仓来源）、`532d8b21`（SKU 参数）、`b59f0643`（运营上传表），以及包含组合入口与本交接文档的第四个提交。第四个提交后应检查工作区为干净；个人和组长仓库均未推送 PR2。PR1 与 PR2 的改动文件路径没有重叠，当前两条远端 `main` 都是 PR1 的祖先；这只证明当前提交头下按依赖顺序无提交图冲突，不能预判之后 `main` 的变化。
+PR2 原始四个独立提交为：`e69ba550`（雅仓来源）、`532d8b21`（SKU 参数）、`b59f0643`（运营上传表）、`405e5586`（组合入口与本交接文档）。分支已推送到个人仓库，[PR #2](https://github.com/Arsenal20262/LXE_AGENT/pull/2) 已创建且未合并。PR1 与 PR2 的改动文件路径没有重叠；本地同步前序文档后，提交号可能变化，合并前仍须按当时的分支状态核对依赖和冲突。
 
-下一步：重新核对两个远端头和 PR1 状态，验证 PR2 相对 PR1 的差异仅含本模块。随后分别取得用户批准再 push 到个人 fork、在个人 fork 创建以 PR1 分支为 base 的独立 PR。PR1 合并方式若改写提交历史，先按其实际结果移植 PR2 独有提交并复验，不把 PR1 文件重复放进 PR2。下一模块在新的聊天和分支继续。
+下一步：合并前重新核对两个远端头、PR1 状态及 PR2 相对 PR1 的差异。PR1 合并方式若改写提交历史，先按其实际结果移植 PR2 独有提交并复验，不把 PR1 文件重复放进 PR2。向组长仓库提交或合并须另行取得用户批准；下一模块在新的聊天和分支继续。
