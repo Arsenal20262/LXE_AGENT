@@ -15,6 +15,14 @@
 - **禁止共享或复制 `.venv`**：editable 安装的 `.pth` 指向创建它的 checkout 绝对路径，共享会导致"改的是这份代码、跑的却是另一份"。每个 worktree 各自 `uv sync`（几秒钟，`wt-claim` 已自动做对）。
 - **错误真实性**：必须让 AI 看到经过必要脱敏和显式截断的实际错误，不得用无事实依据的推测、通用提示或自写占位文本覆盖实际异常。只有错误形状固定，并有真实响应 fixture 或集成测试证明替代文本与原错误语义等价时，才允许使用固定替代文本；此时仍须在结构化诊断或日志中保留实际错误。
 
+## Instruction Handling
+
+When you receive an instruction:
+
+1. If the instruction is incorrect, explain why.
+2. If the instruction is ambiguous, ask for clarification.
+3. Otherwise, carry out the instruction.
+
 ## 工具链
 
 - Python 一律用 `uv`（禁 pip），JS 一律用 `bun`（禁 npm/yarn）；安装带 `--frozen`，不要动 lockfile 之外的版本。
