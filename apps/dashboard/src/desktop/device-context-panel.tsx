@@ -64,6 +64,5 @@ export function DeviceContextPanel({ cloud, busy, onRefresh, onConfirm }: {
       <summary><ChevronDown size={15} aria-hidden />{t.errorDetails}</summary>
       <pre>{cloud.permission_error}</pre>
     </details> : null}
-    {!cloud.configured && known && cloud.desktop_features.length > 0 ? <p className="device-permission-note">{t.loginMissing}</p> : null}
   </section>;
 }
