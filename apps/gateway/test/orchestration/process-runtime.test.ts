@@ -64,6 +64,23 @@ afterEach(async () => {
 });
 
 describe("ProcessAgentRuntime", () => {
+  test.skipIf(process.platform!=="win32")("Windows forced shutdown waits for the runtime and its owned child",async()=>{
+    const root=mkdtempSync(join(tmpdir(),"lxe-update-process-tree-"));temporaryRoots.push(root);
+    const pidFile=join(root,"owned.pid");
+    const runtime=new ProcessAgentRuntime({command:process.execPath,arguments:[resolve(import.meta.dirname,"fixtures/fake-agent-cli.mjs")],cwd:process.cwd(),environment:{...process.env,FAKE_OWNED_CHILD_PID:pidFile,FAKE_IGNORE_SHUTDOWN:"1"},...resourcePaths(process.cwd()),dataRoot:root,legacyWorkspace:testWorkspace,shutdownTimeoutMs:50});
+    runtimes.push(runtime);await runtime.start();const pid=Number(readFileSync(pidFile,"utf8"));
+    try { expect(()=>process.kill(pid,0)).not.toThrow();await runtime.stop();expect(runtime.hasProcess).toBe(false);expect(()=>process.kill(pid,0)).toThrow(); }
+    finally { try { process.kill(pid,"SIGKILL"); } catch {} }
+  });
+  test("an error from a live child preserves ownership until actual exit", async () => {
+    const runtime=new ProcessAgentRuntime({command:process.execPath,arguments:[resolve(import.meta.dirname,"fixtures/fake-agent-cli.mjs")],cwd:process.cwd(),environment:process.env,...resourcePaths(process.cwd()),dataRoot:process.cwd(),legacyWorkspace:testWorkspace});
+    runtimes.push(runtime);await runtime.start();
+    const child=(runtime as any).child;
+    child.emit("error",new Error("kill EPERM: fixture signal denied"));
+    expect(runtime.hasProcess).toBe(true);expect(runtime.status().pid).toBe(child.pid);
+    expect(runtime.status().message).toContain("kill EPERM");
+    await runtime.stop();expect(runtime.hasProcess).toBe(false);
+  });
   test("forwards Desktop stream batches through their dedicated callback", async () => {
     const fixture = resolve(import.meta.dirname, "fixtures/fake-agent-cli.mjs");
     const batches: Array<Extract<AgentEvent, { type: "conversation.stream.delta" }>["payload"]> = [];
@@ -360,4 +377,46 @@ describe("ProcessAgentRuntime", () => {
       ],
     });
   });
+});
+
+test("termination waits for exit even when the child already reports killed",async()=>{
+ const {EventEmitter}=await import("node:events");
+ const child=Object.assign(new EventEmitter(),{exitCode:null,signalCode:null,killed:true,kill:()=>{setTimeout(()=>child.emit("exit",null,"SIGTERM"),50);return true;}});
+ const runtime=new ProcessAgentRuntime({command:"unused",cwd:process.cwd(),environment:{},...resourcePaths(process.cwd()),dataRoot:process.cwd(),legacyWorkspace:testWorkspace});
+ (runtime as any).child=child;
+ let completed=false;
+ const termination=(runtime as any).terminateChild().then(()=>{completed=true;});
+ await Bun.sleep(10);expect(completed).toBe(false);expect(runtime.hasProcess).toBe(true);
+ await termination;expect(runtime.hasProcess).toBe(false);
+});
+test("unconfirmed exit rejects and retains ownership after forced termination",async()=>{
+ const {EventEmitter}=await import("node:events");
+ const child=Object.assign(new EventEmitter(),{exitCode:null,signalCode:null,killed:true,kill:()=>true});
+ const runtime=new ProcessAgentRuntime({command:"unused",cwd:process.cwd(),environment:{},...resourcePaths(process.cwd()),dataRoot:process.cwd(),legacyWorkspace:testWorkspace});
+ (runtime as any).child=child;
+ await expect((runtime as any).terminateChild()).rejects.toThrow("did not exit");expect(runtime.hasProcess).toBe(true);
+},6000);
+
+test.each([false,true])("parent exit cannot release ownership before tree termination (failure=%s)",async fail=>{
+ const {EventEmitter}=await import("node:events");
+ const child=Object.assign(new EventEmitter(),{pid:424242,exitCode:null as number|null,signalCode:null});
+ const runtime=new ProcessAgentRuntime({command:"must-not-start",cwd:process.cwd(),environment:{},...resourcePaths(process.cwd()),dataRoot:process.cwd(),legacyWorkspace:testWorkspace});
+ (runtime as any).child=child;
+ let finish!:()=>void,failTree!:(error:Error)=>void;
+ (runtime as any).terminateProcessTree=()=>new Promise<void>((resolve,reject)=>{finish=resolve;failTree=reject;});
+ child.once("exit",()=>{(runtime as any).handleExit(new Error("parent exited"));});
+ const termination=(runtime as any).terminateChild();
+ child.exitCode=0;child.emit("exit",0,null);
+ expect(runtime.hasProcess).toBe(true);expect(runtime.status().pid).toBe(child.pid);
+ await expect(runtime.start()).rejects.toThrow("has not confirmed exit");
+ if(fail){
+  const failure=new Error("taskkill fixture: descendant access denied");
+  failTree(failure);
+  await expect(termination).rejects.toThrow(failure.message);
+  expect(runtime.hasProcess).toBe(true);expect(runtime.status().message).toBe(failure.message);
+  await expect(runtime.start()).rejects.toThrow(failure.message);
+  await expect(runtime.stop()).rejects.toThrow(failure.message);
+ }else{
+  finish();await termination;expect(runtime.hasProcess).toBe(false);
+ }
 });

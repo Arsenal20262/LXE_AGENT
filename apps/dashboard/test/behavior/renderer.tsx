@@ -1,6 +1,8 @@
 import { useApprovalsQuery } from "../../src/api/queries";
 import type { PendingApproval, PendingUserQuestion, PermissionMode } from "@lxe/desktop-protocol";
 import { FilePreviewLayout } from "../../src/features/file-preview/Sidebar";
+import { UpdateControl } from "../../src/desktop/update-control";
+import type { DesktopUpdateState, DesktopUpdateRelease } from "@lxe/desktop-protocol";
 import { UserReferenceText } from "../../src/features/sessions/UserReferenceText";
 /// <reference path="../../src/vite-env.d.ts" />
 import React, { useState } from "react";
@@ -19,6 +21,9 @@ import "../../src/styles.css";
 // Only external boundaries are substituted. App, Query hooks, composer and
 // dialog focus management are production code, running in Chromium.
 const calls: { operation: string; input?: unknown }[] = [];
+const updateRelease: DesktopUpdateRelease = {version:"0.2.0",build_id:"renderer-build",file_name:"fixture.exe",size:100,sha512:"fixture",notes:"Renderer update"};
+let updateState: DesktopUpdateState = {phase:"unsupported"};
+let releaseUpdateDownload: (()=>void) | undefined;
 const workspaceMode = new URLSearchParams(location.search).has("workspaces");
 let referenceMode = false;
 let slowCandidates = false;
@@ -155,7 +160,15 @@ const desktop = {
   getSetupState: async () => setupState({ complete }),
   getHealth: async () => ({ ...health }),
   getCloudState: async () => cloudState(),
-  getUpdateState: async () => ({ phase: "unsupported" as const }),
+  getUpdateState: async () => updateState,
+  checkForUpdate: async () => { calls.push({operation:"update.check"}); return updateState={phase:"available",release:updateRelease}; },
+  downloadUpdate: async target => {
+    calls.push({operation:"update.download",input:target});
+    updateState={phase:"downloading",release:updateRelease};
+    await new Promise<void>(resolve=>{releaseUpdateDownload=resolve;});
+    return updateState={phase:"ready",release:updateRelease};
+  },
+  installUpdate: async target => { calls.push({operation:"update.install",input:target}); return updateState={phase:"ready",release:updateRelease}; },
   applyAppearance: async () => {},
   listInputAssets: async () => [],
   onStatusChanged: (listener: (value: DesktopHealth) => void) => {
@@ -312,6 +325,9 @@ function reset() {
   calls.length = 0; sends.length = 0; stops = 0; releaseSend = undefined;
 }
 const fixture = {
+  mountUpdates() { reset(); updateState={phase:"idle"}; flushSync(()=>root!.render(<I18nContext.Provider value={UI_TEXT.en}><UpdateControl manual /></I18nContext.Provider>)); },
+  releaseUpdateDownload() { releaseUpdateDownload?.(); },
+  updateError(operation: "download" | "install") { updateState={phase:"error",release:updateRelease,failedOperation:operation,message:"EACCES: fixture update failure"}; },
   mountPermissions() { reset(); composerOptions = { running: true }; conversationKey = "permissions-a"; permissionModes.clear(); approvalRequests = []; fixtureQuestion = undefined; failPermission = false; holdPermission = false; failApproval = false; holdApproval = false; composerLanguage = "en"; renderComposer(); },
   permissionRequests(requests: PendingApproval[]) { approvalRequests = requests; void queryClient?.invalidateQueries({ queryKey: ["sessions", "approvals"] }); },
   approvalFailure(value: boolean) { failApproval = value; },

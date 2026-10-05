@@ -9,7 +9,8 @@ test("interrupted installation is visible on next launch and success clears atte
  journal.error(new Error("spawn failed https://cos.test/a?signature=secret"));
  expect(readFileSync(path,"utf8")).not.toContain("signature=secret");
  expect(new UpdateJournal(path).previous("0.2.17")).toContain("spawn failed");
- expect(journal.previous("0.2.18")).toContain("0.2.18");
- expect(journal.previous("0.2.18")).toBeUndefined();
+ expect(journal.previous("0.2.18","other-build")).toContain("spawn failed");
+ expect(journal.previous("0.2.18","one")).toContain("已成功更新");
+ expect(journal.previous("0.2.18","one")).toBeUndefined();
  }finally{rmSync(dir,{recursive:true});}
 });

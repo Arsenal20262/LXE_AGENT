@@ -19,6 +19,7 @@ export interface ReleaseCandidate {
   schema_version: 1; version: string; build_id: string; source_commit: string;
   built_at: string; platform: "windows-x64"; file_name: string; object_key: string;
   size: number; sha512: string; notes: string;
+  blockmap?: {file_name:string;object_key:string;size:number;sha512:string};
 }
 export function readCandidate(path: string): ReleaseCandidate {
   const record = JSON.parse(readFileSync(path, "utf8")) as ReleaseCandidate;
@@ -33,13 +34,19 @@ export function readCandidate(path: string): ReleaseCandidate {
   if (record.file_name !== name || record.object_key !== `artifacts/${record.version}/${record.build_id}/${name}`) {
     throw new Error("Invalid candidate path");
   }
+  if (record.blockmap && (record.blockmap.file_name !== name + ".blockmap"
+    || record.blockmap.object_key !== record.object_key + ".blockmap"
+    || !Number.isSafeInteger(record.blockmap.size) || record.blockmap.size <= 0 || record.blockmap.size > 16 * 1024**2
+    || !/^[A-Za-z0-9+/]{86}==$/.test(record.blockmap.sha512))) throw new Error("Invalid candidate blockmap");
   return record;
 }
 export async function verifyCandidate(path: string): Promise<ReleaseCandidate> {
   const record = readCandidate(path);
-  const file = join(dirname(path), record.file_name);
-  if (statSync(file).size !== record.size || await sha512(file) !== record.sha512) {
-    throw new Error("Candidate installer changed");
+  for (const artifact of [record, ...(record.blockmap ? [record.blockmap] : [])]) {
+    const file = join(dirname(path), artifact.file_name);
+    if (statSync(file).size !== artifact.size || await sha512(file) !== artifact.sha512) {
+      throw new Error("Candidate artifact changed: " + artifact.file_name);
+    }
   }
   return record;
 }

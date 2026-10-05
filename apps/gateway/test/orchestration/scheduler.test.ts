@@ -601,3 +601,29 @@ test("admission persistence fences deletion and updates before execution", async
   finish(); await accepted;
   expect(runtime.started).toHaveLength(1);
 });
+
+test("update confirmation fence settles old admissions without starting them or accepting new work",async()=>{
+ const runtime=new RecordingRuntime(),states:string[]=[];
+ const scheduler=new SessionScheduler({runtime,onJobState:e=>states.push(e.state+":"+e.job.job_id)});
+ await scheduler.enqueue(job("s1","active"));
+ let persisted!:()=>void;
+ const admission=scheduler.enqueue(job("s2","persisting"),{beforeAccept:()=>new Promise<void>(r=>{persisted=r;})});
+ const unlock=scheduler.beginUpdate(true)!;expect(unlock).toBeFunction();
+ await expect(scheduler.enqueue(job("s3","new"))).rejects.toThrow("blocked");
+ await expect(scheduler.steerActive("s1",{text:"new input"})).rejects.toThrow("blocked");
+ const settled=scheduler.settleUpdateAdmissions();persisted();await admission;await settled;
+ expect(runtime.started.map(j=>j.job_id)).toEqual(["active"]);
+ expect(scheduler.runStatuses().map(j=>j.turn_id)).toContain("persisting");
+ await scheduler.cancelForUpdate();
+ expect(states).toContain("cleared:persisting");expect(runtime.cancelled).toEqual(["active"]);expect(runtime.cancellationReasons).toEqual(["user_stop"]);
+ unlock();expect(runtime.started.map(j=>j.job_id)).toEqual(["active"]);
+});
+test("recovery after a cancellation timeout never replays previously discarded steering",async()=>{
+ const runtime=new RecordingRuntime();runtime.cancelTurn=async()=>{throw new Error("cancel_turn timed out");};
+ const scheduler=new SessionScheduler({runtime});await scheduler.enqueue(job("s1","active"));
+ const unlock=scheduler.beginUpdate(true)!;
+ await expect(scheduler.cancelForUpdate()).rejects.toThrow("cancel_turn timed out");unlock();
+ scheduler.handleRuntimeEvent(completion("active","s1",{status:"completed",session_id:"s1",job_id:"active",remaining_steering:[{text:"discarded at update consent",message_id:"old-input",response_route_id:"route"}]}));
+ expect(runtime.started.map(row=>row.job_id)).toEqual(["active"]);
+ await scheduler.enqueue(job("s1","explicit-new-task"));expect(runtime.started.at(-1)?.job_id).toBe("explicit-new-task");
+});

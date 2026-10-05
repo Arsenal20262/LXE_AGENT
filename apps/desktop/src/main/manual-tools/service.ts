@@ -9,6 +9,13 @@ export class ManualToolsService {
   readonly terminals: ManualTerminals;
   readonly browsers: ManualBrowsers;
   private readonly creating = new Map<string, Promise<unknown>>();
+  private updateFenced = false;
+  activity(): string[] { return [...this.terminals.activity(), ...this.creating.keys()]; }
+  beginUpdate(): () => void {
+    this.updateFenced = true;
+    return () => { this.updateFenced = false; };
+  }
+  async settleUpdateAdmissions(): Promise<void> { await Promise.allSettled(this.creating.values()); }
   constructor(private readonly window: () => BrowserWindow | undefined, root: string, private readonly resolveDirectory: (sessionId: string) => Promise<string | undefined>) {
     const emit = (event: ManualToolEvent) => { const window = this.window(); if (window && !window.isDestroyed()) window.webContents.send(IPC_CHANNELS.manualToolEvent, event); };
     this.terminals = new ManualTerminals(root, emit); this.browsers = new ManualBrowsers(window, emit);
@@ -25,6 +32,7 @@ export class ManualToolsService {
     await access(directory, constants.R_OK | constants.X_OK); return directory;
   }
   async call(call: ManualToolCall): Promise<unknown> {
+    if (this.updateFenced) throw new Error("Application update is preparing; manual tools are blocked");
     const { sessionId, id } = call.input;
     switch (call.operation) {
       case "terminal.create": case "browser.create": {
