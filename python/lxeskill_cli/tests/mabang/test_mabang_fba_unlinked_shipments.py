@@ -236,7 +236,7 @@ def _mock_list_session(monkeypatch, payloads: list[dict]) -> _FakeSession:
 
 
 def test_status_total_counts_live_response_projection_without_total(monkeypatch):
-    fixture = json.loads((Path(__file__).parent / "fixtures/unlinked_list_without_total.json").read_text())
+    fixture = json.loads((Path(__file__).parent / "fixtures/unlinked_list_without_total.json").read_text(encoding="utf-8"))
     assert len(fixture["cases"]) == len(ship.UNLINKED_SHIPMENT_STATUS_SPECS)
     for case, spec in zip(fixture["cases"], ship.UNLINKED_SHIPMENT_STATUS_SPECS):
         assert case["status_name"] == spec.status_name
