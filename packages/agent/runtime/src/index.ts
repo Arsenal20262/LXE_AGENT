@@ -1,4 +1,7 @@
+export * from "./permissions/approvals";
+export * from "./permissions/execution-paths";
 export * from "./tooling/user-questions";
+export * from "./permissions/policy";
 export * from "./engine/context";
 export * from "./tooling/coding-tools";
 export { buildExecOutputStep, sanitizeToolDisplayText } from "./tooling/tool-display";
@@ -32,3 +35,5 @@ export * from "./tooling/workspace-search";
 export * from "./workspace/instance-manager";
 
 export type * from "./messages/assistant-message";
+
+export { WorkspaceFileSearch, DEFAULT_FILE_SEARCH_EXCLUDED_DIRECTORIES } from "./tooling/file-references";

@@ -23,7 +23,7 @@ describe("preload bridge", () => {
     expect(Object.keys(bridge).sort()).toEqual(["dashboard", "desktop", "files", "tools"]);
     expect(Object.keys(bridge.dashboard)).toEqual(["call"]);
     expect(Object.keys(bridge.desktop).sort()).toEqual([
-      "getUpdateState", "checkForUpdate", "installUpdate",
+      "showTitlebarMenu", "getUpdateState", "checkForUpdate", "installUpdate",
       "activateCloudEnrollment",
       "confirmCloudDevice", "refreshCloudContext",
       "applyAppearance",
@@ -46,7 +46,7 @@ describe("preload bridge", () => {
       "onSyntheticPerformerTaskChanged",
       "openCloudDestination",
       "openLogsDirectory",
-      "openWorkspace",
+      "openWorkspace", "getWorkspaceApplications",
       "openSyntheticPerformerOutput",
       "platform",
       "prepareCloudDependencies",
@@ -266,7 +266,6 @@ test("file bridge has a separate binary channel and never serializes bytes into 
   expect(calls).toEqual([[IPC_CHANNELS.fileRead, "opaque-handle", undefined], [IPC_CHANNELS.fileReadText, "opaque-text-handle", { offset: 5001 }]]);
 });
 
-
 test("Vietnam map bridge sends no renderer source path or slot", async () => {
   const calls: unknown[][] = [];
   const bridge = createDesktopBridge({
@@ -278,5 +277,20 @@ test("Vietnam map bridge sends no renderer source path or slot", async () => {
   expect(calls).toEqual([
     [IPC_CHANNELS.uploadVietnamSkuMap],
     [IPC_CHANNELS.rollbackVietnamSkuMap, "a".repeat(32)],
+  ]);
+});
+
+test("workspace bridge forwards the directory and optional catalog ID without changing legacy calls", async () => {
+  const calls: unknown[][] = [];
+  const bridge = createDesktopBridge({ invoke: async <T>(...args: unknown[]): Promise<T> => {
+    calls.push(args); return [] as T;
+  }, on() {}, removeListener() {} }, "darwin");
+  await bridge.desktop.getWorkspaceApplications({ refresh: true });
+  await bridge.desktop.openWorkspace("/工作目录 & spaces");
+  await bridge.desktop.openWorkspace("/工作目录 & spaces", "vscode");
+  expect(calls).toEqual([
+    [IPC_CHANNELS.getWorkspaceApplications, { refresh: true }],
+    [IPC_CHANNELS.openWorkspace, "/工作目录 & spaces", undefined],
+    [IPC_CHANNELS.openWorkspace, "/工作目录 & spaces", "vscode"],
   ]);
 });

@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import type { CSSProperties } from "react";
-import { Sparkles } from "lucide-react";
 
 import { formatCompactNumber, formatNumber } from "../../shared/format";
 import { queryError, useStatsOverviewQuery } from "../../api/queries";
@@ -83,7 +82,6 @@ export function ConversationWelcome({ enabled = true }: { enabled?: boolean }) {
   return (
     <section className="conversation-welcome">
       <header className="welcome-heading">
-        <Sparkles aria-hidden size={19} />
         <div>
           <h2>{t.welcome.greetingAnonymous}</h2>
           <p>{t.welcome.subtitle}</p>

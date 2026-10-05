@@ -1,0 +1,7 @@
+{
+  "name": "lxe-exec-sandbox-native-dependencies",
+  "private": true,
+  "dependencies": {
+    "koffi": "3.1.1"
+  }
+}

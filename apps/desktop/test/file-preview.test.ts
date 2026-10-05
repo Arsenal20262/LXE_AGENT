@@ -190,3 +190,29 @@ test("permissions are recognized only at target access; diagnostics retain real 
   expect(diagnostic.kind).toBe("unknown"); expect(diagnostic.diagnostic).toStartWith("actual failure\n");
   expect(diagnostic.diagnostic).not.toContain("private-token"); expect(diagnostic.diagnostic).not.toContain("secret-value"); expect(diagnostic.diagnostic).toEndWith("[truncated]");
 });
+
+test("skill previews resolve only session-authorized names and revalidate each content read", async () => {
+  const root = await mkdtemp(join(tmpdir(), "lxe-skill-preview-")); roots.push(root);
+  const workspace = join(root, "workspace"), skill = join(root, "skills", "中文 skill");
+  await mkdir(workspace); await mkdir(skill, { recursive: true });
+  const source = join(skill, "SKILL.md"); await writeFile(source, "# Current skill\n正文");
+  let allowed = true;
+  const service = new FilePreviewService(() => ({
+    resolveWorkspaceDirectory: async id => { if (id !== "s") throw new Error("Session not found"); return workspace; },
+    resolveSkill: async (id, name) => allowed && id === "s" && name === "demo" ? source : undefined,
+    resolveArtifact: async () => undefined, resolveAttachment: async () => undefined,
+    resolveImagePreview: async () => { throw new Error("Not an image attachment"); },
+  }), new OfficePreviewCache(join(root, "cache"), "node", "cli"), { openPath: async () => "", revealPath: () => {} });
+  services.push(service);
+  const file = { session_id: "s", kind: "skill" as const, id: "demo" };
+  const prepared = await service.call({ operation: "prepare", input: { ref: file, request_id: "skill", mode: "text" } });
+  expect(prepared.metadata.kind).toBe("markdown"); expect((await service.readText(prepared.handle)).text).toContain("正文");
+  for (const invalid of [{ ...file, session_id: "other" }, { ...file, id: source }, { ...file, id: "../demo" }]) {
+    await expect(service.call({ operation: "stat", input: { ref: invalid } })).rejects.toThrow();
+  }
+  allowed = false; await expect(service.readText(prepared.handle)).rejects.toThrow("not part");
+  allowed = true; await rm(source); await expect(service.call({ operation: "stat", input: { ref: file } })).rejects.toThrow("ENOENT");
+  await writeFile(source, "# Restored");
+  const restored = await service.call({ operation: "prepare", input: { ref: file, request_id: "restored", mode: "text" } });
+  expect((await service.readText(restored.handle)).text).toBe("# Restored");
+});

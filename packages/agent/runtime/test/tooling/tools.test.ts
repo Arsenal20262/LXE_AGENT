@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { ToolRegistry, unknownToolFailureDetails } from "../../src/tooling/registry";
 import { registerToolSearch } from "../../src/tooling/tool-search";
-import { testWorkspace } from "../workspace";
+import { policyFor, testWorkspace } from "../workspace";
 
 const definition = (name: string, exposure: "direct" | "deferred" = "direct") => ({
   name,
@@ -59,7 +59,7 @@ describe("tool registry exposure", () => {
     const outOfScope = registry.createExposureState({ allowedSkills: new Set(["fba-shipment-create"]) });
     const context = {
       session_id: "session",
-      workspace: testWorkspace,
+      workspace: testWorkspace, executionPolicy: policyFor(testWorkspace.directory),
       exposureState: outOfScope,
       handle: {
         signal: new AbortController().signal,

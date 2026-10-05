@@ -2,11 +2,12 @@ import { createHash } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { checkFdVersion, FD_VERSION } from "../packages/agent/runtime/src/tooling/fd-search";
+import { sourceRuntimePaths } from "../apps/desktop/src/main/source-runtime-paths";
 
 export interface FdLock { version: string; platforms: Record<string, { archive_url: string; archive_sha256: string }> }
 const sha256 = (path: string) => createHash("sha256").update(readFileSync(path)).digest("hex");
 export async function prepareDesktopFd(options: {
-  repositoryRoot?: string; platform?: string; arch?: string;
+  repositoryRoot?: string; platform?: NodeJS.Platform; arch?: string;
   download?: (url: string, destination: string) => Promise<void>;
   extract?: (archive: string, destination: string) => void;
   checkVersion?: (path: string) => void;
@@ -18,7 +19,7 @@ export async function prepareDesktopFd(options: {
   const asset = lock.platforms[target];
   if (lock.version !== FD_VERSION) throw new Error(`fd lock version must match runtime ${FD_VERSION}`);
   if (!asset || !/^https:\/\//.test(asset.archive_url) || !/^[a-f0-9]{64}$/.test(asset.archive_sha256)) throw new Error(`Invalid or unsupported fd lock target: ${target}`);
-  const tools = join(root, "build/desktop-runtime", target, "tools");
+  const tools = sourceRuntimePaths(root, platform, options.arch ?? process.arch).toolsRoot;
   const name = platform === "win32" ? "fd.exe" : "fd";
   const executable = join(tools, name);
   const markerPath = join(tools, ".fd.json");

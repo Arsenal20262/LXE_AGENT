@@ -13,7 +13,7 @@ const sidebar = readFileSync(path.join(sourceDir, "shared/use-three-state-sideba
 test("macOS list starts below the native traffic-light row", () => {
   assert.match(
     styles,
-    /\.app-sidebar\.is-expanded\s*\{[^}]*margin-top:\s*44px;/s
+    /\.app-sidebar\.is-expanded\s*\{[^}]*margin-top:\s*var\(--app-titlebar-height\);/s
   );
   assert.match(
     styles,

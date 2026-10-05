@@ -12,6 +12,8 @@
   --font-sans:
     "HarmonyOS Sans SC", -apple-system, BlinkMacSystemFont, "SF Pro Text",
     "PingFang SC", "Hiragino Sans GB", "Segoe UI", "Microsoft YaHei UI", sans-serif;
+  /* UI text uses --font-sans; code, commands, paths and technical values use
+     this one stack. Document viewers keep the fonts declared by the file. */
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --bg: #fafaf9;
   --bg-soft: #ffffff;
@@ -213,7 +215,8 @@ button {
 
 /* Decision A: the sidebar sits below the content plane rather than above it, so
    the "chrome recedes, content is the stage" relationship survives the switch. */
-:root[data-theme="dark"] .app-shell {
+:root[data-theme="dark"] .app-shell,
+:root[data-theme="dark"] .desktop-platform-win32 {
   --navigation-bg: #242322;
   --sidebar-bg: #1c1b1a;
   --sidebar-border: rgba(255, 255, 255, 0.065);
@@ -222,6 +225,8 @@ button {
   --sidebar-accent: #e3aa8d;
   --sidebar-hover: rgba(255, 255, 255, 0.055);
   --sidebar-active: rgba(255, 255, 255, 0.09);
+  --sidebar-action-bg: color-mix(in srgb, var(--sidebar-bg) 94%, white 6%);
+  --sidebar-shadow: rgba(0, 0, 0, 0.34);
   border-right-color: #312e2b;
 }
 
@@ -340,19 +345,6 @@ button {
 }
 
 .desktop-platform-darwin .app-shell.sessions-focus > .main-panel {
-  padding-top: 0;
-}
-
-/* Windows already draws its native controls inside a 40px title-bar overlay.
-   Conversation pages reuse that row instead of stacking a second 44px header
-   below it. Other sections keep the generic title-bar clearance above. */
-.desktop-platform-win32:has(.app-shell.sessions-focus) > .desktop-window-drag-region {
-  pointer-events: none;
-  app-region: no-drag;
-  -webkit-app-region: no-drag;
-}
-
-.desktop-platform-win32 .app-shell.sessions-focus > .main-panel {
   padding-top: 0;
 }
 
@@ -1602,7 +1594,7 @@ button {
   margin: 0;
   overflow-wrap: anywhere;
   color: var(--text);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
 }
 
 .desktop-health-card.state-ready strong {
@@ -2114,18 +2106,25 @@ button {
   line-height: 1.45;
 }
 
+.desktop-platform-win32,
 .app-shell {
-  --app-navigation-width: 56px;
+  --app-navigation-width: 53.2px;
+  --app-titlebar-height: 41.8px;
   --app-sidebar-width: 256px;
   --sidebar-control-left: calc(var(--app-navigation-width) + 8px);
-  --navigation-bg: #272321;
-  --sidebar-bg: #211d1a;
-  --sidebar-border: rgba(255, 255, 255, 0.07);
-  --sidebar-ink: #f2ede6;
-  --sidebar-ink-soft: #a89d90;
-  --sidebar-accent: #d9a488;
-  --sidebar-hover: rgba(255, 255, 255, 0.06);
-  --sidebar-active: rgba(255, 255, 255, 0.1);
+  --navigation-bg: var(--bg);
+  --sidebar-bg: var(--bg);
+  --sidebar-border: var(--border);
+  --sidebar-ink: var(--text);
+  --sidebar-ink-soft: var(--muted);
+  --sidebar-accent: var(--accent-strong);
+  --sidebar-hover: color-mix(in srgb, var(--bg) 95%, var(--text) 5%);
+  --sidebar-active: color-mix(in srgb, var(--bg) 91%, var(--text) 9%);
+  --sidebar-action-bg: var(--sidebar-hover);
+  --sidebar-shadow: var(--shadow-strong);
+}
+
+.app-shell {
   position: relative;
   display: grid;
   width: 100%;
@@ -2148,6 +2147,7 @@ button {
   inset-block: 0;
   left: calc(var(--app-navigation-width) + var(--app-sidebar-width) - 3px);
   width: 6px;
+  outline: none;
   cursor: col-resize;
   touch-action: none;
   app-region: no-drag;
@@ -2157,12 +2157,18 @@ button {
 .sidebar-resizer::after {
   content: "";
   position: absolute;
-  inset: 0 2px;
+  inset-block: 0;
+  left: 2px;
+  width: 1px;
+  pointer-events: none;
 }
 
 .sidebar-resizer:hover::after,
-.sidebar-resizer:focus-visible::after,
 .app-shell[data-sidebar-resizing] > .sidebar-resizer::after {
+  background: color-mix(in srgb, var(--text) 35%, var(--bg));
+}
+
+.sidebar-resizer:focus-visible::after {
   background: var(--accent);
 }
 
@@ -2194,7 +2200,7 @@ button {
   min-height: 0;
   padding: 16px 14px 14px;
   overflow: hidden;
-  border-right: 1px solid #2a2622;
+  border-right: 1px solid var(--sidebar-border);
   background: var(--sidebar-bg);
   color: var(--sidebar-ink-soft);
   transition: opacity 140ms ease, transform 180ms cubic-bezier(0.2, 0.75, 0.25, 1);
@@ -2269,21 +2275,21 @@ button {
 }
 
 .sidebar-window-controls.sidebar-visible .sidebar-icon-button {
-  color: #a89d90;
+  color: var(--sidebar-ink-soft);
 }
 
 .sidebar-window-controls.sidebar-visible .sidebar-icon-button.is-open,
 .sidebar-window-controls.sidebar-visible .sidebar-icon-button.is-selected {
-  color: #f2ede6;
+  color: var(--sidebar-ink);
 }
 
 .sidebar-window-controls.sidebar-visible .sidebar-icon-button:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #f2ede6;
+  background: var(--sidebar-hover);
+  color: var(--sidebar-ink);
 }
 
 .sidebar-window-controls.sidebar-visible .sidebar-icon-button:active {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--sidebar-active);
 }
 
 .app-shell.sidebar-collapsed .sidebar-window-controls .sidebar-icon-button {
@@ -2300,8 +2306,8 @@ button {
   grid-column: 2;
   grid-row: 1;
   width: var(--app-sidebar-width);
-  height: calc(100vh - 44px);
-  margin-top: 44px;
+  height: calc(100vh - var(--app-titlebar-height));
+  margin-top: var(--app-titlebar-height);
   padding-top: 8px;
   border-top: 1px solid var(--sidebar-border);
   border-radius: 14px 0 0 0;
@@ -2320,9 +2326,9 @@ button {
   height: min(78vh, 720px);
   max-height: calc(100vh - 64px);
   padding: 12px 14px 14px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--sidebar-border);
   border-radius: 14px;
-  box-shadow: 0 22px 52px rgba(0, 0, 0, 0.34);
+  box-shadow: 0 22px 52px var(--sidebar-shadow);
 }
 
 .app-sidebar.is-peek {
@@ -3314,7 +3320,7 @@ h1 {
 }
 
 .mono {
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--font-mono);
 }
 
 .grid-list {
@@ -4800,9 +4806,13 @@ h1 {
 .catalog-item .item-heading h3 {
   min-width: 0;
   color: var(--text-strong);
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: 0.8125rem;
   font-weight: 680;
+}
+
+.tools-catalog .catalog-item .item-heading h3 {
+  font-family: var(--font-mono);
 }
 
 .catalog-item .description {
@@ -4838,8 +4848,8 @@ h1 {
   text-overflow: ellipsis;
 }
 
-.maintenance-command-name {
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+.catalog-item .item-heading .maintenance-command-name {
+  font-family: var(--font-mono);
   font-size: 0.75rem !important;
 }
 
@@ -5708,7 +5718,7 @@ h1 {
   overflow: hidden;
   min-width: 0;
   color: var(--muted);
-  font-family: var(--font-mono, monospace);
+  font-family: var(--font-mono);
   font-size: 0.6875rem;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -6185,7 +6195,7 @@ code {
   border-radius: 6px;
   background: var(--surface-muted);
   color: var(--text-soft);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--font-mono);
   font-size: 0.75rem;
   overflow-wrap: anywhere;
 }
@@ -6638,6 +6648,10 @@ code {
   outline-offset: 1px;
 }
 
+pre, kbd, samp {
+  font-family: var(--font-mono);
+}
+
 pre {
   max-height: 360px;
   margin: 0;
@@ -6844,7 +6858,7 @@ pre {
     padding-top: 12px;
     border: 1px solid var(--sidebar-border);
     border-radius: 14px;
-    box-shadow: 0 22px 52px rgba(0, 0, 0, 0.34);
+    box-shadow: 0 22px 52px var(--sidebar-shadow);
   }
 
   .desktop-window-frame .app-shell.sessions-focus .conversation-header {
@@ -8244,13 +8258,13 @@ pre {
 .sidebar-session-section .search-box {
   min-height: 36px;
   border-color: var(--sidebar-border);
-  background: rgba(255, 255, 255, 0.055);
+  background: var(--sidebar-hover);
   color: var(--sidebar-ink-soft);
 }
 
 .sidebar-session-section .search-box:focus-within {
-  border-color: rgba(217, 164, 136, 0.5);
-  box-shadow: 0 0 0 2px rgba(217, 164, 136, 0.12);
+  border-color: var(--sidebar-accent);
+  box-shadow: 0 0 0 2px var(--focus-ring);
 }
 
 .sidebar-session-section .search-box input {
@@ -8293,7 +8307,7 @@ pre {
   overflow-x: hidden;
   overflow-y: scroll;
   padding: 0;
-  scrollbar-color: rgba(255, 255, 255, 0.16) rgba(255, 255, 255, 0.025);
+  scrollbar-color: var(--scrollbar-thumb) transparent;
   scrollbar-gutter: stable;
   scrollbar-width: thin;
 }
@@ -8304,12 +8318,12 @@ pre {
 
 .sidebar-session-section .session-index-list::-webkit-scrollbar-track {
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.025);
+  background: transparent;
 }
 
 .sidebar-session-section .session-index-list::-webkit-scrollbar-thumb {
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.16);
+  background: var(--scrollbar-thumb);
 }
 
 .sidebar-session-section .session-index-item {
@@ -8334,8 +8348,8 @@ pre {
 .sidebar-session-section .session-index-item:hover .session-index-actions,
 .sidebar-session-section .session-index-item:focus-within .session-index-actions,
 .sidebar-session-section .session-index-item.menu-open .session-index-actions {
-  background: color-mix(in srgb, var(--sidebar-bg) 94%, white 6%);
-  box-shadow: -14px 0 12px 3px color-mix(in srgb, var(--sidebar-bg) 94%, white 6%);
+  background: var(--sidebar-action-bg);
+  box-shadow: -14px 0 12px 3px var(--sidebar-action-bg);
 }
 
 .sidebar-session-section .session-index-icon {
@@ -8377,7 +8391,7 @@ pre {
 }
 
 .sidebar-session-section .session-load-more-error {
-  color: #edaa98;
+  color: var(--danger);
 }
 
 .sidebar-session-section .session-index-item .primary-cell {
@@ -8398,11 +8412,11 @@ pre {
   display: grid;
   gap: 1.6px;
   padding: 4.8px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--border);
   border-radius: 9.6px;
-  background: #3b3936;
-  color: #f2ede6;
-  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.34);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 18px 42px var(--shadow-strong);
   font-size: 0.79rem;
 }
 
@@ -8423,7 +8437,7 @@ pre {
 
 .session-actions-menu button:hover,
 .session-actions-menu button:focus-visible {
-  background: rgba(255, 255, 255, 0.09);
+  background: var(--row-hover);
   outline: none;
 }
 
@@ -8433,19 +8447,19 @@ pre {
 }
 
 .session-actions-menu button.danger {
-  color: #ff8f8b;
+  color: var(--danger);
 }
 
 .session-actions-hint,
 .session-actions-error {
   margin: 3.1px 6.4px 2.4px;
-  color: #c7bdb2;
+  color: var(--muted);
   font-size: 0.54rem;
   line-height: 1.4;
 }
 
 .session-actions-error {
-  color: #ffaaa5;
+  color: var(--danger);
 }
 
 .session-delete-backdrop {
@@ -8534,15 +8548,14 @@ pre {
   position: relative;
   z-index: 8;
   display: grid;
-  /* The row's own content is 44px: a 30px button inside 7px of padding. Asking
-     for more than that only pads the title away from the conversation. */
-  min-height: 44px;
+  /* Keep the title row aligned with the sidebar while retaining 30px controls. */
+  min-height: var(--app-titlebar-height);
   flex-shrink: 0;
   container-type: inline-size;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 9px;
-  padding: 7px 18px;
+  padding: calc((var(--app-titlebar-height) - 30px) / 2) 18px;
   /* No rule underneath. A line has to be drawn because the content is sliced
      off at a hard edge; fading it out instead removes the thing the line was
      there to explain. The fade lives on .conversation-scroll-area::before. */
@@ -8558,43 +8571,22 @@ pre {
    so the click never reaches the DOM. Stacking cannot rescue it either — the
    regions are unioned and subtracted in document order, not by z-index, and the
    header comes after the toggle, so its rectangle would be added back last. */
-.desktop-platform-darwin .sessions-focus .conversation-header,
-.desktop-platform-win32 .sessions-focus .conversation-header {
+.desktop-platform-darwin .sessions-focus .conversation-header {
   z-index: 21;
   background: var(--bg);
   app-region: no-drag;
   -webkit-app-region: no-drag;
 }
 
-.desktop-platform-darwin .sessions-focus .conversation-header-copy,
-.desktop-platform-win32 .sessions-focus .conversation-header-copy {
+.desktop-platform-darwin .sessions-focus .conversation-header-copy {
   app-region: drag;
   -webkit-app-region: drag;
 }
 
 /* Declared after the title text so the subtraction lands on top of it. */
-.desktop-platform-darwin .sessions-focus .conversation-header button,
-.desktop-platform-win32 .sessions-focus .conversation-header button {
+.desktop-platform-darwin .sessions-focus .conversation-header button {
   app-region: no-drag;
   -webkit-app-region: no-drag;
-}
-
-/* Windows draws its native controls inside the title-bar overlay, so the row
-   keeps clear of them on the right. */
-.desktop-platform-win32 .sessions-focus .conversation-header {
-  min-height: 40px;
-  padding-top: 5px;
-  padding-right: calc(
-    18px + max(
-      138px,
-      calc(
-        100vw
-        - env(titlebar-area-x, 0px)
-        - env(titlebar-area-width, calc(100vw - 138px))
-      )
-    )
-  );
-  padding-bottom: 5px;
 }
 
 .desktop-window-frame .app-shell.sidebar-collapsed.sessions-focus .conversation-header {
@@ -8789,9 +8781,7 @@ pre {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
-/* A neutral fill, the same one the heatmap's idle days use, so the two halves
-   of the panel read as one surface instead of two. The fill alone draws the
-   tile - a border around a block this small only makes it look heavier. */
+/* Quiet neutral tiles keep the numbers prominent without extra borders. */
 .welcome-metrics > div {
   display: grid;
   min-width: 0;
@@ -8799,6 +8789,10 @@ pre {
   padding: 4px 8px;
   border-radius: 7px;
   background: var(--conversation-muted-fill);
+}
+
+:root[data-theme="dark"] .welcome-metrics > div {
+  background: #3d3b39;
 }
 
 /* A dd carries a 40px indent from the user-agent sheet, which quietly ate more
@@ -8837,6 +8831,11 @@ pre {
 }
 
 .welcome-heatmap {
+  --heatmap-empty: var(--conversation-muted-fill);
+  --heatmap-level-1: color-mix(in srgb, var(--accent) 28%, var(--conversation-muted-fill));
+  --heatmap-level-2: color-mix(in srgb, var(--accent) 52%, var(--conversation-muted-fill));
+  --heatmap-level-3: color-mix(in srgb, var(--accent) 76%, var(--conversation-muted-fill));
+  --heatmap-level-4: var(--accent);
   display: grid;
   width: 100%;
   aspect-ratio: var(--heatmap-columns) / 7;
@@ -8846,15 +8845,25 @@ pre {
   grid-template-rows: repeat(7, minmax(0, 1fr));
 }
 
-.welcome-heatmap-cell {
-  border-radius: 2px;
-  background: var(--conversation-muted-fill);
+/* Idle days must remain visible against the panel. A dedicated dark ramp
+   keeps low activity distinct instead of mixing the accent into muddy grey. */
+:root[data-theme="dark"] .welcome-heatmap {
+  --heatmap-empty: #43413e;
+  --heatmap-level-1: #87553b;
+  --heatmap-level-2: #b4754e;
+  --heatmap-level-3: #db9869;
+  --heatmap-level-4: #f2bd8d;
 }
 
-.welcome-heatmap-cell[data-level="1"] { background: color-mix(in srgb, var(--accent) 28%, var(--conversation-muted-fill)); }
-.welcome-heatmap-cell[data-level="2"] { background: color-mix(in srgb, var(--accent) 52%, var(--conversation-muted-fill)); }
-.welcome-heatmap-cell[data-level="3"] { background: color-mix(in srgb, var(--accent) 76%, var(--conversation-muted-fill)); }
-.welcome-heatmap-cell[data-level="4"] { background: var(--accent); }
+.welcome-heatmap-cell {
+  border-radius: 2px;
+  background: var(--heatmap-empty);
+}
+
+.welcome-heatmap-cell[data-level="1"] { background: var(--heatmap-level-1); }
+.welcome-heatmap-cell[data-level="2"] { background: var(--heatmap-level-2); }
+.welcome-heatmap-cell[data-level="3"] { background: var(--heatmap-level-3); }
+.welcome-heatmap-cell[data-level="4"] { background: var(--heatmap-level-4); }
 
 .welcome-status {
   color: var(--muted);
@@ -10901,7 +10910,7 @@ pre {
   min-width: 0;
   overflow-wrap: anywhere;
   color: var(--muted);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-mono);
   font-size: 0.6875rem;
 }
 
@@ -11473,7 +11482,7 @@ pre {
 .device-permission-details dl > div { display: grid; grid-template-columns: 90px minmax(0, 1fr); gap: 12px; font-size: .75rem; line-height: 1.7; }
 .device-permission-details dt { color: var(--muted); }
 .device-permission-details dd { margin: 0; overflow-wrap: anywhere; }
-.device-permission-error pre { white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; max-height: 180px; overflow: auto; font: .6875rem/1.7 ui-monospace, monospace; color: var(--muted); margin: 12px 0 0; }
+.device-permission-error pre { white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; max-height: 180px; overflow: auto; font: .6875rem/1.7 var(--font-mono); color: var(--muted); margin: 12px 0 0; }
 @media (max-width: 640px) {
   .desktop-device-context { padding: 14px; }
   .device-permission-header { flex-wrap: wrap; }

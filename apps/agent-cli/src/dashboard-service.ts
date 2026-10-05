@@ -24,6 +24,7 @@ import {
   providerPreferencePatch,
   readProviderPreference,
   SkillCatalog,
+  WorkspaceFileSearch, DEFAULT_FILE_SEARCH_EXCLUDED_DIRECTORIES,
   UserSkillFiles,
   type McpConfig,
   type LxeSkillCommandDefinition,
@@ -32,6 +33,7 @@ import {
   type SqliteRuntimeStore,
   type ToolRegistry,
   type UserQuestionService,
+  type PermissionApprovalService,
 } from "@lxe/runtime";
 
 type Environment = Record<string, string | undefined>;
@@ -39,6 +41,8 @@ type Environment = Record<string, string | undefined>;
 /** Agent-process dependencies required by the Dashboard query service. */
 interface DashboardServiceOptions {
   questions?: UserQuestionService;
+  approvals?: PermissionApprovalService;
+  onPermissionChanged?: (sessionId: string) => Promise<void> | void;
   /** Writable desktop/source state. */
   stateRoot: string;
   /** Read-only provider schemas and auth profile metadata. */
@@ -241,6 +245,17 @@ export class DashboardService {
     },
     "workspaces.rename": input => this.options.store.renameWorkspace(input.directory, input.display_name)
       ?? rpcError("not_found", "workspace not found"),
+    "sessions.permission.set": async input => {
+      this.options.store.setSessionPermissionMode(input.session_id, input.permission_mode);
+      const permission_mode = this.options.store.getSessionPermissionMode(input.session_id);
+      await this.options.onPermissionChanged?.(input.session_id);
+      return { session_id: input.session_id, permission_mode };
+    },
+    "sessions.approvals": () => ({ items: this.options.approvals?.snapshot() ?? [] }),
+    "sessions.approval.decide": input => {
+      if (!this.options.approvals) return rpcError("unavailable", "Single-operation approval is unavailable");
+      return this.options.approvals.decide(input);
+    },
     "sessions.questions": () => ({ items: this.options.questions?.snapshot() ?? [] }),
     "sessions.answer": input => {
       if (!this.options.questions) return rpcError("unavailable", "User questions are unavailable");
@@ -252,15 +267,18 @@ export class DashboardService {
     "sessions.detail": (input) => this.session(input) as Promise<DashboardRpcResult<"sessions.detail">>,
     "sessions.pin": (input) => this.pinSession(input) as DashboardRpcResult<"sessions.pin">,
     "sessions.delete": (input) => this.deleteSession(input) as Promise<DashboardRpcResult<"sessions.delete">>,
+    "sessions.files.candidates": input => this.fileCandidates(input.session_id, input.query),
     "sessions.workspace.reload": (input) => this.reloadWorkspace(input),
     "skills.user.list": () => this.listPayload(this.userSkillFiles.list(this.skillOptions())) as DashboardRpcResult<"skills.user.list">,
     "skills.user.content": input => this.userSkillFiles.content(input.id, this.skillOptions(), input.path),
     "skills.user.setEnabled": input => this.userSkillFiles.setEnabled(input.id, input.version, input.enabled, this.skillOptions()),
     "skills.user.delete": input => this.userSkillFiles.delete(input.id, input.version),
-    "skills.list": () => this.listPayload(
-      this.skills().map((manifest) => this.skillPayload(manifest)),
-    ) as DashboardRpcResult<"skills.list">,
-    "skills.content": (input) => this.skillContent(input.name) as DashboardRpcResult<"skills.content">,
+    "skills.list": async input => this.listPayload((await this.sessionSkills(input.session_id)).map(manifest => this.skillPayload(manifest))) as DashboardRpcResult<"skills.list">,
+    "skills.content": async input => {
+      const skill = (await this.sessionSkills(input.session_id)).find(item => item.name === input.name);
+      if (!skill) rpcError("not_found", "skill not found");
+      return this.skillPayload(skill, true) as DashboardRpcResult<"skills.content">;
+    },
     "skills.reference": (input) => this.skillReference(input.name, input.path) as DashboardRpcResult<"skills.reference">,
     "commands.list": () => this.listPayload(this.options.cliCommands ?? []) as DashboardRpcResult<"commands.list">,
     "toolsets.list": () => this.listPayload(this.toolsets()) as DashboardRpcResult<"toolsets.list">,
@@ -326,12 +344,40 @@ export class DashboardService {
     return session;
   }
 
+  private readonly fileSearches = new Map<string, { root: string; search: WorkspaceFileSearch; query?: AbortController }>();
+  invalidateFileCandidates(session: string): void { this.fileSearches.get(session)?.search.invalidate(); }
+  releaseFileCandidates(session: string): void {
+    const entry = this.fileSearches.get(session); entry?.query?.abort(); entry?.search.dispose(); this.fileSearches.delete(session);
+  }
+  dispose(): void { for (const key of this.fileSearches.keys()) this.releaseFileCandidates(key); }
+  private async fileCandidates(session: string, query: string) {
+    const record = await this.options.store.getSession(session);
+    if (!record) rpcError("not_found", "session not found");
+    const root = record.workspace.directory;
+    let entry = this.fileSearches.get(session);
+    if (entry?.root !== root) { this.releaseFileCandidates(session); entry = undefined; }
+    if (!entry) {
+      entry = { root, search: new WorkspaceFileSearch(root, { maxResults: 20, maxEntries: 50000, excludedDirectories: DEFAULT_FILE_SEARCH_EXCLUDED_DIRECTORIES }) };
+      this.fileSearches.set(session, entry);
+    }
+    this.fileSearches.delete(session); this.fileSearches.set(session, entry);
+    while (this.fileSearches.size > 32) this.releaseFileCandidates(this.fileSearches.keys().next().value!);
+    entry.query?.abort(); const controller = new AbortController(); entry.query = controller;
+    return { items: await entry.search.list(query, controller.signal) };
+  }
+  private async sessionSkills(session?: string): Promise<SkillManifest[]> {
+    if (session !== undefined && !await this.options.store.getSession(session)) rpcError("not_found", "session not found");
+    return this.skills();
+  }
+
   private async deleteSession(input: DashboardRpcSpec["sessions.delete"]["input"]): Promise<JsonObject> {
     if (!await this.options.store.getSession(input.session_id)) {
       return rpcError("not_found", "session not found");
     }
     await this.options.terminateSession?.(input.session_id);
+    await this.options.approvals?.forgetSession(input.session_id);
     this.options.questions?.forgetSession(input.session_id);
+    this.releaseFileCandidates(input.session_id);
     if (!await this.options.store.deleteSession(input.session_id)) {
       return rpcError("not_found", "session not found");
     }
@@ -372,12 +418,6 @@ export class DashboardService {
 
   private skills(): SkillManifest[] {
     return this.skillCatalog.list(this.skillOptions());
-  }
-
-  private skillContent(name: string): JsonObject {
-    const manifest = this.skills().find((item) => item.name === name);
-    if (!manifest) rpcError("not_found", "skill not found");
-    return this.skillPayload(manifest, true);
   }
 
   private skillReference(name: string, path: string): JsonObject {

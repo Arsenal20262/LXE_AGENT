@@ -1,4 +1,5 @@
 export const IPC_CHANNELS = {
+  showTitlebarMenu: "lxe:desktop:titlebar-menu",
   manualToolCall: "lxe:manual-tools:call",
   manualToolEvent: "lxe:manual-tools:event",
   fileCall: "lxe:files:call",
@@ -9,6 +10,7 @@ export const IPC_CHANNELS = {
   installUpdate: "lxe:desktop:update-install",
   dashboardCall: "lxe:dashboard:call",
   selectWorkspace: "lxe:desktop:select-workspace",
+  getWorkspaceApplications: "lxe:desktop:workspace-applications",
   openWorkspace: "lxe:desktop:open-workspace",
   selectZiniaoApp: "lxe:desktop:select-ziniao-app",
   selectZiniaoWebDriverDirectory: "lxe:desktop:select-ziniao-webdriver-directory",
