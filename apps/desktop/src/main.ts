@@ -448,9 +448,10 @@ async function bootstrap(): Promise<void> {
       await manualTools?.closeSession();
       gatewayStopStarted = true;
       await gateway.stop(true);
-      await authBrowserHost.stop();
+      await authBrowserHost.stop(true);
     },
     recover: async () => {
+      await authBrowserHost.start();
       if (gatewayStopStarted) await gateway.recoverAfterUpdate();
       gatewayStopStarted = false;
       cloud.start();

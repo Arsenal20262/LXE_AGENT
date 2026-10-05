@@ -17,7 +17,7 @@ const describe=async(file:string)=>({file_name:basename(file),size:statSync(file
 const old={...await describe(oldFile),version:"0.0.2",build_id:record.builds[1],notes:"qualification B"};
 const next={...await describe(newFile),version:"0.0.3",build_id:record.builds[2],notes:"qualification C",blockmap:await describe(newFile+".blockmap")};
 const oldMap=await describe(oldFile+".blockmap"),newMap=next.blockmap;
-let mode="delta",bytes=0,ranges=0,completeRequests=0;
+let mode="delta",bytes=0,transferBytes=0,ranges=0,completeRequests=0;
 const server=createServer((req,res)=>{
  const url=new URL(req.url!,"http://localhost");
  if(url.pathname==="/new.exe"&&mode==="expired"&&url.searchParams.get("generation")==="1"){res.writeHead(403);res.end("Request has expired");return;}
@@ -30,6 +30,7 @@ const server=createServer((req,res)=>{
   res.writeHead(206,{"Content-Range":`bytes ${start}-${end}/${size}`,"Content-Length":end-start+1});stream=createReadStream(source,{start,end});
  }else{if(source===newFile&&!range)completeRequests++;res.writeHead(200,{"Content-Length":size});stream=createReadStream(source);}
  if(source===newFile)stream.on("data",part=>{bytes+=part.length;});
+ stream.on("data",part=>{transferBytes+=part.length;});
  res.on("close",()=>stream.destroy());stream.pipe(res);
 });
 await new Promise<void>(resolve=>server.listen(0,"127.0.0.1",resolve));
@@ -40,7 +41,7 @@ try{
   rmSync(join(cache,"pending"),{recursive:true,force:true});mkdirSync(cache,{recursive:true});copyFileSync(oldFile,join(cache,"installer.exe"));
   if(mode==="deleted-cache")rmSync(join(cache,"installer.exe"));
   if(mode==="corrupt-cache")writeFileSync(join(cache,"installer.exe"),"invalid old installer");
-  bytes=0;ranges=0;completeRequests=0;let tickets=0;
+  bytes=0;transferBytes=0;ranges=0;completeRequests=0;let tickets=0;
   const diagnostics:string[]=[];
   const installer=new ElectronUpdateInstaller(()=>{},message=>diagnostics.push(message));
   (installer as any).updater.forceDevUpdateConfig=true;
@@ -56,7 +57,7 @@ try{
   else if(mode==="expired")assert.equal(tickets,2);
   else assert(completeRequests>0,"Fallback did not download a complete installer");
   assert(!diagnostics.join("\n").includes("qualification-secret"));
-  results.push({scenario:mode,bytes,installerBytes:next.size,ranges,completeRequests,tickets,diagnostics});
+  results.push({scenario:mode,bytes,transferBytes,installerBytes:next.size,ranges,completeRequests,tickets,diagnostics});
   console.log(JSON.stringify(results.at(-1)));
  }
  writeFileSync(join(record.output,"download-results.json"),JSON.stringify(results,null,2));

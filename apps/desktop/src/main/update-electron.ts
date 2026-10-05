@@ -2,7 +2,7 @@ import {NsisUpdater} from "electron-updater";
 import {Provider} from "electron-updater/out/providers/Provider";
 import {downloadDifferential} from "./update-differential";
 import {app,autoUpdater} from "electron";
-import {spawn} from "node:child_process";
+import {launchUpdateInstaller} from "./update-launch";
 import {join} from "node:path";
 import type {DesktopUpdateIdentity,DesktopUpdateRelease} from "@lxe/desktop-protocol";
 import type {LatestUpdate,UpdateApi,UpdateInstaller,UpdateTicket} from "./update-service";
@@ -74,13 +74,9 @@ export class PrivateNsisUpdater extends NsisUpdater {
   const file=this.installerPath;
   if(!file||!this.downloadedUpdateHelper?.downloadedFileInfo)throw new Error("No verified installer available");
   const args=["--updated","/S","--force-run",`/D=${app.getAppPath().replace(/[\\/]resources[\\/]app\.asar$/,"")}`];
-  const launch=(command:string,argv:string[])=>new Promise<void>((resolve,reject)=>{
-   const child=spawn(command,argv,{detached:true,stdio:"ignore"});
-   child.once("error",reject);child.once("spawn",()=>{child.unref();resolve();});
-  });
-  const elevated=()=>launch(join(process.resourcesPath,"elevate.exe"),[file,...args]);
+  const elevated=()=>launchUpdateInstaller(file,args,true);
   if(this.downloadedUpdateHelper.downloadedFileInfo.isAdminRightsRequired)await elevated();
-  else try{await launch(file,args);}catch(error){
+  else try{await launchUpdateInstaller(file,args);}catch(error){
    if(["EACCES","UNKNOWN"].includes((error as NodeJS.ErrnoException).code??""))await elevated();else throw error;
   }
   // Upstream quitAndInstall quits before asynchronous spawn failures are known.

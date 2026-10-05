@@ -6,25 +6,34 @@ const release:DesktopUpdateRelease={version:"0.2.18",build_id:"one",file_name:"L
 function fixture(){
  const calls:string[]=[];
  let latest:LatestUpdate={state:"available",release};
- let verificationFailure=false,cleanupFailure=false,cancel=false,downloadFailures=0,installFailure=false;
+ let verificationFailure=false,cleanupFailure=false,cancel=false,downloadFailures=0,installFailure=false,revoked=false;
+ let afterConfirm=()=>{};
  const service=new DesktopUpdateService({
   supported:true,
-  api:{latest:async()=>{calls.push("latest");return latest;},ticket:async()=>{calls.push("ticket");return {url:"https://private/file?signature=secret",expires_at:99999};}},
+  api:{latest:async()=>{calls.push("latest");if(revoked)throw new Error("HTTP 403 device_disabled");return latest;},ticket:async()=>{calls.push("ticket");return {url:"https://private/file?signature=secret",expires_at:99999};}},
   installer:{download:async(_r,_u,progress)=>{calls.push("download");if(downloadFailures-->0){const e=new Error("object URL expired");e.name="UpdateTicketExpiredError";throw e;}progress(42);return "cache.exe";},
    verify:async()=>{calls.push("verify");if(verificationFailure)throw new Error("SHA512 checksum mismatch");},
    install:async()=>{calls.push("install");if(installFailure)throw new Error("spawn ENOENT");}},
-  prepareInstall:async()=>{calls.push("confirm+fence");if(cancel)return;return ()=>{calls.push("unlock");};},
+  prepareInstall:async()=>{calls.push("confirm+fence");if(cancel)return;afterConfirm();return ()=>{calls.push("unlock");};},
   cleanup:async()=>{calls.push("cleanup");if(cleanupFailure)throw new Error("runtime did not exit");},
   recover:async()=>{calls.push("recover");},
  });
  return {service,calls,pause:()=>{latest={state:"paused",release:null};},replace:()=>{latest={state:"available",release:{...release,build_id:"two"}};},
   bad:()=>{verificationFailure=true;},cancel:()=>{cancel=true;},cleanupFail:()=>{cleanupFailure=true;},downloadFail:(n:number)=>{downloadFailures=n;},installFail:()=>{installFailure=true;},
+  revoke:()=>{revoked=true;},afterConfirm:(action:()=>void)=>{afterConfirm=action;},
   ready:async()=>{await service.check();return service.download(release);}};
 }
 test("automatic check only advertises a release; download requires a bound user action",async()=>{
  const f=fixture();expect(UPDATE_INTERVAL_MS).toBe(600000);
  expect((await f.service.check()).phase).toBe("available");expect(f.calls).toEqual(["latest"]);
  expect((await f.service.download(release)).phase).toBe("ready");expect(f.calls).not.toContain("install");
+});
+test.each(["pause","replace","revoke"] as const)("changes while native consent is open block installation: %s",async action=>{
+ const f=fixture();await f.ready();f.afterConfirm(f[action]);
+ const state=await f.service.install(release);
+ expect(state.failedOperation).toBe("install");expect(f.calls).toContain("unlock");
+ expect(f.calls).not.toContain("cleanup");expect(f.calls).not.toContain("install");
+ if(action==="revoke")expect(state.message).toContain("HTTP 403 device_disabled");
 });
 test("ready cached package survives rechecks without a ticket",async()=>{
  const f=fixture();await f.ready();await f.service.check();expect(f.service.state().phase).toBe("ready");

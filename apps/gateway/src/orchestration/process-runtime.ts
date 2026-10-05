@@ -208,7 +208,16 @@ export class ProcessAgentRuntime implements DirectAgentRuntime {
       this.options.onStderr?.(line);
       this.logger.debug("agent_cli_stderr", { line });
     });
-    child.once("error", (error) => { if (this.child === child) this.handleExit(error); });
+    child.on("error", (error) => {
+      if (this.child !== child) return;
+      if (!child.pid || child.exitCode !== null || child.signalCode !== null) this.handleExit(error);
+      else {
+        // A failed signal/write is not an exit. Retain ownership so a recovery
+        // cannot start another runtime alongside the still-running process.
+        this.setStatus("error", error.message);
+        this.rejectPending(error);
+      }
+    });
     child.once("exit", (code, signal) => { if (this.child === child) this.handleExit(new AgentProcessError(
       `agent-cli exited: code=${String(code ?? "")} signal=${String(signal ?? "")}`,
       "AgentProcessExited",

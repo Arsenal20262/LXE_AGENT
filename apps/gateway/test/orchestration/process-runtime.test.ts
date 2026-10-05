@@ -64,6 +64,15 @@ afterEach(async () => {
 });
 
 describe("ProcessAgentRuntime", () => {
+  test("an error from a live child preserves ownership until actual exit", async () => {
+    const runtime=new ProcessAgentRuntime({command:process.execPath,arguments:[resolve(import.meta.dirname,"fixtures/fake-agent-cli.mjs")],cwd:process.cwd(),environment:process.env,...resourcePaths(process.cwd()),dataRoot:process.cwd(),legacyWorkspace:testWorkspace});
+    runtimes.push(runtime);await runtime.start();
+    const child=(runtime as any).child;
+    child.emit("error",new Error("kill EPERM: fixture signal denied"));
+    expect(runtime.hasProcess).toBe(true);expect(runtime.status().pid).toBe(child.pid);
+    expect(runtime.status().message).toContain("kill EPERM");
+    await runtime.stop();expect(runtime.hasProcess).toBe(false);
+  });
   test("forwards Desktop stream batches through their dedicated callback", async () => {
     const fixture = resolve(import.meta.dirname, "fixtures/fake-agent-cli.mjs");
     const batches: Array<Extract<AgentEvent, { type: "conversation.stream.delta" }>["payload"]> = [];
