@@ -28,7 +28,9 @@ FunctionEnd
     FileOpen $R2 "$LxeResult" w
     FileWrite $R2 "7za exit: $LxeResultCode$\r$\n$R1"
     FileClose $R2
+    Push $LxeResultCode
     Call LxeCleanupApplication
+    Pop $LxeResultCode
     Call LxeInstallFailure
   ${EndIf}
 !macroend

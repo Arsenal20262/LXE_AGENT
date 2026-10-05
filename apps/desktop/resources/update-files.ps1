@@ -73,13 +73,13 @@ try {
         if ([IO.Directory]::Exists($StageRoot)) { [IO.Directory]::Delete($StageRoot, $true) }
         if ([IO.Directory]::Exists($BackupRoot)) { [IO.Directory]::Delete($BackupRoot, $true) }
     }
-    [IO.File]::WriteAllText($ResultPath, ($Action + ' succeeded'), $utf8)
+    [IO.File]::AppendAllText($ResultPath, ("`r`n" + $Action + ' succeeded'), $utf8)
     exit 0
 } catch {
     $diagnostic = $_.Exception.ToString()
     if ($Action -eq 'Promote') {
         try { Restore-Program } catch { $diagnostic += "`r`nRollback failed: " + $_.Exception.ToString() }
     }
-    [IO.File]::WriteAllText($ResultPath, ($diagnostic + "`r`nBackup retained at: " + $BackupRoot), $utf8)
+    [IO.File]::AppendAllText($ResultPath, ("`r`n" + $diagnostic + "`r`nBackup retained at: " + $BackupRoot), $utf8)
     exit 2
 }

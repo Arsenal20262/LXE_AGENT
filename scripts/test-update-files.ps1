@@ -50,5 +50,10 @@ Prepare 'unsafe-payload'
 Run 'Promote' 2
 Assert ([IO.File]::ReadAllText((Join-Path $install 'a.exe')) -eq 'old-a') 'Invalid payload changed program'
 $passed += 'payload cannot replace var'
+Prepare 'cleanup-diagnostic'
+[IO.File]::WriteAllText($result, '7za exit: 2; fixture extraction failure')
+Run 'Commit'
+Assert ([IO.File]::ReadAllText($result).Contains('fixture extraction failure')) 'Cleanup overwrote the original failure'
+$passed += 'staging cleanup preserves the original extraction diagnostic'
 $passed | ForEach-Object { Write-Host "PASS $_" }
 Write-Host "Passed $($passed.Count) Windows filesystem scenarios. Artifacts: $OutputRoot"
