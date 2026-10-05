@@ -618,3 +618,12 @@ test("update confirmation fence settles old admissions without starting them or 
  expect(states).toContain("cleared:persisting");expect(runtime.cancelled).toEqual(["active"]);expect(runtime.cancellationReasons).toEqual(["user_stop"]);
  unlock();expect(runtime.started.map(j=>j.job_id)).toEqual(["active"]);
 });
+test("recovery after a cancellation timeout never replays previously discarded steering",async()=>{
+ const runtime=new RecordingRuntime();runtime.cancelTurn=async()=>{throw new Error("cancel_turn timed out");};
+ const scheduler=new SessionScheduler({runtime});await scheduler.enqueue(job("s1","active"));
+ const unlock=scheduler.beginUpdate(true)!;
+ await expect(scheduler.cancelForUpdate()).rejects.toThrow("cancel_turn timed out");unlock();
+ scheduler.handleRuntimeEvent(completion("active","s1",{status:"completed",session_id:"s1",job_id:"active",remaining_steering:[{text:"discarded at update consent",message_id:"old-input",response_route_id:"route"}]}));
+ expect(runtime.started.map(row=>row.job_id)).toEqual(["active"]);
+ await scheduler.enqueue(job("s1","explicit-new-task"));expect(runtime.started.at(-1)?.job_id).toBe("explicit-new-task");
+});

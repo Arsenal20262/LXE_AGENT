@@ -135,12 +135,12 @@ export class SessionScheduler {
   private draining = false;
   private runtimeReady = true;
   private updateFenced = false;
-  private updateCancelling = false;
+  private readonly discardSteeringAfterUpdate = new WeakSet<RunHandle>();
 
   beginUpdate(allowBusy = false): (() => void) | undefined {
     if (this.updateFenced || (!allowBusy && this.hasInflightJobs())) return undefined;
     this.updateFenced = true;
-    return () => { this.updateFenced = false; this.updateCancelling = false; this.drain(); };
+    return () => { this.updateFenced = false; this.drain(); };
   }
 
   async settleUpdateAdmissions(): Promise<void> {
@@ -154,7 +154,7 @@ export class SessionScheduler {
 
   async cancelForUpdate(): Promise<void> {
     await this.settleUpdateAdmissions();
-    this.updateCancelling = true;
+    for (const handle of this.activeBySession.values()) this.discardSteeringAfterUpdate.add(handle);
     for (const sessionId of this.pending.keys()) this.clearPending(sessionId);
     await Promise.all([...this.activeBySession.values()].map(handle => this.requestStop(handle.sessionId, handle.jobId)));
   }
@@ -343,7 +343,7 @@ export class SessionScheduler {
       ? "cancelled"
       : clean(event.payload.status) === "completed" ? "completed" : "error";
     this.publishJobState(status, handle.originJob);
-    if (!cancelled && !this.updateCancelling) this.requeueRemainingSteering(handle, event.payload.remaining_steering);
+    if (!cancelled && !this.discardSteeringAfterUpdate.has(handle)) this.requeueRemainingSteering(handle, event.payload.remaining_steering);
     this.markReady(handle.sessionId);
     this.logger.debug("scheduler_job_released", {
       session_id: handle.sessionId,
