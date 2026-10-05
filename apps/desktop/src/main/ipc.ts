@@ -1,6 +1,7 @@
+import { validateTitlebarMenu } from "./titlebar-menu";
 import { fileResult } from "./file-preview/errors";
 import { mkdirSync } from "node:fs";
-import { dialog, ipcMain, shell } from "electron";
+import { app, dialog, ipcMain, shell } from "electron";
 import type {
   DashboardRpcCall,
   DashboardRpcOperation,
@@ -24,7 +25,9 @@ import type {
   DesktopSyntheticPerformerTaskInput,
 } from "@lxe/desktop-protocol";
 import { IPC_CHANNELS } from "../ipc-channels";
-import { openWorkspaceDirectory, workspaceDirectory } from "./workspace-directory";
+import { workspaceDirectory } from "./workspace-directory";
+import { WorkspaceApplications } from "./workspace-apps/service";
+import { bundleIconDataUrl } from "./workspace-apps/icons";
 import { readClipboardFilePaths } from "./clipboard-files";
 import {
   validateDraftImagePreviewVariant,
@@ -41,6 +44,7 @@ import {
 } from "./ipc-validation";
 
 export interface DesktopIpcApplication {
+  showTitlebarMenu?(request: import("@lxe/desktop-protocol").DesktopTitlebarMenuRequest): Promise<import("@lxe/desktop-protocol").DesktopTitlebarAction>;
   isTrustedFileSender(event: import("electron").IpcMainInvokeEvent): boolean;
   fileCall?<K extends keyof import("@lxe/desktop-protocol").DesktopFileOperations>(call: import("@lxe/desktop-protocol").DesktopFileCall<K>): Promise<import("@lxe/desktop-protocol").DesktopFileOperations[K]["result"]>;
   fileRead?(handle: string, relativeImage?: string): Promise<Uint8Array>;
@@ -98,6 +102,8 @@ const stringArray = (value: unknown, label: string): string[] => {
 };
 
 export function registerDesktopIpc(application: DesktopIpcApplication): () => void {
+  const workspaceApps = new WorkspaceApplications({ openPath: path => shell.openPath(path), icon: path => process.platform === "darwin" ? bundleIconDataUrl(path) : app.getFileIcon(path, { size: "normal" }).then(image => image.toDataURL()) });
+  const trustedWorkspaceSender = (event: Electron.IpcMainInvokeEvent) => { if (!application.isTrustedFileSender(event)) throw new Error("Workspace applications are only available to the desktop main frame"); };
   ipcMain.handle(IPC_CHANNELS.fileCall, (event, call) => fileResult(typeof call?.operation === "string" ? call.operation : "call", () => {
     if (!application.isTrustedFileSender(event)) throw new Error("File previews are only available to the desktop main frame");
     if (call?.operation === "focus-preview") {
@@ -118,6 +124,11 @@ export function registerDesktopIpc(application: DesktopIpcApplication): () => vo
     if (!application.fileRead) throw new Error("File previews are unavailable");
     return application.fileRead(handle, relativeImage);
   }));
+  ipcMain.handle(IPC_CHANNELS.showTitlebarMenu, (event, input: unknown) => {
+    if (!application.isTrustedFileSender(event)) throw new Error("Titlebar menus are only available to the desktop main frame");
+    if (!application.showTitlebarMenu) throw new Error("Windows titlebar menus are unavailable");
+    return application.showTitlebarMenu(validateTitlebarMenu(input));
+  });
   ipcMain.handle(IPC_CHANNELS.getUpdateState, () => application.getUpdateState?.() ?? {phase:"unsupported"});
   ipcMain.handle(IPC_CHANNELS.checkForUpdate, () => application.checkForUpdate?.() ?? {phase:"unsupported"});
   ipcMain.handle(IPC_CHANNELS.installUpdate, () => application.installUpdate?.() ?? {phase:"unsupported"});
@@ -130,8 +141,8 @@ export function registerDesktopIpc(application: DesktopIpcApplication): () => vo
     });
     return selection.canceled || !selection.filePaths[0] ? null : workspaceDirectory(selection.filePaths[0]);
   });
-  ipcMain.handle(IPC_CHANNELS.openWorkspace, (_event, directory: unknown) =>
-    openWorkspaceDirectory(directory, path => shell.openPath(path)));
+  ipcMain.handle(IPC_CHANNELS.getWorkspaceApplications, (event, input: unknown) => { trustedWorkspaceSender(event); return workspaceApps.list(input); });
+  ipcMain.handle(IPC_CHANNELS.openWorkspace, (event, directory: unknown, applicationId: unknown) => { trustedWorkspaceSender(event); return workspaceApps.open(directory, applicationId); });
   ipcMain.handle(IPC_CHANNELS.selectZiniaoApp, async () => {
     const selection = await dialog.showOpenDialog({
       title: "选择紫鸟 APP",

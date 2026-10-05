@@ -10,9 +10,9 @@ const passed = [];
 const errors = [];
 
 app.whenReady().then(async () => {
-  const win = new BrowserWindow({ width: 1200, height: 900, show: false,
+  const win = new BrowserWindow({ width: 1200, height: 900, show: suite === "windows-titlebar",
     // Hidden Windows windows throttle animation frames even with backgroundThrottling disabled.
-    webPreferences: { offscreen: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false } });
+    webPreferences: { offscreen: suite !== "windows-titlebar", contextIsolation: true, nodeIntegration: false, backgroundThrottling: false } });
   // Do not permit accidental external requests from fixtures or production UI.
   win.webContents.session.webRequest.onBeforeRequest((details, callback) => {
     const local = details.url.startsWith(new URL(url).origin + "/") || /^(data:|blob:)/.test(details.url);
@@ -34,7 +34,7 @@ app.whenReady().then(async () => {
       if (await js(code)) return;
       await delay(25);
     }
-    throw new Error(`Timed out: ${label}\n${JSON.stringify(await state())}\n${await js("document.body.innerText.slice(0, 3000)")}`);
+    throw new Error(`Timed out: ${label}\n${JSON.stringify({...(await state()),sessions:undefined})}\n${await js("document.body.innerText.slice(0, 3000)")}`);
   };
   const load = async (query = "") => {
     await win.loadURL(url + query);
@@ -59,8 +59,8 @@ app.whenReady().then(async () => {
     await settle();
   };
   const type = async text => {
-    await focus("textarea"); await win.webContents.insertText(text); await settle();
-    assert.equal(await js("document.querySelector('textarea').value"), text, "native input reached the controlled textarea");
+    await focus(".reference-editor"); await win.webContents.insertText(text); await settle();
+    assert.equal(await js("(sessionStorage.getItem('lxe.composer-draft.' + document.querySelector('.reference-editor').dataset.session) || '')"), text, "native input reached the controlled textarea");
   };
   const step = async (name, run) => {
     try { await run(); assert.deepEqual(errors, [], "renderer console/network errors"); passed.push(name); }
@@ -68,7 +68,226 @@ app.whenReady().then(async () => {
   };
   try {
     await load();
-    if (suite === "dialog") {
+    if (suite === "permissions") {
+      await js("behavior.mountPermissions()");
+      const mode = () => js("document.querySelector('.permission-picker > button').innerText");
+      const choose = async value => {
+        await click(".permission-picker > button");
+        await js(`Array.from(document.querySelectorAll('.permission-menu button')).find(b=>b.innerText.includes(${JSON.stringify(value)})).click()`);
+        await settle();
+      };
+      await step("running session switches from workspace write to read only", async () => {
+        await waitFor("document.querySelector('.permission-picker > button')?.innerText.includes('Workspace Write')", "initial server mode");
+        assert.equal(await js("document.querySelector('.permission-picker > button').disabled"), false);
+        await choose("Read Only");
+        await waitFor("document.querySelector('.permission-picker > button').innerText.includes('Read Only')", "read only saved");
+        assert.equal((await state()).stops, 0);
+      });
+      await step("full access requires confirmation; cancel preserves mode", async () => {
+        await choose("Full access");
+        await waitFor("Boolean(document.querySelector('#permission-full-title'))", "confirmation shown");
+        await click(".session-delete-dialog footer button:first-child");
+        assert.match(await mode(), /Read Only/);
+        await choose("Full access");
+        await click(".session-delete-dialog footer button:last-child");
+        await waitFor("!document.querySelector('#permission-full-title') && document.querySelector('.permission-picker > button').innerText.includes('Full access')", "full saved");
+      });
+      await step("approval takeover hides the toolbar and restores drafts after separate decisions", async () => {
+        await type("Keep this draft");
+        await js("behavior.chooseFile('draft.txt')"); await click('[aria-label="Add files"]');
+        await js("behavior.permissionApprovals()");
+        await waitFor("document.querySelector('.permission-approval')?.innerText.includes('python report.py --all')", "first approval");
+        assert.equal(await js("document.querySelector('.permission-command').textContent"), "python report.py --all");
+        assert.match(await js("document.querySelector('.permission-target').innerText"), /outside/);
+        assert.equal(await js("document.querySelectorAll('.permission-picker, .conversation-compose-actions, .reference-editor, .permission-approval header button').length"), 0);
+        assert.deepEqual(await js("Array.from(document.querySelectorAll('.permission-approval button')).map(b=>b.innerText)"), ["Reject", "Allow once"]);
+        const fileCalls = (await state()).calls.filter(call => call.operation === "dropFiles").length;
+        await js("behavior.drop(); behavior.remotePermission('read-only')"); await settle();
+        assert.equal((await state()).calls.filter(call => call.operation === "dropFiles").length, fileCalls);
+        assert.equal(await js("document.querySelector('.permission-approval').dataset.requestId"), "permission-0");
+        await click(".permission-approval footer button:last-child");
+        await waitFor("document.querySelector('.permission-approval')?.dataset.requestId === 'permission-1'", "second approval");
+        assert.equal(await js("document.querySelector('.permission-operation-details').open"), false);
+        await click(".permission-operation-details summary");
+        assert.equal(await js("document.querySelector('.permission-operation-details pre').textContent"), "Complete proposed contents");
+        await click(".permission-approval footer button:first-child");
+        await waitFor("!document.querySelector('.permission-approval')", "approvals completed");
+        const decisions = (await state()).calls.filter(call => call.operation === "sessions.approval.decide");
+        assert.deepEqual(decisions.map(call => call.input.decision), ["allow", "deny"]);
+        assert.equal((await state()).stops, 0, "rejecting an operation does not stop the turn");
+        assert.equal(await js("document.querySelector('.reference-editor').textContent"), "Keep this draft");
+        assert.match(await js("document.querySelector('.conversation-compose-box').innerText"), /draft.txt/);
+        await waitFor("document.querySelector('.permission-picker > button')?.innerText.includes('Read Only')", "latest mode restored with toolbar");
+      });
+      await step("save failure preserves confirmed value and actual error", async () => {
+        await js("behavior.permissionFailure(true)"); await choose("Workspace Write");
+        await waitFor("document.querySelector('.permission-error')?.innerText.includes('fixture permission save failed')", "actual save error");
+        assert.match(await mode(), /Read Only/);
+        await js("behavior.permissionFailure(false)"); await choose("Workspace Write");
+        await waitFor("document.querySelector('.permission-picker > button').innerText.includes('Workspace Write')", "retry saved");
+      });
+      await step("late save response cannot change another session", async () => {
+        await js("behavior.holdPermission(true)"); await choose("Read Only");
+        assert.equal(await js("document.querySelector('.permission-picker > button').disabled"), true);
+        await js("behavior.permissionSession('permissions-b')"); await settle();
+        assert.match(await mode(), /Workspace Write/);
+        await js("behavior.releasePermission()"); await settle();
+        assert.match(await mode(), /Workspace Write/);
+        await js("behavior.permissionSession('permissions-a')");
+        await waitFor("document.querySelector('.permission-picker > button').innerText.includes('Read Only')", "original saved value recovered");
+      });
+      await step("remote changes and reconnection query server state", async () => {
+        await js("behavior.updateComposer({runtimeReady:false})"); await settle();
+        assert.equal(await js("document.querySelector('.permission-picker > button').disabled"), true);
+        await js("behavior.remotePermission('workspace-write'); behavior.updateComposer({runtimeReady:true})");
+        await waitFor("document.querySelector('.permission-picker > button').innerText.includes('Workspace Write')", "reconnected value");
+        await js("behavior.remotePermission('read-only')");
+        await waitFor("document.querySelector('.permission-picker > button').innerText.includes('Read Only')", "other window change");
+        await js("behavior.permissionApprovals(); behavior.updateComposer({runtimeReady:false})"); await settle();
+        await js("behavior.updateComposer({runtimeReady:true})");
+        await waitFor("Boolean(document.querySelector('.permission-approval'))", "pending restored after reconnect");
+        await click(".permission-approval footer button:first-child");
+        await waitFor("document.querySelector('.permission-approval')?.dataset.requestId === 'permission-1'", "next pending approval");
+        await click(".permission-approval footer button:first-child");
+        await waitFor("!document.querySelector('.permission-approval')", "requests rejected");
+        await click(".conversation-send-button[data-mode='stop']");
+        assert.equal((await state()).stops, 1, "normal stop is available after rejection");
+      });
+      await step("question card retains permission selector", async () => {
+        await js("behavior.permissionQuestion(true)"); await settle();
+        assert.ok(await js("Boolean(document.querySelector('.user-question-card'))"));
+        assert.equal(await js("document.querySelector('.permission-picker > button').disabled"), false);
+        await js("behavior.permissionQuestion(false)");
+      });
+      const request = (id, tool, preview) => ({ request_id: id, session_id: "permissions-a", turn_id: "turn", tool_call_id: id,
+        tool, target_mode: "workspace-write", justification: "创建测试文件，验证权限申请流程。", arguments: {}, preview });
+      const show = async value => {
+        await js(`behavior.permissionRequests([${JSON.stringify(value)}])`);
+        await waitFor(`document.querySelector('.permission-approval')?.dataset.requestId === ${JSON.stringify(value.request_id)}`, "approval preview");
+      };
+      await step("failed and delayed decisions preserve the card without duplicate submissions or toolbar flashes", async () => {
+        await show(request("delayed", "write", { path: "/work/report.txt", content: "Exact contents\nnext line" }));
+        await js("behavior.approvalFailure(true)"); await click(".permission-approval footer button:last-child");
+        await waitFor("document.querySelector('.permission-error')?.innerText.includes('ENOSPC: fixture approval audit failed')", "actual approval error");
+        assert.equal(await js("document.querySelectorAll('.conversation-compose-actions').length"), 0);
+        await js("behavior.approvalFailure(false); behavior.holdApproval(true)");
+        await click(".permission-approval footer button:last-child");
+        await waitFor("document.querySelector('.permission-approval')?.getAttribute('aria-busy') === 'true'", "decision in progress");
+        assert.equal(await js("Array.from(document.querySelectorAll('.permission-approval button')).every(b=>b.disabled)"), true);
+        assert.equal(await js("document.querySelectorAll('.conversation-compose-box').length"), 0);
+        await js("document.querySelector('.permission-approval footer button:last-child').click()");
+        assert.equal((await state()).calls.filter(call => call.operation === "sessions.approval.decide" && call.input.request_id === "delayed").length, 2, "only failed attempt and explicit retry");
+        await js("behavior.releaseApproval()");
+        await waitFor("Boolean(document.querySelector('.reference-editor'))", "composer restored after acknowledgement");
+      });
+      await step("file and edit previews preserve exact text and reset collapsed state across requests", async () => {
+        await show(request("write-preview", "write", { path: "D:\\work\\订单分析\\hello.txt", content: "第一行\n\n<script>visible text</script>\n最后一行\n" }));
+        assert.equal(await js("document.querySelector('.permission-operation-details').open"), false);
+        assert.equal(await js("document.querySelector('.permission-target code').textContent"), "D:\\work\\订单分析\\hello.txt");
+        await click(".permission-operation-details summary");
+        assert.equal(await js("document.querySelector('.permission-operation-details pre').textContent"), "第一行\n\n<script>visible text</script>\n最后一行\n");
+        await show(request("edit-preview", "edit", { path: "/work/hello.txt", edits: [{ oldText: "old\nline", newText: "new\nline" }, { oldText: "remove", newText: "" }] }));
+        assert.equal(await js("document.querySelector('.permission-operation-details').open"), false);
+        await click(".permission-operation-details summary");
+        assert.deepEqual(await js("Array.from(document.querySelectorAll('.permission-edit pre')).map(p=>p.textContent)"), ["old\nline", "new\nline", "remove", ""]);
+        await show(request("normalized-exec", "exec", { command: "/venv/bin/python -m lxeskill list", cwd: "/work", requested_command: "lxeskill list" }));
+        assert.equal(await js("document.querySelector('.permission-command').textContent"), "/venv/bin/python -m lxeskill list");
+        await click(".permission-operation-details summary");
+        assert.equal(await js("document.querySelector('.permission-operation-details pre').textContent"), "lxeskill list");
+      });
+      await step("compact approval cards fit narrow light and dark views while long contents remain readable", async () => {
+        await js("behavior.composerLanguage('zh')");
+        const value = request("visual-write", "write", { path: "/work/订单分析/hello.txt", content: "你好，世界！\n这是一个用于验证权限审批界面的测试文件。\n".repeat(40) });
+        for (const theme of ["light", "dark"]) {
+          await js(`document.documentElement.dataset.theme=${JSON.stringify(theme)}`);
+          await show({ ...value, request_id: `visual-${theme}` }); await settle();
+          assert.match(await js("document.querySelector('.permission-approval-status').innerText"), /等待审批/);
+          assert.ok(await js("document.querySelector('.permission-approval').getBoundingClientRect().height < 240"));
+          if (process.env.LXE_APPROVAL_SCREENSHOT) {
+            await js("document.fonts.ready.then(() => undefined)"); await settle();
+            const bounds = await js("document.querySelector('.permission-approval').getBoundingClientRect().toJSON()");
+            const screenshot = await win.webContents.capturePage({ x: Math.floor(bounds.x), y: Math.floor(bounds.y), width: Math.ceil(bounds.width), height: Math.ceil(bounds.height) });
+            require("node:fs").writeFileSync(process.env.LXE_APPROVAL_SCREENSHOT.replace(/\.png$/, `-${theme}.png`), screenshot.toPNG());
+          }
+          win.setSize(480, 650); await settle();
+          await click(".permission-operation-details summary");
+          assert.equal(await js("document.querySelector('.permission-operation-details pre').textContent"), value.preview.content);
+          assert.ok(await js("(() => { const body=document.querySelector('.permission-approval-body'); return body.scrollHeight > body.clientHeight && body.scrollWidth <= body.clientWidth + 1; })()"));
+          assert.ok(await js("document.querySelector('.permission-approval footer').getBoundingClientRect().bottom <= innerHeight"));
+          win.setSize(1200, 900); await settle();
+        }
+      });
+    }
+    else if (suite === "mermaid") {
+      const chart = 'flowchart TD\nA[会话模式与固定工作区] --> C[统一策略服务]\nB[宿主提供的临时目录和产物目录] --> C\nC --> D[本次调用的实际策略]\nD --> E[exec：构建进程沙箱]\nD --> F[write/edit：检查目标路径]\nD --> G[模型上下文：说明当前权限]';
+      const sequence = 'sequenceDiagram\nparticipant A as 用户\nparticipant B as Agent\nA->>B: 请求\nNote over B: 执行任务\nB-->>A: 返回结果';
+      const custom = 'flowchart LR\nA[重点]:::highlight --> B[默认]\nclassDef highlight fill:#345678,color:#ffffff,stroke:#789abc';
+      const mount = charts => js(`behavior.mountMermaid(${JSON.stringify(charts)})`);
+      const setTheme = theme => js(`document.documentElement.dataset.theme=${JSON.stringify(theme)}`);
+      const palette = () => js(`(() => {
+        const css = selector => getComputedStyle(document.querySelector(selector));
+        return {
+          node: css('#mermaid-fixture-0 .node rect').fill,
+          text: css('#mermaid-fixture-0 .nodeLabel').color,
+          line: css('#mermaid-fixture-0 .flowchart-link').stroke,
+          arrow: css('#mermaid-fixture-0 marker path').fill,
+          background: css('.mermaid-block').backgroundColor,
+          actor: css('#mermaid-fixture-1 rect.actor').fill,
+          actorText: css('#mermaid-fixture-1 text.actor > tspan').fill,
+          note: css('#mermaid-fixture-1 rect.note').fill,
+          noteText: css('#mermaid-fixture-1 .noteText').fill,
+        };
+      })()`);
+      const luminance = color => {
+        const channels = color.match(/[\d.]+/g).slice(0, 3).map(Number).map(c => {
+          c /= 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+        });
+        return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+      };
+      const contrast = (a, b) => (Math.max(luminance(a), luminance(b)) + 0.05) / (Math.min(luminance(a), luminance(b)) + 0.05);
+      const ready = theme => waitFor(`document.querySelectorAll('.mermaid-block svg').length === 2
+        && getComputedStyle(document.querySelector('#mermaid-fixture-0 .node rect')).fill === ${JSON.stringify(theme === "dark" ? "rgb(48, 47, 46)" : "rgb(244, 244, 244)")}`, `${theme} diagrams`);
+      await step("light and dark diagrams have neutral nodes and readable labels, arrows and sequence notes", async () => {
+        for (const theme of ["light", "dark"]) {
+          await setTheme(theme); await mount([chart, sequence]); await ready(theme);
+          const colors = await palette();
+          assert.equal(colors.actor, colors.node);
+          assert.equal(colors.arrow, colors.line);
+          assert.ok(contrast(colors.text, colors.node) >= 4.5, JSON.stringify(colors));
+          assert.ok(contrast(colors.actorText, colors.actor) >= 4.5, JSON.stringify(colors));
+          assert.ok(contrast(colors.noteText, colors.note) >= 4.5, JSON.stringify(colors));
+          assert.ok(contrast(colors.line, colors.background) >= 3);
+          assert.notEqual(colors.note, "rgb(255, 245, 173)");
+          if (process.env.LXE_MERMAID_SCREENSHOT) {
+            await js("document.fonts.ready.then(() => undefined)"); await settle();
+            const bounds = await js("document.querySelector('.mermaid-block').getBoundingClientRect().toJSON()");
+            const screenshot = await win.webContents.capturePage({ x: Math.floor(bounds.x), y: Math.floor(bounds.y), width: Math.ceil(bounds.width), height: Math.ceil(bounds.height) });
+            require("node:fs").writeFileSync(process.env.LXE_MERMAID_SCREENSHOT.replace(/\.png$/, `-${theme}.png`), screenshot.toPNG());
+          }
+        }
+      });
+      await step("mounted diagrams follow theme and font changes without stale renders", async () => {
+        await setTheme("light"); await ready("light");
+        await setTheme("dark"); await settle(); await setTheme("light"); await settle(); await setTheme("dark");
+        await ready("dark");
+        await js("document.documentElement.dataset.fontSize='large'");
+        await waitFor("document.querySelector('#mermaid-fixture-0 svg') && getComputedStyle(document.querySelector('#mermaid-fixture-0 svg')).fontSize === '18px'", "large diagram text");
+        await js("document.documentElement.dataset.fontSize='standard'");
+        await waitFor("document.querySelector('#mermaid-fixture-0 svg') && getComputedStyle(document.querySelector('#mermaid-fixture-0 svg')).fontSize === '16px'", "standard diagram text");
+        assert.equal(await js("document.querySelectorAll('#mermaid-fixture-0 .node').length"), 7);
+        assert.ok((await js("getComputedStyle(document.querySelector('#mermaid-fixture-0 svg')).fontFamily")).includes("HarmonyOS Sans SC"));
+      });
+      await step("explicit diagram colors survive theme changes", async () => {
+        await mount([custom]);
+        for (const theme of ["light", "dark"]) {
+          await setTheme(theme);
+          await waitFor(`document.querySelector('#mermaid-fixture-0 .node:not(.highlight) rect')
+            && getComputedStyle(document.querySelector('#mermaid-fixture-0 .node:not(.highlight) rect')).fill === ${JSON.stringify(theme === "dark" ? "rgb(48, 47, 46)" : "rgb(244, 244, 244)")}`, "custom diagram rendered in current theme");
+          await settle();
+          assert.equal(await js("getComputedStyle(document.querySelector('#mermaid-fixture-0 .highlight rect')).fill"), "rgb(52, 86, 120)");
+        }
+      });
+    } else if (suite === "dialog") {
       await step("focus enters the first visible control and wraps in both directions", async () => {
         await js("behavior.mountDialog()"); await click("#opener");
         assert.equal((await state()).active, "first", "initial focus skips hidden and disabled controls");
@@ -103,13 +322,13 @@ app.whenReady().then(async () => {
     } else if (suite === "composer") {
       await step("IME confirmation does not send; Shift+Enter inserts a line; Enter sends once", async () => {
         await js("behavior.mountComposer()"); await type("中文");
-        assert.equal(await js("document.querySelector('textarea').maxLength"), 8192);
+        assert.equal(await js("Number(document.querySelector('.reference-editor').dataset.maxlength)"), 8192);
         // Synthetic composition metadata covers React's nativeEvent.isComposing;
         // normal Enter/Tab/Shift+Enter use Chromium native input below.
         await js("behavior.composeEnter()"); await settle();
         assert.equal((await state()).sends.length, 0);
         await key("Enter", ["shift"]);
-        assert.equal(await js("document.querySelector('textarea').value"), "中文\n");
+        assert.equal(await js("(sessionStorage.getItem('lxe.composer-draft.' + document.querySelector('.reference-editor').dataset.session) || '')"), "中文\n");
         assert.equal((await state()).sends.length, 0);
         await key("Enter");
         assert.deepEqual((await state()).sends, [{ text: "中文", attachments: [] }]);
@@ -119,14 +338,14 @@ app.whenReady().then(async () => {
         await key("Enter"); await key("Enter"); await click(".conversation-send-button");
         assert.equal((await state()).sends.length, 1);
         await js("behavior.releaseSend()"); await settle();
-        assert.equal(await js("document.querySelector('textarea').value"), "");
+        assert.equal(await js("(sessionStorage.getItem('lxe.composer-draft.' + document.querySelector('.reference-editor').dataset.session) || '')"), "");
       });
       await step("running work changes the action button to stop", async () => {
         await js("behavior.mountComposer({running:true})"); await type("queued draft");
         await click(".conversation-send-button");
         assert.equal((await state()).stops, 1); assert.equal((await state()).sends.length, 0);
         // Enter intentionally queues a new message during an existing turn.
-        await focus("textarea"); await key("Enter");
+        await focus(".reference-editor"); await key("Enter");
         assert.equal((await state()).sends.length, 1);
       });
       await step("model/thinking saves block both click and keyboard submission", async () => {
@@ -134,22 +353,180 @@ app.whenReady().then(async () => {
           await js(`behavior.mountComposer({${flag}:true})`); await type("wait for settings");
           await key("Enter"); await click(".conversation-send-button");
           assert.equal((await state()).sends.length, 0, flag);
-          await js(`behavior.updateComposer({${flag}:false})`); await focus("textarea"); await key("Enter");
+          await js(`behavior.updateComposer({${flag}:false})`); await focus(".reference-editor"); await key("Enter");
           assert.equal((await state()).sends.length, 1, `${flag} recovery`);
         }
       });
       await step("offline composer retains draft and blocks send, file selection and drops", async () => {
         await js("behavior.mountComposer()"); await type("offline draft");
         await js("behavior.updateComposer({runtimeReady:false})"); await settle();
-        assert.equal(await js("document.querySelector('textarea').disabled"), true);
-        assert.equal(await js("document.querySelector('textarea').placeholder"), "Fixture runtime unavailable");
+        const beforeOffline = (await state()).calls;
+        assert.equal(await js("(document.querySelector('.reference-editor').contentEditable === 'false')"), true);
+        assert.equal(await js("document.querySelector('.reference-editor').dataset.placeholder"), "Fixture runtime unavailable");
         await click(".conversation-send-button"); await key("Enter");
         await click(".conversation-attach-button"); await js("behavior.drop()"); await settle();
-        assert.deepEqual((await state()).sends, []); assert.deepEqual((await state()).calls, []);
-        await js("behavior.updateComposer({runtimeReady:true})"); await focus("textarea"); await key("Enter");
+        assert.deepEqual((await state()).sends, []); assert.deepEqual((await state()).calls, beforeOffline);
+        await js("behavior.updateComposer({runtimeReady:true})"); await focus(".reference-editor"); await key("Enter");
         assert.deepEqual((await state()).sends, [{ text: "offline draft", attachments: [] }]);
         await js("behavior.drop()"); await settle();
-        assert.deepEqual((await state()).calls, [{ operation: "dropFiles", input: ["fixture.txt"] }], "drop listener is exercised after recovery");
+        assert.deepEqual((await state()).calls.filter(call => !call.operation.startsWith("sessions.")), [{ operation: "dropFiles", input: ["fixture.txt"] }], "drop listener is exercised after recovery");
+      });
+    } else if (suite === "references") {
+      const draft = () => js("sessionStorage.getItem('lxe.composer-draft.' + document.querySelector('.reference-editor').dataset.session) || ''");
+      const mount = async () => { await js("behavior.mountReferences()"); await settle(); };
+      const options = () => waitFor("document.querySelectorAll('.composer-candidate').length > 0 && document.querySelector('.composer-candidate-viewport').getAttribute('aria-busy') === 'false'", "candidates ready");
+      const pointer = async selector => {
+        const point = await js(`(() => { const r = document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect(); return {x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)} })()`);
+        win.webContents.sendInputEvent({ type: "mouseMove", ...point });
+        win.webContents.sendInputEvent({ type: "mouseDown", button: "left", clickCount: 1, ...point });
+        win.webContents.sendInputEvent({ type: "mouseUp", button: "left", clickCount: 1, ...point });
+        await settle();
+      };
+      const captureMenu = async name => {
+        const dir = process.env.LXE_COMPOSER_CAPTURE_DIR; if (!dir) return;
+        const rect = await js("(() => { const r=document.querySelector('.composer-candidates').getBoundingClientRect(); return {x:Math.floor(r.x),y:Math.floor(r.y),width:Math.ceil(r.width),height:Math.ceil(r.height)} })()");
+        require('node:fs').mkdirSync(dir,{recursive:true});
+        require('node:fs').writeFileSync(require('node:path').join(dir, name), (await win.webContents.capturePage(rect)).toPNG());
+      };
+      await step("bare triggers show compact rows without redundant root paths or skill icons", async () => {
+        await mount(); await type("@"); await options();
+        assert.equal(await js("document.querySelectorAll('.composer-candidate').length"), 3);
+        assert.equal(await js("document.querySelectorAll('.composer-candidate-description').length"), 0);
+        assert.equal(await js("document.querySelector('.composer-candidate').getBoundingClientRect().height"), 34);
+        assert.equal(await js("document.querySelector('.composer-candidate kbd').getBoundingClientRect().width > 0"), true);
+        assert.equal(await js("Math.abs(document.querySelector('.composer-candidates').getBoundingClientRect().width - document.querySelector('.reference-composer').getBoundingClientRect().width) < 1"), true);
+        await captureMenu("at-root-menu-fixture-light.png");
+        await pointer('#composer-candidate-1'); assert.equal(await draft(), "@销售.md ");
+        assert.equal(await js("document.activeElement.classList.contains('reference-editor')"), true);
+        await mount(); await type("/"); await options();
+        assert.equal(await js("document.querySelectorAll('.composer-candidate').length"), 3);
+        assert.equal(await js("document.querySelectorAll('.composer-candidate svg').length"), 0);
+        assert.equal(await js("[...document.querySelectorAll('.composer-candidate')].every(el=>{const a=el.querySelector('.composer-candidate-name').getBoundingClientRect(),b=el.querySelector('.composer-candidate-description').getBoundingClientRect();return Math.abs(a.y+a.height/2-b.y-b.height/2)<1})"), true);
+        await captureMenu("skill-menu-fixture-light.png");
+      });
+      await step("file locations only name parents; breadcrumbs appear after drilling and preserve quoting", async () => {
+        await mount(); await js('behavior.referenceCandidates([{path:"归档/销售.md",kind:"file"}])'); await type("@销售"); await options();
+        assert.equal(await js("document.querySelector('.composer-candidate-description').textContent"), "归档");
+        await mount(); await type("@报表/"); await options();
+        assert.equal(await js("Boolean(document.querySelector('.composer-crumbs'))"), false);
+        assert.equal(await js("document.querySelector('.composer-candidate-description').textContent"), "报表");
+        await mount(); await type('@"报'); await options(); await pointer('.composer-candidate-trailing button'); await options();
+        assert.equal(await draft(), '@"报表/');
+        assert.equal(await js("document.querySelectorAll('.composer-candidate-description').length"), 0);
+        assert.equal(await js("document.querySelector('.composer-crumbs [aria-current]').disabled"), true);
+        assert.equal(await js("document.querySelector('[role=listbox]').contains(document.querySelector('.composer-crumbs'))"), false);
+        await pointer('.composer-crumbs button'); await options(); assert.equal(await draft(), '@"');
+        assert.equal(await js("Boolean(document.querySelector('.composer-crumbs'))"), false);
+        await key("Tab"); await options(); await key("Enter"); assert.equal(await draft(), '@"报表/销售 统计.md" ');
+      });
+      await step("long menus fit above the composer and keyboard scrolling leaves the chat in place", async () => {
+        await mount(); await js('behavior.referenceCandidates(Array.from({length:20},(_,i)=>({path:`报表/这是需要截断的长文件名称-${i}.md`,kind:"file"})))'); await type("@"); await options();
+        assert.equal(await js("document.querySelector('.composer-candidates').getBoundingClientRect().height <= 400"), true);
+        const scroll = await js("window.scrollY");
+        const point = await js("(()=>{const r=document.querySelector('#composer-candidate-0').getBoundingClientRect();return{x:Math.round(r.x+30),y:Math.round(r.y+15)}})()");
+        win.webContents.sendInputEvent({type:"mouseMove",...point}); await settle();
+        for (let i=0;i<19;i++) await key("Down");
+        assert.equal(await js("document.querySelector('.composer-candidate[aria-selected=true]').id"), "composer-candidate-19");
+        assert.equal(await js("(()=>{const r=document.querySelector('#composer-candidate-19').getBoundingClientRect(),v=document.querySelector('.composer-candidate-viewport').getBoundingClientRect();return r.top>=v.top && r.bottom<=v.bottom+1})()"), true);
+        assert.equal(await js("window.scrollY"), scroll);
+        assert.equal(await js("document.querySelector('.composer-candidates').hasAttribute('data-overflow-below')"), false);
+        await key("Down"); assert.equal(await js("document.querySelector('.composer-candidate[aria-selected=true]').id"), "composer-candidate-0");
+        assert.equal(await js("document.querySelector('.composer-candidates').hasAttribute('data-overflow-below')"), true);
+        win.setSize(1200, 430); await settle();
+        assert.equal(await js("document.querySelector('.composer-candidates').getBoundingClientRect().top >= 83"), true);
+        await js("document.querySelector('.reference-editor').style.height='160px'"); await settle();
+        assert.equal(await js("document.querySelector('.composer-candidates').getBoundingClientRect().top >= 83"), true);
+        win.setSize(1200, 900); await settle();
+      });
+      await step("file selection serializes the path and Enter does not send while picking", async () => {
+        await mount(); await type("@销售"); await options(); await key("Enter");
+        assert.equal(await draft(), "@销售.md "); assert.equal((await state()).sends.length, 0);
+        assert.equal(await js("document.querySelectorAll('[data-file-reference]').length"), 1);
+        await key("Enter"); assert.equal((await state()).sends[0].text, "@销售.md");
+      });
+      await step("directory Tab drills; Enter selects a quoted file without losing spaces", async () => {
+        await mount(); await type("@报"); await options(); await key("Tab"); await options();
+        assert.equal(await draft(), "@报表/");
+        await key("Enter"); assert.equal(await draft(), '@"报表/销售 统计.md" ');
+        await mount(); await type("@报"); await options(); await key("Enter");
+        assert.equal(await draft(), "@报表/ ");
+        await click('[data-folder="true"]'); assert.equal(await js("Boolean(document.querySelector('.file-sidebar'))"), false);
+      });
+      await step("skill suggestions and manually entered names share editable decoration", async () => {
+        await mount(); await type("/office-xl"); await options(); await key("Enter");
+        assert.equal(await draft(), "/office-xlsx "); assert.equal((await state()).sends.length, 0);
+        assert.equal(await js("document.querySelector('[data-skill-reference]')?.textContent"), "/office-xlsx");
+        await mount(); await type("请使用 /office-xlsx 做表");
+        await waitFor("Boolean(document.querySelector('[data-skill-reference]'))", "manual skill decorated");
+        await key("Enter"); assert.equal((await state()).sends[0].text, "请使用 /office-xlsx 做表");
+      });
+      await step("file and skill chips open the existing sidebar without changing the draft", async () => {
+        await mount(); await type("@销售"); await options(); await key("Enter");
+        await click('[data-file-reference]'); await waitFor("document.querySelector('.file-sidebar')?.textContent.includes('Reference preview content')", "file preview");
+        assert.equal(await draft(), "@销售.md ");
+        await mount(); await type("/office-xlsx ");
+        await waitFor("Boolean(document.querySelector('[data-skill-reference]'))", "skill chip");
+        await click('[data-skill-reference]'); await waitFor("document.querySelector('.file-sidebar')?.textContent.includes('Reference preview content')", "skill preview");
+        assert.equal(await draft(), "/office-xlsx ");
+        assert((await state()).calls.some(c => c.input?.ref?.kind === "skill"));
+      });
+      await step("unknown skills remain prose; deleted files can still be sent and preview shows missing", async () => {
+        await mount(); await type("/unknown do it"); await key("Enter");
+        assert.equal((await state()).sends[0].text, "/unknown do it");
+        await mount(); await type("@missing"); await options(); await key("Enter");
+        await click('[data-file-reference]'); await waitFor("Boolean(document.querySelector('.file-failure-panel'))", "missing file empty state");
+        await focus('.reference-editor'); await key("Enter"); assert.equal((await state()).sends[0].text, "@missing.txt");
+      });
+      await step("Escape preserves query, IME does not pick/send, and stale candidates cannot win", async () => {
+        await mount(); await type("@报"); await options(); await js("behavior.composeEnter()"); await settle();
+        assert.equal((await state()).sends.length, 0); assert.equal(await draft(), "@报");
+        await key("Escape"); assert.equal(await draft(), "@报");
+        await mount(); await js("behavior.slowCandidates(true)"); await type("@销");
+        await key("Enter"); assert.equal((await state()).sends.length, 0);
+        await win.webContents.insertText("售"); await settle(); await js("behavior.releaseCandidates()"); await options();
+        assert.equal(await draft(), "@销售"); await key("Enter"); assert.equal(await draft(), "@销售.md ");
+      });
+      await step("atomic file references support undo, redo and plain-text copy", async () => {
+        await mount(); await type("@销售"); await options(); await key("Enter");
+        const mod = process.platform === "darwin" ? "meta" : "control";
+        await key("z", [mod]); assert.equal(await draft(), "@销售");
+        await key("z", [mod, "shift"]); assert.equal(await draft(), "@销售.md ");
+        await key("a", [mod]); win.webContents.copy(); await settle();
+        assert.equal(require('electron').clipboard.readText(), "@销售.md ");
+        await key("Backspace"); assert.equal(await draft(), "");
+      });
+      await step("draft session switches and remount keep canonical references and preview actions", async () => {
+        await mount(); await type("@销售"); await options(); await key("Enter");
+        const owner = await js("document.querySelector('.reference-editor').dataset.session");
+        await js("behavior.referenceSession('other-reference-session')"); await settle(); assert.equal(await draft(), "");
+        await js(`behavior.referenceSession(${JSON.stringify(owner)})`); await settle(); assert.equal(await draft(), "@销售.md ");
+        assert.equal(await js("document.querySelectorAll('[data-file-reference]').length"), 1);
+        await click('.message-reference'); await waitFor("Boolean(document.querySelector('.file-sidebar'))", "history file preview");
+      });
+      await step("serialized length never exceeds 8192 and emails/paths do not trigger menus", async () => {
+        await mount(); await type("a@b.test /usr/bin 5/8"); assert.equal(await js("Boolean(document.querySelector('.composer-candidates'))"), false);
+        await mount(); await type("x".repeat(8192)); await win.webContents.insertText("y"); await settle(); assert.equal((await draft()).length, 8192);
+      });
+      await step("narrow/dark layouts retain candidate actions and file chip ellipsis", async () => {
+        await mount(); win.setSize(420, 650); await js("document.documentElement.dataset.theme='dark'"); await type("@报"); await options();
+        assert.equal(await js("document.querySelector('.composer-candidates').getBoundingClientRect().right <= innerWidth && document.querySelector('.composer-candidates').getBoundingClientRect().top >= 0"), true);
+        const captureDir = process.env.LXE_COMPOSER_CAPTURE_DIR;
+        if (captureDir) { require('node:fs').mkdirSync(captureDir,{recursive:true}); require('node:fs').writeFileSync(require('node:path').join(captureDir,'composer-reference-menu-fixture-dark.png'),(await win.webContents.capturePage()).toPNG()); }
+        await key("Tab"); await options(); await key("Enter"); assert.equal(await draft(), '@"报表/销售 统计.md" ');
+        const dir = process.env.LXE_COMPOSER_CAPTURE_DIR;
+        if (dir) { require('node:fs').mkdirSync(dir,{recursive:true}); require('node:fs').writeFileSync(require('node:path').join(dir,'composer-reference-fixture-dark.png'),(await win.webContents.capturePage()).toPNG()); }
+        if (dir) {
+          // Optional visual review of real reference nodes alongside ordinary text.
+          win.setSize(1000, 650); await mount(); await type("@报"); await options(); await key("Enter");
+          await win.webContents.insertText("/office-xlsx 测试文本");
+          await waitFor("Boolean(document.querySelector('[data-skill-reference]'))", "reference appearance fixture");
+          for (const theme of ["dark", "light"]) {
+            await js(`document.documentElement.dataset.theme=${JSON.stringify(theme)}`);
+            await js("document.fonts.ready.then(() => undefined)"); await settle();
+            const bounds = await js("document.querySelector('.conversation-composer').getBoundingClientRect().toJSON()");
+            require('node:fs').writeFileSync(require('node:path').join(dir, `composer-reference-appearance-fixture-${theme}.png`), (await win.webContents.capturePage({ x: Math.floor(bounds.x), y: Math.floor(bounds.y), width: Math.ceil(bounds.width), height: Math.ceil(bounds.height) })).toPNG());
+          }
+        }
       });
     } else if (suite === "readiness") {
       for (const [section, expected] of [
@@ -184,14 +561,14 @@ app.whenReady().then(async () => {
         await waitFor("Boolean(document.querySelector('.desktop-onboarding-skip'))", "onboarding skip");
         await click(".desktop-onboarding-skip");
         await click(".session-new-button");
-        await waitFor("Boolean(document.querySelector('textarea'))", "conversation after skipping");
-        assert.equal(await js("document.querySelector('textarea').disabled"), true);
-        const placeholder = await js("document.querySelector('textarea').placeholder");
+        await waitFor("Boolean(document.querySelector('.reference-editor'))", "conversation after skipping");
+        assert.equal(await js("(document.querySelector('.reference-editor').contentEditable === 'false')"), true);
+        const placeholder = await js("document.querySelector('.reference-editor').dataset.placeholder");
         assert.match(placeholder, /model/i);
         assert.deepEqual((await state()).calls.filter(call => call.operation.includes(".")), []);
         await js("behavior.setHealth({gateway:'ready',agent_cli:'ready'})");
         await waitFor("document.querySelectorAll('.welcome-metrics dd').length > 0", "welcome statistics after runtime recovery");
-        assert.equal(await js("document.querySelector('textarea').disabled"), false);
+        assert.equal(await js("(document.querySelector('.reference-editor').contentEditable === 'false')"), false);
         assert.equal(await js("document.querySelector('.welcome-metrics dd').textContent"), "7");
       });
     } else if (suite === "sidebar") {
@@ -201,11 +578,13 @@ app.whenReady().then(async () => {
       const expanded = () => js("document.querySelector('.app-sidebar').classList.contains('is-expanded')");
       await load(sidebarQuery);
       await waitFor("document.querySelectorAll('.workspace-group').length === 3", "workspace list ready");
+      const railWidth = (await rect(".app-navigation")).width;
       await step("navigation is separate from the workspace list and preserves its expansion", async () => {
         assert.equal(await js("document.querySelectorAll('.app-navigation nav button').length"), 5);
-        assert.equal((await rect(".app-navigation")).width, 56);
-        assert.equal((await rect(".app-sidebar")).left, 56);
-        assert.equal((await rect(".main-panel")).left, 312);
+        assert.ok(Math.abs(railWidth - 56 * 0.95) < 0.02);
+        assert.ok(Math.abs((await rect(".app-sidebar")).top - (process.platform === "win32" ? 40 : 44 * 0.95)) < 0.02);
+        assert.equal((await rect(".app-sidebar")).left, railWidth);
+        assert.equal((await rect(".main-panel")).left, railWidth + 256);
         assert.ok((await rect(".workspace-index-scroll")).height > await js("innerHeight") * 0.72, "workspace list uses most of the available window height");
         await click(".tab-home");
         assert.equal(await js("document.querySelector('.tab-home').getAttribute('aria-current')"), "page");
@@ -216,7 +595,7 @@ app.whenReady().then(async () => {
       await step("collapsing only hides the list; navigation and settings remain usable", async () => {
         await click(".sidebar-toggle-button"); await delay(220);
         assert.equal(await js("document.querySelector('.app-sidebar').inert"), true);
-        assert.equal((await rect(".main-panel")).left, 56);
+        assert.equal((await rect(".main-panel")).left, railWidth);
         await click(".tab-home"); await click(".tab-sessions");
         assert.equal(await expanded(), false);
         await click(".sidebar-settings-button");
@@ -241,7 +620,7 @@ app.whenReady().then(async () => {
         const toggle = await rect(".sidebar-toggle-button");
         move(toggle.left + 10, toggle.top + 10);
         await waitFor("document.querySelector('.app-sidebar').classList.contains('is-peek')", "hover peek");
-        assert.equal((await rect(".main-panel")).left, 56);
+        assert.equal((await rect(".main-panel")).left, railWidth);
         const search = await rect(".sidebar-search-button");
         move(search.left + 10, search.top + 10);
         await click(".sidebar-search-button");
@@ -267,19 +646,19 @@ app.whenReady().then(async () => {
           JSON.stringify({ handle, before, after: await rect(".app-sidebar") }));
         await load(sidebarQuery);
         await waitFor("document.querySelectorAll('.workspace-group').length === 3", "reloaded list");
-        await waitFor(`document.querySelector('.main-panel').getBoundingClientRect().left === ${56 + before.width + 60}`, "restored width animation completed");
+        await waitFor(`document.querySelector('.main-panel').getBoundingClientRect().left === ${railWidth + before.width + 60}`, "restored width animation completed");
         assert.equal(await expanded(), true);
         assert.equal((await rect(".app-sidebar")).width, before.width + 60);
-        assert.equal((await rect(".main-panel")).left, 56 + before.width + 60);
+        assert.equal((await rect(".main-panel")).left, railWidth + before.width + 60);
         await focus(".sidebar-resizer"); await key("Left");
         assert.equal(await js("Number(localStorage.getItem('lxe.dashboard.sidebar.width'))"), before.width + 50);
       });
       await step("narrow windows use a dismissible drawer while keeping the rail accessible", async () => {
         win.setContentSize(800, 900); await delay(250);
-        assert.equal((await rect(".main-panel")).left, 56);
+        assert.equal((await rect(".main-panel")).left, railWidth);
         assert.equal(await js("getComputedStyle(document.querySelector('.sidebar-dismiss')).display"), "block");
         const panel = await rect(".app-sidebar");
-        assert.ok(panel.left > 56 && panel.right < 800);
+        assert.ok(panel.left > railWidth && panel.right < 800);
         await click(".sidebar-dismiss"); await delay(220);
         assert.equal(await expanded(), false);
         assert.equal(await js("document.documentElement.scrollWidth > innerWidth"), false);
@@ -298,10 +677,14 @@ app.whenReady().then(async () => {
               if (await expanded() !== open) await click(".sidebar-toggle-button");
               await delay(220);
               const toggle = await rect(".sidebar-toggle-button"), title = await rect(".conversation-header-copy");
-              assert.ok(title.left >= toggle.right, `${platform} ${theme} ${open}: title avoids toggle`);
+              assert.ok(platform === "win32" ? title.top >= 40 : title.left >= toggle.right, `${platform} ${theme} ${open}: title avoids toggle`);
               assert.ok((await rect(".navigation-rail-button")).top >= 44);
               assert.equal(await js("getComputedStyle(document.querySelector('.sidebar-toggle-button')).webkitAppRegion"), "no-drag");
-              if (platform === "win32") assert.ok((await rect(".conversation-header-actions")).right <= 1200 - 138);
+              if (platform === "win32") {
+                assert.equal((await rect(".main-panel")).top, 40);
+                assert.equal((await rect(".app-navigation")).top, 40);
+                assert.ok((await rect(".conversation-header-actions")).right > 1200 - 138);
+              }
             }
           }
         }
@@ -318,6 +701,109 @@ app.whenReady().then(async () => {
           await click(".sidebar-toggle-button"); await delay(220);
           await js("document.documentElement.dataset.theme='dark'");
           require("node:fs").writeFileSync(process.env.LXE_SIDEBAR_SCREENSHOT.replace(/\.png$/, "-collapsed.png"), (await win.webContents.capturePage()).toPNG());
+        }
+      });
+    } else if (suite === "windows-titlebar") {
+      const rect = selector => js(`(() => { const r=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect(); return {top:r.top,left:r.left,right:r.right,bottom:r.bottom,width:r.width,height:r.height}; })()`);
+      const menu = '.windows-titlebar-menu [role="menuitem"]';
+      await load("?app=1&workspaces=1&section=sessions&platform=win32");
+      await waitFor("Boolean(document.querySelector('.windows-titlebar-menu'))", "caption mounted");
+      win.show(); win.focus(); await delay(100);
+      await step("all Windows columns begin below one caption in either theme and sidebar state", async () => {
+        for (const theme of ["light", "dark"]) {
+          await js(`document.documentElement.dataset.theme='${theme}'`);
+          for (let i=0;i<2;i++) {
+            assert.equal((await rect('.app-navigation')).top, 40);
+            assert.equal((await rect('.main-panel')).top, 40);
+            assert.equal((await rect('.sidebar-toggle-button')).left, 12);
+            assert.equal((await rect('.sidebar-toggle-button')).height, 28);
+            assert.equal((await rect(menu)).left, 48);
+            assert.equal(await js("getComputedStyle(document.querySelector('.windows-titlebar-menu')).webkitAppRegion"), "no-drag");
+            assert.equal(await js("document.documentElement.scrollHeight>innerHeight"), false);
+            assert.equal(
+              await js("getComputedStyle(document.querySelector('.desktop-platform-win32'), '::before').backgroundColor"),
+              await js("getComputedStyle(document.querySelector('.main-panel')).backgroundColor"),
+              'caption follows the content theme in either sidebar state',
+            );
+            if (i === 1) {
+              // Use a real pointer: DOM clicks alone do not exercise :hover or delayed peek.
+              await js("document.activeElement.blur()");
+              win.webContents.sendInputEvent({ type: 'mouseMove', x: 800, y: 400 });
+              await delay(220);
+              win.webContents.sendInputEvent({ type: 'mouseMove', x: 26, y: 20 });
+              await waitFor("document.querySelector('.app-sidebar').classList.contains('is-peek')", 'caption hover peek');
+              await delay(180);
+              const contrast = await js(`(() => {
+                const button = document.querySelector('.sidebar-toggle-button');
+                const rgb = value => value.match(/[\\d.]+/g).map(Number);
+                const ink = rgb(getComputedStyle(button.querySelector('svg')).stroke);
+                const fill = rgb(getComputedStyle(button).backgroundColor);
+                const caption = rgb(getComputedStyle(document.querySelector('.desktop-platform-win32'), '::before').backgroundColor);
+                const alpha = fill[3] ?? 1;
+                const luminance = color => color.slice(0, 3).map(v => v / 255)
+                  .map(v => v <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4)
+                  .reduce((sum, v, i) => sum + v * [.2126, .7152, .0722][i], 0);
+                const a = luminance(ink), b = luminance(fill.map((v, i) => v * alpha + caption[i] * (1 - alpha)));
+                return (Math.max(a, b) + .05) / (Math.min(a, b) + .05);
+              })()`);
+              if (process.env.LXE_TITLEBAR_SCREENSHOT) {
+                require('node:fs').writeFileSync(process.env.LXE_TITLEBAR_SCREENSHOT.replace(/\.png$/, '-hover-' + theme + '.png'), (await win.webContents.capturePage()).toPNG());
+              }
+              assert.ok(contrast >= 3, `${theme} caption icon must remain visible while peeking (contrast ${contrast})`);
+            }
+            await click('.sidebar-toggle-button'); await delay(220);
+          }
+        }
+        for (const tab of ['home','workbench','capabilities','activity','sessions']) {
+          const exists = await js(`Boolean(document.querySelector('.tab-${tab}'))`);
+          if (exists) { await click(`.tab-${tab}`); assert.equal((await rect('.main-panel')).top,40); }
+        }
+        await click('.tab-sessions');
+      });
+      await step("caption menus preserve input selection for pointer and keyboard activation", async () => {
+        await js(`window.lxe.desktop.showTitlebarMenu=async request=>{ window.captionRequest=request; window.captionFocus=document.activeElement.className; window.captionSelection=getSelection().toString(); return null; };undefined`);
+        await waitFor("Boolean(document.querySelector('.reference-editor'))", "composer mounted");
+        await waitFor("document.querySelector('.reference-editor')?.getAttribute('contenteditable')==='true'", 'composer enabled');
+        await focus('.reference-editor'); await win.webContents.insertText('Keep selected draft'); await settle();
+        await focus('.reference-editor');
+        await js(`(()=>{const e=document.querySelector('.reference-editor'); const r=document.createRange();r.selectNodeContents(e);getSelection().removeAllRanges();getSelection().addRange(r);})()`);
+        await js(`document.querySelectorAll('${menu}')[1].dispatchEvent(new MouseEvent('mousedown',{bubbles:true,cancelable:true}));document.querySelectorAll('${menu}')[1].click()`); await settle();
+        assert.match(await js('captionFocus'),/reference-editor/);
+        assert.equal(await js('captionSelection'),'Keep selected draft');
+        await focus(menu); await key('Right'); await key('Down');
+        assert.match(await js('captionFocus'),/reference-editor/);
+        assert.equal(await js('captionRequest.menu'),'edit');
+        assert.equal(await js('captionSelection'),'Keep selected draft');
+      });
+      await step("application actions reuse settings and updater without installing or repeating checks", async () => {
+        await js(`window.captionAction='settings';window.captionChecks=0;window.captionInstalls=0;window.lxe.desktop.showTitlebarMenu=async()=>captionAction;window.lxe.desktop.getUpdateState=async()=>({phase:'idle'});window.lxe.desktop.checkForUpdate=async()=>{captionChecks++;return {phase:'idle',message:'Already current'};};window.lxe.desktop.installUpdate=async()=>{captionInstalls++;return {phase:'ready'};};undefined`);
+        await click(menu);
+        await waitFor("Boolean(document.querySelector('.desktop-settings-modal'))", "settings via menu");
+        assert.equal((await rect('.desktop-settings-backdrop')).top,40);
+        assert.equal(await js('captionChecks'),0);
+        await js("window.captionAction='check-updates'"); await click(menu);
+        await waitFor('captionChecks===1', 'single manual update check');
+        await waitFor("document.querySelector('.lxe-update-manual')?.textContent.includes('No updates available')", "update feedback");
+        assert.equal(await js('captionInstalls'),0);
+        await key('Escape'); await js("window.captionAction='settings'"); await click(menu); await delay(150);
+        assert.equal(await js('captionChecks'),1);
+        await key('Escape');
+      });
+      await step("Chinese menus and full preview stay below caption", async () => {
+        await load("?app=1&workspaces=1&section=sessions&platform=win32&language=zh");
+        await waitFor("Boolean(document.querySelector('.windows-titlebar-menu'))", "Chinese caption");
+        assert.deepEqual(await js(`Array.from(document.querySelectorAll('${menu}')).map(e=>e.textContent)`),['应用','编辑']);
+        const preview = '.file-header-actions button';
+        await click(preview);
+        await waitFor("Boolean(document.querySelector('.file-sidebar'))", "preview opened");
+        assert.equal((await rect('.file-sidebar')).top,40);
+        await click('.file-tab-strip > button:nth-last-child(2)');
+        assert.equal((await rect('.file-sidebar')).top,40);
+        if(process.env.LXE_TITLEBAR_SCREENSHOT) {
+          for(const theme of ['dark','light']) {
+            await js(`document.documentElement.dataset.theme='${theme}'`); await settle();
+            require('node:fs').writeFileSync(process.env.LXE_TITLEBAR_SCREENSHOT.replace(/\.png$/, '-'+theme+'.png'),(await win.webContents.capturePage()).toPNG());
+          }
         }
       });
     } else if (suite === "workspaces") {
@@ -364,21 +850,21 @@ app.whenReady().then(async () => {
       await step("cancel, choose, open and failed send preserve the draft and actual directory", async () => {
         await js("behavior.chooseDirectory(null)");
         await click(".conversation-workspace button[aria-label='Choose workspace']");
-        assert.equal(await js("document.querySelector('textarea').value"), "Prepare the project report");
+        assert.equal(await js("(sessionStorage.getItem('lxe.composer-draft.' + document.querySelector('.reference-editor').dataset.session) || '')"), "Prepare the project report");
         assert.equal(await js("document.querySelector('.conversation-workspace select').value"), "/fixture/shop");
         await js('behavior.chooseDirectory("D:\\\\资料\\\\采购")');
         await click(".conversation-workspace button[aria-label='Choose workspace']");
         const selected = await js("document.querySelector('.conversation-workspace select').value");
         assert.equal(selected, "D:\\资料\\采购");
-        await click(".conversation-workspace button[aria-label='Open folder']");
+        await click(".conversation-workspace .workspace-open-split button:first-child");
         assert.equal((await state()).calls.findLast(call => call.operation === "openWorkspace").input, selected);
         await js("behavior.failWorkspaceSend(true)");
-        await focus("textarea"); await key("Enter");
+        await focus(".reference-editor"); await key("Enter");
         await waitFor("document.body.textContent.includes('EACCES: fixture directory denied')", "actual failure displayed");
         const sent = (await state()).calls.findLast(call => call.operation === "sessions.send").input;
         assert.equal(sent.directory, undefined);
         assert.equal((await state()).sessions.find(row => row.session_id === sent.session_id).workspace.directory, selected);
-        assert.equal(await js("document.querySelector('textarea').value"), "Prepare the project report");
+        assert.equal(await js("(sessionStorage.getItem('lxe.composer-draft.' + document.querySelector('.reference-editor').dataset.session) || '')"), "Prepare the project report");
         assert.equal(await js("document.querySelector('.conversation-workspace select').disabled"), false);
       });
       await step("pending first send locks its directory and a late reply cannot switch a newer draft", async () => {
@@ -392,7 +878,7 @@ app.whenReady().then(async () => {
         await js("behavior.releaseWorkspaceSend()");
         await settle();
         await waitFor("Boolean(document.querySelector('.conversation-workspace select')) && document.querySelector('.conversation-workspace select').value === '/fixture/shop'", "new draft retained");
-        assert.equal(await js("document.querySelector('textarea').value"), "");
+        assert.equal(await js("(sessionStorage.getItem('lxe.composer-draft.' + document.querySelector('.reference-editor').dataset.session) || '')"), "");
       });
       await step("global search labels the directory and an existing chat cannot change it", async () => {
         await click(".sidebar-search-button");
@@ -401,7 +887,7 @@ app.whenReady().then(async () => {
         await click(".session-index-open");
         await waitFor("document.querySelector('.conversation-workspace-name')?.textContent === 'archive'", "existing chat directory");
         assert.equal(await js("Boolean(document.querySelector('.conversation-workspace select'))"), false);
-        await click(".conversation-workspace button[aria-label='Open folder']");
+        await click(".conversation-workspace .workspace-open-split button:first-child");
         assert.equal((await state()).calls.findLast(call => call.operation === "openWorkspace").input, "/fixture/archive");
       });
       await step('selected empty directories retain a blank and survive reload without history entries', async () => {
@@ -486,11 +972,11 @@ app.whenReady().then(async () => {
         await js('behavior.chooseDirectory("/fixture/retry"); behavior.failRegistration(true)');
         await click('.conversation-workspace button[aria-label="Choose workspace"]');
         await waitFor('document.querySelector(".conversation-workspace")?.textContent.includes("SQLITE_FULL")', 'registration failure');
-        assert.equal(await js('document.querySelector("textarea").value'), 'Keep my draft');
+        assert.equal(await js('(sessionStorage.getItem("lxe.composer-draft." + document.querySelector(".reference-editor").dataset.session) || "")'), 'Keep my draft');
         assert.equal(await js('document.querySelector(".conversation-workspace select").value'), '/fixture/shop');
         await js('behavior.failRegistration(false)'); await click('.conversation-workspace button[aria-label="Choose workspace"]');
         await waitFor('document.querySelector(".conversation-workspace select").value === "/fixture/retry"', 'retry registered');
-        assert.equal(await js('document.querySelector("textarea").value'), 'Keep my draft');
+        assert.equal(await js('(sessionStorage.getItem("lxe.composer-draft." + document.querySelector(".reference-editor").dataset.session) || "")'), 'Keep my draft');
       });
       await step('late registration cannot switch a newer draft or pull the user off another page', async () => {
         await js('behavior.chooseDirectory("/fixture/late"); behavior.holdRegistration(true)');
@@ -513,20 +999,20 @@ app.whenReady().then(async () => {
         await waitFor('document.querySelectorAll(".input-attachment-draft .input-attachment-chip").length === 1', 'first attachment');
         await js('behavior.chooseDirectory("/fixture/merge-b")'); await click('.workspace-index-heading button');
         await waitFor('document.querySelector(".conversation-workspace select")?.value === "/fixture/merge-b"', 'second blank');
-        assert.equal(await js('document.querySelector("textarea").value'), '');
+        assert.equal(await js('(sessionStorage.getItem("lxe.composer-draft." + document.querySelector(".reference-editor").dataset.session) || "")'), '');
         assert.equal(await js('document.querySelectorAll(".input-attachment-draft .input-attachment-chip").length'), 0);
         await type('Draft B'); await js('behavior.chooseFile("b.txt"); behavior.chooseDirectory("/fixture/merge-a")');
         await click('[aria-label="Add files"]');
         await waitFor('document.querySelectorAll(".input-attachment-draft .input-attachment-chip").length === 1', 'second attachment');
         await click('.conversation-workspace button[aria-label="Choose workspace"]');
         await waitFor('document.querySelector(".conversation-workspace select")?.value === "/fixture/merge-a"', 'merged blank');
-        assert.equal(await js('document.querySelector("textarea").value'), 'Draft A\n\nDraft B');
+        assert.equal(await js('(sessionStorage.getItem("lxe.composer-draft." + document.querySelector(".reference-editor").dataset.session) || "")'), 'Draft A\n\nDraft B');
         assert.equal(await js('document.querySelectorAll(".input-attachment-draft .input-attachment-chip").length'), 2);
       });
       await step('blank creation failure preserves the selected draft and attachments', async () => {
         await js('behavior.failCreation(true)'); await click('.session-new-button');
         await waitFor('document.body.textContent.includes("SQLITE_FULL: fixture session creation failed")', 'creation error');
-        assert.equal(await js('document.querySelector("textarea").value'), 'Draft A\n\nDraft B');
+        assert.equal(await js('(sessionStorage.getItem("lxe.composer-draft." + document.querySelector(".reference-editor").dataset.session) || "")'), 'Draft A\n\nDraft B');
         assert.equal(await js('document.querySelectorAll(".input-attachment-draft .input-attachment-chip").length'), 2);
         await js('behavior.failCreation(false)');
       });

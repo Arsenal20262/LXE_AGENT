@@ -139,6 +139,8 @@ for (const path of [
 requireResourceSourceDirectory(join(exifToolRoot, "exiftool_files"));
 
 rmSync(publishRoot, { recursive: true, force: true });
+const execSandbox = join(publishRoot, "exec-sandbox");
+runRequiredBuildCommand("build Windows exec sandbox", [process.execPath, join(repositoryRoot, "scripts", "prepare-exec-sandbox.ts"), execSandbox]);
 const pythonOverlay = join(publishRoot, "python-site-packages");
 mkdirSync(pythonOverlay, { recursive: true });
 
@@ -204,6 +206,8 @@ const wireGuardResourceRoot = join(repositoryRoot, "apps", "desktop", "resources
 
 const extraResources: BuilderFileSet[] = [
   exactFileSet(join(repositoryRoot, "apps", "desktop", "resources", "app-update.yml"), "app-update.yml"),
+  { from: execSandbox, to: scopeEntry("runtime-exec-sandbox").target, filter: ["**/*", "!node_modules/**/*"] },
+  { from: join(execSandbox, "node_modules"), to: `${scopeEntry("runtime-exec-sandbox").target}/node_modules`, filter: ["**/*"] },
   { from: nodeRoot, to: scopeEntry("runtime-node").target, filter: ["**/*"] },
   { from: officeRoot, to: scopeEntry("runtime-office").target, filter: ["**/*"] },
   // electron-builder's resource filter always omits a root node_modules.

@@ -1,3 +1,4 @@
+import { PermissionPolicyService } from "../../src/permissions/policy";
 import { messageFixture, eventFixture } from "../message-fixtures";
 import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
 import { buildSystemPrompt } from "../../src/engine/system-prompt";
@@ -23,6 +24,7 @@ import type {
   RuntimeHandle,
   RuntimeArtifactRecord,
   RuntimeImageViewRecord,
+  RuntimeSessionRecord,
   RuntimeMessage,
   RuntimeProviderRequest,
   RuntimeStore,
@@ -31,6 +33,7 @@ import type {
 } from "../../src/engine/types";
 
 const workspace = resolveWorkspaceContext(repositoryRoot(import.meta.dir));
+const permissionPolicy = new PermissionPolicyService();
 afterEach(() => setSystemTime());
 
 const job = (overrides: Partial<AgentJob> = {}): AgentJob => ({
@@ -54,6 +57,7 @@ const job = (overrides: Partial<AgentJob> = {}): AgentJob => ({
 });
 
 class MemoryStore implements RuntimeStore {
+  permissionMode: RuntimeSessionRecord["permission_mode"] = "danger-full-access";
   messages: RuntimeMessage[] = [];
   pendingEvents: JsonObject[] = [];
   metrics: JsonObject[] = [];
@@ -67,9 +71,10 @@ class MemoryStore implements RuntimeStore {
   messageReasons: string[] = [];
   async start(): Promise<void> {}
   async stop(): Promise<void> {}
-  async getSession(): Promise<{ session_id: string; source: JsonObject; workspace: typeof workspace }> {
+  async getSession(): Promise<RuntimeSessionRecord> {
     return {
       session_id: "s1",
+      permission_mode: this.permissionMode,
       source: {
         platform: "feishu",
         extra: { bot_app_id: "cli_app", bot_id: "ou_bot", bot_name: "Shop Bot" },
@@ -152,6 +157,53 @@ const lxeSkillInvocationError = (details: JsonObject = {
 );
 
 describe("TypeScriptAgentRuntime", () => {
+  test.each(["read-only", "workspace-write"] as const)("describes %s before contacting the model", async mode => {
+    const store = new MemoryStore();
+    store.permissionMode = mode;
+    let contacted = false;
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy, store, tools: new ToolRegistry(), systemPrompt: "test",
+      emitter: { emit: async () => {}, typing: async () => {} },
+      provider: { summarize, turn: async request => { contacted = true; expect(JSON.stringify(request.messages)).toContain(`permission_mode>${mode}`); return messageFixture({}); } },
+    });
+    await runtime.start();
+    try {
+      await runtime.runTurn(job(), handle());
+      expect(contacted).toBe(true);
+    } finally { await runtime.stop(); }
+  });
+
+  test.each(["read-only", "workspace-write"] as const)("each tool and subsequent model request obtain a mid-turn switch to %s", async mode => {
+    const store = new MemoryStore();
+    const tools = new ToolRegistry();
+    let executed = 0, requests = 0;
+    tools.register({ name: "change_mode", description: "fixture", input_schema: { type: "object" }, execute: async (_input, context) => {
+      expect(context.executionPolicy?.workspaceRoot).toBe(workspace.directory);
+      store.permissionMode = mode;
+      return { content: [] };
+    } });
+    tools.register({ name: "write_fixture", description: "fixture", input_schema: { type: "object" }, execute: async (_input, context) => {
+      expect(context.executionPolicy.mode).toBe(mode);
+      executed++; return { content: [] };
+    } });
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy, store, tools, systemPrompt: "test",
+      emitter: { emit: async () => {}, typing: async () => {} },
+      provider: { summarize, turn: async request => {
+        expect(JSON.stringify(request.messages)).toContain(JSON.stringify(join(workspace.directory, ".lxeagent", "artifacts")).slice(1, -1));
+        if (requests > 0) expect(JSON.stringify(request.messages)).toContain(`permission_mode>${mode}`);
+        return requests++ === 0 ? messageFixture({ stopReason: "toolUse", content: [
+          { type: "tool_call", id: "first", name: "change_mode", arguments: {} },
+          { type: "tool_call", id: "second", name: "write_fixture", arguments: {} },
+        ] }) : messageFixture({ stopReason: "stop", content: [{ type: "text", text: "stopped" }] });
+      } },
+    });
+    await runtime.start();
+    try {
+      await runtime.runTurn(job(), handle());
+      expect(executed).toBe(1);
+      expect(JSON.stringify(store.messages)).not.toContain("backends are not implemented");
+    } finally { await runtime.stop(); }
+  });
+
   test.each(["model", "tool", "question"] as const)("user stop during %s writes separate context after tool closure and replays it next turn", async phase => {
     const store = new MemoryStore();
     const tools = new ToolRegistry();
@@ -171,7 +223,7 @@ describe("TypeScriptAgentRuntime", () => {
     });
     let subsequentTurn = false;
     let nextRequest: RuntimeMessage[] = [];
-    const runtime = new TypeScriptAgentRuntime({ store, tools, systemPrompt: "test",
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy, store, tools, systemPrompt: "test",
       emitter: { emit: async () => {}, typing: async () => {} },
       provider: { summarize, turn: async request => {
         if (subsequentTurn) {
@@ -236,7 +288,7 @@ describe("TypeScriptAgentRuntime", () => {
       const record = store.recordTurn.bind(store);
       store.recordTurn = async (sessionId, metrics) => { controller.abort(); await record(sessionId, metrics); };
     }
-    const runtime = new TypeScriptAgentRuntime({ store, tools: new ToolRegistry(), systemPrompt: "test",
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy, store, tools: new ToolRegistry(), systemPrompt: "test",
       logger: createLogger("test.runtime", { write: line => logs.push(line) }),
       emitter: { emit: async () => {}, typing: async () => {} },
       provider: { summarize, turn: async () => {
@@ -266,7 +318,7 @@ describe("TypeScriptAgentRuntime", () => {
     ];
     const questions = new UserQuestionService(() => {});
     const tools = new ToolRegistry(); registerUserQuestionTool(tools, questions);
-    const runtime = new TypeScriptAgentRuntime({ store, tools, systemPrompt: "test",
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy, store, tools, systemPrompt: "test",
       emitter: { emit: async () => {}, typing: async () => {} },
       provider: { summarize, turn: async request => {
         const results = request.messages.flatMap(m => Array.isArray(m.content) ? m.content : [])
@@ -290,7 +342,7 @@ describe("TypeScriptAgentRuntime", () => {
     const questions = new UserQuestionService(() => {});
     registerUserQuestionTool(tools, questions);
     let modelCalls = 0;
-    const runtime = new TypeScriptAgentRuntime({ store, tools, systemPrompt: "test",
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy, store, tools, systemPrompt: "test",
       emitter: { emit: async () => {}, typing: async () => {} },
       provider: { summarize, turn: async request => {
         modelCalls++;
@@ -331,10 +383,10 @@ describe("TypeScriptAgentRuntime", () => {
 
   test.each(["feishu", "cli", ""])("does not expose desktop questions to an actual %s turn on a desktop session", async platform => {
     const store = new MemoryStore();
-    store.getSession = async () => ({ session_id: "s1", source: { platform: "desktop" }, workspace });
+    store.getSession = async () => ({ permission_mode: store.permissionMode, session_id: "s1", source: { platform: "desktop" }, workspace });
     const tools = new ToolRegistry();
     registerUserQuestionTool(tools, new UserQuestionService(() => {}));
-    const runtime = new TypeScriptAgentRuntime({ store, tools, systemPrompt: "test",
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy, store, tools, systemPrompt: "test",
       emitter: { emit: async () => {}, typing: async () => {} },
       provider: { summarize, turn: async request => {
         expect(request.tools.map(t => t.name)).not.toContain("ask_user_question");
@@ -349,7 +401,7 @@ describe("TypeScriptAgentRuntime", () => {
   test("reports persisted message and usage changes without reporting failed writes", async () => {
     const changes: string[] = [];
     const store = new MemoryStore();
-    const runtime = new TypeScriptAgentRuntime({
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
       store,
       tools: new ToolRegistry(),
       provider: {
@@ -381,7 +433,7 @@ describe("TypeScriptAgentRuntime", () => {
     const failedUsageChanges: string[] = [];
     const failedUsageStore = new MemoryStore();
     failedUsageStore.recordTurn = async () => { throw new Error("usage write failed"); };
-    const failedUsageRuntime = new TypeScriptAgentRuntime({
+    const failedUsageRuntime = new TypeScriptAgentRuntime({ permissionPolicy,
       store: failedUsageStore,
       tools: new ToolRegistry(),
       provider: {
@@ -404,7 +456,7 @@ describe("TypeScriptAgentRuntime", () => {
     const failedMessageChanges: string[] = [];
     const failedMessageStore = new MemoryStore();
     failedMessageStore.appendMessage = async () => { throw new Error("message write failed"); };
-    const failedMessageRuntime = new TypeScriptAgentRuntime({
+    const failedMessageRuntime = new TypeScriptAgentRuntime({ permissionPolicy,
       store: failedMessageStore,
       tools: new ToolRegistry(),
       provider: {
@@ -429,7 +481,7 @@ describe("TypeScriptAgentRuntime", () => {
     const store = new MemoryStore();
     const changes: string[] = [];
     let observedUserContent: RuntimeMessage["content"] | undefined;
-    const runtime = new TypeScriptAgentRuntime({
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
       store,
       tools: new ToolRegistry(),
       provider: {
@@ -483,7 +535,7 @@ describe("TypeScriptAgentRuntime", () => {
       execute: async () => ({ content: [{ type: "text", text: "ok" }] }),
     });
     let providerCalls = 0;
-    const runtime = new TypeScriptAgentRuntime({
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
       store,
       tools,
       provider: {
@@ -531,7 +583,7 @@ describe("TypeScriptAgentRuntime", () => {
 
   test("records zero cache tokens when the provider reports none", async () => {
     const store = new MemoryStore();
-    const runtime = new TypeScriptAgentRuntime({
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
       store,
       tools: new ToolRegistry(),
       provider: {
@@ -572,7 +624,7 @@ describe("TypeScriptAgentRuntime", () => {
       },
     });
     let providerCalls = 0;
-    const runtime = new TypeScriptAgentRuntime({
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
       store,
       tools,
       workspaceInstances: {
@@ -616,7 +668,7 @@ describe("TypeScriptAgentRuntime", () => {
   test("rejects an AgentJob whose workspace differs from the persisted session", async () => {
     const store = new MemoryStore();
     let providerCalled = false;
-    const runtime = new TypeScriptAgentRuntime({
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
       store,
       tools: new ToolRegistry(),
       provider: {
@@ -663,7 +715,7 @@ describe("TypeScriptAgentRuntime", () => {
       },
     });
     let providerCalls = 0;
-    const runtime = new TypeScriptAgentRuntime({
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
       store,
       tools,
       provider: { summarize, turn: async (request) => {
@@ -743,7 +795,7 @@ describe("TypeScriptAgentRuntime", () => {
       messageFixture({ content: [{ type: "tool_call", id: "bad-3", name: "exec", arguments: {} }], stopReason: "toolUse", usage: { input_tokens: 1, output_tokens: 1 } }),
       messageFixture({ content: [{ type: "text", text: "stopped" }], stopReason: "stop", usage: { input_tokens: 1, output_tokens: 1 } }),
     ];
-    const runtime = new TypeScriptAgentRuntime({
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
       store,
       tools,
       provider: { summarize, turn: async () => responses.shift()! },
@@ -821,7 +873,7 @@ describe("TypeScriptAgentRuntime", () => {
       ], stopReason: "toolUse", usage: { input_tokens: 1, output_tokens: 1 } }),
       messageFixture({ content: [{ type: "text", text: "complete" }], stopReason: "stop", usage: { input_tokens: 1, output_tokens: 1 } }),
     ];
-    const runtime = new TypeScriptAgentRuntime({
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
       store,
       tools,
       provider: { summarize, turn: async () => responses.shift()! },
@@ -912,7 +964,7 @@ describe("TypeScriptAgentRuntime", () => {
       messageFixture({ content: [{ type: "tool_call", id: "tool-1", name: "owned_tool", arguments: {} }], stopReason: "toolUse", usage: { input_tokens: 1, output_tokens: 1 } }),
       messageFixture({ content: [{ type: "text", text: "complete" }], stopReason: "stop", usage: { input_tokens: 1, output_tokens: 1 } }),
     ];
-    const runtime = new TypeScriptAgentRuntime({
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
       store,
       tools,
       toolExposure: { allowedSkills: new Set(["demo-skill"]) },
@@ -936,7 +988,7 @@ describe("TypeScriptAgentRuntime", () => {
     let systemPromptCalls = 0;
     let wireTurns = 0;
     let wireAttempts = 0;
-    const runtime = new TypeScriptAgentRuntime({
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
       store,
       tools: new ToolRegistry(),
       provider: {
@@ -1010,7 +1062,7 @@ describe("TypeScriptAgentRuntime", () => {
     const firstEnteredPromise = new Promise<void>((resolve) => { firstEntered = resolve; });
     const firstReleasePromise = new Promise<void>((resolve) => { releaseFirst = resolve; });
     const requests: Array<{ system: string; tools: string[] }> = [];
-    const runtime = new TypeScriptAgentRuntime({
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
       store,
       tools,
       skillSnapshot: () => {
@@ -1067,7 +1119,7 @@ describe("TypeScriptAgentRuntime", () => {
       { event_id: "stored-2", job_id: "stored-2", created_at: 0, text: "stored second" },
     );
     let captured: RuntimeProviderRequest | undefined;
-    const runtime = new TypeScriptAgentRuntime({
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
       store,
       tools: new ToolRegistry(),
       provider: {
@@ -1107,7 +1159,7 @@ describe("TypeScriptAgentRuntime", () => {
     const requests: RuntimeMessage[][] = [];
     const run = async (day: number) => {
       setSystemTime(new Date(2026, 8, day, 12));
-      const runtime = new TypeScriptAgentRuntime({
+      const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
         store, tools: new ToolRegistry(), systemPrompt: "stable",
         provider: { summarize, turn: async (request) => {
           requests.push(structuredClone(request.messages));
@@ -1140,7 +1192,7 @@ describe("TypeScriptAgentRuntime", () => {
     tools.register({ name: "noop", description: "noop", input_schema: { type: "object" },
       execute: async () => ({ content: [{ type: "text", text: "ok" }] }),
     });
-    const runtime = new TypeScriptAgentRuntime({
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
       store, tools, systemPrompt: "test",
       provider: { summarize, turn: async (request) => {
         requests.push(structuredClone(request.messages));
@@ -1173,7 +1225,7 @@ describe("TypeScriptAgentRuntime", () => {
   test("keeps system and historical messages stable across time and diagnostic changes", async () => {
     const store = new MemoryStore();
     const requests: RuntimeProviderRequest[] = [];
-    const runtime = new TypeScriptAgentRuntime({
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
       store,
       tools: new ToolRegistry(),
       provider: {
@@ -1240,7 +1292,7 @@ describe("TypeScriptAgentRuntime", () => {
       text: "stored only",
     });
     let captured: RuntimeProviderRequest | undefined;
-    const runtime = new TypeScriptAgentRuntime({
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
       store,
       tools: new ToolRegistry(),
       provider: {
@@ -1275,7 +1327,7 @@ describe("TypeScriptAgentRuntime", () => {
       text: "refresh completed",
     });
     let captured: RuntimeProviderRequest | undefined;
-    const runtime = new TypeScriptAgentRuntime({
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
       store,
       tools: new ToolRegistry(),
       provider: {
@@ -1340,7 +1392,7 @@ describe("TypeScriptAgentRuntime", () => {
       acquire: () => snapshot,
       reconfigure: async () => snapshot,
     };
-    const runtime = new TypeScriptAgentRuntime({
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
       store,
       tools: new ToolRegistry(),
       providerManager,
@@ -1381,7 +1433,7 @@ describe("TypeScriptAgentRuntime", () => {
       },
     });
     const requests: Array<{ tools: string[]; toolChoice: string }> = [];
-    const runtime = new TypeScriptAgentRuntime({
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
       store,
       tools,
       provider: {
@@ -1431,7 +1483,7 @@ describe("TypeScriptAgentRuntime", () => {
       },
     });
     const requests: Array<{ tools: unknown[]; toolChoice: string }> = [];
-    const runtime = new TypeScriptAgentRuntime({
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
       store,
       tools,
       maxSteps,
@@ -1494,7 +1546,7 @@ describe("TypeScriptAgentRuntime", () => {
     });
     const emitted: EmitRequest[] = [];
     const services: string[] = [];
-    const runtime = new TypeScriptAgentRuntime({
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
       store,
       tools,
       provider: { summarize, turn: async (request) => {
@@ -1611,7 +1663,7 @@ describe("TypeScriptAgentRuntime", () => {
       execute: parallelExecute,
     });
     const emitted: EmitRequest[] = [];
-    const runtime = new TypeScriptAgentRuntime({
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
       store,
       tools,
       provider: { summarize, turn: async () => responses.shift()! },
@@ -1642,7 +1694,7 @@ describe("TypeScriptAgentRuntime", () => {
     const store = new MemoryStore();
     const emitted: EmitRequest[] = [];
     const promptPlatforms: string[] = [];
-    const runtime = new TypeScriptAgentRuntime({
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
       store,
       tools: new ToolRegistry(),
       provider: {
@@ -1681,7 +1733,7 @@ describe("TypeScriptAgentRuntime", () => {
     const store = new MemoryStore();
     const frames: EmitRequest[] = [];
     const batches: DesktopStreamBatchRequest[] = [];
-    const runtime = new TypeScriptAgentRuntime({
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
       store,
       tools: new ToolRegistry(),
       provider: {
@@ -1735,7 +1787,7 @@ describe("TypeScriptAgentRuntime", () => {
       console.error('after turn failure'); process.exit(4);
     `);
     const tools = new ToolRegistry(), store = new MemoryStore();
-    store.getSession = async () => ({ session_id: "s1", source: { platform: "desktop" }, workspace: resolveWorkspaceContext(root) });
+    store.getSession = async () => ({ permission_mode: store.permissionMode, session_id: "s1", source: { platform: "desktop" }, workspace: resolveWorkspaceContext(root) });
     const shell = new ExecShellAdapter();
     shell.spawnSpec = () => ({ argv: [process.execPath, join(root, "child.js")], detached: process.platform !== "win32" });
     const first = Promise.withResolvers<ToolStep>(), last = Promise.withResolvers<ToolStep>();
@@ -1746,7 +1798,7 @@ describe("TypeScriptAgentRuntime", () => {
     } });
     let modelCalls = 0, finished = false;
     const frames: EmitRequest[] = [];
-    const runtime = new TypeScriptAgentRuntime({ store, tools, systemPrompt: "test",
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy, store, tools, systemPrompt: "test",
       provider: { summarize, turn: async () => modelCalls++ === 0
         ? messageFixture({ content: [{ type: "tool_call", id: "live-exec", name: "exec", arguments: { command: "fixture", "yield-time-ms": 1_000 } }], stopReason: "toolUse" })
         : messageFixture({ content: [{ type: "text", text: "done" }], stopReason: "stop" }) },
@@ -1801,7 +1853,7 @@ describe("TypeScriptAgentRuntime", () => {
       const frames: EmitRequest[] = [];
       const batches: DesktopStreamBatchRequest[] = [];
       let modelCalls = 0;
-      const runtime = new TypeScriptAgentRuntime({
+      const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
         store, tools, systemPrompt: "test",
         provider: {
           summarize,
@@ -1881,7 +1933,7 @@ describe("TypeScriptAgentRuntime", () => {
         execute: async () => ({ content: [{ type: "text", text: "ok" }] }),
       });
       const emitted: EmitRequest[] = [];
-      const runtime = new TypeScriptAgentRuntime({
+      const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
         store: new MemoryStore(),
         tools,
         provider: { summarize, turn: async () => responses.shift()! },
@@ -1923,7 +1975,7 @@ describe("TypeScriptAgentRuntime", () => {
   test("streams a CLI turn through the runtime emitter", async () => {
     const store = new MemoryStore();
     const emitted: EmitRequest[] = [];
-    const runtime = new TypeScriptAgentRuntime({
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
       store,
       tools: new ToolRegistry(),
       provider: {
@@ -1980,7 +2032,7 @@ describe("TypeScriptAgentRuntime", () => {
     });
     const emitted: EmitRequest[] = [];
     const changes: string[] = [];
-    const runtime = new TypeScriptAgentRuntime({
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
       store,
       tools,
       provider: { summarize, turn: async () => responses.shift()! },
@@ -2040,7 +2092,7 @@ describe("TypeScriptAgentRuntime", () => {
       },
     });
     const emitted: EmitRequest[] = [];
-    const runtime = new TypeScriptAgentRuntime({
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
       store,
       tools,
       provider: { summarize, turn: async () => responses.shift()! },
@@ -2070,7 +2122,7 @@ describe("TypeScriptAgentRuntime", () => {
       input_schema: { type: "object" },
       execute: async () => ({ content: [{ type: "text", text: "created" }], files: ["/tmp/report.xlsx"] }),
     });
-    const runtime = new TypeScriptAgentRuntime({
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
       store,
       tools,
       provider: { summarize, turn: async (request) => {
@@ -2122,7 +2174,7 @@ describe("TypeScriptAgentRuntime", () => {
     });
     let providerCalls = 0;
     const delivered: string[] = [];
-    const runtime = new TypeScriptAgentRuntime({
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
       store,
       tools,
       provider: { summarize, turn: async () => {
@@ -2172,7 +2224,7 @@ describe("TypeScriptAgentRuntime", () => {
       input_schema: { type: "object" },
       execute: async () => ({ content: [{ type: "text", text: "ok" }] }),
     });
-    const runtime = new TypeScriptAgentRuntime({
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
       store,
       tools,
       provider: { summarize, turn: async (request) => {
@@ -2225,7 +2277,7 @@ describe("TypeScriptAgentRuntime", () => {
 
   test("returns an error outcome when both the provider and error reply delivery fail", async () => {
     const store = new MemoryStore();
-    const runtime = new TypeScriptAgentRuntime({
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
       store,
       tools: new ToolRegistry(),
       provider: { summarize, turn: async () => { throw new Error("provider offline"); } },
@@ -2251,7 +2303,7 @@ describe("TypeScriptAgentRuntime", () => {
 
   test("keeps a successful turn independent from typing delivery", async () => {
     const store = new MemoryStore();
-    const runtime = new TypeScriptAgentRuntime({
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
       store,
       tools: new ToolRegistry(),
       provider: { summarize, turn: async () => (messageFixture({
@@ -2284,7 +2336,7 @@ describe("TypeScriptAgentRuntime", () => {
     let providerCalls = 0;
     let summaryCalls = 0;
     let retriedMessages: RuntimeMessage[] = [];
-    const runtime = new TypeScriptAgentRuntime({
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
       store,
       tools: new ToolRegistry(),
       contextWindowTokens: 100_000,
@@ -2327,7 +2379,7 @@ describe("TypeScriptAgentRuntime", () => {
     let providerCalls = 0;
     let summaryCalls = 0;
     const original = structuredClone(store.messages);
-    const runtime = new TypeScriptAgentRuntime({
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
       store,
       tools: new ToolRegistry(),
       contextWindowTokens: 1_000,
@@ -2365,7 +2417,7 @@ describe("TypeScriptAgentRuntime", () => {
     ];
     let providerCalls = 0;
     let summaryCalls = 0;
-    const runtime = new TypeScriptAgentRuntime({
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
       store,
       tools: new ToolRegistry(),
       contextWindowTokens: 256_000,
@@ -2414,7 +2466,7 @@ describe("TypeScriptAgentRuntime", () => {
       name: "second", description: "second", input_schema: { type: "object", properties: {} },
       execute: async () => { throw new Error("must not run"); },
     });
-    const runtime = new TypeScriptAgentRuntime({
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
       store, tools,
       provider: { summarize, turn: async () => (messageFixture({
         content: [
@@ -2454,7 +2506,7 @@ describe("TypeScriptAgentRuntime", () => {
       },
       registerProcess: () => () => undefined,
     };
-    const runtime = new TypeScriptAgentRuntime({
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
       store, tools,
       provider: { summarize, turn: async () => {
         providerCalls += 1;
@@ -2479,7 +2531,7 @@ describe("TypeScriptAgentRuntime", () => {
     const frames: EmitRequest[] = [];
     const requests: RuntimeProviderRequest[] = [];
     const runHandle: RuntimeHandle = { ...handle(), drainSteering: () => queue.splice(0) };
-    const runtime = new TypeScriptAgentRuntime({
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
       store, tools: new ToolRegistry(), systemPrompt: "test",
       provider: { summarize, turn: async request => {
         requests.push(request);
@@ -2538,7 +2590,7 @@ describe("TypeScriptAgentRuntime", () => {
       const controller = new AbortController();
       const runHandle: RuntimeHandle = { ...handle(), signal: controller.signal, drainSteering: () => queue.splice(0) };
       let providerCalls = 0;
-      const runtime = new TypeScriptAgentRuntime({
+      const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
         store, tools: new ToolRegistry(), systemPrompt: "test", maxSteps: scenario === "limit" ? 1 : scenario === "repeated_limit" ? 2 : 3,
         provider: { summarize, turn: async () => {
           providerCalls += 1;
@@ -2571,7 +2623,7 @@ describe("TypeScriptAgentRuntime", () => {
       name: "loop", description: "loop", input_schema: { type: "object", properties: {} },
       execute: async () => ({ content: [{ type: "text", text: "again" }] }),
     });
-    const runtime = new TypeScriptAgentRuntime({
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
       store, tools, maxSteps: 1,
       provider: { summarize, turn: async () => (messageFixture({
         content: [{ type: "tool_call", id: "t1", name: "loop", arguments: {} }],
@@ -2601,7 +2653,7 @@ describe("TypeScriptAgentRuntime", () => {
       const store = new MemoryStore();
       let calls = 0;
       let snapshots = 0;
-      const runtime = new TypeScriptAgentRuntime({
+      const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
         store, tools: new ToolRegistry(),
         skillSnapshot: () => {
           snapshots += 1;
@@ -2685,7 +2737,7 @@ describe("TypeScriptAgentRuntime", () => {
         },
       },
     };
-    const runtime = new TypeScriptAgentRuntime({
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
       store,
       tools: new ToolRegistry(),
       providerManager: { acquire: () => snapshot, reconfigure: async () => snapshot },
@@ -2747,7 +2799,7 @@ describe("TypeScriptAgentRuntime", () => {
         },
       },
     };
-    const runtime = new TypeScriptAgentRuntime({
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
       store,
       tools: new ToolRegistry(),
       providerManager: { acquire: () => snapshot, reconfigure: async () => snapshot },
@@ -2776,7 +2828,7 @@ describe("TypeScriptAgentRuntime", () => {
     });
     const attempts: Array<{ step: number; attempt: number }> = [];
     let calls = 0;
-    const runtime = new TypeScriptAgentRuntime({
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
       store,
       tools,
       provider: {
@@ -2834,7 +2886,7 @@ test("accounts failed attempts once and isolates their streamed text from the re
   const emitted: EmitRequest[] = [];
   const messageIds: string[] = [];
   let calls = 0;
-  const runtime = new TypeScriptAgentRuntime({
+  const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
     store, tools: new ToolRegistry(), systemPrompt: "test",
     provider: { summarize, turn: async (request) => {
       const { AssistantMessageAccumulator } = await import("../../src/messages/accumulator");
@@ -2872,7 +2924,7 @@ test("does not execute or synthesize results for truncated tool drafts", async (
   const tools = new ToolRegistry();
   let executions = 0;
   tools.register({ name: "dangerous", description: "test", input_schema: { type: "object" }, execute: async () => { executions++; return { content: [] }; } });
-  const runtime = new TypeScriptAgentRuntime({
+  const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
     store, tools, systemPrompt: "test",
     provider: { summarize, turn: async () => messageFixture({ stopReason: "length", content: [
       { type: "text", text: "partial answer" }, { type: "tool_call", id: "call", name: "dangerous" },
@@ -2893,7 +2945,7 @@ test("request anchors survive restart and power next-request display without sum
   const store = new MemoryStore();
   const requests: RuntimeProviderRequest[] = [];
   const emitted: EmitRequest[] = [];
-  const makeRuntime = () => new TypeScriptAgentRuntime({
+  const makeRuntime = () => new TypeScriptAgentRuntime({ permissionPolicy,
     store, tools: new ToolRegistry(), systemPrompt:"stable",
     display: { model:"", contextWindowTokens:256000, toolUseMode:"full" },
     provider: {
@@ -2928,7 +2980,7 @@ test("request anchors survive restart and power next-request display without sum
 
 test.each(["partial", "unreported", "zero", "different-model"] as const)("does not anchor %s usage", async kind => {
   const store=new MemoryStore();
-  const runtime=new TypeScriptAgentRuntime({
+  const runtime=new TypeScriptAgentRuntime({ permissionPolicy,
     store,tools:new ToolRegistry(),systemPrompt:"s",
     provider:{summarize,turn:async()=>messageFixture({
       content:[{type:"text",text:"done"}],
@@ -2952,7 +3004,7 @@ test("persists coherent display observations and isolates heartbeat and persiste
     expect(epoch).toBe("epoch");
     snapshots.push(structuredClone(snapshot));
   };
-  const runtime = new TypeScriptAgentRuntime({
+  const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
     store, tools:new ToolRegistry(), systemPrompt:"stable", contextWindowTokens:1000000,
     provider:{summarize,turn:async()=>messageFixture({content:[{type:"text",text:"answer"}],
       usage:{input_tokens:100,output_tokens:50,cache_read_input_tokens:200}})},
@@ -2985,7 +3037,7 @@ test("keeps calibrated image occupancy after turn maintenance", async () => {
   const store=new MemoryStore() as MemoryStore & Pick<RuntimeStore,"beginContextDisplay"|"saveContextDisplay">;
   store.beginContextDisplay=async()=> "epoch";
   store.saveContextDisplay=async(_id,_epoch,snapshot)=>{snapshots.push(structuredClone(snapshot));};
-  const runtime=new TypeScriptAgentRuntime({
+  const runtime=new TypeScriptAgentRuntime({ permissionPolicy,
     store,tools:new ToolRegistry(),systemPrompt:"s",
     provider:{summarize,turn:async()=>messageFixture({content:[{type:"text",text:"done"}],usage:{input_tokens:5000,output_tokens:5}})},
     emitter:{emit:async()=>undefined,typing:async()=>undefined},
@@ -3006,7 +3058,7 @@ test.each(["error","cancelled"] as const)("saves final consumption on %s without
   store.saveContextDisplay=async(_id,_epoch,snapshot)=>{snapshots.push(structuredClone(snapshot));};
   const cancellation=new AbortController();
   const turnHandle={...handle(),signal:cancellation.signal};
-  const runtime=new TypeScriptAgentRuntime({
+  const runtime=new TypeScriptAgentRuntime({ permissionPolicy,
     store,tools:new ToolRegistry(),systemPrompt:"s",
     provider:{summarize,turn:async request=>{
       const failed=messageFixture({stopReason:status==="cancelled"?"aborted":"error",
@@ -3044,7 +3096,7 @@ test.each(["read", "text", "mcp", "failed", "storage-failed", "cancelled"] as co
   });
   const batches: DesktopStreamBatchRequest[] = [];
   let round = 0;
-  const runtime = new TypeScriptAgentRuntime({ store, tools, systemPrompt: "test",
+  const runtime = new TypeScriptAgentRuntime({ permissionPolicy, store, tools, systemPrompt: "test",
     provider: { summarize, turn: async request => {
       if (round++ === 0) return messageFixture({ stopReason: "toolUse", content: ["a", "b"].map(id => ({
         type: "tool_call", name: "read", id, arguments: { path: "/tmp/example.png" },
@@ -3065,5 +3117,108 @@ test.each(["read", "text", "mcp", "failed", "storage-failed", "cancelled"] as co
       mutation.kind === "part_updated" && mutation.part.type === "tool" && mutation.part.tool_step.image_view
         ? [mutation.part.tool_step.image_view.view_id] : [])));
     expect(seen.size).toBe(scenario === "read" ? 2 : 0);
+  } finally { await runtime.stop(); }
+});
+
+describe("explicit composer skill invocations", () => {
+  test("injects only direct input, exposes owned tools, persists immutable load evidence and avoids replay loads", async () => {
+    const store = new MemoryStore(), tools = new ToolRegistry(), looked: string[] = [];
+    store.messages = [{ role: "user", content: "/history-skill" }];
+    store.pendingEvents = [{ type: "notice", text: "/event-skill" }];
+    tools.register({ name: "office_action", description: "fixture", input_schema: { type: "object" }, exposure: "deferred", ownerSkills: ["office-xlsx"], execute: async () => ({ content: [] }) });
+    let calls = 0;
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy, store, tools, systemPrompt: "test",
+      emitter: { emit: async () => {}, typing: async () => {} },
+      resolveInvokedSkill: async name => { looked.push(name); return name === "office-xlsx" ? { name, root: "/skills/office-xlsx", content: "Unique instructions" } : undefined; },
+      provider: { summarize, turn: async request => {
+        if (calls++ === 0) {
+          expect(request.tools.some(t => t.name === "office_action")).toBe(true);
+          expect(JSON.stringify(request.messages)).toContain("Unique instructions");
+          expect(request.messages.filter(m => m.role === "user" && typeof m.content === "string" && m.content.startsWith("<skill_content"))).toHaveLength(1);
+        }
+        return messageFixture({ stopReason: "stop", content: [{ type: "text", text: "done" }] });
+      } },
+    });
+    await runtime.start();
+    try {
+      await runtime.runTurn(job({ user_input: "use /office-xlsx /office-xlsx /missing-skill", user_content_blocks: [{ type: "text", text: "attachment /attachment-skill" }] }), handle());
+      expect(looked).toEqual(["office-xlsx", "missing-skill"]);
+      const user = store.messages.find(m => m.role === "user" && m.message_id === "m1");
+      expect(user && "invoked_skills" in user && user.invoked_skills).toEqual(["office-xlsx"]);
+      expect(store.messageReasons.filter(r => r === "skill_invocation")).toHaveLength(1);
+      expect(JSON.stringify(store.metrics)).toContain('"skill":"office-xlsx"');
+      await runtime.runTurn(job({ job_id: "j2", user_input: "continue" }), handle());
+      expect(looked).toEqual(["office-xlsx", "missing-skill"]);
+    } finally { await runtime.stop(); }
+  });
+  test("real skill-load errors stop before provider and are not reported as success", async () => {
+    const store = new MemoryStore(); let calls = 0;
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy, store, tools: new ToolRegistry(), systemPrompt: "test",
+      emitter: { emit: async () => {}, typing: async () => {} },
+      resolveInvokedSkill: async () => { throw new Error("EACCES: SKILL.md read failed"); },
+      provider: { summarize, turn: async () => { calls++; return messageFixture(); } },
+    });
+    await runtime.start();
+    try {
+      const result = await runtime.runTurn(job({ user_input: "/office-xlsx work" }), handle());
+      expect(result.status).toBe("error"); expect(calls).toBe(0);
+      expect(store.messages.some(m => m.role === "user" && m.content === "/office-xlsx work")).toBe(true);
+      expect(JSON.stringify(store.turnErrors)).toContain("EACCES: SKILL.md read failed");
+    } finally { await runtime.stop(); }
+  });
+});
+
+test("explicit skills deduplicate a steering batch and never scan tool output", async () => {
+  const store = new MemoryStore(), tools = new ToolRegistry(), looked: string[] = [];
+  const queue: ReturnType<RuntimeHandle["drainSteering"]> = [];
+  let round = 0, invalidations = 0;
+  tools.register({ name: "fixture", description: "fixture", input_schema: { type: "object" }, execute: async () => ({ content: [{ type: "text", text: "/tool-output-skill" }] }) });
+  const runtime = new TypeScriptAgentRuntime({ permissionPolicy, store, tools, systemPrompt: "test",
+    emitter: { emit: async () => {}, typing: async () => {} },
+    onToolResult: () => { invalidations++; },
+    toolExposure: { allowedSkills: new Set(["one", "two"]) },
+    resolveInvokedSkill: async name => { looked.push(name); return { name, root: "/skills/" + name, content: "Instructions " + name }; },
+    provider: { summarize, turn: async request => {
+      if (round++ === 0) {
+        queue.push({ text: "/one /two /blocked" }, { text: "/two continue" });
+        return messageFixture({ stopReason: "toolUse", content: [{ type: "tool_call", id: "c", name: "fixture", arguments: {} }] });
+      }
+      expect(request.messages.filter(m => m.role === "user" && typeof m.content === "string" && m.content.startsWith("<skill_content"))).toHaveLength(2);
+      return messageFixture({ stopReason: "stop", content: [{ type: "text", text: "done" }] });
+    } },
+  });
+  await runtime.start();
+  try {
+    expect((await runtime.runTurn(job(), { ...handle(), drainSteering: () => queue.splice(0) })).status).toBe("completed");
+    expect(looked).toEqual(["one", "two"]); expect(invalidations).toBeGreaterThan(0);
+    expect(store.messageReasons.filter(reason => reason === "skill_invocation")).toHaveLength(2);
+  } finally { await runtime.stop(); }
+});
+
+test("mode changes during provider retries and a removed environment baseline reach the next model request", async () => {
+  const store = new MemoryStore();
+  let requests = 0;
+  const modes: string[] = [];
+  const runtime = new TypeScriptAgentRuntime({ permissionPolicy, store, tools: new ToolRegistry(), systemPrompt: "test", approvalAvailable: true,
+    emitter: { emit: async () => {}, typing: async () => {} },
+    provider: { summarize, turn: async request => {
+      const environment = [...request.messages].reverse().find(message => message.role === "user" && message.environmentContext);
+      if (environment?.role === "user") modes.push(environment.environmentContext!.permission_mode!);
+      if (requests++ === 0) {
+        store.permissionMode = "read-only";
+        throw new RuntimeProviderError("retry", "custom", "temporary", "retry", true, 503);
+      }
+      return messageFixture({ stopReason: "stop", content: [{ type: "text", text: "done" }] });
+    } },
+  });
+  await runtime.start();
+  try {
+    await runtime.runTurn(job({ source: { platform: "desktop" } }), handle());
+    expect(modes).toEqual(["danger-full-access", "read-only"]);
+    store.messages = [{ role: "compactionSummary", summary: "previous work", tokensBefore: 1000, details: { readFiles: [], modifiedFiles: [] } }];
+    store.permissionMode = "workspace-write";
+    await runtime.runTurn(job({ source: { platform: "desktop" } }), handle());
+    expect(modes.at(-1)).toBe("workspace-write");
+    expect(JSON.stringify(store.messages)).toContain("Desktop single-operation approval is available");
   } finally { await runtime.stop(); }
 });

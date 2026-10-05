@@ -1,6 +1,8 @@
+import { WindowsTitlebar } from "./windows-titlebar";
 import { UsagePanel } from "./usage-panel";
 import { ErpSettingsTabs } from "./erp-settings-tabs";
 import { DeviceContextPanel } from "./device-context-panel";
+import "./settings-theme.css";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode, type RefObject } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -981,6 +983,7 @@ function DesktopSettingsForm({
 }
 
 function CloudBindingDialog({
+  settingsTheme,
   activating,
   cloud,
   enrollment,
@@ -991,6 +994,7 @@ function CloudBindingDialog({
   onPasswordChange,
   onSelect,
 }: {
+  settingsTheme: boolean;
   activating: boolean;
   cloud: DesktopCloudState;
   enrollment: DesktopCloudEnrollmentSelection | null;
@@ -1008,7 +1012,7 @@ function CloudBindingDialog({
   const dialogRef = useDialogFocus<HTMLElement>(true, closeDialog);
   const currentDevice = [cloud.device_name.trim(), cloud.vpn_ip.trim()].filter(Boolean).join(" · ");
   return (
-    <div className="modal-backdrop desktop-cloud-binding-backdrop" onMouseDown={(event) => {
+    <div className={`modal-backdrop desktop-cloud-binding-backdrop${settingsTheme ? " desktop-settings-theme" : ""}`} onMouseDown={(event) => {
       if (event.target === event.currentTarget) closeDialog();
     }}>
       <section
@@ -1083,10 +1087,12 @@ function CloudBindingDialog({
 }
 
 function DesktopConfirmationDialog({
+  settingsTheme,
   confirmation,
   onCancel,
   onConfirm,
 }: {
+  settingsTheme: boolean;
   confirmation: DesktopConfirmation;
   onCancel: () => void;
   onConfirm: () => void;
@@ -1106,7 +1112,7 @@ function DesktopConfirmationDialog({
       ? t.desktop.confirm.deleteKeyDescription
       : t.desktop.confirm.clearDescription(confirmation.label);
   return (
-    <div className="modal-backdrop desktop-confirm-backdrop" onMouseDown={(event) => {
+    <div className={`modal-backdrop desktop-confirm-backdrop${settingsTheme ? " desktop-settings-theme" : ""}`} onMouseDown={(event) => {
       if (event.target === event.currentTarget) onCancel();
     }}>
       <section
@@ -1178,6 +1184,7 @@ export function DesktopShell({
   const [activeErp, setActiveErp] = useState<ErpIntegrationName>("mabangTms");
   const [activeSettingsSection, setActiveSettingsSection] = useState<DesktopSettingsSection>("cloud");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [updateCheckRequest, setUpdateCheckRequest] = useState(0);
   const [saving, setSaving] = useState(false);
   const [credentialBusy, setCredentialBusy] = useState(false);
   const [restarting, setRestarting] = useState(false);
@@ -1204,6 +1211,7 @@ export function DesktopShell({
     setCloudPassword("");
     setCloudEnrollmentError("");
     setSettingsOpen(false);
+    setUpdateCheckRequest(0);
   };
   const settingsDialogRef = useDialogFocus<HTMLFormElement>(settingsOpen, closeSettings);
 
@@ -1659,6 +1667,7 @@ export function DesktopShell({
   );
   const confirmationDialog = confirmation ? (
     <DesktopConfirmationDialog
+      settingsTheme={settingsOpen}
       confirmation={confirmation}
       onCancel={() => setConfirmation(null)}
       onConfirm={confirmPendingAction}
@@ -1666,6 +1675,7 @@ export function DesktopShell({
   ) : null;
   const cloudBindingDialog = cloudBindingDialogOpen ? (
     <CloudBindingDialog
+      settingsTheme={settingsOpen}
       activating={cloudActivating}
       cloud={cloud}
       enrollment={cloudEnrollment}
@@ -1745,6 +1755,11 @@ export function DesktopShell({
   return (
     <div className={frameClassName} data-lxe-root-state="ready">
       {dragRegion}
+      {desktop.platform === "win32" ? <WindowsTitlebar language={language} onAction={action => {
+        if (!action) return;
+        if (!settingsOpen) openSettings();
+        if (action === "check-updates") setUpdateCheckRequest(value => value + 1);
+      }} /> : null}
       <div key={appGeneration}>{children({ cloud, health, openSettings, setupComplete: setup.complete })}</div>
       {notice && !settingsOpen ? (
         <DesktopNoticeMessage
@@ -1754,7 +1769,7 @@ export function DesktopShell({
         />
       ) : null}
       {settingsOpen ? (
-        <div className="modal-backdrop desktop-settings-backdrop" onMouseDown={(event) => {
+        <div className="modal-backdrop desktop-settings-backdrop desktop-settings-theme" onMouseDown={(event) => {
           if (event.target === event.currentTarget) closeSettings();
         }}>
           <form
@@ -1799,7 +1814,7 @@ export function DesktopShell({
             <footer>
               <div className="desktop-version-updates">
                 <span className="desktop-version">{health?.version ? `v${health.version}` : "—"}</span>
-                <UpdateControl manual />
+                <UpdateControl manual checkRequest={updateCheckRequest} />
               </div>
               {activeSettingsSection !== "status"
                 && activeSettingsSection !== "appearance"

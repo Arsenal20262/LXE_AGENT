@@ -4,10 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ModelImageProcessor } from "../../src/providers/model-image";
 import { createFileTools } from "../../src/tooling/coding/file-tools";
-import { FileVersionLedger } from "../../src/tooling/coding/file-version-ledger";
+import { FileVersionLedger, type FileVersion } from "../../src/tooling/coding/file-version-ledger";
 import { CodingPathPolicy } from "../../src/tooling/coding/path-policy";
 import { ToolRegistry } from "../../src/tooling/registry";
-import { workspaceFor } from "../workspace";
+import { policyFor, workspaceFor } from "../workspace";
 
 const roots: string[] = [];
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
@@ -21,7 +21,7 @@ function setup(ledger = new FileVersionLedger()) {
   for (const tool of createFileTools({ paths: new CodingPathPolicy({}), ledger, imageProcessor: new ModelImageProcessor(), toolOutputLimit: 10_000 })) registry.register(tool);
   const controller = new AbortController();
   const context = {
-    session_id: "test", workspace: workspaceFor(root),
+    session_id: "test", workspace: workspaceFor(root), executionPolicy: policyFor(root),
     handle: { signal: controller.signal, cancelled: false, drainSteering: () => [], registerProcess: () => () => undefined },
   };
   return { root, path, registry, controller, context, ledger };
@@ -32,7 +32,7 @@ describe("edit file execution", () => {
     const { path, registry, context } = setup();
     const schema = registry.definition("edit")!.input_schema;
     expect(schema.required).toEqual(["path", "edits"]);
-    expect(Object.keys(schema.properties as object)).toEqual(["path", "edits"]);
+    expect(Object.keys(schema.properties as object)).toEqual(["sandbox_permissions", "justification", "path", "edits"]);
     await registry.execute("read", { path }, context);
     for (const input of [
       { file_path: path, old_string: "first", new_string: "FIRST" },
@@ -73,22 +73,23 @@ describe("edit file execution", () => {
   test("rechecks the version immediately before writing", async () => {
     class ChangingLedger extends FileVersionLedger {
       checks = 0;
-      override assertCurrent(session: string, path: string, action: string): void {
-        if (++this.checks === 2) writeFileSync(path, "external write before commit");
-        super.assertCurrent(session, path, action);
+      override assertVersion(session: string, path: string, action: string, current: FileVersion | undefined): void {
+        super.assertVersion(session, path, action, current);
+        // Change the file between observations, keeping the edit match valid.
+        if (++this.checks === 1) writeFileSync(path, "first\nsecond\nexternal write before commit");
       }
     }
     const { path, registry, context } = setup(new ChangingLedger());
     await registry.execute("read", { path }, context);
     await expect(registry.execute("edit", { path, edits: [{ oldText: "first", newText: "FIRST" }] }, context)).rejects.toThrow("重新 read");
-    expect(readFileSync(path, "utf8")).toBe("external write before commit");
+    expect(readFileSync(path, "utf8")).toBe("first\nsecond\nexternal write before commit");
   });
   test("observes cancellation before writing even after preparation", async () => {
     let cancel: () => void = () => {};
     class CancellingLedger extends FileVersionLedger {
       checks = 0;
-      override assertCurrent(session: string, path: string, action: string): void {
-        super.assertCurrent(session, path, action);
+      override assertVersion(session: string, path: string, action: string, current: FileVersion | undefined): void {
+        super.assertVersion(session, path, action, current);
         if (++this.checks === 2) cancel();
       }
     }

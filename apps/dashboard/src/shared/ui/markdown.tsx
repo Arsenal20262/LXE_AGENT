@@ -72,20 +72,56 @@ const CODE_LANGUAGE_PATTERN = /\blanguage-([^\s]+)\b/;
 type MermaidApi = typeof import("mermaid").default;
 
 let mermaidLoader: Promise<MermaidApi> | null = null;
+let mermaidRenderQueue: Promise<unknown> = Promise.resolve();
 
 export function loadMermaid(): Promise<MermaidApi> {
   if (!mermaidLoader) {
-    mermaidLoader = import("mermaid").then((module) => {
-      const mermaid = module.default;
-      mermaid.initialize({
-        startOnLoad: false,
-        securityLevel: "strict",
-        theme: "base"
-      });
-      return mermaid;
-    });
+    mermaidLoader = import("mermaid").then((module) => module.default);
   }
   return mermaidLoader;
+}
+
+function renderMermaidChart(id: string, chart: string) {
+  // initialize changes Mermaid's global configuration. Keep it and the entire
+  // async render together so several diagrams cannot overwrite each other's theme.
+  const render = mermaidRenderQueue.then(async () => {
+    const mermaid = await loadMermaid();
+    const root = document.documentElement;
+    const styles = getComputedStyle(root);
+    const color = (token: string) => styles.getPropertyValue(token).trim();
+    const text = color("--text");
+    const border = color("--border-strong");
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: "strict",
+      theme: "base",
+      themeVariables: {
+        darkMode: root.dataset.theme === "dark",
+        background: color("--surface"),
+        primaryColor: color("--conversation-muted-fill"),
+        secondaryColor: color("--surface-subtle"),
+        tertiaryColor: color("--surface"),
+        primaryTextColor: text,
+        secondaryTextColor: text,
+        tertiaryTextColor: text,
+        primaryBorderColor: border,
+        secondaryBorderColor: border,
+        tertiaryBorderColor: border,
+        lineColor: color("--muted"),
+        arrowheadColor: color("--muted"),
+        edgeLabelBackground: color("--surface"),
+        noteBkgColor: color("--surface-subtle"),
+        noteTextColor: text,
+        noteBorderColor: border,
+        fontFamily: color("--font-sans"),
+        fontSize: styles.fontSize,
+      },
+    });
+    return mermaid.render(id, chart);
+  });
+  // A malformed diagram must not prevent subsequent diagrams from rendering.
+  mermaidRenderQueue = render.catch(() => {});
+  return render;
 }
 
 const EXTERNAL_LINK_PATTERN = /^https?:\/\//i;
@@ -158,29 +194,36 @@ export function MermaidBlock({ chart }: { chart: string }) {
 
   useEffect(() => {
     let cancelled = false;
+    let revision = 0;
 
     async function renderMermaid() {
+      const currentRevision = ++revision;
       setSvg("");
       setError("");
       if (!chartText) {
         return;
       }
       try {
-        const mermaid = await loadMermaid();
-        const result = await mermaid.render(mermaidId, chartText);
-        if (!cancelled) {
+        const result = await renderMermaidChart(mermaidId, chartText);
+        if (!cancelled && currentRevision === revision) {
           setSvg(result.svg);
         }
       } catch (err) {
-        if (!cancelled) {
+        if (!cancelled && currentRevision === revision) {
           setError(err instanceof Error ? err.message : String(err));
         }
       }
     }
 
-    renderMermaid();
+    const observer = new MutationObserver(() => { void renderMermaid(); });
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme", "data-font-size"],
+    });
+    void renderMermaid();
     return () => {
       cancelled = true;
+      observer.disconnect();
     };
   }, [chartText, mermaidId]);
 

@@ -7,7 +7,7 @@ export function validateRef(value: unknown): SessionFileRef {
   const ref = value as Record<string, unknown>;
   if (typeof ref.session_id !== "string" || !ref.session_id.trim()) throw invalidFileReference("Session is required");
   if (ref.kind === "workspace" && typeof ref.path === "string") return { session_id: ref.session_id, kind: ref.kind, path: ref.path };
-  if ((ref.kind === "artifact" || ref.kind === "attachment") && typeof ref.id === "string" && ref.id.trim()) return { session_id: ref.session_id, kind: ref.kind, id: ref.id };
+  if ((ref.kind === "artifact" || ref.kind === "attachment" || ref.kind === "skill") && typeof ref.id === "string" && ref.id.trim()) return { session_id: ref.session_id, kind: ref.kind, id: ref.id };
   throw invalidFileReference("Invalid file reference");
 }
 export function contains(root: string, path: string): boolean {

@@ -1,0 +1,16 @@
+.workspace-open-control { flex:0 0 auto; position:relative; -webkit-app-region:no-drag }
+.workspace-open-split { display:flex; height:28px; border:1px solid var(--border); border-radius:7px; overflow:hidden }
+.workspace-open-split button { display:flex; align-items:center; justify-content:center; padding:0 7px; border:0; background:transparent; color:var(--muted); cursor:pointer }
+.workspace-open-split button+button { border-left:1px solid var(--border); padding:0 4px }
+.workspace-open-split button:hover { background:var(--row-hover); color:var(--text) }
+.workspace-open-split button:disabled,.workspace-open-menu button:disabled { opacity:.5; cursor:default }
+.workspace-open-control img,.workspace-open-menu img { width:16px; height:16px; object-fit:contain; flex-shrink:0 }
+.workspace-open-menu { z-index:1000; width:max-content; min-width:180px; max-width:min(320px,calc(100vw - 16px)); max-height:min(420px,calc(100vh - 16px)); overflow:auto; padding:5px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:9px; box-shadow:var(--shadow-card); -webkit-app-region:no-drag }
+.workspace-open-menu button { display:flex; align-items:center; gap:9px; width:100%; border:0; border-radius:5px; padding:8px; background:transparent; color:inherit; font:inherit; font-size:.8rem; text-align:left; cursor:pointer }
+.workspace-open-menu button:hover,.workspace-open-menu button:focus-visible { background:var(--row-hover) }
+.workspace-open-menu button>span { overflow:hidden; white-space:nowrap; text-overflow:ellipsis }
+.workspace-open-menu svg { flex-shrink:0 }
+.workspace-open-failure { padding:6px; border-top:1px solid var(--border); color:var(--danger,#c65050) }
+.workspace-open-failure pre { max-width:290px; max-height:180px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; font-size:.75rem }
+.conversation-workspace.is-readonly { display:flex; align-items:center; gap:5px }
+.conversation-workspace-label { display:flex; align-items:center; gap:6px; min-width:0; max-width:220px; padding:5px 7px; color:var(--muted); font-size:.75rem }

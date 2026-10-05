@@ -1,3 +1,5 @@
+import { parsePermissionMode, type PermissionMode, type PendingApproval, type ApprovalDecision } from "@lxe/protocol";
+export type { PermissionMode, PendingApproval, ApprovalDecision } from "@lxe/protocol";
 import type { DesktopStreamMutation, DisplayMetrics, ToolStep, TurnProcessPart } from "@lxe/protocol";
 import type { BackgroundTaskChangedPayload } from "./index";
 import { parseUserQuestionSubmission, type PendingUserQuestion, type SubmitUserQuestionAnswer } from "@lxe/protocol/user-questions";
@@ -66,6 +68,7 @@ export type SourceSummary = {
 
 export type SessionPayload = {
   session_id: string;
+  permission_mode: PermissionMode;
   blank?: boolean;
   title: string;
   pinned_at: number;
@@ -485,6 +488,9 @@ export interface DashboardRpcSpec {
     input: { directory: string; display_name: string };
     result: WorkspaceSummaryPayload;
   };
+  "sessions.permission.set": { input: { session_id: string; permission_mode: PermissionMode }; result: { session_id: string; permission_mode: PermissionMode } };
+  "sessions.approvals": { input: DashboardRpcEmptyInput; result: { items: PendingApproval[] } };
+  "sessions.approval.decide": { input: ApprovalDecision; result: { accepted: true; request_id: string } };
   "sessions.questions": { input: DashboardRpcEmptyInput; result: { items: PendingUserQuestion[] } };
   "sessions.answer": { input: SubmitUserQuestionAnswer; result: { accepted: true; request_id: string } };
   "sessions.list": {
@@ -541,6 +547,7 @@ export interface DashboardRpcSpec {
     input: { session_id: string; attachment_id: string; variant?: "thumbnail" | "expanded" };
     result: { data_url: string; source: "history" | "current_file" };
   };
+  "sessions.files.candidates": { input: { session_id: string; query: string }; result: { items: Array<{ path: string; kind: "file" | "directory" }> } };
   "sessions.workspace.reload": {
     input: { session_id: string };
     result: WorkspaceReloadPayload;
@@ -549,8 +556,8 @@ export interface DashboardRpcSpec {
   "skills.user.content": { input: { id: string; path?: string }; result: UserSkillContentPayload };
   "skills.user.setEnabled": { input: { id: string; version: string; enabled: boolean }; result: UserSkillPayload };
   "skills.user.delete": { input: { id: string; version: string }; result: { id: string; deleted: boolean; recycled_path: string } };
-  "skills.list": { input: DashboardRpcEmptyInput; result: ApiList<SkillPayload> };
-  "skills.content": { input: { name: string }; result: SkillContentPayload };
+  "skills.list": { input: { session_id?: string }; result: ApiList<SkillPayload> };
+  "skills.content": { input: { name: string; session_id?: string }; result: SkillContentPayload };
   "skills.reference": {
     input: { name: string; path: string };
     result: SkillReferenceContentPayload;
@@ -722,9 +729,18 @@ export function parseDashboardRpcCall(value: unknown): DashboardRpcCall {
         display_name: textValue(input.display_name, `${operation}.display_name`, { allowEmpty: true })!,
       } };
     case "sessions.workspaces":
+    case "sessions.approvals":
     case "sessions.questions":
       exactKeys(input, [], `${operation}.input`);
       return { operation, input: {} };
+    case "sessions.permission.set":
+      exactKeys(input, ["session_id", "permission_mode"], `${operation}.input`);
+      try { return { operation, input: { session_id: textValue(input.session_id, `${operation}.session_id`)!, permission_mode: parsePermissionMode(input.permission_mode) } }; }
+      catch (error) { return rpcError(error instanceof Error ? error.message : String(error)); }
+    case "sessions.approval.decide":
+      exactKeys(input, ["session_id", "request_id", "decision"], `${operation}.input`);
+      if (input.decision !== "allow" && input.decision !== "deny") return rpcError("approval decision must be allow or deny");
+      return { operation, input: { session_id: textValue(input.session_id, `${operation}.session_id`)!, request_id: textValue(input.request_id, `${operation}.request_id`)!, decision: input.decision } };
     case "sessions.answer":
       exactKeys(input, ["session_id", "request_id", "answers"], `${operation}.input`);
       try { return { operation, input: parseUserQuestionSubmission(input) }; }
@@ -827,8 +843,14 @@ export function parseDashboardRpcCall(value: unknown): DashboardRpcCall {
     case "sessions.workspace.reload":
       exactKeys(input, ["session_id"], `${operation}.input`);
       return { operation, input: { session_id: textValue(input.session_id, `${operation}.session_id`)! } };
-    case "skills.user.list":
+    case "sessions.files.candidates":
+      exactKeys(input, ["session_id", "query"], `${operation}.input`);
+      if (typeof input.query !== "string" || input.query.length > 8192) throw new DashboardRpcError("invalid_request", "Invalid file query");
+      return { operation, input: { session_id: textValue(input.session_id, `${operation}.session_id`)!, query: input.query } };
     case "skills.list":
+      exactKeys(input, ["session_id"], `${operation}.input`);
+      return { operation, input: input.session_id === undefined ? {} : { session_id: textValue(input.session_id, `${operation}.session_id`)! } };
+    case "skills.user.list":
     case "commands.list":
     case "toolsets.list":
     case "mcp.servers.list":
@@ -848,8 +870,8 @@ export function parseDashboardRpcCall(value: unknown): DashboardRpcCall {
       exactKeys(input, ["id", "version"], `${operation}.input`);
       return { operation, input: { id: textValue(input.id, `${operation}.id`)!, version: textValue(input.version, `${operation}.version`)! } };
     case "skills.content":
-      exactKeys(input, ["name"], `${operation}.input`);
-      return { operation, input: { name: textValue(input.name, `${operation}.name`)! } };
+      exactKeys(input, ["name", "session_id"], `${operation}.input`);
+      return { operation, input: { name: textValue(input.name, `${operation}.name`)!, ...(input.session_id === undefined ? {} : { session_id: textValue(input.session_id, `${operation}.session_id`)! }) } };
     case "skills.reference":
       exactKeys(input, ["name", "path"], `${operation}.input`);
       return { operation, input: {

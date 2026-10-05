@@ -10,6 +10,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { sourceRuntimePaths } from "../apps/desktop/src/main/source-runtime-paths";
 
 export interface MacExifToolLock {
   version: string;
@@ -65,12 +66,12 @@ const readLock = (path: string): MacExifToolLock => {
 
 export const macExifToolRoot = (
   root = repositoryRoot,
-  arch = process.arch,
-): string => join(root, "build", "desktop-runtime", `darwin-${arch}`, "tools", "exiftool");
+  arch: string = process.arch,
+): string => dirname(sourceRuntimePaths(root, "darwin", arch).exifTool);
 
 export const macExifToolPath = (
   root = repositoryRoot,
-  arch = process.arch,
+  arch: string = process.arch,
 ): string => join(macExifToolRoot(root, arch), "exiftool");
 
 const downloadArchive = async (url: string, destination: string): Promise<void> => {

@@ -17,6 +17,8 @@ export interface ExecSpawnSpec {
 }
 
 export interface ExecEnvironmentContext {
+  workspaceDirectory: string;
+  temporaryDirectory: string;
   sessionId: string;
   turnId: string;
   responseRouteId: string;
@@ -264,6 +266,7 @@ export class ExecShellAdapter {
       .filter(Boolean);
     const projectVenv = projectVenvPath(root, this.platform);
     const {
+      LXE_AGENT_SQLITE_DB_PATH: _agentDatabase,
       LXE_AGENT_SOUL_PATH: _agentSoulPath,
       LXE_USER_SKILLS_ROOT: _userSkillsRoot,
       LXE_LXESKILL_CATALOG_PATH: _runtimeCatalogPath,
@@ -283,7 +286,10 @@ export class ExecShellAdapter {
       PYTHONUNBUFFERED: "1",
       PYTHONDONTWRITEBYTECODE: "1",
       PYTHONNOUSERSITE: "1",
-      LXE_WORKSPACE_ROOT: root,
+      LXE_WORKSPACE_ROOT: context.workspaceDirectory,
+      TMP: context.temporaryDirectory,
+      TEMP: context.temporaryDirectory,
+      TMPDIR: context.temporaryDirectory,
       LXE_AGENT_SESSION_ID: context.sessionId,
       LXE_RESPONSE_ROUTE_ID: context.responseRouteId,
       LXE_AGENT_TURN_ID: context.turnId,
@@ -294,6 +300,7 @@ export class ExecShellAdapter {
   /** Resolve against the same environment as exec, including the managed tools directory. */
   hasExecutable(command: string, root: string, cwd = root): boolean {
     const environment = this.childEnvironment(root, {
+      workspaceDirectory: cwd, temporaryDirectory: cwd,
       sessionId: "", turnId: "", responseRouteId: "", execSessionId: "",
     });
     return Bun.which(command, { cwd, PATH: environment.PATH ?? "" }) !== null;

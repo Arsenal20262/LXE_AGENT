@@ -354,6 +354,7 @@ export class SkillCatalog {
     return [
       "## Available skills",
       "When a request matches a skill, use the read tool to load its SKILL.md before executing its workflow. Follow that file exactly.",
+      "Explicit /skill-name references may already supply a <skill_content> block. Follow that block without loading the same skill again.",
       ...(hasLxeSkillCommands ? [
         "",
         "## lxeskill invocation contract",
