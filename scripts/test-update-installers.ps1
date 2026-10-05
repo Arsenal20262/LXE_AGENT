@@ -29,6 +29,18 @@ function Data-Hashes {
     return ((Get-ChildItem -LiteralPath (Join-Path $install 'var') -File -Recurse | Sort-Object FullName | ForEach-Object { $_.FullName + ':' + (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash }) -join "`n")
 }
 $before = Data-Hashes
+$appFile = Join-Path $install ($q.productName + '.exe')
+$oldProgram = (Get-FileHash -LiteralPath $appFile -Algorithm SHA512).Hash
+$oldCache = (Get-FileHash -LiteralPath (Join-Path $cache 'installer.exe') -Algorithm SHA512).Hash
+$locked = [IO.File]::Open($appFile, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+try {
+    $failed = Start-Process -FilePath $q.artifacts[1] -ArgumentList ('/S --updated /D=' + $install) -Wait -PassThru
+    Assert ($failed.ExitCode -eq 2) "Expected transactional replacement failure, received $($failed.ExitCode)"
+} finally { $locked.Dispose() }
+Assert ((Get-FileHash -LiteralPath $appFile -Algorithm SHA512).Hash -eq $oldProgram) 'Failed upgrade changed the old program'
+Assert ((Get-FileHash -LiteralPath (Join-Path $cache 'installer.exe') -Algorithm SHA512).Hash -eq $oldCache) 'Failed upgrade replaced the old installer cache'
+Assert ((Data-Hashes) -eq $before) 'Failed upgrade changed var'
+Write-Host 'PASS locked installed executable prevents replacement; old program, data and cache survive'
 for ($i=1; $i -lt 3; $i++) {
     Install $q.artifacts[$i] $true
     Assert ((Data-Hashes) -eq $before) 'Database, settings or workspace changed during update'
@@ -48,5 +60,5 @@ $process = Start-Process -FilePath $uninstaller.FullName -ArgumentList '/S /DELE
 Assert ($process.ExitCode -eq 0) 'Explicit data removal failed'
 Wait-Removed (Join-Path $install 'var')
 Assert (-not (Test-Path -LiteralPath (Join-Path $install 'var'))) 'Explicit uninstall retained data unexpectedly'
-[IO.File]::WriteAllText((Join-Path $q.output 'install-results.json'), '{"legacy_upgrade":true,"new_upgrade":true,"var_preserved":true,"cache_matches":true,"uninstall_keep":true,"uninstall_delete":true}')
+[IO.File]::WriteAllText((Join-Path $q.output 'install-results.json'), '{"legacy_upgrade":true,"new_upgrade":true,"var_preserved":true,"cache_matches":true,"locked_file_rollback":true,"uninstall_keep":true,"uninstall_delete":true}')
 Write-Host "PASS default uninstall retains var; explicit fixture deletion removes it; no real tunnel changed"
