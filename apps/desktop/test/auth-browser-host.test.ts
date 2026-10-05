@@ -41,6 +41,18 @@ async function fixture(idleMs = 180_000) {
 }
 
 describe("authentication browser host", () => {
+  test("can restart after a failed update handoff and provide a working new endpoint", async () => {
+    const {host}=await fixture();await host.stop(true);await host.start();
+    const env=host.environment();
+    const response=await fetch(env.LXE_AUTH_BROWSER_HOST_URL+"/v1/auth-browser",{method:"POST",headers:{Authorization:`Bearer ${env.LXE_AUTH_BROWSER_HOST_TOKEN}`},body:JSON.stringify({operation:"open",arguments:{headless:true}})});
+    expect(response.status).toBe(200);expect((await response.json() as any).ok).toBe(true);
+  });
+  test("strict update shutdown retains failed leases and reports the actual error", async () => {
+    const {host,call,sessions}=await fixture();await call("open");
+    const close=sessions[0]!.close.bind(sessions[0]);sessions[0]!.close=async()=>{throw new Error("fixture page close failed");};
+    await expect(host.stop(true)).rejects.toThrow("fixture page close failed");
+    sessions[0]!.close=close;await host.stop(true);expect(sessions[0]!.closed).toBe(1);
+  });
   test("authenticates before creating any page, rejects browser origins", async () => {
     const { call, sessions } = await fixture();
     expect((await call("open", "", { Authorization: "Bearer wrong" })).status).toBe(403);

@@ -1,5 +1,11 @@
 import { existsSync, writeFileSync } from "node:fs";
 import { createInterface } from "node:readline";
+import { spawn } from "node:child_process";
+
+if (process.env.FAKE_OWNED_CHILD_PID) {
+  const owned = spawn(process.execPath, ["-e", "setInterval(()=>{},1000)"], { stdio: "ignore" });
+  writeFileSync(process.env.FAKE_OWNED_CHILD_PID, String(owned.pid));
+}
 
 const input = createInterface({ input: process.stdin, crlfDelay: Infinity });
 const write = (message) => process.stdout.write(`${JSON.stringify(message)}\n`);
@@ -182,6 +188,7 @@ for await (const line of input) {
     continue;
   }
   if (request.method === "shutdown") {
+    if (process.env.FAKE_IGNORE_SHUTDOWN === "1") continue;
     event({ type: "system.status", payload: { state: "stopped" } });
     process.stdout.write(`${JSON.stringify({
       jsonrpc: "2.0",

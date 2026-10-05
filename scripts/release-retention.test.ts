@@ -37,6 +37,20 @@ test("ten builds retain the newest three installers and all records; cleanup is 
     expect(f.logs.at(-1)).toContain("removed 0 installer(s)");
   } finally { f.dispose(); }
 });
+test("blockmaps are removed with obsolete installers; malformed companions preserve the pair", () => {
+  const f = fixture(); try {
+    for (const n of [0, 1, 9]) {
+      const record=f.records[n]!;
+      record.blockmap={file_name:record.file_name+".blockmap",object_key:record.object_key+".blockmap",size:3,sha512:Buffer.alloc(64).toString("base64")};
+      writeFileSync(f.file(n)+".blockmap",n===1?"wrong size":"map");
+      writeJsonAtomic(join(f.root,record.build_id,"candidate.json"),record);
+    }
+    f.clean();
+    expect(existsSync(f.file(0))).toBe(false);expect(existsSync(f.file(0)+".blockmap")).toBe(false);
+    for(const n of [1,9]){expect(existsSync(f.file(n))).toBe(true);expect(existsSync(f.file(n)+".blockmap")).toBe(true);}
+    expect(f.logs.join("\n")).toContain("Artifact is not the expected regular file");
+  } finally { f.dispose(); }
+});
 test("latest successful publication is an extra protection that rotates after the next success", () => {
   const f = fixture(); try {
     writeJsonAtomic(join(f.root, "build-0", "publication.json"), { intent: true });

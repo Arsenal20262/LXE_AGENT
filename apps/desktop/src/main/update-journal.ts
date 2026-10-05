@@ -14,10 +14,10 @@ export class UpdateJournal {
   const record=JSON.parse(readFileSync(this.path,"utf8"));
   this.write({...record,error:updateDiagnostic(error)});
  }
- previous(currentVersion:string):string|undefined{
+ previous(currentVersion:string,currentBuildId?:string):string|undefined{
   if(!existsSync(this.path))return;
   const record=JSON.parse(readFileSync(this.path,"utf8"));
-  if(record.version===currentVersion){rmSync(this.path);return "已成功更新到 "+currentVersion;}
+  if(record.version===currentVersion&&record.build_id===currentBuildId){rmSync(this.path);return "已成功更新到 "+currentVersion;}
   return "上次尝试更新到 "+record.version+"，当前仍为 "+currentVersion+"。"+(record.error||"安装未确认完成，请重新检查更新；不会自动重试安装。");
  }
 }

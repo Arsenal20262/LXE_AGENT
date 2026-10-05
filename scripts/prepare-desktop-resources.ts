@@ -258,8 +258,10 @@ const extraResources: BuilderFileSet[] = [
 
 const builderConfigPath = join(repositoryRoot, "apps", "desktop", "electron-builder.yml");
 const builderConfig = Bun.YAML.parse(readFileSync(builderConfigPath, "utf8")) as BuilderConfiguration;
-applyDesktopProductVersion(builderConfig, environment.LXE_DESKTOP_PRODUCT_VERSION);
+applyDesktopProductVersion(builderConfig, environment.LXE_DESKTOP_PRODUCT_VERSION,
+  environment.LXE_DESKTOP_BUILD_ID ? {build_id:environment.LXE_DESKTOP_BUILD_ID,source_commit:environment.LXE_DESKTOP_SOURCE_COMMIT ?? ""} : undefined);
 builderConfig.extraResources = extraResources;
+builderConfig.beforePack = join(repositoryRoot, "scripts", "windows-update-installer.cjs");
 builderConfig.afterPack = join(repositoryRoot, "scripts", "verify-packaged-office.cjs");
 writeFileSync(generatedBuilderConfig, `${JSON.stringify(builderConfig, null, 2)}\n`, "utf8");
 
