@@ -31,12 +31,24 @@
   visibility:hidden;
   pointer-events:none}
 .file-preview-resizer {
+  position:relative;
   width:5px;
   flex:0 0 5px;
+  outline:none;
   cursor:col-resize;
   touch-action:none}
-.file-preview-resizer:hover,.file-preview-resizer:focus {
-  background:var(--accent,#6799db)}
+.file-preview-resizer::after {
+  content:"";
+  position:absolute;
+  z-index:1;
+  inset-block:0;
+  right:-1px;
+  width:1px;
+  pointer-events:none}
+.file-preview-resizer:hover::after,.file-preview-resizer:active::after {
+  background:color-mix(in srgb,var(--text) 35%,var(--bg))}
+.file-preview-resizer:focus-visible::after {
+  background:var(--accent)}
 .file-header-actions {
   display:flex;
   gap:6px;
