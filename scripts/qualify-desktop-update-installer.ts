@@ -1,7 +1,7 @@
 /** Windows-only isolated NSIS qualification. Never uses the production AppID/cache. */
 import {createRequire} from "node:module";
 import {cpSync,existsSync,mkdirSync,readFileSync,renameSync,rmSync,writeFileSync} from "node:fs";
-import {join,resolve} from "node:path";
+import {join,resolve,parse} from "node:path";
 import {execFileSync} from "node:child_process";
 import {randomUUID} from "node:crypto";
 const root=resolve(import.meta.dir,".."),desktop=join(root,"apps/desktop");
@@ -49,7 +49,7 @@ export async function qualify(payload:string,legacyRef:string,resumeRoot?:string
   artifacts.push(join(output,version,`LXE-Update-Qualification-${version}.exe`));
  }
  const record={schema_version:1,appId:"com.lxe.agent.updatequalification."+id,productName:product,cache,
-  output,installRoot:join(output,"安装 space",product),artifacts,builds:[1,2,3].map(n=>`qualification-${id}-${n}`)};
+  output,installRoot:join(parse(output).root,"LXE update "+id,"安装"),artifacts,builds:[1,2,3].map(n=>`qualification-${id}-${n}`)};
  writeFileSync(join(output,"qualification.json"),JSON.stringify(record,null,2));
  console.log("QUALIFICATION="+join(output,"qualification.json"));
 }
