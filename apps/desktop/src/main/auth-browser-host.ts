@@ -29,6 +29,7 @@ export class AuthBrowserHost {
 
   async start(): Promise<void> {
     if (this.endpoint) return;
+    this.stopping = false;
     await new Promise<void>((resolve, reject) => {
       this.server.once("error", reject);
       this.server.listen(0, "127.0.0.1", () => {
@@ -48,21 +49,23 @@ export class AuthBrowserHost {
     return { LXE_AUTH_BROWSER_HOST_URL: this.endpoint, LXE_AUTH_BROWSER_HOST_TOKEN: this.token };
   }
 
-  async stop(): Promise<void> {
+  async stop(strict = false): Promise<void> {
     this.stopping = true;
     clearInterval(this.timer);
-    await Promise.allSettled([...this.leases.keys()].map(id => this.closeLease(id)));
+    const results = await Promise.allSettled([...this.leases.keys()].map(id => this.closeLease(id)));
     await new Promise<void>(resolve => {
       this.server.close(() => resolve());
       this.server.closeAllConnections();
     });
     this.endpoint = "";
+    const failures = results.filter((result): result is PromiseRejectedResult => result.status === "rejected");
+    if (strict && failures.length) throw new AggregateError(failures.map(result=>result.reason), failures.map(result=>String(result.reason)).join("\n"));
   }
 
   private async closeLease(id: string): Promise<void> {
     const lease = this.leases.get(id);
-    this.leases.delete(id);
     await lease?.session.close();
+    this.leases.delete(id);
   }
 
   private async expire(): Promise<void> {

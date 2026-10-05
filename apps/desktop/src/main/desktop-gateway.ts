@@ -346,9 +346,16 @@ export class DesktopGateway {
     }
   }
 
+  updateTasks(): string[] {
+    return this.composition?.parts.scheduler.runStatuses().map(task => `Agent ${task.session_id}/${task.turn_id}`) ?? [];
+  }
+
+  settleUpdateAdmissions(): Promise<void> { return this.composition!.parts.scheduler.settleUpdateAdmissions(); }
+  cancelUpdateTasks(): Promise<void> { return this.composition!.parts.scheduler.cancelForUpdate(); }
+
   beginUpdate(): () => void {
     if (!this.composition || !this.runtime?.isReady) throw new UpdateBusyError("Agent 状态尚未就绪，无法确认是否空闲");
-    const release = this.composition.parts.scheduler.beginUpdate();
+    const release = this.composition.parts.scheduler.beginUpdate(true);
     if (!release) throw new UpdateBusyError("仍有任务正在运行或排队，请结束任务后再次点击更新");
     this.updatePreparing = true;
     return () => { this.updatePreparing = false; release(); };
@@ -358,6 +365,7 @@ export class DesktopGateway {
     await this.files?.dispose(); this.files = undefined;
     const composition = this.composition;
     if (composition) await composition.stop();
+    if (this.runtime?.hasProcess) throw new Error("Agent process exit is unconfirmed; refusing to discard its ownership");
     if (strict && composition?.parts.lifecycle.shutdownError) {
       throw new Error("更新前清理失败：" + composition.parts.lifecycle.shutdownError + "。请手动重启应用后重试");
     }
@@ -368,6 +376,13 @@ export class DesktopGateway {
     this.dashboardObservedRuntimeReady = false;
     this.gatewayState = "stopped";
     this.publishHealth();
+  }
+
+  async recoverAfterUpdate(): Promise<void> {
+    if (this.runtime?.hasProcess) throw new Error("Agent process exit is unconfirmed; restart the application before retrying");
+    this.composition = undefined;
+    this.store?.stop(); this.store = undefined; this.runtime = undefined;
+    await this.start();
   }
 
   async restart(): Promise<void> {
