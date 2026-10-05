@@ -130,6 +130,14 @@ export class ProcessAgentRuntime implements DirectAgentRuntime {
   private notifications = Promise.resolve();
   private incompatible = false;
   private child: ChildProcessWithoutNullStreams | undefined;
+  private treeTermination: { pid: number; error?: Error } | undefined;
+  private terminateProcessTree: ((pid: number) => Promise<void>) | undefined = process.platform === "win32"
+    ? pid => new Promise((resolveTree, reject) => {
+      execFile("taskkill.exe", ["/PID", String(pid), "/T", "/F"], { windowsHide: true, timeout: 3500 }, (error, _stdout, stderr) => {
+        if (error) reject(new Error(`taskkill failed: ${error.message}; ${stderr}`));
+        else resolveTree();
+      });
+    }) : undefined;
   private stdout: Interface | undefined;
   private stderr: Interface | undefined;
   private state: ProcessState = "stopped";
@@ -158,7 +166,7 @@ export class ProcessAgentRuntime implements DirectAgentRuntime {
     const logging = loggingStatus(this.remoteHealthSnapshot.logging);
     return {
       state: this.state,
-      pid: this.child?.pid ?? 0,
+      pid: this.child?.pid ?? this.treeTermination?.pid ?? 0,
       message: this.statusMessage,
       ...(typeof lxeSkillAvailable === "boolean"
         ? { lxeskillAvailable: lxeSkillAvailable }
@@ -175,6 +183,7 @@ export class ProcessAgentRuntime implements DirectAgentRuntime {
   }
 
   private async launch(recovering: boolean): Promise<void> {
+    this.assertTreeExitConfirmed();
     if (this.isReady) return;
     if (this.child) await this.terminateChild();
     this.stopping = false;
@@ -254,6 +263,7 @@ export class ProcessAgentRuntime implements DirectAgentRuntime {
   }
 
   async stop(): Promise<void> {
+    this.assertTreeExitConfirmed();
     this.manuallyStopped = true;
     if (this.restartTimer) clearTimeout(this.restartTimer);
     this.restartTimer = undefined;
@@ -283,7 +293,13 @@ export class ProcessAgentRuntime implements DirectAgentRuntime {
     this.stopping = false;
   }
 
-  get hasProcess(): boolean { return Boolean(this.child); }
+  get hasProcess(): boolean { return Boolean(this.child || this.treeTermination); }
+
+  private assertTreeExitConfirmed(): void {
+    if (this.treeTermination) throw this.treeTermination.error ?? new AgentProcessError(
+      `Owned process tree for PID ${this.treeTermination.pid} has not confirmed exit`, "AgentProcessExitUnconfirmed",
+    );
+  }
 
   async restart(): Promise<void> {
     await this.stop();
@@ -568,7 +584,7 @@ export class ProcessAgentRuntime implements DirectAgentRuntime {
   }
 
   private scheduleRecovery(): void {
-    if (this.manuallyStopped || this.incompatible || this.restartTimer) return;
+    if (this.manuallyStopped || this.incompatible || this.restartTimer || this.treeTermination) return;
     const delays = this.options.restartDelaysMs ?? [];
     const delay = delays[this.restartAttempt];
     if (delay === undefined) return;
@@ -582,31 +598,43 @@ export class ProcessAgentRuntime implements DirectAgentRuntime {
   }
 
   private async terminateChild(): Promise<void> {
+    this.assertTreeExitConfirmed();
     const child = this.child;
     if (!child) return;
     // Keep ownership until an actual exit. Sending SIGKILL is not proof of exit.
     if (child.exitCode === null && child.signalCode === null) {
-      await new Promise<void>((resolveExit, reject) => {
+      const terminateTree = child.pid ? this.terminateProcessTree : undefined;
+      if (terminateTree) this.treeTermination = { pid: child.pid! };
+      try { await new Promise<void>((resolveExit, reject) => {
         let forceTimer: ReturnType<typeof setTimeout>;
         let deadline: ReturnType<typeof setTimeout>;
         let parentExited = false;
-        let treeTerminated = process.platform !== "win32" || !child.pid;
+        let treeTerminated = !terminateTree;
         const cleanup = () => { clearTimeout(forceTimer); clearTimeout(deadline); child.off("exit", exited); };
         const finish = () => { if (parentExited && treeTerminated) { cleanup(); resolveExit(); } };
         const exited = () => { parentExited = true; finish(); };
         child.once("exit", exited);
-        forceTimer = setTimeout(() => { if (process.platform !== "win32") try { child.kill("SIGKILL"); } catch (error) { cleanup(); reject(error); } }, 1500);
+        forceTimer = setTimeout(() => { if (!terminateTree) try { child.kill("SIGKILL"); } catch (error) { cleanup(); reject(error); } }, 1500);
         deadline = setTimeout(() => { cleanup(); reject(new AgentProcessError(`agent-cli PID ${child.pid} did not exit after termination`, "AgentProcessExitUnconfirmed")); }, 4000);
         try {
-          if (process.platform === "win32" && child.pid) {
-            execFile("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], {windowsHide:true,timeout:3500}, (error, _stdout, stderr) => {
-              if (error) { cleanup(); reject(new Error(`taskkill failed: ${error.message}; ${stderr}`)); return; }
+          if (terminateTree) {
+            void terminateTree(child.pid!).then(() => {
               treeTerminated = true;
               finish();
-            });
+            }, error => { cleanup(); reject(error); });
           } else child.kill("SIGTERM");
         } catch (error) { cleanup(); reject(error); }
-      });
+      }); } catch (cause) {
+        const error = cause instanceof Error ? cause : new Error(String(cause));
+        if (this.treeTermination) {
+          // handleExit may already have released the parent. A failed tree kill
+          // still leaves descendants unconfirmed, so recovery must stay blocked.
+          this.treeTermination.error = error;
+          this.setStatus("error", error.message);
+        }
+        throw error;
+      }
+      this.treeTermination = undefined;
     }
     this.child = undefined;
     this.generation += 1;

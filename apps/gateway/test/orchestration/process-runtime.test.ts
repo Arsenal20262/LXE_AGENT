@@ -396,3 +396,27 @@ test("unconfirmed exit rejects and retains ownership after forced termination",a
  (runtime as any).child=child;
  await expect((runtime as any).terminateChild()).rejects.toThrow("did not exit");expect(runtime.hasProcess).toBe(true);
 },6000);
+
+test.each([false,true])("parent exit cannot release ownership before tree termination (failure=%s)",async fail=>{
+ const {EventEmitter}=await import("node:events");
+ const child=Object.assign(new EventEmitter(),{pid:424242,exitCode:null as number|null,signalCode:null});
+ const runtime=new ProcessAgentRuntime({command:"must-not-start",cwd:process.cwd(),environment:{},...resourcePaths(process.cwd()),dataRoot:process.cwd(),legacyWorkspace:testWorkspace});
+ (runtime as any).child=child;
+ let finish!:()=>void,failTree!:(error:Error)=>void;
+ (runtime as any).terminateProcessTree=()=>new Promise<void>((resolve,reject)=>{finish=resolve;failTree=reject;});
+ child.once("exit",()=>{(runtime as any).handleExit(new Error("parent exited"));});
+ const termination=(runtime as any).terminateChild();
+ child.exitCode=0;child.emit("exit",0,null);
+ expect(runtime.hasProcess).toBe(true);expect(runtime.status().pid).toBe(child.pid);
+ await expect(runtime.start()).rejects.toThrow("has not confirmed exit");
+ if(fail){
+  const failure=new Error("taskkill fixture: descendant access denied");
+  failTree(failure);
+  await expect(termination).rejects.toThrow(failure.message);
+  expect(runtime.hasProcess).toBe(true);expect(runtime.status().message).toBe(failure.message);
+  await expect(runtime.start()).rejects.toThrow(failure.message);
+  await expect(runtime.stop()).rejects.toThrow(failure.message);
+ }else{
+  finish();await termination;expect(runtime.hasProcess).toBe(false);
+ }
+});
