@@ -118,14 +118,13 @@ Function LxeCommitApplication
   ${EndIf}
   ${GetParent} "$LOCALAPPDATA\${APP_INSTALLER_STORE_FILE}" $R0
   CreateDirectory "$R0"
-  ClearErrors
-  CopyFiles /SILENT "$EXEPATH" "$LOCALAPPDATA\${APP_INSTALLER_STORE_FILE}.new"
-  ${IfNot} ${Errors}
+  # CopyFiles uses the Shell and can wait for an overwrite dialog even in /S.
+  # CopyFile replaces our temporary cache file without involving Shell UI.
+  System::Call 'kernel32::CopyFile(t "$EXEPATH",t "$LOCALAPPDATA\${APP_INSTALLER_STORE_FILE}.new",i 0)i.r1 ?e'
+  Pop $R2
+  ${If} $1 != 0
     System::Call 'kernel32::MoveFileEx(t "$LOCALAPPDATA\${APP_INSTALLER_STORE_FILE}.new",t "$LOCALAPPDATA\${APP_INSTALLER_STORE_FILE}",i 9)i.r1 ?e'
     Pop $R2
-  ${Else}
-    StrCpy $1 0
-    System::Call 'kernel32::GetLastError()i.r2'
   ${EndIf}
   ${If} $1 == 0
     FileOpen $R3 "$LxeResult" a

@@ -15,6 +15,9 @@ function Install([string]$file,[bool]$update=$false) {
     $process = Start-Process -FilePath $file -ArgumentList $arguments -Wait -PassThru
     Assert ($process.ExitCode -eq 0) "Installer exit code: $($process.ExitCode)"
 }
+# The old template's Shell CopyFiles can prompt when reinstalling over its cache.
+# This is a disposable fixture cache; each qualification starts from a fresh A.
+if (Test-Path -LiteralPath $cache) { Remove-Item -LiteralPath $cache -Recurse -Force }
 Install $q.artifacts[0]
 Assert (Test-Path -LiteralPath (Join-Path $install ($q.productName + '.exe'))) 'Isolated application was not installed'
 [IO.Directory]::CreateDirectory((Join-Path $install 'var\db')) | Out-Null
