@@ -61,7 +61,7 @@ export function PermissionPicker({ sessionId, initialMode, ready }: { sessionId:
 function FullAccessConfirmation({ pending, ready, error, onCancel, onConfirm }: { pending: boolean; ready: boolean; error: string; onCancel(): void; onConfirm(): void }) {
   const t = useUiText().permissions;
   const ref = useDialogFocus<HTMLElement>(true, onCancel);
-  return createPortal(<div className="session-delete-backdrop"><section role="dialog" aria-modal="true" aria-labelledby="permission-full-title" className="session-delete-dialog" ref={ref} tabIndex={-1}>
+  return createPortal(<div className="session-delete-backdrop"><section role="dialog" aria-modal="true" aria-labelledby="permission-full-title" className="session-delete-dialog permission-confirm-dialog" ref={ref} tabIndex={-1}>
     <h2 id="permission-full-title">{t.confirmTitle}</h2><p>{t.confirmBody}</p>
     {error ? <p role="alert">{error}</p> : null}
     <footer><button type="button" disabled={pending} onClick={onCancel}>{t.cancel}</button><button type="button" className="danger" disabled={pending || !ready} onClick={onConfirm}>{t.confirm}</button></footer>

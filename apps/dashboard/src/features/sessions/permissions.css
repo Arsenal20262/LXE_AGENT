@@ -2,6 +2,12 @@
 .permission-error { color: var(--danger); white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
 .permission-picker > .permission-error { position: absolute; bottom: 100%; background: var(--surface); padding: 10px; width: 300px; box-shadow: 0 4px 20px #0002; border-radius: 8px; z-index: 10; }
 
+.session-delete-dialog.permission-confirm-dialog { padding: 20px; border-radius: 14px; }
+.session-delete-dialog.permission-confirm-dialog > h2 { font-size: 1rem; font-weight: 650; line-height: 1.5; }
+.session-delete-dialog.permission-confirm-dialog > p { margin-top: 8px; font-size: .8125rem; line-height: 1.6; }
+.session-delete-dialog.permission-confirm-dialog > footer { margin-top: 16px; }
+.session-delete-dialog.permission-confirm-dialog > footer > button { min-width: 64px; min-height: 32px; padding: 6px 12px; border-radius: 8px; font-size: .8125rem; line-height: 18px; }
+
 .permission-approval { min-width: 0; overflow: hidden; border: 1px solid var(--warning-border-strong); border-radius: 14px; background: var(--surface); box-shadow: var(--shadow-card); }
 .permission-approval-status { display: flex; align-items: center; gap: 8px; padding: 10px 16px; background: var(--warning-soft); color: var(--warning); font-size: 13px; line-height: 18px; }
 .permission-status-dot { width: 6px; height: 6px; flex: 0 0 auto; border-radius: 50%; background: currentColor; }
