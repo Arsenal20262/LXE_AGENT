@@ -190,6 +190,7 @@ describe("desktop product version selection", () => {
 
     expect(builderConfig.extraMetadata).toEqual({
       release_channel: "local",
+      name: "lxe-agent",
       version: "0.7.3",
     });
     expect(() => applyDesktopProductVersion({}, undefined)).toThrow("<missing>");

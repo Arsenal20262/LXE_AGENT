@@ -68,7 +68,44 @@ app.whenReady().then(async () => {
   };
   try {
     await load();
-    if (suite === "permissions") {
+    if (suite === "updates") {
+      await js("behavior.mountUpdates()");
+      await step("checking discovers an update without downloading", async () => {
+        await waitFor("Boolean(document.querySelector('.lxe-update-manual-button'))", "update control");
+        await click(".lxe-update-manual-button");
+        assert.deepEqual((await state()).calls.map(c=>c.operation), ["update.check"]);
+        assert.equal(await js("document.querySelector('.lxe-update-manual-button').innerText"), "Download update");
+        assert.equal(await js("document.querySelectorAll('[role=dialog]').length"), 0);
+      });
+      await step("download binds the shown release and suppresses duplicate clicks", async () => {
+        await click(".lxe-update-manual-button");
+        await js("document.querySelector('.lxe-update-primary').click(); document.querySelector('.lxe-update-primary')?.click()");
+        await settle();
+        const downloads=(await state()).calls.filter(c=>c.operation==="update.download");
+        assert.equal(downloads.length,1); assert.equal(downloads[0].input.build_id,"renderer-build");
+        assert.equal(downloads[0].input.version,"0.2.0");
+        await js("behavior.releaseUpdateDownload()"); await settle();
+        assert.equal((await state()).calls.filter(c=>c.operation==="update.install").length,0);
+        assert.equal(await js("document.querySelector('.lxe-update-primary').innerText"),"Restart and update");
+      });
+      await step("later preserves the download and installation is explicit", async () => {
+        await click(".lxe-update-actions button:first-child");
+        assert.equal(await js("document.querySelectorAll('[role=dialog]').length"),0);
+        await click(".lxe-update-manual-button"); await click(".lxe-update-primary");
+        const installs=(await state()).calls.filter(c=>c.operation==="update.install");
+        assert.equal(installs.length,1); assert.equal(installs[0].input.build_id,"renderer-build");
+      });
+      await step("installation error retries installation and supports a fresh check", async () => {
+        await js("behavior.updateError('install')");
+        await waitFor("document.querySelector('[role=alert]')?.innerText.includes('EACCES')","actual error");
+        await click(".lxe-update-primary");
+        assert.equal((await state()).calls.filter(c=>c.operation==="update.install").length,2);
+        await js("behavior.updateError('download')");
+        await waitFor("Boolean(document.querySelector('[role=alert]'))","download error");
+        await click(".lxe-update-actions button:nth-child(2)");
+        assert.equal((await state()).calls.filter(c=>c.operation==="update.check").length,2);
+      });
+    } else if (suite === "permissions") {
       await js("behavior.mountPermissions()");
       const mode = () => js("document.querySelector('.permission-picker > button').innerText");
       const choose = async value => {

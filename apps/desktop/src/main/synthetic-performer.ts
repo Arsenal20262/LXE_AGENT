@@ -234,7 +234,12 @@ export class DesktopSyntheticPerformerService {
     if (!this.task || (this.task.state !== "queued" && this.task.state !== "running")) return;
     this.cancelRequested = true;
     await this.terminateChild();
-    await this.currentRun?.catch(() => undefined);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([this.currentRun?.catch(() => undefined), new Promise<never>((_resolve,reject) => {
+        timer=setTimeout(() => reject(new Error(`Synthetic performer PID ${this.child?.pid} exit unconfirmed after termination`)), 4000);
+      })]);
+    } finally { if (timer) clearTimeout(timer); }
   }
 
   private requireRuntime(): void {
@@ -456,6 +461,7 @@ export class DesktopSyntheticPerformerService {
         const killer = spawn("taskkill", ["/PID", String(child.pid), "/T", "/F"], {
           stdio: "ignore",
           windowsHide: true,
+          timeout: 4000,
         });
         killer.once("error", () => resolve());
         killer.once("close", () => resolve());

@@ -4,6 +4,7 @@ import type { ManualToolEvent, TerminalSnapshot } from "@lxe/desktop-protocol";
 interface Terminal { snapshot: TerminalSnapshot; child: UtilityProcess; ready: Promise<TerminalSnapshot>; closing?: Promise<void> | undefined; closed?: () => void; closeFailed?: (error: Error) => void }
 export class ManualTerminals {
   private readonly items = new Map<string, Terminal>();
+  activity(): string[] { return [...this.items.values()].filter(item => !item.snapshot.exited).map(item => `Terminal ${item.snapshot.sessionId}/${item.snapshot.id}`); }
   constructor(root: string, private readonly emit: (event: ManualToolEvent) => void) { this.root = root.replace(/app\.asar([\\/])/, "app.asar.unpacked$1"); }
   private readonly root: string;
   get(sessionId: string, id: string): TerminalSnapshot | null {
@@ -33,7 +34,8 @@ export class ManualTerminals {
         entry.snapshot.exited = true; entry.snapshot.exitCode = message.exitCode ?? 0;
         this.emit({ kind: "terminal.state", snapshot: { ...entry.snapshot } });
       } else if (message.type === "error") { clearTimeout(timer); failure(message.error!); }
-      else if (message.type === "closed") { entry.closed?.(); }
+      // The host closes after its PTY; wait for the host's real exit below.
+      else if (message.type === "closed") { /* exit event is authoritative */ }
       else if (message.type === "close-error") { entry.closeFailed?.(new Error(message.error)); }
     });
     child.on("exit", code => {
