@@ -11,7 +11,7 @@ function Wait-Removed([string]$path) {
     Assert (-not (Test-Path -LiteralPath $path)) "Uninstaller did not remove: $path"
 }
 function Install([string]$file,[bool]$update=$false) {
-    $arguments = '/S ' + $(if ($update) { '--updated ' } else { '' }) + '/D=' + $install
+    $arguments = '/S ' + $(if ($update) { '--updated ' } else { '' }) + '"/D=' + $install + '"'
     $process = Start-Process -FilePath $file -ArgumentList $arguments -Wait -PassThru
     Assert ($process.ExitCode -eq 0) "Installer exit code: $($process.ExitCode)"
 }
@@ -34,7 +34,7 @@ $oldProgram = (Get-FileHash -LiteralPath $appFile -Algorithm SHA512).Hash
 $oldCache = (Get-FileHash -LiteralPath (Join-Path $cache 'installer.exe') -Algorithm SHA512).Hash
 $locked = [IO.File]::Open($appFile, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
 try {
-    $failed = Start-Process -FilePath $q.artifacts[1] -ArgumentList ('/S --updated /D=' + $install) -Wait -PassThru
+    $failed = Start-Process -FilePath $q.artifacts[1] -ArgumentList ('/S --updated "/D=' + $install + '"') -Wait -PassThru
     Assert ($failed.ExitCode -eq 2) "Expected transactional replacement failure, received $($failed.ExitCode)"
 } finally { $locked.Dispose() }
 Assert ((Get-FileHash -LiteralPath $appFile -Algorithm SHA512).Hash -eq $oldProgram) 'Failed upgrade changed the old program'
