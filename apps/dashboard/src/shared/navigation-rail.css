@@ -9,7 +9,7 @@
   width: var(--app-navigation-width);
   height: 100vh;
   min-height: 0;
-  padding: 50px 8px 12px;
+  padding: calc(var(--app-titlebar-height) + 6px) 6.6px 12px;
   background: var(--navigation-bg);
   color: var(--sidebar-ink-soft);
 }
@@ -117,7 +117,7 @@
 }
 
 @media (max-height: 430px) {
-  .app-navigation { padding-top: 44px; padding-bottom: 6px; }
+  .app-navigation { padding-top: var(--app-titlebar-height); padding-bottom: 6px; }
   .navigation-rail-list { gap: 2px; }
   .app-navigation .sidebar-status-card { gap: 4px; padding-top: 4px; }
 }

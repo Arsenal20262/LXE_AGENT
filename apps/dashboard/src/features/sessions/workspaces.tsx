@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState, type ComponentProps } from "react";
-import { ChevronRight, Folder, FolderOpen, FolderPlus, MoreHorizontal, Plus } from "lucide-react";
+import { Folder, FolderOpen, FolderPlus, MoreHorizontal, Plus } from "lucide-react";
 import { flattenSessionPages, queryError, useSessionsInfiniteQuery, useSessionStatus } from "../../api/queries";
 import { useUiText } from "../../shared/i18n";
 import { SessionsIndex } from "./view";
 import type { ConversationDisplaySnapshot } from "./display-controller";
 import "./workspaces.css";
+import { WorkspaceOpenButton } from "../workspace-apps/WorkspaceOpenButton";
 
 import { emptyWorkspace, workspaceGroups, workspaceLabel, workspaceName, type SessionWorkspace } from "./workspace-state";
 import { WorkspaceActionsMenu, WorkspaceRenameDialog } from "./workspace-actions";
@@ -36,27 +37,18 @@ function WorkspaceGroup({ workspace, label, active, props, onActions }: {
   const query = useSessionsInfiniteQuery("", props.enabled && expanded, workspace.directory);
   const sessions = flattenSessionPages(query.data?.pages);
   const statuses = useSessionStatus(sessions.items.map(item => item.session_id), props.enabled && expanded, props.display, false);
-  const [openError, setOpenError] = useState("");
-  const open = async () => {
-    setOpenError("");
-    try { await window.lxe!.desktop.openWorkspace(workspace.directory); }
-    catch (error) { setOpenError(queryError(error)); }
-  };
   return <section data-workspace-directory={workspace.directory} className={active ? "workspace-group is-active" : "workspace-group"}>
     <div className="workspace-group-header">
       <button type="button" className="workspace-group-toggle" aria-expanded={expanded} title={workspace.directory} onClick={() => props.onExpandedChange(workspace.directory, !expanded)}>
-        <ChevronRight size={13} className={expanded ? "expanded" : ""} />
         {expanded ? <FolderOpen size={17} /> : <Folder size={17} />}
         <span>{label}</span>
         {workspace.directory === props.defaultDirectory ? <small className="workspace-default-badge">{t.workspaces.defaultBadge}</small> : null}
       </button>
-      <button type="button" className="workspace-icon-button" title={t.workspaces.open} aria-label={`${t.workspaces.open}: ${label}`} onClick={() => void open()}><FolderOpen size={14} /></button>
       <button type="button" className="workspace-icon-button workspace-actions-trigger" disabled={!props.enabled}
         title={t.workspaces.actions} aria-label={`${t.workspaces.actions}: ${label}`} aria-haspopup="menu"
         onClick={event => onActions(workspace, event.currentTarget)}><MoreHorizontal size={16} /></button>
       <button type="button" className="workspace-icon-button" title={t.workspaces.newIn(label)} aria-label={t.workspaces.newIn(label)} onClick={() => props.onNew(workspace.directory)}><Plus size={16} /></button>
     </div>
-    {openError ? <div className="workspace-error" role="alert">{openError}</div> : null}
     {expanded ? <div className="workspace-group-sessions">
       <SessionsIndex {...props} embedded searchOpen={false} query="" sessions={props.currentBlank?.workspace.directory === workspace.directory ? [{ ...props.currentBlank, title: t.conversation.newTitle }, ...sessions.items.filter(item => item.session_id !== props.currentBlank?.session_id)] : sessions.items}
         statuses={statuses.items} statusUnavailable={!statuses.ready} statusError={statuses.error}
@@ -120,13 +112,11 @@ export function WorkspaceControl({ directory, workspaces, defaultDirectory, edit
   if (!editable) {
     const name = workspaceName(directory, groups, defaultDirectory, t.workspaces.defaultName);
     return <div className="conversation-workspace is-readonly">
-      <button type="button" className="conversation-workspace-button" disabled={!directory}
-        title={`${name}\n${directory}`} aria-label={t.workspaces.open}
-        onClick={() => void invoke(() => window.lxe!.desktop.openWorkspace(directory))}>
+      <span className="conversation-workspace-label" title={`${name}\n${directory}`}>
         <FolderOpen size={15} aria-hidden="true" />
         <span className="conversation-workspace-name">{name}</span>
         {directory === defaultDirectory ? <small className="workspace-default-badge">{t.workspaces.defaultBadge}</small> : null}
-      </button>
+      </span><WorkspaceOpenButton directory={directory} />
       {error ? <div className="workspace-error" role="alert">{error}</div> : null}
     </div>;
   }
@@ -139,7 +129,7 @@ export function WorkspaceControl({ directory, workspaces, defaultDirectory, edit
       </select>
       <span className="conversation-workspace-path" title={directory}>{directory}</span>
       <button type="button" disabled={disabled} title={t.workspaces.choose} aria-label={t.workspaces.choose} onClick={() => void invoke(onChoose)}><FolderPlus size={16} /></button>
-      <button type="button" disabled={!directory} title={t.workspaces.open} aria-label={t.workspaces.open} onClick={() => void invoke(() => window.lxe!.desktop.openWorkspace(directory))}><FolderOpen size={16} /></button>
+      <WorkspaceOpenButton directory={directory} />
     </div>
     {error ? <div className="workspace-error" role="alert">{error}</div> : null}
   </div>;

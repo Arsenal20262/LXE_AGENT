@@ -1,5 +1,5 @@
 import { clearResetStreams } from "../features/sessions/context-display";
-import type { DesktopConversationActivityPayload, SubmitUserQuestionAnswer, UserSkillPayload } from "@lxe/desktop-protocol";
+import type { ApprovalDecision, DesktopConversationActivityPayload, PermissionMode, SubmitUserQuestionAnswer, UserSkillPayload } from "@lxe/desktop-protocol";
 import {
   keepPreviousData,
   useInfiniteQuery,
@@ -73,6 +73,62 @@ export function useUserQuestionsQuery(enabled: boolean, selectedSessionId: strin
   const refetch = query.refetch;
   useEffect(() => { if (enabled) void refetch(); }, [enabled, selectedSessionId, refetch]);
   return query;
+}
+
+export function useApprovalsQuery(enabled: boolean, selectedSessionId: string) {
+  const query = useQuery({
+    queryKey: dashboardQueryKeys.sessions.approvals,
+    queryFn: async ({ signal }) => {
+      const result = await callDashboard({ operation: "sessions.approvals", input: {} });
+      signal.throwIfAborted();
+      return result;
+    },
+    enabled, retry: false, staleTime: 0,
+    refetchOnMount: "always", refetchOnWindowFocus: "always",
+    // Events are hints. Recover missed notifications and changes while unfocused.
+    refetchInterval: 5_000, refetchIntervalInBackground: true,
+  });
+  const refetch = query.refetch;
+  useEffect(() => { if (enabled) void refetch(); }, [enabled, selectedSessionId, refetch]);
+  return query;
+}
+
+export function useSessionPermissionQuery(sessionId: string, enabled: boolean) {
+  const query = useQuery({
+    queryKey: dashboardQueryKeys.sessions.permission(sessionId),
+    queryFn: async ({ signal }) => {
+      const detail = await callDashboard({ operation: "sessions.detail", input: { session_id: sessionId, message_limit: 1 } });
+      signal.throwIfAborted();
+      return detail.session.permission_mode;
+    },
+    enabled: enabled && Boolean(sessionId), retry: false, staleTime: 0,
+    refetchOnMount: "always", refetchOnWindowFocus: "always", refetchInterval: 5_000,
+  });
+  const refetch = query.refetch;
+  useEffect(() => { if (enabled && sessionId) void refetch(); }, [enabled, sessionId, refetch]);
+  return query;
+}
+
+export function useSessionPermissionMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    retry: false,
+    mutationFn: (input: { session_id: string; permission_mode: PermissionMode }) =>
+      callDashboard({ operation: "sessions.permission.set", input }),
+    onSuccess: async result => {
+      const queryKey = dashboardQueryKeys.sessions.permission(result.session_id);
+      await queryClient.cancelQueries({ queryKey, exact: true });
+      queryClient.setQueryData(queryKey, result.permission_mode);
+      // Reconcile competing changes and only update the response's own session.
+      await queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.sessions.all });
+    },
+  });
+}
+
+export function useApprovalActions() {
+  const decide = useMutation({ retry: false, mutationFn: (input: ApprovalDecision) =>
+    callDashboard({ operation: "sessions.approval.decide", input }) });
+  return { decide: decide.mutateAsync };
 }
 
 export function useUserQuestionActions() {
@@ -504,4 +560,27 @@ export function useUserSkillMutation(onRecycled: (id: string, path: string) => v
     // Explicit mutation completion refreshes the visible list, including newly unshadowed skills.
     onSettled: () => client.invalidateQueries({ queryKey: dashboardQueryKeys.skills.all }),
   });
+}
+
+/** Imperative completion reads share Query's cache/single-flight transport; the
+ * editor owns the short-lived caret request generation, not the server state. */
+export function useComposerDiscovery() {
+  const client = useQueryClient();
+  const skills = useCallback((session_id: string) => client.fetchQuery({
+    queryKey: ["composer", "skills", session_id],
+    queryFn: async ({ signal }) => {
+      const result = await callDashboard({ operation: "skills.list", input: { session_id } });
+      signal.throwIfAborted(); return result;
+    },
+    ...SKILL_QUERY_OPTIONS, gcTime: 0,
+  }), [client]);
+  const files = useCallback((session_id: string, query: string) => client.fetchQuery({
+    queryKey: ["composer", "files", session_id, query],
+    queryFn: async ({ signal }) => {
+      const result = await callDashboard({ operation: "sessions.files.candidates", input: { session_id, query } });
+      signal.throwIfAborted(); return result;
+    },
+    staleTime: 0, gcTime: 0, retry: false,
+  }), [client]);
+  return { skills, files };
 }

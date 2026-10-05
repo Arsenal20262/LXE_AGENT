@@ -5,7 +5,7 @@ import { join } from "node:path";
 import type { JsonObject } from "@lxe/protocol";
 import { registerCodingTools } from "../../src/tooling/coding-tools";
 import { ToolRegistry } from "../../src/tooling/registry";
-import { workspaceFor } from "../workspace";
+import { policyFor, workspaceFor } from "../workspace";
 import { removeTemporaryRoot } from "../temp-directory";
 import { ExecShellAdapter } from "../../src/tooling/exec-shell";
 import { buildExecOutputStep } from "../../src/tooling/tool-display";
@@ -39,7 +39,7 @@ test("exec publishes output before returning, coalesces updates and preserves th
     onExecComplete: snapshot => { completions.push(snapshot); },
   });
   const context = {
-    session_id: "s", turn_id: "turn", response_route_id: "route", tool_call_id: "call", workspace: workspaceFor(root),
+    session_id: "s", turn_id: "turn", response_route_id: "route", tool_call_id: "call", workspace: workspaceFor(root), executionPolicy: policyFor(root, "s"),
     handle: { signal: new AbortController().signal, cancelled: false, drainSteering: () => [], registerProcess: () => () => undefined },
   };
   let returned = false;
@@ -94,7 +94,7 @@ test.each(["utf8", "gbk"])("live %s byte chunks, stream ordering and bounded pre
   const updates: JsonObject[] = [];
   const manager = registerCodingTools(new ToolRegistry(), { execShell: shell, onExecUpdate: snapshot => { updates.push(snapshot); } });
   const execution = manager.execute({ command: "child", cwd: root, sessionId: "s", turnId: "turn", toolCallId: "call",
-    responseRouteId: "route", workspace: workspaceFor(root), yieldMs: 5_000, signal: new AbortController().signal });
+    responseRouteId: "route", workspace: workspaceFor(root), executionPolicy: policyFor(root, "s"), yieldMs: 5_000, signal: new AbortController().signal });
   try {
     await until(() => updates.some(update => String(update.output_tail).includes("中文")));
     expect(updates.at(-1)?.status).toBe("running");
@@ -122,7 +122,7 @@ test("empty foreground completion and termination both publish final updates wit
   const manager = registerCodingTools(new ToolRegistry(), { execShell: shell,
     onExecUpdate: snapshot => { updates.push(snapshot); }, onExecComplete: snapshot => { completed.push(snapshot); } });
   const request = { command: "void 0;", cwd: root, sessionId: "s", turnId: "turn", toolCallId: "call",
-    responseRouteId: "route", workspace: workspaceFor(root), yieldMs: 5_000, signal: new AbortController().signal };
+    responseRouteId: "route", workspace: workspaceFor(root), executionPolicy: policyFor(root, "s"), yieldMs: 5_000, signal: new AbortController().signal };
   try {
     expect((await manager.execute(request)).status).toBe("completed");
     expect(updates).toHaveLength(1);

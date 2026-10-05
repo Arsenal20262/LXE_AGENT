@@ -52,8 +52,8 @@ describe("system prompt builder", () => {
     expect(volatile).not.toContain("Platform: feishu");
     expect(volatile).not.toContain("Working directory: /workspace/project");
     expect(volatile).not.toContain("Git worktree root: /workspace");
-    expect(volatile).toContain("There is no filesystem or network sandbox");
-    expect(volatile).toContain("workspace is only the default path base");
+    expect(volatile).toContain("The latest environment context specifies the permission mode");
+    expect(volatile).toContain("exec, write and edit");
     expect(volatile).not.toContain(`Server ${"scope"}`);
   });
 
@@ -68,7 +68,6 @@ describe("system prompt builder", () => {
         { id: "fba_delivery_csv", dir: "fba/delivery_csv", holds: "FBA 发货单 CSV。" },
         { id: "replenish_store_msku", dir: "replenish/store_msku", holds: "店铺 MSKU 数据。" },
       ],
-      artifactRoot: "/data/var/artifacts",
     });
     const [stable, volatile] = prompt.split(SYSTEM_PROMPT_CACHE_BREAKPOINT);
     // The map never changes between turns, so it must sit inside the cached prefix.

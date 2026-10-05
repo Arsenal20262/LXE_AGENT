@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ChevronRight, File, Folder, FolderOpen, RefreshCw } from "lucide-react";
+import { ChevronRight, File, Folder, RefreshCw } from "lucide-react";
 import type { DirectoryPage, SessionFileRef } from "@lxe/desktop-protocol";
+import { WorkspaceOpenButton } from "../workspace-apps/WorkspaceOpenButton";
 import { useUiText } from "../../shared/i18n";
 import { filesApi, errorText } from "./api";
 import type { ReadingState } from "./reading-state";
@@ -57,8 +58,8 @@ function Directory({ session, path, open, refresh, state, rootChanged }: { sessi
   </li>)}{busy ? <li className={!page ? "file-preview-loading" : undefined} role="status">{t.loading}</li> : null}{!busy && page?.entries.length === 0 ? <li>{t.empty}</li> : null}{error ? <li role="alert">{error}<button onClick={() => void reload()}>{t.retry}</button></li> : null}{page?.next != null ? <li><button onClick={() => void reload(true)} disabled={busy}>{t.more}</button></li> : null}</ul>;
 }
 export function FileTree({ session, open, state }: { session: string; open(file: SessionFileRef, name: string): void; state: ReadingState }) {
-  const [refresh, setRefresh] = useState(0), [root, setRoot] = useState(state.tree.root), [error, setError] = useState(""), t = useUiText().filePreview;
+  const [refresh, setRefresh] = useState(0), [root, setRoot] = useState(state.tree.root), t = useUiText().filePreview;
   const scroll = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => { if (scroll.current) scroll.current.scrollTop = state.scroll.tree?.top ?? 0; }, []);
-  return <section className="file-tree"><header className="file-document-toolbar"><span className="file-display-path" title={root}>{root || t.files}</span><button title={t.workspaceOpen} aria-label={t.workspaceOpen} onClick={() => { void filesApi().call({ operation: "open-workspace", input: { session_id: session } }).then(() => setError(""), error => setError(errorText(error))); }}><FolderOpen size={15} /></button><button data-preview-refresh title={t.refresh} aria-label={t.refresh} onClick={() => setRefresh(n => n + 1)}><RefreshCw size={15} /></button></header>{error ? <pre className="file-preview-error" role="alert">{error}</pre> : null}<div className="file-tree-scroll" ref={scroll} onScroll={e => { state.scroll.tree = { top: e.currentTarget.scrollTop, left: 0 }; }}><Directory session={session} path="" open={open} refresh={refresh} state={state} rootChanged={setRoot} /></div></section>;
+  return <section className="file-tree"><header className="file-document-toolbar"><span className="file-display-path" title={root}>{root || t.files}</span><WorkspaceOpenButton directory={root} /><button data-preview-refresh title={t.refresh} aria-label={t.refresh} onClick={() => setRefresh(n => n + 1)}><RefreshCw size={15} /></button></header><div className="file-tree-scroll" ref={scroll} onScroll={e => { state.scroll.tree = { top: e.currentTarget.scrollTop, left: 0 }; }}><Directory session={session} path="" open={open} refresh={refresh} state={state} rootChanged={setRoot} /></div></section>;
 }

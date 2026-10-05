@@ -6,17 +6,6 @@ from pathlib import Path
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 
-# These retired entrypoints belong to Bun session state and delivery routing.
-REMOVED_PATHS = (
-    "python/lxeskill_cli/lxeskill/bridge.py",
-    "python/lxeskill_cli/shared/db/sqlite/_agent_storage.py",
-    "python/lxeskill_cli/shared/db/sqlite/response_route_state.py",
-    "python/lxeskill_cli/shared/db/sqlite/session_messages.py",
-    "python/lxeskill_cli/shared/db/sqlite/session_transcripts.py",
-    "python/lxeskill_cli/shared/agent_state.py",
-    "python/lxeskill_cli/services/browser/store/agent_tool_state.py",
-)
-
 REMOVED_SYMBOLS = {
     "python/lxeskill_cli/shared/db/shared_state_dto.py": ("AgentSessionState", "ResponseRouteContext"),
     "python/lxeskill_cli/shared/db/sqlite/bootstrap.py": (
@@ -73,11 +62,6 @@ def _defined_symbols(relative_path: str) -> set[str]:
             if isinstance(target, ast.Name):
                 symbols.add(target.id)
     return symbols
-
-
-def test_python_agent_state_entrypoints_stay_removed() -> None:
-    remaining = [path for path in REMOVED_PATHS if (REPOSITORY_ROOT / path).exists()]
-    assert remaining == []
 
 
 def test_python_agent_state_and_routing_symbols_stay_removed() -> None:

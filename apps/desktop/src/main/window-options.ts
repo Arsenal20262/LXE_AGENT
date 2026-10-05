@@ -18,6 +18,12 @@ export const DESKTOP_TITLEBAR_COLOURS: Record<DesktopAppearance, { color: string
   dark: { color: "#242322", symbolColor: "#a89d90" },
 };
 
+/** Match the renderer's page background and caption text in each theme. */
+export const WINDOWS_TITLEBAR_COLOURS: typeof DESKTOP_TITLEBAR_COLOURS = {
+  light: { color: "#fafaf9", symbolColor: "#5d544a" },
+  dark: { color: "#242322", symbolColor: "#cbc0b4" },
+};
+
 type WindowAppearance = Pick<
   BrowserWindowConstructorOptions,
   "autoHideMenuBar" | "titleBarOverlay" | "titleBarStyle"
@@ -35,7 +41,7 @@ export const desktopWindowAppearance = (platform: DesktopPlatform): WindowAppear
     autoHideMenuBar: true,
     titleBarStyle: "hidden",
     titleBarOverlay: {
-      ...DESKTOP_TITLEBAR_COLOURS.light,
+      ...(platform === "win32" ? WINDOWS_TITLEBAR_COLOURS.light : DESKTOP_TITLEBAR_COLOURS.light),
       height: DESKTOP_TITLEBAR_HEIGHT,
     },
   };
