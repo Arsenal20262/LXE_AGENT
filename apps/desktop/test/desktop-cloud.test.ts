@@ -1,3 +1,4 @@
+import { identityFixtureCloud } from "./native-access-fixture";
 import { CloudContextError } from "../src/main/cloud-context";
 import { afterEach, describe, expect, test } from "bun:test";
 import { createCipheriv, randomBytes, scryptSync } from "node:crypto";
@@ -191,7 +192,7 @@ const cloudService = (options: ConstructorParameters<typeof DesktopCloudService>
       device: { id: body.device_id, kind: body.principal_kind ?? "managed_device", display_name: body.display_name, wireguard_ip: body.wireguard_ip },
       permission: permission ? { ...permission, grants: { server_capabilities: [], erp_actions: [], ...permission.grants } } : null };
   } };
-  return new DesktopCloudService({ ...options, contextClient, ...(fetcher ? { fetch: (input, init) => {
+  return identityFixtureCloud({ ...options, contextClient, ...(fetcher ? { fetch: (input, init) => {
     if (String(input).endsWith("/identity/business-credential")) throw new Error("Business credentials must not be requested");
     const response = Promise.resolve(fetcher(input, init));
     if (/\/identity(?:\/activate)?$/u.test(String(input))) {
@@ -264,7 +265,7 @@ describe("DesktopCloudService", () => {
       `${previewUrl}/api/v1/agent-data/identity`,
       `${previewUrl}/api/v1/agent-data/identity/llm-credential`,
     ]);
-    expect(changed).toEqual(["a".repeat(64)]);
+    expect(changed).toEqual(["revoked", "a".repeat(64)]);
     expect(config.state()).toMatchObject({ complete: true, credential_source: "cloud" });
     expect(config.environment()).toMatchObject({ LXE_MANAGED_LLM_API_KEY: "managed-key-one" });
 
@@ -275,7 +276,7 @@ describe("DesktopCloudService", () => {
     apiKey = "managed-key-two";
     await service.check();
     expect(requests.filter((url) => url.endsWith("/llm-credential"))).toHaveLength(2);
-    expect(changed).toEqual(["a".repeat(64), "b".repeat(64)]);
+    expect(changed).toEqual(["revoked", "a".repeat(64), "revoked", "b".repeat(64)]);
     expect(config.environment()).toMatchObject({
       LXE_MANAGED_LLM_API_KEY: "managed-key-two",
       LXE_MANAGED_LLM_CREDENTIAL_REVISION: "b".repeat(64),
@@ -477,7 +478,7 @@ describe("DesktopCloudService", () => {
     });
     expect(service.allowedSkillTypes()).toEqual(["amazon_fba", "ziniao_browser", "default"]);
     expect(provisioned).toBe(1);
-    expect(events.filter(({ message }) => message !== "cloud_skill_permission_failed").map(({ message }) => message)).toEqual([
+    expect(events.filter(({ message }) => !["cloud_skill_permission_failed", "native_cloud_access_failed"].includes(message)).map(({ message }) => message)).toEqual([
       "cloud_enrollment_activation_started",
       "cloud_enrollment_decrypted",
       "cloud_device_activation_failed",
@@ -590,7 +591,7 @@ describe("DesktopCloudService", () => {
       permission_profile: "replenishment",
     });
     expect(permissionChanges).toEqual([[], ["replenishment", "default"]]);
-    expect(managedCredentialChanges).toEqual(["revoked", "e".repeat(64)]);
+    expect(managedCredentialChanges).toEqual(["revoked", "revoked", "e".repeat(64)]);
     expect(config.managedLlmCredential()).toMatchObject({
       api_key: "replacement-managed-key",
       credential_revision: "e".repeat(64),
@@ -920,7 +921,7 @@ describe("DesktopCloudService", () => {
     expect(config.environment()).not.toHaveProperty("LXE_DATA_SERVER_API_KEY");
     expect(config.environment()).not.toHaveProperty("LXE_ERP_API_KEY");
     expect(config.environment()).not.toHaveProperty("LXE_SAIHU_MCP_API_KEY");
-    expect(events.filter(({ message }) => message !== "cloud_skill_permission_failed").map(({ message }) => message)).toEqual([
+    expect(events.filter(({ message }) => !["cloud_skill_permission_failed", "native_cloud_access_failed"].includes(message)).map(({ message }) => message)).toEqual([
       "cloud_enrollment_activation_started",
       "cloud_device_activation_failed",
     ]);
@@ -1499,7 +1500,7 @@ describe("independent CLI skill permissions", () => {
     const updates: string[][] = [];
     let query: (url: string, signal: AbortSignal) => Promise<unknown> = async () => context();
     let identityFetch: typeof fetch = async () => Response.json({ detail: "identity credential expired" }, { status: 401 });
-    const make = (clock?: DesktopCloudClock, supported = true) => new DesktopCloudService({ dataRoot: root, config, supported, clock,
+    const make = (clock?: DesktopCloudClock, supported = true) => identityFixtureCloud({ dataRoot: root, config, supported, clock,
       logger: testLogger([]), provisioner: { provision: async () => {} }, enrollments: new DesktopCloudEnrollmentManager(),
       onConfigured: async () => {}, onPermissionChanged: (skills) => { updates.push([...skills]); },
       contextClient: { query: (url, signal) => query(url, signal) }, fetch: (input, init) => identityFetch(input, init),
@@ -1551,7 +1552,7 @@ describe("independent CLI skill permissions", () => {
     expect(f.config.cloudConfiguration().managed).toBe(false);
     expect(f.config.cloudIdentityCredential()).toBe("");
     expect(f.config.environment()).toMatchObject({ LXE_DATA_SERVER_URL: "http://10.88.0.1:8000", LXE_DATA_SERVER_ENABLED: "0" });
-    await expect(service.erpDashboardUrl()).rejects.toThrow("登录凭据");
+    await expect(service.erpDashboardUrl()).resolves.toContain("erp_handoff");
     await service.stop();
     f.setQuery(async () => { throw new CloudContextError("offline", "cloud_connection_failed"); });
     const restarted = f.make();

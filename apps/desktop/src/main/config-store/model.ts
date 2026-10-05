@@ -100,6 +100,8 @@ export interface DesktopSecrets {
   cloud_wireguard: WireGuardTunnelConfiguration | null;
   managed_llm_credential: ManagedLlmCredential | null;
   managed_llm_state?: ManagedLlmState | null;
+  managed_llm_owner?: DesktopObservedDevice | null;
+  managed_llm_verified_at?: number;
 }
 
 export const LOG_RETENTION_DAYS = new Set<DesktopLogRetentionDays>([3, 7, 14, 30]);
@@ -506,6 +508,8 @@ export const parseSecrets = (raw: unknown): DesktopSecrets => {
       value.cloud_permission_snapshot,
     ),
     cloud_observed_device: parseObservedDevice(value.cloud_observed_device),
+    managed_llm_owner: parseObservedDevice(value.managed_llm_owner),
+    managed_llm_verified_at: typeof value.managed_llm_verified_at === "number" && Number.isSafeInteger(value.managed_llm_verified_at) && value.managed_llm_verified_at >= 0 ? value.managed_llm_verified_at : 0,
     cloud_wireguard: parseWireGuardTunnelConfiguration(value.cloud_wireguard),
     managed_llm_credential: parsedManagedCredential,
     managed_llm_state: value.managed_llm_state == null ? singleManagedState(parsedManagedCredential) : parseManagedState(value.managed_llm_state),

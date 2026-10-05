@@ -1,3 +1,4 @@
+import { identityFixtureCloud } from "./native-access-fixture";
 import { afterEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createCipheriv, randomBytes, scryptSync } from "node:crypto";
@@ -46,7 +47,7 @@ test("server role controls management while runtime credentials remain scoped in
   const { root, config, identity } = setup(); enroll(config);
   const requests: string[] = [];
   const code = `lxe_handoff_${"h".repeat(43)}`;
-  const service = new DesktopCloudService({ contextClient: contextPort(identity), dataRoot: root, config, supported: false,
+  const service = identityFixtureCloud({ contextClient: contextPort(identity), dataRoot: root, config, supported: false,
     logger, enrollments: new DesktopCloudEnrollmentManager(), onConfigured: async () => {},
     provisioner: { provision: async () => { throw new Error("must not provision"); } },
     fetch: async (input, init) => {
@@ -73,7 +74,7 @@ test("server role controls management while runtime credentials remain scoped in
     }
     identity.management_role = "member"; identity.management_version += 1;
     expect(await service.check()).toMatchObject({ is_admin: false, permission_profile: "replenishment" });
-    await expect(service.adminDashboardUrl()).rejects.toThrow("管理员身份");
+    await expect(service.adminDashboardUrl()).rejects.toThrow("设备权限");
     expect(requests.some((url) => url.includes("/admin/status"))).toBe(false);
     expect(requests.some((url) => url.includes("/business-credential"))).toBe(false);
   } finally { await service.stop(); }
@@ -81,7 +82,7 @@ test("server role controls management while runtime credentials remain scoped in
 
 test("an inherited administrator key never configures a desktop identity", async () => {
   const { root, config } = setup();
-  const service = new DesktopCloudService({ dataRoot: root, config, supported: true, logger,
+  const service = identityFixtureCloud({ dataRoot: root, config, supported: true, logger,
     enrollments: new DesktopCloudEnrollmentManager(), provisioner: { provision: async () => {} },
     onConfigured: async () => {}, fetch: async () => { throw new Error("must not connect"); } });
   try {
@@ -105,7 +106,7 @@ test("an encrypted v4 identity file binds an existing tunnel without provisionin
     kdf: { name: "scrypt", n: 32768, r: 8, p: 1, salt: salt.toString("base64") },
     cipher: { name: "aes-256-gcm", nonce: nonce.toString("base64"), ciphertext: ciphertext.toString("base64"), tag: cipher.getAuthTag().toString("base64") } }));
   let configured = 0;
-  const service = new DesktopCloudService({ dataRoot: root, config, supported: true, logger,
+  const service = identityFixtureCloud({ dataRoot: root, config, supported: true, logger,
     enrollments: new DesktopCloudEnrollmentManager(), onConfigured: async () => { configured += 1; },
     provisioner: { provision: async () => { throw new Error("Existing tunnel must be preserved"); } },
     fetch: async (input) => String(input).endsWith("/identity/activate") ? Response.json(identity) : Response.json(business),
@@ -127,7 +128,7 @@ test("ERP shortcut hands both administrators and members into a device session",
   const requests: string[] = [];
   let fail = false;
   let wrongScope = false;
-  const service = new DesktopCloudService({ contextClient: contextPort(identity), dataRoot: root, config, supported: false, logger,
+  const service = identityFixtureCloud({ contextClient: contextPort(identity), dataRoot: root, config, supported: false, logger,
     enrollments: new DesktopCloudEnrollmentManager(), onConfigured: async () => {},
     provisioner: { provision: async () => { throw new Error("must not provision"); } },
     fetch: async (input, init) => {
@@ -148,8 +149,9 @@ test("ERP shortcut hands both administrators and members into a device session",
     expect(await service.erpDashboardUrl()).toBe(`http://10.88.0.1:8000/erp?auth=identity-v1#handoff=${erpCode}`);
     expect(requests).toEqual([JSON.stringify({ target: "erp" })]);
     wrongScope = true;
-    await expect(service.erpDashboardUrl()).rejects.toThrow("Invalid device handoff response");
+    await expect(service.erpDashboardUrl()).rejects.toThrow("Invalid browser handoff response");
     wrongScope = false; fail = true;
+    await service.check();
     try { await service.erpDashboardUrl(); throw new Error("Expected failure"); }
     catch (error) { expect(String(error)).toContain("403"); expect(String(error)).not.toContain(erpCode); }
     expect(service.state().is_admin).toBe(true); // ERP business permission does not define the administrator role.
@@ -159,7 +161,7 @@ test("ERP shortcut hands both administrators and members into a device session",
     const before = requests.length;
     expect(await service.erpDashboardUrl()).toBe(`http://10.88.0.1:8000/erp?auth=identity-v1#handoff=${erpCode}`);
     expect(requests.length).toBe(before + 1);
-    await expect(service.adminDashboardUrl()).rejects.toThrow("管理员身份");
+    await expect(service.adminDashboardUrl()).rejects.toThrow("设备权限");
     identity.permission_v2.grants.desktop_features = [];
     identity.permission_v2.assignment_version += 1;
     await service.check();
