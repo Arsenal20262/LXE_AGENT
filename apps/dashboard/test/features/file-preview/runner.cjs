@@ -27,6 +27,18 @@ app.whenReady().then(async () => {
     const fs=require("node:fs"), path=require("node:path");fs.mkdirSync(process.env.LXE_PREVIEW_CAPTURE_DIR,{recursive:true});
     fs.writeFileSync(path.join(process.env.LXE_PREVIEW_CAPTURE_DIR,name+".png"),(await win.webContents.capturePage()).toPNG());
   };
+  const captureTabs = async name => {
+    if (!process.env.LXE_PREVIEW_CAPTURE_DIR) return;
+    const fs=require('node:fs'), path=require('node:path');
+    fs.mkdirSync(process.env.LXE_PREVIEW_CAPTURE_DIR,{recursive:true});
+    const theme=await js('document.documentElement.dataset.theme');
+    for (const mode of ['light','dark']) {
+      await js(`document.documentElement.dataset.theme='${mode}'`); await delay(100);
+      const clip=await js("(()=>{const r=document.querySelector('.file-sidebar').getBoundingClientRect();return {x:Math.ceil(r.x),y:Math.ceil(r.y),width:Math.floor(r.width),height:Math.min(300,Math.floor(r.height))}})()");
+      fs.writeFileSync(path.join(process.env.LXE_PREVIEW_CAPTURE_DIR,`${name}-${mode}.png`),(await win.webContents.capturePage(clip)).toPNG());
+    }
+    await js(theme ? `document.documentElement.dataset.theme=${JSON.stringify(theme)}` : 'delete document.documentElement.dataset.theme');
+  };
   const step = async (name, fn) => { await fn(); assert.deepEqual(errors, []); passed.push(name); };
   try {
     await win.loadURL(url);
@@ -41,6 +53,8 @@ app.whenReady().then(async () => {
       assert.equal(await js("Math.round(document.querySelector('.file-sidebar').getBoundingClientRect().width)"), 420);
       await click("#open-0"); assert.equal(await js("document.querySelectorAll('[role=tab]').length"), 1);
       assert.equal(await js("document.querySelector('#draft').value"), "keep this draft");
+      assert.ok(await js("(()=>{const tab=document.querySelector('.file-tab').getBoundingClientRect(),add=document.querySelector('.file-tab-new').getBoundingClientRect();return add.left-tab.right>=0&&add.left-tab.right<=8})()"), 'new tab follows the single tab');
+      await captureTabs('tabs-single');
     });
     await step("FortuneSheet React 19 mounting, selection, copying and resizing", async () => {
       await click("#open-1"); await wait("!!document.querySelector('.fortune-container canvas')", "spreadsheet canvas");
@@ -154,7 +168,21 @@ app.whenReady().then(async () => {
       await js("previewFixture.slow(true);document.querySelector('#open-0').click();document.querySelector('#open-4').click()"); await delay(650);
       assert.ok(await js("document.querySelector('[role=tab][aria-selected=true]').textContent.includes('图.png')"));
       await js("previewFixture.slow(false)");
-      assert.ok(await js("(()=>{const a=document.querySelector('[aria-selected=true]').getBoundingClientRect(),r=document.querySelector('.file-tabs').getBoundingClientRect();return a.left>=r.left-1&&a.right<=r.right+1})()"));
+      const activeVisible="(()=>{const a=document.querySelector('[aria-selected=true]').closest('.file-tab').getBoundingClientRect(),r=document.querySelector('.file-tabs').getBoundingClientRect();return a.left>=r.left-1&&a.right<=r.right+1})()";
+      assert.ok(await js(activeVisible), 'the active tab and its close button stay visible');
+      await captureTabs('tabs-overflow');
+      for (let i=0;i<6;i++) {
+        await js("document.querySelector('[role=separator]').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}))");
+        await delay(40);
+      }
+      assert.equal(await js("Math.round(document.querySelector('.file-sidebar').getBoundingClientRect().width)"),320);
+      assert.ok(await js(activeVisible), 'the entire active tab fits at minimum sidebar width');
+      assert.ok(await js("(()=>{const strip=document.querySelector('.file-tab-strip').getBoundingClientRect();return [...document.querySelectorAll('.file-tab-strip>button')].every(b=>{const r=b.getBoundingClientRect();return r.left>=strip.left&&r.right<=strip.right})})()"), 'panel controls remain accessible beside overflowing tabs');
+      await captureTabs('tabs-overflow-narrow');
+      for (let i=0;i<6;i++) {
+        await js("document.querySelector('[role=separator]').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowLeft',bubbles:true}))");
+        await delay(40);
+      }
       await js("document.querySelector('[role=tab][aria-selected=true]').dispatchEvent(new KeyboardEvent('keydown',{key:'Home',bubbles:true}))");
       await wait("document.querySelector('[role=tab][aria-selected=true]')?.textContent.includes('文档.md')", "Home navigation");
     });

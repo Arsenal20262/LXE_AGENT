@@ -50,7 +50,7 @@
   background:none;
   color:inherit;
   border-radius:6px}
-.file-header-actions button:hover,.file-tab-strip button:hover,.file-document-toolbar button:hover {
+.file-header-actions button:hover,.file-document-toolbar button:hover {
   background:#8882}
 .file-tab-strip {
   display:flex;
@@ -59,41 +59,72 @@
   flex-shrink:0;
   border-bottom:1px solid var(--border,#ddd);
   gap:4px;
-  padding:0 6px}
+  padding:0 8px}
+.file-tab-strip>button {
+  flex:0 0 28px;
+  width:28px;
+  height:28px;
+  padding:0;
+  color:var(--text-soft)}
+.file-tab-strip>button:hover,.file-tab>button:last-child:hover {
+  background:var(--row-hover);
+  color:var(--text-strong)}
+.file-tab-strip>button:focus-visible,.file-tab button:focus-visible {
+  outline:2px solid var(--accent-strong);
+  outline-offset:-2px}
+.file-panel-expand { margin-left:auto }
 .file-tabs {
   display:flex;
-  overflow:auto;
-  flex:1;
+  align-items:center;
+  overflow-x:auto;
+  overflow-y:hidden;
+  scrollbar-width:none;
+  flex:0 1 auto;
   min-width:0;
   height:100%;
-  gap:3px}
+  gap:4px}
+.file-tabs::-webkit-scrollbar { display:none }
 .file-tab {
   display:flex;
   align-items:center;
   flex-shrink:0;
-  max-width:210px;
+  max-width:min(210px,100%);
   min-width:70px;
-  border-bottom:2px solid transparent}
+  height:30px;
+  border-radius:8px;
+  color:var(--text-soft);
+  font-size:.875rem}
+.file-tab:not(.active):hover {
+  background:var(--surface-subtle);
+  color:var(--text-strong)}
 .file-tab.active {
-  border-bottom-color:var(--accent,#6799db);
-  background:#8881}
+  background:var(--surface);
+  color:var(--text-strong);
+  box-shadow:0 1px 2px var(--shadow-soft)}
 .file-tab button {
   border:0;
   background:none;
   color:inherit;
   display:flex;
   align-items:center;
-  gap:5px;
-  padding:8px 5px;
+  gap:6px;
+  height:100%;
+  padding:0 6px;
+  border-radius:6px;
   min-width:0}
 .file-tab [role=tab] {
-  flex:1}
+  flex:1;
+  padding-left:10px}
 .file-tab span {
   overflow:hidden;
   text-overflow:ellipsis;
   white-space:nowrap}
 .file-tab>button:last-child {
-  flex:none}
+  flex:0 0 24px;
+  width:24px;
+  height:24px;
+  margin-right:3px;
+  justify-content:center}
 .file-document,.file-tree {
   display:flex;
   flex-direction:column;
