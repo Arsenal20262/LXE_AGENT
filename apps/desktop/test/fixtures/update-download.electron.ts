@@ -30,7 +30,8 @@ const server=createServer((req,res)=>{
   ranges++;const start=Number(range[1]),end=Number(range[2]);
   res.writeHead(206,{"Content-Range":`bytes ${start}-${end}/${size}`,"Content-Length":end-start+1});stream=createReadStream(source,{start,end});
  }else{if(source===newFile&&!range)completeRequests++;res.writeHead(200,{"Content-Length":size});stream=createReadStream(source);}
- if(source===newFile)stream.on("data",part=>{bytes+=part.length;});
+ let tampered=false;
+ if(source===newFile)stream.on("data",part=>{bytes+=part.length;if(mode==="bad-target"&&!tampered){part[0]^=255;tampered=true;}});
  stream.on("data",part=>{transferBytes+=part.length;});
  res.on("close",()=>stream.destroy());stream.pipe(res);
 });
@@ -38,7 +39,7 @@ await new Promise<void>(resolve=>server.listen(0,"127.0.0.1",resolve));
 const base=`http://127.0.0.1:${(server.address() as any).port}`;
 const results:any[]=[];
 try{
- for(mode of ["delta","deleted-cache","corrupt-cache","missing-map","no-range","expired"]){
+ for(mode of ["delta","deleted-cache","corrupt-cache","missing-map","no-range","expired","bad-target"]){
   rmSync(join(cache,"pending"),{recursive:true,force:true});mkdirSync(cache,{recursive:true});copyFileSync(oldFile,join(cache,"installer.exe"));
   if(mode==="deleted-cache")rmSync(join(cache,"installer.exe"));
   if(mode==="corrupt-cache")writeFileSync(join(cache,"installer.exe"),"invalid old installer");
@@ -52,14 +53,18 @@ try{
   }};
   const service=new DesktopUpdateService({api,installer,supported:true,prepareInstall:async()=>undefined,cleanup:async()=>{throw new Error("Download qualification must never install");}});
   await service.check();const result=await service.download(next);
-  assert.equal(result.phase,"ready",result.message);
-  assert.equal(await hash((installer as any).updater.installerPath),next.sha512);
-  if(mode==="delta"){assert(ranges>0);assert(bytes<next.size);assert.equal(completeRequests,0);}
-  else if(mode==="expired")assert.equal(tickets,2);
-  else assert(completeRequests>0,"Fallback did not download a complete installer");
+  if(mode==="bad-target"){
+   assert.equal(result.phase,"error");assert.equal(result.failedOperation,"download");assert.match(result.message!,/checksum|sha.?512/i);assert.equal(completeRequests,0);
+  }else{
+   assert.equal(result.phase,"ready",result.message);
+   assert.equal(await hash((installer as any).updater.installerPath),next.sha512);
+   if(mode==="delta"){assert(ranges>0);assert(bytes<next.size);assert.equal(completeRequests,0);}
+   else if(mode==="expired")assert.equal(tickets,2);
+   else assert(completeRequests>0,"Fallback did not download a complete installer");
+  }
   assert(!diagnostics.join("\n").includes("qualification-secret"));
-  results.push({scenario:mode,bytes,transferBytes,installerBytes:next.size,ranges,completeRequests,tickets,diagnostics});
-  console.log(JSON.stringify(results.at(-1)));
+  results.push({scenario:mode,phase:result.phase,bytes,transferBytes,installerBytes:next.size,ranges,completeRequests,tickets,diagnostics});
+  console.log(JSON.stringify({...results.at(-1),diagnostics:diagnostics.length}));
  }
  writeFileSync(join(record.output,"download-results.json"),JSON.stringify(results,null,2));
  await new Promise<void>(resolve=>server.close(()=>resolve()));app.exit(0);
