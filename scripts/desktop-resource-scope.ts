@@ -24,6 +24,7 @@ export interface ResourceScope {
 const normalized = (path: string): string => path.replaceAll("\\", "/").replace(/^\.\//u, "");
 const managedDependencyPrefixes = [
   "runtime/office/",
+  "runtime/exec-sandbox/node_modules/",
   "runtime/python/lib/",
   "runtime/node/node_modules/",
 ] as const;

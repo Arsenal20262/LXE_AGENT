@@ -1,3 +1,4 @@
+import { forgetComposerEditor } from "./features/sessions/ReferenceComposer";
 import { moveConversationAttachments, forgetConversationAttachments } from "./features/sessions/attachment-draft";
 import { forgetPreviewSession } from "./features/file-preview/reading-state";
 import { FilePreviewLayout } from "./features/file-preview/Sidebar";
@@ -49,6 +50,7 @@ import {
   useSessionsInfiniteQuery,
   useSessionWorkspacesQuery,
   useUserQuestionsQuery,
+  useApprovalsQuery,
   useSkillsQuery,
   useToolsetsQuery,
 } from "./api/queries";
@@ -238,7 +240,9 @@ function App({
   const sessions = useMemo(() => flattenSessionPages(sessionsQuery.data?.pages), [sessionsQuery.data?.pages]);
   const questionsQuery = useUserQuestionsQuery(dashboardRuntimeReady, selectedSessionId);
   const pendingQuestions = dashboardRuntimeReady ? questionsQuery.data?.items ?? [] : [];
-  const waitingSessionIds = new Set(pendingQuestions.map(q => q.session_id));
+  const approvalsQuery = useApprovalsQuery(dashboardRuntimeReady, selectedSessionId);
+  const pendingApprovals = dashboardRuntimeReady ? approvalsQuery.data?.items ?? [] : [];
+  const waitingSessionIds = new Set([...pendingQuestions, ...pendingApprovals].map(q => q.session_id));
   const sessionStatuses=useSessionStatus(sessions.items.map(session=>session.session_id),dashboardRuntimeReady,sessionDetailQuery.display,activeSection==="sessions"&&!newConversation);
 
   useEffect(() => {
@@ -500,7 +504,7 @@ function App({
       operation: "sessions.delete",
       input: { session_id: session.session_id },
     });
-    forgetPreviewSession(session.session_id);
+    forgetPreviewSession(session.session_id); forgetComposerEditor(session.session_id);
     forgetConversationAttachments(session.session_id);
     queryClient.removeQueries({ queryKey: dashboardQueryKeys.sessions.detailSession(session.session_id) });
     queryClient.removeQueries({ queryKey: dashboardQueryKeys.sessions.activity(session.session_id) });
@@ -925,6 +929,8 @@ function App({
                     />}
                     question={newConversation ? undefined : pendingQuestions.find(q => q.session_id === selectedSessionId)}
                     onQuestionAnswered={() => { void questionsQuery.refetch(); }}
+                    approvals={pendingApprovals.filter(request => request.session_id === selectedSessionId)}
+                    onApprovalChanged={() => { void approvalsQuery.refetch(); }}
                     fallbackSession={selectedSession}
                     detail={sessionDetail}
                     activity={conversationActivity}

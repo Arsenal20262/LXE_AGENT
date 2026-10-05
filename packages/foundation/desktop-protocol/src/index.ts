@@ -233,7 +233,7 @@ export type AgentSuccessResponse = JsonRpcSuccess;
 export type AgentErrorResponse = JsonRpcFailure;
 export type AgentResponse = JsonRpcResponse;
 
-export type AgentSessionChange = "messages" | "usage" | "artifacts" | "attachments" | "questions";
+export type AgentSessionChange = "messages" | "usage" | "artifacts" | "attachments" | "questions" | "permission" | "approvals";
 
 export type AgentSessionChangedPayload = {
   changes: AgentSessionChange[];
@@ -670,17 +670,23 @@ export interface DesktopUsageBalance {
   error: string | null;
 }
 
+export interface WorkspaceApplication { id: string; name: string; icon: string | null }
+
+export type { DesktopTitlebarAction, DesktopTitlebarMenuRequest } from "./titlebar";
+
 export interface LxeDesktopBridge {
   tools?: import("./manual-tools").ManualToolsBridge;
   files: import("./file-preview").DesktopFilesBridge;
   dashboard: DashboardTransport;
   desktop: {
     readonly platform: DesktopPlatform;
+    showTitlebarMenu?(request: import("./titlebar").DesktopTitlebarMenuRequest): Promise<import("./titlebar").DesktopTitlebarAction>;
     getUpdateState?(): Promise<import("./updates").DesktopUpdateState>;
     checkForUpdate?(): Promise<import("./updates").DesktopUpdateState>;
     installUpdate?(): Promise<import("./updates").DesktopUpdateState>;
     selectWorkspace(): Promise<string | null>;
-    openWorkspace(directory: string): Promise<void>;
+    getWorkspaceApplications(input?: { refresh?: boolean }): Promise<WorkspaceApplication[]>;
+    openWorkspace(directory: string, applicationId?: string): Promise<void>;
     selectZiniaoApp(): Promise<string | null>;
     selectZiniaoWebDriverDirectory(): Promise<string | null>;
     selectCloudEnrollment(): Promise<DesktopCloudEnrollmentSelection | null>;
@@ -980,7 +986,7 @@ export function decodeAgentEvent(notification: AgentNotification): AgentEvent {
       }
       const changes = [...new Set(payload.changes)];
       if (changes.some((change) => change !== "messages" && change !== "usage"
-        && change !== "artifacts" && change !== "attachments" && change !== "questions")) {
+        && change !== "artifacts" && change !== "attachments" && change !== "questions" && change !== "permission" && change !== "approvals")) {
         throw new Error("agent protocol session.changed.changes contains an unsupported change type");
       }
       payload.changes = changes;
@@ -1075,3 +1081,5 @@ export function isAgentResponse(message: AgentWireMessage): message is AgentResp
 export function isAgentEvent(message: AgentWireMessage): message is AgentNotification {
   return "method" in message && !("id" in message) && agentEventTypes.has(message.method as AgentEvent["type"]);
 }
+
+export * from "./composer-references";

@@ -1,3 +1,4 @@
+import { PermissionPolicyService } from "../../src/permissions/policy";
 import { expect, test } from "bun:test";
 import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -32,7 +33,7 @@ test("real stdio MCP images are normalized before history and survive a cold nex
   let store = new SqliteRuntimeStore(join(root, "agent.sqlite3"));
   let count = 0;
   const requests: RuntimeMessage[][] = [], streams: unknown[] = [];
-  const createRuntime = () => new TypeScriptAgentRuntime({ store, tools, systemPrompt: "test", provider: {
+  const createRuntime = () => new TypeScriptAgentRuntime({ permissionPolicy: new PermissionPolicyService(), store, tools, systemPrompt: "test", provider: {
     summarize: async () => { throw new Error("unexpected summary"); },
     turn: async request => {
       requests.push(structuredClone(request.messages));

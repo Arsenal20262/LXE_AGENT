@@ -11,7 +11,7 @@ Desktop 不再把所有状态塞进一个 `local_agent.sqlite3`。Electron Main�
 | 文件 | 谁写入 | 保存什么 |
 | --- | --- | --- |
 | `db/gateway.sqlite3` | Electron Main / Gateway | Gateway session、平台来源和 response route |
-| `db/agent.sqlite3` | 私有 `agent-cli` / Runtime | Agent session、pending event、usage、模型信息和 transcript 索引 |
+| `db/agent.sqlite3` | 私有 `agent-cli` / Runtime | Agent session（含独立的 `permission_mode`）、pending event、usage、模型信息和 transcript 索引 |
 | `db/exec-sessions/<thread-id>/agent.sqlite3` | 一次性 `agent-cli exec` / Runtime | 单个 CLI thread 的 session、usage、模型信息和 transcript 索引 |
 | `db/lxeskill.sqlite3` | 一次性 Python `lxeskill` 命令 | Python 业务侧状态与可丢弃的紫鸟会话缓存；浏览器真实状态以紫鸟客户端实时接口为准 |
 | `db/sessions.json` | Gateway | 平台 source 到 session id 的稳定绑定 |

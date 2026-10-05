@@ -80,6 +80,7 @@ describe("DesktopInputAssetsService", () => {
     ]);
     expect(calls[0]!.environment.LXE_DATA_ROOT).toBeTruthy();
     expect(calls[0]!.environment.LXE_SQLITE_DB_PATH).toContain("lxeskill.sqlite3");
+    expect(calls[0]!.environment.LXE_WORKSPACE_ROOT).toBe(join(calls[0]!.environment.LXE_DATA_ROOT!, "workspace"));
     expect(calls[0]!.environment.LXE_MANAGED_PATH).toBeTruthy();
   });
 

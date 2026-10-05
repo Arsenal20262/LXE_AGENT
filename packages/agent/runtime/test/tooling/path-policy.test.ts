@@ -22,7 +22,7 @@ describe("CodingPathPolicy", () => {
     const repositorySkillsRoot = join(resourceRoot, "skills");
     const skillRoot = join(repositorySkillsRoot, "demo");
     const skillDocument = join(skillRoot, "SKILL.md");
-    const runtimeArtifactRoot = join(dataRoot, "artifacts");
+    const runtimeArtifactRoot = join(workspaceRoot, ".lxeagent", "artifacts");
     const runtimeArtifact = join(runtimeArtifactRoot, "report.txt");
     const normalFile = join(workspaceRoot, "notes.txt");
     const environmentFile = join(workspaceRoot, ".env");
@@ -37,7 +37,7 @@ describe("CodingPathPolicy", () => {
     }
 
     const workspace = workspaceFor(workspaceRoot);
-    const policy = new CodingPathPolicy({ repositorySkillsRoot, artifactRoot: runtimeArtifactRoot, homeDirectory: home });
+    const policy = new CodingPathPolicy({ repositorySkillsRoot, homeDirectory: home });
 
     expect(policy.resolveReadable(workspace, normalFile)).toMatchObject({ path: normalFile, scope: { kind: "workspace" } });
     expect(policy.resolveReadable(workspace, skillDocument)).toMatchObject({ path: skillDocument, scope: { kind: "skills" } });

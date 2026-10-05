@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { resolveUserSkillsRoot } from "@lxe/core";
 import { posix, win32 } from "node:path";
+import { sourceRuntimePaths } from "./source-runtime-paths";
 
 export interface DesktopPaths {
   sourceRoot: string;
@@ -22,6 +23,7 @@ export interface DesktopPaths {
   managedPythonPath: string;
   officeNodePath: string;
   officeCliPath: string;
+  execSandboxRunnerPath: string;
   exifToolPath: string;
   fdPath: string;
   managedPath: string;
@@ -51,6 +53,7 @@ export function resolveDesktopPaths(options: DesktopPathOptions): DesktopPaths {
       || (options.packaged ? options.appPath : targetPath.join(options.appPath, "..", "..")),
   );
   const resourceRoot = options.packaged ? options.resourcesPath : sourceRoot;
+  const sourceRuntime = sourceRuntimePaths(sourceRoot, platform, arch);
   const projectRoot = options.packaged
     ? targetPath.dirname(targetPath.resolve(options.executablePath))
     : sourceRoot;
@@ -70,26 +73,19 @@ export function resolveDesktopPaths(options: DesktopPathOptions): DesktopPaths {
     ? targetPath.join(options.resourcesPath, "runtime", "python", platform === "win32" ? "python.exe" : "bin/python3")
     : targetPath.join(sourceRoot, ".venv", platform === "win32" ? "Scripts/python.exe" : "bin/python");
   const exifToolName = platform === "win32" ? "exiftool.exe" : "exiftool";
-  const sourceExifToolPlatform = platform === "win32" ? "win32-x64" : `${platform}-${arch}`;
   const exifToolPath = options.packaged
     ? targetPath.join(options.resourcesPath, "runtime", "tools", "exiftool", exifToolName)
     : String(environment.LXE_EXIFTOOL_PATH ?? "").trim()
-      || targetPath.join(
-        sourceRoot,
-        "build",
-        "desktop-runtime",
-        sourceExifToolPlatform,
-        "tools",
-        "exiftool",
-        exifToolName,
-      );
+      || sourceRuntime.exifTool;
   const officeRuntimeRoot = options.packaged
     ? targetPath.join(options.resourcesPath, "runtime")
-    : targetPath.join(sourceRoot, "build", "desktop-runtime", `${platform}-${arch}`);
-  const officeNodePath = (!options.packaged && String(environment.LXE_OFFICE_NODE ?? "").trim())
-    || targetPath.join(officeRuntimeRoot, "node", platform === "win32" ? "node.exe" : "node");
-  const officeCliPath = (!options.packaged && String(environment.LXE_OFFICE_CLI ?? "").trim())
-    || targetPath.join(officeRuntimeRoot, "office", "node_modules", "@deepseek-ai", "libreoffice-kit", "lib", "cli.js");
+    : sourceRuntime.runtimeRoot;
+  const officeNodePath = options.packaged
+    ? targetPath.join(officeRuntimeRoot, "node", platform === "win32" ? "node.exe" : "node")
+    : String(environment.LXE_OFFICE_NODE ?? "").trim() || sourceRuntime.node;
+  const officeCliPath = options.packaged
+    ? targetPath.join(officeRuntimeRoot, "office", "node_modules", "@deepseek-ai", "libreoffice-kit", "lib", "cli.js")
+    : String(environment.LXE_OFFICE_CLI ?? "").trim() || sourceRuntime.officeCli;
   const managedDirectories = options.packaged
     ? [
         targetPath.join(options.resourcesPath, "runtime", "node"),
@@ -130,10 +126,13 @@ export function resolveDesktopPaths(options: DesktopPathOptions): DesktopPaths {
     managedPythonPath,
     officeNodePath,
     officeCliPath,
+    execSandboxRunnerPath: options.packaged
+      ? targetPath.join(options.resourcesPath, "runtime", "exec-sandbox", "runner.mjs")
+      : sourceRuntime.sandboxRunner,
     exifToolPath,
     fdPath: options.packaged
       ? targetPath.join(options.resourcesPath, "runtime", "tools", `fd${executable}`)
-      : String(environment.LXE_FD_PATH ?? "").trim() || targetPath.join(sourceRoot, "build", "desktop-runtime", `${platform}-${arch}`, "tools", `fd${executable}`),
+      : String(environment.LXE_FD_PATH ?? "").trim() || sourceRuntime.fd,
     managedPath: existingDirectories(managedDirectories).join(targetPath.delimiter),
   };
 }

@@ -55,3 +55,21 @@ test("all provider wires send XML without internal metadata and preserve the pri
     expect(JSON.stringify(before)).not.toContain("2026-09-06");
   }
 });
+
+test("permission facts survive replay, participate in change detection and tolerate old snapshots", async () => {
+  const { permissionEnvironment } = await import("../../src/engine/environment-context");
+  const { ExecutionPaths } = await import("../../src/permissions/execution-paths");
+  const paths = new ExecutionPaths("/host", { platform: "darwin", temporaryRoot: "/user-temp" });
+  const old = capture();
+  for (const mode of ["read-only", "workspace-write", "danger-full-access"] as const) {
+    const permissions = permissionEnvironment({ mode, workspaceRoot: context.workspace.directory, sessionId: "s" }, paths, true);
+    const current = { ...old, ...permissions };
+    expect(environmentChanged([environmentMessage(old)], current)).toBe(true);
+    const restored = normalizeTranscriptMessage(JSON.parse(JSON.stringify(environmentMessage(current))))!;
+    expect(environmentChanged([restored], current)).toBe(false);
+    expect(environmentChanged([restored], { ...current, permission_approvals: "changed" })).toBe(true);
+    if (mode === "workspace-write") expect(permissions.permission_description).toContain("/tmp, /user-temp");
+  }
+  const noChannel = permissionEnvironment({ mode: "read-only", workspaceRoot: "/work", sessionId: "s" }, paths, false);
+  expect(noChannel.permission_approvals).toContain("No single-operation approval channel");
+});

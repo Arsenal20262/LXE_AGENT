@@ -100,6 +100,13 @@
       "platforms": ["win32-x64", "darwin-arm64", "darwin-x64"]
     },
     {
+      "id": "runtime-exec-sandbox",
+      "owner": "bun-exec-sandbox",
+      "source": { "kind": "managed-build", "name": "exec-sandbox" },
+      "target": "runtime/exec-sandbox",
+      "platforms": ["win32-x64"]
+    },
+    {
       "id": "legal",
       "owner": "product-legal",
       "source": { "kind": "file", "path": "THIRD_PARTY_NOTICES.md" },
