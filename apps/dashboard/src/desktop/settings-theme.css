@@ -6,7 +6,7 @@
   --surface: #ffffff;
   --surface-muted: #f4f4f5;
   --surface-subtle: #f4f4f5;
-  --row-hover: #ededee;
+  --row-hover: #f5f5f5;
   --border: #e4e4e7;
   --border-strong: #d4d4d8;
   --text: #18181b;
@@ -21,7 +21,7 @@
   --settings-primary: #27272a;
   --settings-primary-hover: #3f3f46;
   --settings-primary-ink: #ffffff;
-  --settings-selected: #e8e8eb;
+  --settings-selected: var(--table-header-fill);
   --settings-danger-action: #b42318;
   --success: #287342;
   --success-soft: #eef7f0;
