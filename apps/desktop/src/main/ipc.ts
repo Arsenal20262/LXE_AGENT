@@ -54,7 +54,8 @@ export interface DesktopIpcApplication {
   fileReadText?(handle: string, range?: import("@lxe/desktop-protocol").TextPageRequest): Promise<import("@lxe/desktop-protocol").PreviewTextPage>;
   getUpdateState?(): import("@lxe/desktop-protocol").DesktopUpdateState;
   checkForUpdate?(): Promise<import("@lxe/desktop-protocol").DesktopUpdateState>;
-  installUpdate?(): Promise<import("@lxe/desktop-protocol").DesktopUpdateState>;
+  downloadUpdate?(target: import("@lxe/desktop-protocol").DesktopUpdateIdentity): Promise<import("@lxe/desktop-protocol").DesktopUpdateState>;
+  installUpdate?(target: import("@lxe/desktop-protocol").DesktopUpdateIdentity): Promise<import("@lxe/desktop-protocol").DesktopUpdateState>;
   dashboardCall<O extends DashboardRpcOperation>(call: DashboardRpcCall<O>): Promise<DashboardRpcResult<O>>;
   getHealth(): DesktopHealth;
   restartAgent(): Promise<DesktopHealth>;
@@ -137,7 +138,15 @@ export function registerDesktopIpc(application: DesktopIpcApplication): () => vo
   });
   ipcMain.handle(IPC_CHANNELS.getUpdateState, () => application.getUpdateState?.() ?? {phase:"unsupported"});
   ipcMain.handle(IPC_CHANNELS.checkForUpdate, () => application.checkForUpdate?.() ?? {phase:"unsupported"});
-  ipcMain.handle(IPC_CHANNELS.installUpdate, () => application.installUpdate?.() ?? {phase:"unsupported"});
+  const updateTarget = (event: Electron.IpcMainInvokeEvent, value: unknown) => {
+    if (!application.isTrustedFileSender(event)) throw new Error("Updates are only available to the desktop main frame");
+    const target = value as {version?: unknown; build_id?: unknown} | null;
+    if (!target || typeof target.version !== "string" || !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(target.version)
+      || typeof target.build_id !== "string" || !/^[a-zA-Z0-9_-]{1,100}$/.test(target.build_id)) throw new Error("Invalid update target");
+    return {version:target.version,build_id:target.build_id};
+  };
+  ipcMain.handle(IPC_CHANNELS.downloadUpdate, (event, value:unknown) => application.downloadUpdate?.(updateTarget(event,value)) ?? {phase:"unsupported"});
+  ipcMain.handle(IPC_CHANNELS.installUpdate, (event, value:unknown) => application.installUpdate?.(updateTarget(event,value)) ?? {phase:"unsupported"});
   ipcMain.handle(IPC_CHANNELS.dashboardCall, (_event, call: unknown) =>
     application.dashboardCall(validateDashboardRpcCall(call)));
   ipcMain.handle(IPC_CHANNELS.selectWorkspace, async () => {

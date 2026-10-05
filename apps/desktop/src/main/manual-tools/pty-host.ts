@@ -6,12 +6,14 @@ import type { IPty } from "node-pty";
 const port = (process as unknown as { parentPort: { postMessage(value: unknown): void; on(event: "message", callback: (event: { data: Record<string, unknown> }) => void): void } }).parentPort;
 const pty = createRequire(__filename)(process.argv[2]!) as typeof import("node-pty");
 let terminal: IPty | undefined, exited = false, closing = false;
+let resolveExit: (() => void) | undefined;
+const actualExit = new Promise<void>(resolve => { resolveExit = resolve; });
 function shell(): { file: string; args: string[] } {
   if (process.platform !== "win32") return { file: userInfo().shell || process.env.SHELL || "/bin/zsh", args: ["-l"] };
   try { const path = execFileSync("where.exe", ["pwsh.exe"], { encoding: "utf8", windowsHide: true }).trim().split(/\r?\n/)[0]; if (path) return { file: path, args: ["-NoLogo"] }; } catch { /* PowerShell 7 is optional. */ }
   return { file: join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe"), args: ["-NoLogo"] };
 }
-function close(): void {
+async function close(): Promise<void> {
   if (closing) return;
   closing = true;
   try {
@@ -31,6 +33,11 @@ function close(): void {
       }
     }
     if (terminal) try { terminal.kill(); } catch (error) { if (!exited) throw error; }
+    if (terminal && !exited) {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try { await Promise.race([actualExit, new Promise<never>((_resolve,reject) => { timer=setTimeout(() => reject(new Error("Terminal process exit unconfirmed after termination")), 2000); })]); }
+      finally { if (timer) clearTimeout(timer); }
+    }
     port.postMessage({ type: "closed" });
     setTimeout(() => process.exit(0), 20);
   } catch (error) { closing = false; port.postMessage({ type: "close-error", error: String(error) }); }
@@ -43,12 +50,12 @@ port.on("message", ({ data }) => {
       const env = Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined && !entry[0].startsWith("LXE_")));
       terminal = pty.spawn(selected.file, selected.args, { cwd: String(data.cwd), cols: Number(data.cols), rows: Number(data.rows), name: "xterm-256color", env });
       terminal.onData(text => port.postMessage({ type: "output", data: text }));
-      terminal.onExit(event => { exited = true; port.postMessage({ type: "exit", exitCode: event.exitCode }); });
+      terminal.onExit(event => { exited = true; resolveExit?.(); port.postMessage({ type: "exit", exitCode: event.exitCode }); });
       port.postMessage({ type: "ready", shell: selected.file, pid: terminal.pid });
     } else if (data.type === "write") {
       if (!terminal || exited) throw new Error("Terminal has exited"); terminal.write(String(data.data));
     } else if (data.type === "resize") {
       if (terminal && !exited) terminal.resize(Number(data.cols), Number(data.rows));
-    } else if (data.type === "close") close();
+    } else if (data.type === "close") void close();
   } catch (error) { port.postMessage({ type: "error", error: String(error) }); }
 });
