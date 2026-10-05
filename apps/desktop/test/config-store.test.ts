@@ -604,6 +604,7 @@ describe("DesktopConfigStore", () => {
     };
     const revision = "a".repeat(64);
     const store = new DesktopConfigStore(root, join(root, "workspace"), opaqueStorage);
+    store.saveManagedLlmOwner({server_url: "http://company.test", kind: "managed_device", id: "fixture", display_name: "Fixture", wireguard_ip: "10.88.0.2"});
     store.saveManagedLlmCredential({
       provider: "deepseek",
       model: "deepseek-v4-flash",

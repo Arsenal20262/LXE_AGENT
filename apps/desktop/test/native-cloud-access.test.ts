@@ -64,6 +64,7 @@ test("offline restart retains owned cache; denial removes it; local credentials 
   let s=f.make();await s.start();expect(f.config.state().credential_source).toBe("local");await s.stop();
   f.restart();f.setOffline(true);s=f.make();await s.start();
   expect(s.state().native_access).toMatchObject({status:"offline",model_status:"cached"});
+  expect(s.state().native_access!.verified_at).toBeGreaterThan(0);
   expect(f.config.managedLlmState().credentials).toHaveLength(1);
   await expect(s.erpDashboardUrl()).rejects.toThrow();
   f.setOffline(false);f.setDenied(true);await s.check();

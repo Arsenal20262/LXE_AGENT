@@ -16,9 +16,12 @@ export class DesktopCloudConfigService {
 
   managedLlmOwner() { return structuredClone(this.repository.readSecrets().managed_llm_owner ?? null); }
 
-  saveManagedLlmOwner(owner: import("@lxe/desktop-protocol").DesktopObservedDevice | null): void {
+  managedLlmVerifiedAt(): number { return this.repository.readSecrets().managed_llm_verified_at ?? 0; }
+
+  saveManagedLlmOwner(owner: import("@lxe/desktop-protocol").DesktopObservedDevice | null, verifiedAt = 0): void {
     const secrets = this.repository.readSecrets();
     secrets.managed_llm_owner = structuredClone(owner);
+    secrets.managed_llm_verified_at = owner ? verifiedAt : 0;
     this.repository.commit(this.repository.readConfig(), secrets);
   }
 
@@ -31,6 +34,7 @@ export class DesktopCloudConfigService {
       secrets.managed_llm_owner = { server_url: companyServerUrl(cloud), id: cloud.device_id,
         kind: secrets.data_server_api_key.startsWith("lxe_identity_") ? "system_administrator" : "managed_device",
         display_name: cloud.device_name, wireguard_ip: cloud.vpn_ip };
+      secrets.managed_llm_verified_at = secrets.managed_llm_credential?.fetched_at ?? 0;
     } else this.clearManagedLlm(config, secrets);
     this.repository.commit(config, secrets);
   }
@@ -211,6 +215,7 @@ export class DesktopCloudConfigService {
     secrets: ReturnType<DesktopConfigRepository["readSecrets"]>,
   ): void {
     secrets.managed_llm_owner = null;
+    secrets.managed_llm_verified_at = 0;
     secrets.managed_llm_credential = null;
     secrets.managed_llm_state = { revision: 0, default_target: null, models: [], credentials: [] };
   }

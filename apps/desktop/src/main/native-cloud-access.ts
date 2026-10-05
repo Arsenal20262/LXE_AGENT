@@ -20,7 +20,9 @@ export class NativeCloudAccess {
   constructor(private readonly options: {
     config: DesktopConfigStore; client: NativeCloudClient; logger: Logger; llmConfigRoot: string;
     now: () => number; changed: (value: ManagedLlmCredential | null) => Promise<void> | void;
-  }) {}
+  }) {
+    this.value.verified_at = options.config.managedLlmVerifiedAt();
+  }
 
   state(): DesktopNativeCloudAccess { return { ...this.value }; }
   cancel(): void {
@@ -30,7 +32,7 @@ export class NativeCloudAccess {
   private async save(state: ManagedLlmState, device: DesktopObservedDevice): Promise<void> {
     const previous = this.options.config.managedLlmState();
     const before = JSON.stringify(previous);
-    this.options.config.saveManagedLlmOwner(device);
+    this.options.config.saveManagedLlmOwner(device, Math.floor(this.options.now() / 1000));
     if (before !== JSON.stringify(state)) {
       this.options.config.saveManagedLlmState(state);
       await this.options.changed(this.options.config.managedLlmCredential());

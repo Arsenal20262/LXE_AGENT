@@ -329,7 +329,7 @@ async function bootstrap(): Promise<void> {
       config.invalidateManagedLlmCredential(revision);
       const credential = config.managedLlmCredential();
       // Startup may have awaited while the identity or cache changed. Read the current value.
-      await gateway.updateManagedLlmCredential(config.managedLlmCredential());
+      await gateway.updateManagedLlmCredential(credential ? config.managedLlmCredential() : null);
       invalidations.push(["models"]);
       await cloud?.check();
     },
@@ -369,10 +369,10 @@ async function bootstrap(): Promise<void> {
     },
     onPermissionChanged: (allowedSkillTypes) =>
       gateway.updateSkillPermissions(allowedSkillTypes),
-    onManagedLlmCredentialChanged: async () => {
+    onManagedLlmCredentialChanged: async (credential) => {
       if (gateway.health().gateway === "stopped") await gateway.start();
       // Startup may have awaited while the identity or cache changed. Read the current value.
-      await gateway.updateManagedLlmCredential(config.managedLlmCredential());
+      await gateway.updateManagedLlmCredential(credential ? config.managedLlmCredential() : null);
       if (config.state().complete) await gateway.syncModelConfiguration();
       invalidations.push(["models"]);
       broadcastHealth(gateway.health());
