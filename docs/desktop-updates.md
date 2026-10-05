@@ -51,7 +51,7 @@ bun run release:publish
 
 凭据从当前 Windows 用户的 `%LOCALAPPDATA%\LXE\release\cos-credential.xml` 解密，只经标准输入传给发布工具，不进入命令行、源码或安装包。不要在其他电脑复用此加密文件。
 
-上传顺序：安装包和 blockmap → 按构建编号保存的不可变版本记录 → 正式渠道指针。客户端只认渠道指针。渠道切换前失败的文件是未发布候选；可重试同一包，也可换候选包。发布成功后，同版本不能替换构建；修复需要新版本。
+上传顺序：安装包和 blockmap → 按构建编号保存的不可变版本记录 → 正式渠道指针。每个产物上传后都检查对象大小和摘要元数据，再流式回读实际内容计算 SHA-512；仅靠上传者提供的元数据不算校验通过。回读失败或内容不一致时不能切换渠道，发布凭据需要具有这些对象的读取权限。客户端只认渠道指针。渠道切换前失败的文件是未发布候选；可重试同一包，也可换候选包。发布成功后，同版本不能替换构建；修复需要新版本。
 
 本期只使用一台 Windows 发布机。发布锁位于凭据目录的 `publish.lock`；如果进程意外退出，确认没有发布进程后再手工删除该锁。不同机器并发发布不在本期支持范围内。
 
@@ -84,12 +84,22 @@ COS 布局：
 
 安装器先在安装目录旁完整解压新程序，再检查必需文件和 Office 前置依赖。已有安装固定在原目录更新，`var` 始终原地保留。程序文件按事务记录移入旁边的备份目录，然后替换成新文件；提交前失败会尝试恢复旧程序。回滚失败保留备份和实际异常，诊断文件位于 `%TEMP%\lxe-update-<事务编号>.log`。新程序安装成功后才替换缓存，缓存写入失败不会撤销已完成的安装。
 
-`var/updates/last-attempt.json` 记录应用发起的安装尝试；下次启动按实际版本展示结果。这里恢复的是安装阶段的程序文件，不提供断电后的自动恢复、新版本启动健康检查、数据库回滚或自动降级。
+`var/updates/last-attempt.json` 记录应用发起的安装尝试；下次启动同时核对实际版本和构建编号，再展示结果。这里恢复的是安装阶段的程序文件，不提供断电后的自动恢复、新版本启动健康检查、数据库回滚或自动降级。
 
 ## 部署与验证
 
 先部署支持可选 blockmap 字段的更新服务端，再发布新的候选记录；旧服务端会拒绝未知字段。旧客户端仍可获取完整包。首次升级到本次重构版走完整下载，后续版本可使用差分。服务器保留历史 blockmap，本地候选保留策略不清理 COS。
 
-定向测试覆盖更新操作与确认、任务接收竞态、私有协议兼容和真实 HTTP Range 差分。Windows 文件替换场景可运行 `scripts/test-update-files.ps1`；真实安装器资格验证使用 `bun scripts/qualify-desktop-update-installer.ts <win-unpacked目录> <旧版本Git提交>`，生成三个独立 AppID/缓存的测试安装包及 `qualification.json`。测试包的隧道清理脚本替换为无系统操作的夹具，不能发布这些测试包。
+定向测试覆盖更新操作与确认、任务接收竞态、私有协议兼容和真实 HTTP Range 差分。Windows 验证在独立工作区从仓库根目录运行：
 
-历史验证记录见 [2026-09-21 记录](desktop-updates-validation-20260921.md)，它描述的是当时的旧实现，不能代替本次测试结果。正式发布仍走现有发布者确认流程。
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-update-files.ps1
+bun scripts/qualify-desktop-update-installer.ts <win-unpacked目录> <旧版本Git提交>
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-update-installers.ps1 -Qualification <qualification.json>
+bun scripts/test-update-download.ts <qualification.json>
+bun scripts/test-update-extraction.ts <已缓存的makensis.exe路径>
+```
+
+构建夹具生成旧版 ZIP 与两个新版 7z 安装包，共用一个随机测试 AppID 和安装缓存；这个身份与正式应用隔离。原生下载测试另外使用自己的缓存，避免覆盖安装测试的缓存。安装路径包含中文和空格，但保持较短，以兼容旧 ZIP 解压器的路径长度限制。测试包的隧道清理脚本替换为无系统操作的夹具，不能发布这些测试包。
+
+本轮结果见 [2026-10-06 验证记录](desktop-updates-validation-20261006.md)。[2026-09-21 记录](desktop-updates-validation-20260921.md) 描述的是旧实现。正式发布仍走现有发布者确认流程。
