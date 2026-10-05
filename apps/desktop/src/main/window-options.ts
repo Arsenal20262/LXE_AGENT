@@ -18,10 +18,10 @@ export const DESKTOP_TITLEBAR_COLOURS: Record<DesktopAppearance, { color: string
   dark: { color: "#242322", symbolColor: "#a89d90" },
 };
 
-/** Windows caption shares the persistent navigation rail palette. */
+/** Match the renderer's page background and caption text in each theme. */
 export const WINDOWS_TITLEBAR_COLOURS: typeof DESKTOP_TITLEBAR_COLOURS = {
-  light: { color: "#272321", symbolColor: "#a89d90" },
-  dark: { color: "#242322", symbolColor: "#aaa095" },
+  light: { color: "#fafaf9", symbolColor: "#5d544a" },
+  dark: { color: "#242322", symbolColor: "#cbc0b4" },
 };
 
 type WindowAppearance = Pick<

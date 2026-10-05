@@ -720,6 +720,11 @@ app.whenReady().then(async () => {
             assert.equal((await rect(menu)).left, 48);
             assert.equal(await js("getComputedStyle(document.querySelector('.windows-titlebar-menu')).webkitAppRegion"), "no-drag");
             assert.equal(await js("document.documentElement.scrollHeight>innerHeight"), false);
+            assert.equal(
+              await js("getComputedStyle(document.querySelector('.desktop-platform-win32'), '::before').backgroundColor"),
+              await js("getComputedStyle(document.querySelector('.main-panel')).backgroundColor"),
+              'caption follows the content theme in either sidebar state',
+            );
             if (i === 1) {
               // Use a real pointer: DOM clicks alone do not exercise :hover or delayed peek.
               await js("document.activeElement.blur()");
@@ -733,12 +738,12 @@ app.whenReady().then(async () => {
                 const rgb = value => value.match(/[\\d.]+/g).map(Number);
                 const ink = rgb(getComputedStyle(button.querySelector('svg')).stroke);
                 const fill = rgb(getComputedStyle(button).backgroundColor);
-                const rail = rgb(getComputedStyle(document.querySelector('.app-navigation')).backgroundColor);
+                const caption = rgb(getComputedStyle(document.querySelector('.desktop-platform-win32'), '::before').backgroundColor);
                 const alpha = fill[3] ?? 1;
                 const luminance = color => color.slice(0, 3).map(v => v / 255)
                   .map(v => v <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4)
                   .reduce((sum, v, i) => sum + v * [.2126, .7152, .0722][i], 0);
-                const a = luminance(ink), b = luminance(fill.map((v, i) => v * alpha + rail[i] * (1 - alpha)));
+                const a = luminance(ink), b = luminance(fill.map((v, i) => v * alpha + caption[i] * (1 - alpha)));
                 return (Math.max(a, b) + .05) / (Math.min(a, b) + .05);
               })()`);
               if (process.env.LXE_TITLEBAR_SCREENSHOT) {

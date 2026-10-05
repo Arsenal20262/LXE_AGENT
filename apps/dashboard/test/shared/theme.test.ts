@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
+import { WINDOWS_TITLEBAR_COLOURS } from "../../../desktop/src/main/window-options";
 
 import {
   DEFAULT_DASHBOARD_THEME,
@@ -54,6 +55,10 @@ describe("dark palette", () => {
   test("keeps the requested lighter page plane without changing dark mode", () => {
     expect(light["--bg"]).toBe("#fafaf9");
     expect(dark["--bg"]).toBe("#242322");
+    expect(WINDOWS_TITLEBAR_COLOURS).toEqual({
+      light: { color: light["--bg"], symbolColor: light["--text-soft"] },
+      dark: { color: dark["--bg"], symbolColor: dark["--text-soft"] },
+    });
   });
 
   test("keeps the light plane a hair off white rather than a tint", () => {
