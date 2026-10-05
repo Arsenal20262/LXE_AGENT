@@ -581,7 +581,7 @@ def test_external_workspace_is_private_and_does_not_modify_caller_gitignore(tmp_
         assert activate_external_workspace(tmp_path) == (tmp_path / ".lxeskill").resolve()
         assert workspace_root() == tmp_path.resolve()
         assert internal_root() == (tmp_path / ".lxeskill").resolve()
-        assert artifact_root() == (tmp_path / ".lxeskill" / "artifacts").resolve()
+        assert artifact_root() == (tmp_path / ".lxeagent" / "artifacts").resolve()
         assert (tmp_path / ".lxeskill" / ".gitignore").read_text(encoding="utf-8") == "*\n"
         assert caller_gitignore.read_text(encoding="utf-8") == "keep-me\n"
         after_status = subprocess.run(
@@ -606,7 +606,7 @@ def test_desktop_project_workspace_uses_private_writable_roots(tmp_path, monkeyp
         assert activate_project_workspace() == workspace.resolve()
         assert workspace_root() == workspace.resolve()
         assert internal_root() == data_root.resolve() / "lxeskill"
-        assert artifact_root() == data_root.resolve() / "artifacts"
+        assert artifact_root() == workspace.resolve() / ".lxeagent" / "artifacts"
     finally:
         monkeypatch.delenv("LXE_WORKSPACE_ROOT")
         monkeypatch.delenv("LXE_DATA_ROOT")
@@ -622,7 +622,7 @@ def test_workspace_override_alone_uses_repository_var_for_managed_state(tmp_path
         assert activate_project_workspace() == workspace.resolve()
         assert workspace_root() == workspace.resolve()
         assert internal_root() == repository_root() / "var" / "lxeskill"
-        assert artifact_root() == repository_root() / "var" / "artifacts"
+        assert artifact_root() == workspace.resolve() / ".lxeagent" / "artifacts"
         assert internal_root().is_dir()
         assert artifact_root().is_dir()
     finally:

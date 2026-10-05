@@ -31,12 +31,24 @@
   visibility:hidden;
   pointer-events:none}
 .file-preview-resizer {
+  position:relative;
   width:5px;
   flex:0 0 5px;
+  outline:none;
   cursor:col-resize;
   touch-action:none}
-.file-preview-resizer:hover,.file-preview-resizer:focus {
-  background:var(--accent,#6799db)}
+.file-preview-resizer::after {
+  content:"";
+  position:absolute;
+  z-index:1;
+  inset-block:0;
+  right:-1px;
+  width:1px;
+  pointer-events:none}
+.file-preview-resizer:hover::after,.file-preview-resizer:active::after {
+  background:color-mix(in srgb,var(--text) 35%,var(--bg))}
+.file-preview-resizer:focus-visible::after {
+  background:var(--accent)}
 .file-header-actions {
   display:flex;
   gap:6px;
@@ -50,7 +62,7 @@
   background:none;
   color:inherit;
   border-radius:6px}
-.file-header-actions button:hover,.file-tab-strip button:hover,.file-document-toolbar button:hover {
+.file-header-actions button:hover,.file-document-toolbar button:hover {
   background:#8882}
 .file-tab-strip {
   display:flex;
@@ -59,41 +71,72 @@
   flex-shrink:0;
   border-bottom:1px solid var(--border,#ddd);
   gap:4px;
-  padding:0 6px}
+  padding:0 8px}
+.file-tab-strip>button {
+  flex:0 0 28px;
+  width:28px;
+  height:28px;
+  padding:0;
+  color:var(--text-soft)}
+.file-tab-strip>button:hover,.file-tab>button:last-child:hover {
+  background:var(--row-hover);
+  color:var(--text-strong)}
+.file-tab-strip>button:focus-visible,.file-tab button:focus-visible {
+  outline:2px solid var(--accent-strong);
+  outline-offset:-2px}
+.file-panel-expand { margin-left:auto }
 .file-tabs {
   display:flex;
-  overflow:auto;
-  flex:1;
+  align-items:center;
+  overflow-x:auto;
+  overflow-y:hidden;
+  scrollbar-width:none;
+  flex:0 1 auto;
   min-width:0;
   height:100%;
-  gap:3px}
+  gap:4px}
+.file-tabs::-webkit-scrollbar { display:none }
 .file-tab {
   display:flex;
   align-items:center;
   flex-shrink:0;
-  max-width:210px;
+  max-width:min(210px,100%);
   min-width:70px;
-  border-bottom:2px solid transparent}
+  height:30px;
+  border-radius:8px;
+  color:var(--text-soft);
+  font-size:.875rem}
+.file-tab:not(.active):hover {
+  background:var(--surface-subtle);
+  color:var(--text-strong)}
 .file-tab.active {
-  border-bottom-color:var(--accent,#6799db);
-  background:#8881}
+  background:var(--surface);
+  color:var(--text-strong);
+  box-shadow:0 1px 2px var(--shadow-soft)}
 .file-tab button {
   border:0;
   background:none;
   color:inherit;
   display:flex;
   align-items:center;
-  gap:5px;
-  padding:8px 5px;
+  gap:6px;
+  height:100%;
+  padding:0 6px;
+  border-radius:6px;
   min-width:0}
 .file-tab [role=tab] {
-  flex:1}
+  flex:1;
+  padding-left:10px}
 .file-tab span {
   overflow:hidden;
   text-overflow:ellipsis;
   white-space:nowrap}
 .file-tab>button:last-child {
-  flex:none}
+  flex:0 0 24px;
+  width:24px;
+  height:24px;
+  margin-right:3px;
+  justify-content:center}
 .file-document,.file-tree {
   display:flex;
   flex-direction:column;
@@ -246,7 +289,12 @@
   position:relative}
 .file-excel-workbook .fortune-container {
   width:100%;
-  height:100%}
+  height:100%;
+  /* Viewer controls follow the app. Cell fonts are drawn by FortuneSheet from
+     workbook data; do not override its canvas or cell-editing surfaces. */
+  font-family:var(--font-sans)}
+.file-excel-workbook .fortune-toolbar-subtext {
+  font-family:var(--font-sans)}
 .file-open-control {
   position:relative;
   flex:none;
@@ -431,3 +479,10 @@
 @keyframes tool-spin { to { transform:rotate(360deg); } }
 
 .file-html-preview { display:block; width:100%; flex:1; min-height:0; border:0; background:white; color-scheme:light; }
+
+/* Image files use the shared lightbox without changing the sidebar underneath. */
+.file-image-dialog { display:flex; flex-direction:column; width:min(1100px, 100%); height:calc(100dvh - 48px); }
+.file-image-dialog > .file-document { min-height:0; border-radius:12px; overflow:hidden; background:var(--surface); color:var(--text); }
+
+.file-image-dialog .file-image { display:flex; }
+.file-image-dialog .file-image img { margin:auto; }

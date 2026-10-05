@@ -1,3 +1,4 @@
+import { workspaceArtifactRoot } from "@lxe/core";
 import { existsSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, parse, relative, resolve, sep } from "node:path";
@@ -46,7 +47,6 @@ export interface ReadableTarget {
 export interface CodingPathPolicyOptions {
   repositorySkillsRoot?: string;
   userSkillsRoot?: string;
-  artifactRoot?: string;
   homeDirectory?: string;
 }
 
@@ -70,9 +70,6 @@ export class CodingPathPolicy {
         ? [{ root: resolve(options.repositorySkillsRoot), kind: "skills" as const }]
         : []),
       { root: this.userSkillsRoot, kind: "skills" as const },
-      ...(options.artifactRoot
-        ? [{ root: resolve(options.artifactRoot), kind: "artifacts" as const }]
-        : []),
     ]) {
       if (!scopes.has(scope.root)) scopes.set(scope.root, scope);
     }
@@ -121,7 +118,8 @@ export class CodingPathPolicy {
   private readableScopes(workspace: WorkspaceContext): ReadableScope[] {
     const scopes = new Map<string, ReadableScope>();
     for (const scope of [
-      { root: workspace.worktree, kind: "workspace" as const },
+      { root: workspaceArtifactRoot(workspace.directory), kind: "artifacts" as const },
+      { root: workspace.directory, kind: "workspace" as const },
       ...this.externalScopes,
     ]) {
       if (!scopes.has(scope.root)) scopes.set(scope.root, scope);

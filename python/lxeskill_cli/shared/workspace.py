@@ -12,33 +12,8 @@ logger = get_logger(__name__)
 _LOCK = RLock()
 _workspace_root = Path(str(os.getenv("LXE_WORKSPACE_ROOT") or Path.cwd())).expanduser().resolve()
 _internal_root = state_root() / "lxeskill"
-_artifact_root = state_root() / "artifacts"
+_artifact_root = (_workspace_root / ".lxeagent" / "artifacts").resolve()
 _input_root = state_root() / "inputs"
-
-
-def _migrate_legacy_artifact_dirs(root: Path) -> None:
-    """Rename pre-registry artifact directories into their registered layout.
-
-    Idempotent: a legacy directory moves only when its target does not exist yet.
-    When both exist the legacy one is left alone and reported, so that no data is
-    silently merged.
-    """
-    from shared.datasets import load_datasets
-
-    for entry in load_datasets().values():
-        target = root / entry.dir
-        for legacy_name in entry.legacy_dirs:
-            legacy = root / legacy_name
-            if not legacy.is_dir():
-                continue
-            if target.exists():
-                logger.warning(
-                    "artifact_dir_migration_skipped: %s and %s both exist", legacy, target
-                )
-                continue
-            target.parent.mkdir(parents=True, exist_ok=True)
-            legacy.rename(target)
-            logger.info("artifact_dir_migrated: %s -> %s", legacy, target)
 
 
 def activate_project_workspace() -> Path:
@@ -53,12 +28,11 @@ def activate_project_workspace() -> Path:
         )
         writable_root = state_root()
         _internal_root = writable_root / "lxeskill"
-        _artifact_root = writable_root / "artifacts"
+        _artifact_root = (_workspace_root / ".lxeagent" / "artifacts").resolve()
         _input_root = writable_root / "inputs"
         _internal_root.mkdir(parents=True, exist_ok=True)
         _artifact_root.mkdir(parents=True, exist_ok=True)
         _input_root.mkdir(parents=True, exist_ok=True)
-        _migrate_legacy_artifact_dirs(_artifact_root)
     return _workspace_root
 
 
@@ -74,7 +48,7 @@ def activate_external_workspace(cwd: str | os.PathLike[str] | None = None) -> Pa
     with _LOCK:
         _workspace_root = caller_root
         _internal_root = internal_root
-        _artifact_root = internal_root / "artifacts"
+        _artifact_root = (caller_root / ".lxeagent" / "artifacts").resolve()
         _input_root = internal_root / "inputs"
     logger.debug("Activated external lxeskill workspace: %s", internal_root)
     return internal_root

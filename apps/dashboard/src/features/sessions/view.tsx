@@ -1,8 +1,11 @@
+import { ApprovalGate, PermissionPicker } from "./permissions";
+import { ReferenceComposer } from "./ReferenceComposer";
+import { UserReferenceText } from "./UserReferenceText";
 import { FileAvailabilityBadge } from "../file-preview/FileFailure";
 import { PreviewHeaderActions, usePreviewSidebar } from "../file-preview/Sidebar";
 import { OpenFileButton } from "../file-preview/OpenFileButton";
 import { UserQuestionGate } from "./user-questions";
-import type { PendingUserQuestion } from "@lxe/desktop-protocol";
+import type { PendingUserQuestion, PendingApproval, PermissionMode } from "@lxe/desktop-protocol";
 import type { DesktopDraftAttachmentPayload } from "@lxe/desktop-protocol";
 import { conversationAttachments } from "./attachment-draft";
 import { useComposerDraft } from "./composer-draft";
@@ -447,11 +450,11 @@ function MessageContent({ content, message }: { content: unknown; message: Sessi
   const toolCalls = message.tool_calls;
   return (
     <div className="message-content">
-      {typeof content === "string" ? <MessageMarkdown text={content} /> : null}
+      {typeof content === "string" ? message.role === "user" ? <UserReferenceText text={content} skills={Array.isArray(message.invoked_skills) ? message.invoked_skills : []} /> : <MessageMarkdown text={content} /> : null}
       {Array.isArray(content) ? (
         <div className="message-block-list">
           {content.map((block, index) => (
-            <MessageBlock block={block} key={index} />
+            message.role === "user" && isRecord(block) && block.type === "text" ? <UserReferenceText key={index} text={String(block.text ?? "")} skills={Array.isArray(message.invoked_skills) ? message.invoked_skills : []} /> : <MessageBlock block={block} key={index} />
           ))}
         </div>
       ) : null}
@@ -1123,7 +1126,8 @@ function ConversationContextMeter({
 }
 
 export function ConversationComposer({
-  question, onQuestionAnswered,
+  permissionMode = "workspace-write", permissionSessionId,
+  question, onQuestionAnswered, approvals = [], onApprovalChanged,
   contextDetail,
   activity,
   conversationKey,
@@ -1139,8 +1143,12 @@ export function ConversationComposer({
   onSend,
   onStop,
 }: {
+  approvals?: PendingApproval[];
+  onApprovalChanged?: () => void;
   question?: PendingUserQuestion;
   onQuestionAnswered?: () => void;
+  permissionMode?: PermissionMode;
+  permissionSessionId?: string;
   contextDetail: SessionDetailPayload | null;
   activity: DesktopConversationActivityPayload | null;
   conversationKey: string;
@@ -1172,7 +1180,7 @@ export function ConversationComposer({
   });
   const attachments = attachmentDraft.items;
   const [dragActive, setDragActive] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const textareaRef = useRef<HTMLDivElement>(null);
   const previousConversationKey = useRef(conversationKey);
   const currentConversationKey = useRef(conversationKey);
   currentConversationKey.current = conversationKey;
@@ -1189,7 +1197,7 @@ export function ConversationComposer({
     });
   };
   const stageDroppedFiles = useCallback((files: File[]) => {
-    if (!runtimeReady || question || sending) return;
+    if (!runtimeReady || question || sending || !textareaRef.current) return;
     setError("");
     return attachmentDraft.stage(async () => {
       if (!window.lxe) throw new Error(t.conversation.unavailable);
@@ -1207,7 +1215,7 @@ export function ConversationComposer({
     const dragOver = (event: DragEvent) => {
       if (!event.dataTransfer?.types.includes("Files")) return;
       event.preventDefault();
-      if (!runtimeReady || question) {
+      if (!runtimeReady || question || !textareaRef.current) {
         event.dataTransfer.dropEffect = "none";
         return;
       }
@@ -1221,7 +1229,7 @@ export function ConversationComposer({
       if (!event.dataTransfer?.files.length) return;
       event.preventDefault();
       setDragActive(false);
-      if (!runtimeReady || question) return;
+      if (!runtimeReady || question || !textareaRef.current) return;
       void stageDroppedFiles(Array.from(event.dataTransfer.files));
     };
     window.addEventListener("dragover", dragOver);
@@ -1266,53 +1274,26 @@ export function ConversationComposer({
     }
   };
   return (
-    <UserQuestionGate request={runtimeReady ? question : undefined} conversationKey={runtimeReady ? conversationKey : "offline"}
-      onAnswered={onQuestionAnswered}>
     <div className={`conversation-composer ${dragActive ? "drag-active" : ""}`}>
+      <ApprovalGate key={conversationKey} requests={approvals} ready={runtimeReady} onChanged={onApprovalChanged}>
       {dragActive ? <div className="conversation-drop-hint">{t.conversation.dropFiles}</div> : null}
       <div className="conversation-compose-box">
+        <UserQuestionGate request={runtimeReady ? question : undefined} conversationKey={runtimeReady ? conversationKey : "offline"} onAnswered={onQuestionAnswered}>
         {attachments.length ? (
           <InputAttachmentList draft attachments={attachments} onRemove={sending ? undefined : removeAttachment} />
         ) : null}
         {attachmentDraft.pending > 0 ? <span className="conversation-input-hint" role="status">{t.conversation.preparingAttachments}</span> : null}
-        <textarea
-          onPaste={(event) => {
-            const files = Array.from(event.clipboardData.files);
-            if (!files.length && !Array.from(event.clipboardData.types).some((type) => type === "Files" || type === "text/uri-list")) return;
-            if (files.length) event.preventDefault();
+        <ReferenceComposer ref={textareaRef} session={conversationKey} value={text} onChange={setText}
+          disabled={!runtimeReady} placeholder={runtimeReady ? t.conversation.placeholder : runtimeUnavailableMessage}
+          onSubmit={() => void submit()} onFiles={files => {
             if (!runtimeReady || sending) return;
-            const pastedText = event.clipboardData.getData("text/plain");
-            if (files.length && pastedText) {
-              const start = event.currentTarget.selectionStart;
-              const end = event.currentTarget.selectionEnd;
-              const next = (text.slice(0, start) + pastedText + text.slice(end)).slice(0, 8192);
-              setText(next);
-              requestAnimationFrame(() => textareaRef.current?.setSelectionRange(Math.min(start + pastedText.length, next.length), Math.min(start + pastedText.length, next.length)));
-            }
             setError("");
             void attachmentDraft.stage(async () => {
               if (!window.lxe) throw new Error(t.conversation.unavailable);
               return window.lxe.desktop.stagePastedConversationFiles(files);
             });
-          }}
-          aria-label={t.conversation.placeholder}
-          disabled={!runtimeReady}
-          maxLength={8192}
-          onChange={(event) => {
-            setText(event.target.value);
-            event.target.style.height = "auto";
-            event.target.style.height = `${Math.min(event.target.scrollHeight, 180)}px`;
-          }}
-          onKeyDown={(event) => {
-            if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;
-            event.preventDefault();
-            void submit();
-          }}
-          placeholder={runtimeReady ? t.conversation.placeholder : runtimeUnavailableMessage}
-          ref={textareaRef}
-          rows={1}
-          value={text}
-        />
+          }} />
+        </UserQuestionGate>
         <div className="conversation-compose-actions">
           <div className="conversation-compose-leading">
             <button
@@ -1325,9 +1306,8 @@ export function ConversationComposer({
             >
               <Paperclip size={17} />
             </button>
-            <span className="conversation-input-hint">
-              {runtimeReady ? t.conversation.inputHint : runtimeUnavailableMessage}
-            </span>
+            <PermissionPicker key={conversationKey} sessionId={permissionSessionId ?? conversationKey} initialMode={permissionMode} ready={runtimeReady} />
+            {!runtimeReady ? <span className="conversation-input-hint">{runtimeUnavailableMessage}</span> : null}
           </div>
           <div className="conversation-compose-trailing">
             <ConversationContextMeter activity={activity} currentModel={currentModel} detail={contextDetail} />
@@ -1378,8 +1358,8 @@ export function ConversationComposer({
         </div>
       ) : null}
       {error ? <div className="conversation-compose-error" role="alert">{error}</div> : null}
+      </ApprovalGate>
     </div>
-    </UserQuestionGate>
   );
 }
 
@@ -1466,7 +1446,7 @@ export const UnifiedConversationRow = React.memo(function UnifiedConversationRow
     return <div className="message-with-meta role-user has-sent-attachments">
       <SentAttachmentList attachments={message.attachments} sessionId={attachmentSessionId}
         ready={row.status !== "sending" && !row.error} onOpen={onOpenAttachment} />
-      {text.trim() ? <article className="message-card role-user"><MessageMarkdown text={text} /></article> : null}
+      {text.trim() ? <article className="message-card role-user"><UserReferenceText text={text} skills={Array.isArray(message.invoked_skills) ? message.invoked_skills : []} /></article> : null}
       {row.error ? <div role="alert">{row.error}</div> : row.status === "error" ? <div role="status">{stateLabel}</div> : null}
       {["sending", "queued"].includes(row.status ?? "") ? <div className="optimistic-message-state">{stateLabel}</div> : null}
       <MessageMeta createdAt={Number(message.created_at ?? row.createdAt / 1000)} role={role} text={text} />
@@ -1487,7 +1467,7 @@ export const UnifiedConversationRow = React.memo(function UnifiedConversationRow
 
 export function SessionDetailView({
   workspaceControl,
-  question, onQuestionAnswered,
+  question, onQuestionAnswered, approvals = [], onApprovalChanged,
   fallbackSession,
   detail,
   activity,
@@ -1516,6 +1496,8 @@ export function SessionDetailView({
   pendingMessages, display, onFollowingChange,
 }: {
   workspaceControl?: React.ReactNode;
+  approvals?: PendingApproval[];
+  onApprovalChanged?: () => void;
   question?: PendingUserQuestion;
   onQuestionAnswered?: () => void;
   fallbackSession: SessionPayload | null;
@@ -1590,6 +1572,9 @@ export function SessionDetailView({
           onOpenFile={onOpenFile} onRevealFile={onRevealFile} onOpenAttachment={onOpenAttachment} attachmentSessionId={display?.sessionId || session?.session_id} />} />
       <div className="conversation-composer-dock">
         <ConversationComposer
+          permissionSessionId={session?.session_id ?? ""}
+          permissionMode={session?.permission_mode ?? "workspace-write"}
+          approvals={approvals} onApprovalChanged={onApprovalChanged}
           question={question}
           onQuestionAnswered={onQuestionAnswered}
           contextDetail={detail}

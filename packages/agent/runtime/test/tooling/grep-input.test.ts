@@ -7,7 +7,7 @@ import { grepSchema, validateGrepInput } from "../../src/tooling/coding/grep-inp
 import { CodingPathPolicy } from "../../src/tooling/coding/path-policy";
 import { createSearchTools } from "../../src/tooling/coding/search-tools";
 import { ToolRegistry } from "../../src/tooling/registry";
-import { workspaceFor } from "../workspace";
+import { policyFor, workspaceFor } from "../workspace";
 
 describe("grep arguments", () => {
   test("preserves defaults, whitespace and empty filters", () => {
@@ -65,7 +65,7 @@ function setup() {
   for (const tool of createSearchTools({ paths: new CodingPathPolicy(), toolOutputLimit: 10_000, ripgrepPath: null })) registry.register(tool);
   const controller = new AbortController();
   const context = {
-    session_id: "grep-input-test", workspace: workspaceFor(root),
+    session_id: "grep-input-test", workspace: workspaceFor(root), executionPolicy: policyFor(root),
     handle: { signal: controller.signal, cancelled: false, drainSteering: () => [], registerProcess: () => () => undefined },
   };
   const call = async (input: JsonObject) => String((await registry.execute("grep", input, context)).content[0]?.text);

@@ -1,0 +1,218 @@
+/* Settings and dialogs opened from it share this palette, including body portals.
+   Keep it off the desktop frame so onboarding and the conversation retain theirs. */
+.desktop-settings-theme {
+  --bg: #fafaf9;
+  --bg-soft: #ffffff;
+  --surface: #ffffff;
+  --surface-muted: #f4f4f5;
+  --surface-subtle: #f4f4f5;
+  --row-hover: #f5f5f5;
+  --border: #e4e4e7;
+  --border-strong: #d4d4d8;
+  --text: #18181b;
+  --text-strong: #18181b;
+  --text-soft: #18181b;
+  --muted: #65656f;
+  --muted-light: #65656f;
+  --accent: #3f3f46;
+  --accent-strong: #18181b;
+  --accent-soft: #f4f4f5;
+  --accent-muted: #d4d4d8;
+  --settings-primary: #27272a;
+  --settings-primary-hover: #3f3f46;
+  --settings-primary-ink: #ffffff;
+  --settings-selected: var(--table-header-fill);
+  --settings-danger-action: #b42318;
+  --success: #287342;
+  --success-soft: #eef7f0;
+  --success-border: #c9e2d0;
+  --rate-good: var(--success);
+  --rate-good-soft: var(--success-soft);
+  --danger: #b42318;
+  --danger-soft: #fef3f2;
+  --danger-border: #fecdca;
+  --info: var(--text-soft);
+  --info-soft: var(--surface-muted);
+  --focus-ring: rgba(63, 63, 70, 0.2);
+  --scrim: rgba(24, 24, 27, 0.42);
+  --shadow-soft: rgba(24, 24, 27, 0.06);
+  --shadow-medium: rgba(24, 24, 27, 0.1);
+  --shadow-strong: rgba(24, 24, 27, 0.2);
+  --shadow-card: 0 1px 2px var(--shadow-soft), 0 6px 20px var(--shadow-soft);
+  --scrollbar-thumb: rgba(113, 113, 122, 0.26);
+  color: var(--text);
+}
+
+:root[data-theme="dark"] .desktop-settings-theme {
+  --bg: #242424;
+  --bg-soft: #2c2c2c;
+  --surface: #2c2c2c;
+  --surface-muted: #333333;
+  --surface-subtle: #212121;
+  --row-hover: #333333;
+  --border: #414141;
+  --border-strong: #555555;
+  /* Share conversation text colours; navigation and labels use body brightness. */
+  --text: inherit;
+  --text-strong: inherit;
+  --text-soft: var(--text);
+  --muted: inherit;
+  --muted-light: var(--muted);
+  --accent: #d4d4d8;
+  --accent-strong: var(--text);
+  --accent-soft: #383838;
+  --accent-muted: #555555;
+  --settings-primary: #e4e4e7;
+  --settings-primary-hover: #f4f4f5;
+  --settings-primary-ink: #18181b;
+  --settings-selected: #383838;
+  --success: #8dca8d;
+  --success-soft: #253429;
+  --success-border: #3e5844;
+  --danger: #f28e85;
+  --danger-soft: #3d2827;
+  --danger-border: #693b38;
+  --focus-ring: rgba(212, 212, 216, 0.28);
+  --scrim: rgba(0, 0, 0, 0.56);
+  --shadow-soft: rgba(0, 0, 0, 0.2);
+  --shadow-medium: rgba(0, 0, 0, 0.28);
+  --shadow-strong: rgba(0, 0, 0, 0.42);
+  --scrollbar-thumb: rgba(255, 255, 255, 0.22);
+}
+
+.desktop-settings-theme .desktop-settings-modal {
+  box-shadow: 0 24px 80px var(--shadow-strong);
+}
+
+.desktop-settings-theme .desktop-settings-content,
+.desktop-settings-theme .desktop-settings-modal > header {
+  background: var(--bg);
+}
+
+:root:not([data-theme="dark"]) .desktop-settings-theme
+  :is(.desktop-settings-nav, .desktop-settings-modal > footer) {
+  background: var(--bg);
+}
+
+.desktop-settings-theme :is(.desktop-health-card, .desktop-maintenance-panel,
+  .desktop-local-model-card, .desktop-usage-card, .desktop-logging-sink) {
+  background: var(--surface);
+}
+
+.desktop-settings-theme .desktop-eyebrow {
+  color: var(--muted);
+}
+
+.desktop-settings-theme .desktop-settings-nav-item:hover,
+.desktop-settings-theme .desktop-settings-nav-item:focus-visible {
+  background: var(--row-hover);
+}
+
+.desktop-settings-theme .desktop-settings-nav-item.active {
+  /* The transparent border preserves the label's existing horizontal position. */
+  border-left-color: transparent;
+  background: var(--settings-selected);
+  color: var(--text-strong);
+}
+
+.desktop-settings-theme .desktop-settings-nav-item.active > svg {
+  color: var(--text-strong);
+}
+
+.desktop-settings-theme .desktop-settings-nav-item.active small {
+  color: var(--muted);
+  opacity: 1;
+}
+
+.desktop-settings-theme .desktop-appearance-option.active {
+  border-color: var(--border-strong);
+  background: var(--settings-selected);
+  color: var(--text-strong);
+  box-shadow: none;
+}
+
+.desktop-settings-theme :is(button, summary):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.desktop-settings-theme :is(.desktop-restart-button, .desktop-close-button,
+  .desktop-path-button, .desktop-path-input button, .desktop-inline-settings,
+  .desktop-log-directory button, .desktop-usage-refresh) {
+  color: var(--text-soft);
+}
+
+.desktop-settings-theme :is(.desktop-restart-button, .desktop-close-button,
+  .desktop-path-button, .desktop-path-input button, .desktop-inline-settings,
+  .desktop-log-directory button, .desktop-usage-refresh):hover:not(:disabled) {
+  background: var(--row-hover);
+  color: var(--text-strong);
+}
+
+.desktop-settings-theme :is(.desktop-settings-content,
+  .desktop-cloud-binding-dialog) :is(input, select):focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.desktop-settings-theme :is(input, textarea)::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+
+.desktop-settings-theme .desktop-primary-button:not(.desktop-danger-button),
+.desktop-settings-theme .lxe-update-actions .lxe-update-primary {
+  background: var(--settings-primary);
+  border-color: var(--settings-primary);
+  color: var(--settings-primary-ink);
+}
+
+.desktop-settings-theme .desktop-primary-button:not(.desktop-danger-button):hover:not(:disabled),
+.desktop-settings-theme .lxe-update-primary:hover:not(:disabled) {
+  background: var(--settings-primary-hover);
+  border-color: var(--settings-primary-hover);
+}
+
+.desktop-settings-theme .desktop-primary-button:not(.desktop-danger-button):disabled,
+.desktop-settings-theme .lxe-update-primary:disabled {
+  background: var(--surface-muted);
+  border-color: var(--border);
+  color: var(--muted);
+  opacity: 1;
+}
+
+.desktop-settings-theme .desktop-confirm-dialog footer .desktop-danger-button {
+  background: var(--settings-danger-action);
+  border-color: var(--settings-danger-action);
+}
+
+.desktop-settings-theme .desktop-confirm-dialog footer .desktop-danger-button:hover:not(:disabled) {
+  background: #912018;
+  border-color: #912018;
+}
+
+.desktop-settings-theme .lxe-update-dialog {
+  box-shadow: 0 16px 60px var(--shadow-strong);
+}
+
+/* Permission badges have explicit colours in the shared component. Resolve them
+   through the scoped semantic palette so they remain legible on dark cards. */
+.desktop-settings-theme .device-permission-status.verified {
+  color: var(--rate-good);
+  background: var(--success-soft);
+}
+
+.desktop-settings-theme .device-permission-status.cached {
+  color: var(--warning);
+  background: var(--warning-soft);
+}
+
+.desktop-settings-theme .device-permission-status.denied,
+.desktop-settings-theme .device-permission-status.error {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.desktop-settings-theme .device-permission-change {
+  background: var(--warning-soft);
+}

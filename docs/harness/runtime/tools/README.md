@@ -65,6 +65,8 @@ Definition 注册与模型可见是两个不同阶段。Registry 保存所有可
 - 现有文件 write/edit 必须先 read，并拒绝 read 后外部变化的 stale edit。
 - Active business skill 不允许指导模型 shell-out 到业务模块。
 
+会话模式由 Runtime 保存，每次工具调用取得统一策略。当前新旧会话均默认为 Full access；遇到受限模式会拒绝执行，不会静默放行。新产物写入所选工作区的 `.lxeagent/artifacts/`，详见 [会话权限与工作区目录](../permission-policy.md)。
+
 Runtime 没有 filesystem/network sandbox，也没有 sandbox 初始化或失败回退流程。Windows 生产环境继承启动 Desktop/agent-cli 的 Windows 用户权限；源码开发环境同样继承宿主进程权限。它只适用于可信本地自动化。
 
 ## Cancel 与 exec 生命周期

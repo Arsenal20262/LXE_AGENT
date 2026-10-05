@@ -79,3 +79,6 @@ config/desktop-version.local.json
 # OS
 .DS_Store
 Thumbs.db
+
+# Per-workspace agent output (standalone CLI defaults to cwd).
+/.lxeagent/

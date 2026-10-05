@@ -1,3 +1,4 @@
+import { type ExecutionPolicy } from "../permissions/policy";
 import { skillPathKey } from "./skill-files";
 import type { JsonObject, WorkspaceContext } from "@lxe/protocol";
 import type { RuntimeHandle, ToolExecutionResult, ToolSchema } from "../engine/types";
@@ -20,6 +21,7 @@ export interface ToolDefinition extends ToolSchema {
     attributionSkill?: string;
   } | undefined;
   execute(input: JsonObject, context: {
+    executionPolicy: ExecutionPolicy;
     handle: RuntimeHandle;
     session_id: string;
     response_route_id?: string;
@@ -268,6 +270,7 @@ export class ToolRegistry {
     name: string,
     input: JsonObject,
     context: {
+      executionPolicy: ExecutionPolicy;
       handle: RuntimeHandle;
       session_id: string;
       response_route_id?: string;

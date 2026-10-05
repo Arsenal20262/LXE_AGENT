@@ -2,6 +2,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameS
 import { dirname, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { createRequire } from "node:module";
+import { sourceRuntimePaths } from "../apps/desktop/src/main/source-runtime-paths";
 
 const { verifyOfficeRuntime, sha256 } = createRequire(import.meta.url)("./office-runtime.cjs");
 const root = resolve(import.meta.dirname, "..");
@@ -10,12 +11,12 @@ const { values } = parseArgs({ options: {
   destination: { type: "string" }, node: { type: "string" }, "verify-only": { type: "boolean" },
 } });
 if (!["darwin-arm64", "darwin-x64", "win32-x64"].includes(platform)) throw new Error(`Unsupported Office build host: ${platform}`);
-const runtimeRoot = join(root, "build", "desktop-runtime", platform);
-const destination = resolve(values.destination ?? join(runtimeRoot, "office"));
+const paths = sourceRuntimePaths(root);
+const destination = resolve(values.destination ?? paths.officeRoot);
 const config = join(root, "config", "desktop-runtime", "office");
 const lockSha256 = sha256(Buffer.concat(["package.json", "bun.lock", "vc-redist.lock.json"].map(name => readFileSync(join(config, name)))));
 const markerName = ".lxe-office.json";
-const node = values.node ? resolve(values.node) : join(runtimeRoot, "node", process.platform === "win32" ? "node.exe" : "node");
+const node = values.node ? resolve(values.node) : paths.node;
 function run(command: string[], cwd: string): string {
   const result = Bun.spawnSync(command, { cwd, stdout: "pipe", stderr: "pipe", stdin: "ignore", timeout: 300_000 });
   const stdout = new TextDecoder().decode(result.stdout);
