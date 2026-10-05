@@ -10,7 +10,8 @@
 .workspace-group-toggle > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .workspace-icon-button { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 28px; flex-shrink: 0; padding: 0; border: 0; border-radius: 5px; background: transparent; color: var(--sidebar-ink-soft); cursor: pointer; }
 .workspace-icon-button:hover { color: var(--sidebar-ink); background: var(--sidebar-hover); }
-.workspace-group-sessions { margin-left: 19px; }
+.sidebar-session-section .workspace-group-sessions .session-index-open { grid-template-columns: 17px minmax(0, 1fr); gap: 7px; padding-left: 4px; }
+.workspace-group-sessions .session-index-icon { justify-self: center; }
 .workspace-empty { padding: 8px 20px 12px; color: var(--sidebar-ink-soft); font-size: .75rem; }
 .sidebar-session-section .workspace-group-sessions .session-index-list { overflow: visible; max-height: none; margin-right: 0; scrollbar-gutter: auto; }
 .workspace-load-more { border: 0; background: transparent; color: var(--accent-strong); padding: 7px; font: inherit; font-size: .75rem; cursor: pointer; text-align: left; }
