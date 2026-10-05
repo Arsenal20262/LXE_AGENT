@@ -38,7 +38,8 @@ test("company cloud exposes fixed browser shortcuts and gates them by device acc
     assert.match(shell, new RegExp(`destination: "${destination}"`));
   }
   assert.match(shell, /cloud\.configured \? \(/);
-  assert.match(shell, /disabled=\{!connected\}/);
+  assert.match(shell, /disabled=\{!nativeConnected\}/);
+  assert.match(shell, /cloud\.native_access\?\.status === "connected"/);
   assert.match(shell, /desktopCloudShortcutAvailable\(shortcut\.destination, cloud\)/);
   assert.match(shell, /desktop\.openCloudDestination\(destination\)/);
   assert.match(shell, /desktop-cloud-admin-badge/);
