@@ -101,7 +101,10 @@ test("direct transport ignores proxies, never sends credentials/cookies, and nev
   try {
     const c=new DirectNativeCloudClient(),signal=new AbortController().signal,server="http://127.0.0.1:"+upstream.port;
     expect(await c.request(server,"/api/v1/device-access",signal)).toEqual({ok:true});
-    await expect(c.request(server,"/api/v1/device-access/redirect",signal)).rejects.toBeInstanceOf(CloudHttpError);
+    // Bun 1.4.2 on Windows crashes in libuv when .rejects waits on this live HTTP request.
+    // Settle the request before asserting; keep exercising the real transport and redirect response.
+    const redirectError = await c.request(server,"/api/v1/device-access/redirect",signal).catch(error => error);
+    expect(redirectError).toBeInstanceOf(CloudHttpError);
     expect(seen).toHaveLength(2);
   }finally{if(old===undefined)delete process.env.HTTP_PROXY;else process.env.HTTP_PROXY=old;upstream.stop(true);}
 });
