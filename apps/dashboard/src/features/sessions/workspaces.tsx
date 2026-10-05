@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ComponentProps } from "react";
-import { ChevronRight, Folder, FolderOpen, FolderPlus, MoreHorizontal, Plus } from "lucide-react";
+import { Folder, FolderOpen, FolderPlus, MoreHorizontal, Plus } from "lucide-react";
 import { flattenSessionPages, queryError, useSessionsInfiniteQuery, useSessionStatus } from "../../api/queries";
 import { useUiText } from "../../shared/i18n";
 import { SessionsIndex } from "./view";
@@ -46,7 +46,6 @@ function WorkspaceGroup({ workspace, label, active, props, onActions }: {
   return <section data-workspace-directory={workspace.directory} className={active ? "workspace-group is-active" : "workspace-group"}>
     <div className="workspace-group-header">
       <button type="button" className="workspace-group-toggle" aria-expanded={expanded} title={workspace.directory} onClick={() => props.onExpandedChange(workspace.directory, !expanded)}>
-        <ChevronRight size={13} className={expanded ? "expanded" : ""} />
         {expanded ? <FolderOpen size={17} /> : <Folder size={17} />}
         <span>{label}</span>
         {workspace.directory === props.defaultDirectory ? <small className="workspace-default-badge">{t.workspaces.defaultBadge}</small> : null}
