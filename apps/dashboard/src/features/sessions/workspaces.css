@@ -15,7 +15,7 @@
 .workspace-group-sessions .session-index-icon { justify-self: center; }
 .workspace-empty { padding: 8px 20px 12px; color: var(--sidebar-ink-soft); font-size: .75rem; }
 .sidebar-session-section .workspace-group-sessions .session-index-list { overflow: visible; max-height: none; margin-right: 0; scrollbar-gutter: auto; }
-.workspace-load-more { border: 0; background: transparent; color: var(--accent-strong); padding: 7px; font: inherit; font-size: .75rem; cursor: pointer; text-align: left; }
+.workspace-load-more { border: 0; background: transparent; color: var(--sidebar-ink-soft); padding: 7px; font: inherit; font-size: .75rem; cursor: pointer; text-align: left; }
 .workspace-error, .workspace-loading { font-size: .75rem; overflow-wrap: anywhere; padding: 6px 8px; }
 .workspace-error { color: var(--danger, #c65050); }
 .session-workspace-result { display: block; color: var(--sidebar-ink-soft); font-size: .68rem; overflow: hidden; text-overflow: ellipsis; }
