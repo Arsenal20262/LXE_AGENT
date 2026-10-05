@@ -57,11 +57,12 @@ function cleanupExits(source){return source.replaceAll(/^(\s*)Quit\s*$/gm,'$1!if
 async function installAdapter(context){
  const desktopRequire=createRequire(join(context.packager.projectDir,'package.json'));
  const builderRequire=createRequire(desktopRequire.resolve('electron-builder/package.json'));
- const library=builderRequire('app-builder-lib'); // initialize mutually dependent platform modules
+ builderRequire('app-builder-lib'); // initialize mutually dependent platform modules
  const libRequire=createRequire(builderRequire.resolve('app-builder-lib/package.json'));
  if(libRequire('./package.json').version!=='26.0.12')throw new Error('Review the NSIS adapter before upgrading electron-builder');
  const {NsisTarget}=libRequire('./out/targets/nsis/NsisTarget.js');
- const {getPath7za}=libRequire('./out/toolsets/7zip.js');
+ const zipRoot=dirname(libRequire.resolve('7zip-bin/package.json'));
+ if(libRequire('7zip-bin/package.json').version!=='5.2.0')throw new Error('Review extractor and notices before changing 7zip-bin');
  const marker=Symbol.for('lxe.transactional-installer');
  if(NsisTarget.prototype[marker])return;
  NsisTarget.prototype[marker]=true;
@@ -73,14 +74,14 @@ async function installAdapter(context){
   await writeFile(helper,installerHelper(await readFile(join(templates,'include/installer.nsh'),'utf8')));
   await writeFile(section,installSection(await readFile(join(templates,'installSection.nsh'),'utf8'),helper));
   await writeFile(ui,assisted(await readFile(join(templates,'assistedInstaller.nsh'),'utf8')));
-  const sourceTool=await getPath7za(),tool=join(output,'7za.exe');await copyFile(sourceTool,tool);await this.packager.signIf(tool);
+  const sourceTool=join(zipRoot,'win/x64/7za.exe'),tool=join(output,'7za.exe');await copyFile(sourceTool,tool);await this.packager.sign(tool);
   let adapted=replaceOnce(source,'!include "installSection.nsh"',`!include "${section}"`);
   adapted=replaceOnce(adapted,'!include "assistedInstaller.nsh"',`!include "${ui}"`);
   for(const name of ['allowOnlyOneInstallerInstance.nsh','installUtil.nsh']){
    const file=join(output,name);await writeFile(file,cleanupExits(await readFile(join(templates,'include',name),'utf8')));
    adapted=replaceOnce(adapted,`!include "${name}"`,`!include "${file}"`);
   }
-  return `!define LXE_SEVENZIP_PATH "${tool}"\n!define LXE_SEVENZIP_LICENSE_DIR "${dirname(dirname(sourceTool))}"\n${await compute.call(this,adapted,...args)}`;
+  return `!define LXE_SEVENZIP_PATH "${tool}"\n${await compute.call(this,adapted,...args)}`;
  };
 }
 module.exports=installAdapter;

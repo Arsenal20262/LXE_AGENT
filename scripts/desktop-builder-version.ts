@@ -23,5 +23,7 @@ export function applyDesktopProductVersion(
     ? builderConfig.extraMetadata as Record<string, unknown>
     : {};
   if (identity && (!/^[a-zA-Z0-9_-]{1,100}$/.test(identity.build_id) || !/^[a-f0-9]{40}$/.test(identity.source_commit))) throw new Error("Invalid desktop build identity");
-  builderConfig.extraMetadata = { ...existingExtraMetadata, version, ...(identity ? {lxeBuildId:identity.build_id,lxeSourceCommit:identity.source_commit} : {}) };
+  // NSIS derives its installer cache from package.name. Match app-update.yml;
+  // the workspace-only scoped name would otherwise seed a different cache.
+  builderConfig.extraMetadata = { ...existingExtraMetadata, name:"lxe-agent", version, ...(identity ? {lxeBuildId:identity.build_id,lxeSourceCommit:identity.source_commit} : {}) };
 }

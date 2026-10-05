@@ -57,8 +57,8 @@ FunctionEnd
   StrCpy $INSTDIR $LxeStage
   SetOutPath $INSTDIR
   !insertmacro installApplicationFiles
-  File /oname=7zip-installer-LICENSE.txt "${LXE_SEVENZIP_LICENSE_DIR}\LICENSE.txt"
-  File /oname=7zip-installer-COPYING.txt "${LXE_SEVENZIP_LICENSE_DIR}\COPYING"
+  File /oname=7zip-installer-LICENSE.txt "${PROJECT_DIR}\resources\7zip-LICENSE.txt"
+  File /oname=7zip-installer-COPYING.txt "${PROJECT_DIR}\resources\7zip-COPYING.txt"
   !ifdef UNINSTALLER_ICON
     File /oname=uninstallerIcon.ico "${UNINSTALLER_ICON}"
   !endif
