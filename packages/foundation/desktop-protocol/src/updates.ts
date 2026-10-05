@@ -1,15 +1,14 @@
-export interface DesktopUpdateRelease {
-  version: string;
-  build_id: string;
+export interface DesktopUpdateIdentity { version: string; build_id: string; }
+export interface DesktopUpdateArtifact { file_name: string; size: number; sha512: string; }
+export interface DesktopUpdateRelease extends DesktopUpdateIdentity, DesktopUpdateArtifact {
   notes: string;
-  file_name: string;
-  size: number;
-  sha512: string;
+  blockmap?: DesktopUpdateArtifact;
 }
 export interface DesktopUpdateState {
-  phase: "unsupported" | "idle" | "checking" | "downloading" | "verifying" | "ready" | "installing" | "error" | "paused";
+  phase: "unsupported" | "idle" | "checking" | "available" | "downloading" | "verifying" | "ready" | "preparing" | "installing" | "error" | "paused";
   release?: DesktopUpdateRelease;
   percent?: number;
   message?: string;
+  failedOperation?: "check" | "download" | "install";
   lastAttempt?: string;
 }
