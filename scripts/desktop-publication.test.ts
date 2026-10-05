@@ -92,3 +92,20 @@ test("blockmap is verified and uploaded before activating channel; tampering blo
   expect(JSON.parse(cos.objects.get(`releases/${record.version}/${record.build_id}/release.json`)!).blockmap).toEqual(record.blockmap);
  }finally{rmSync(root,{recursive:true,force:true});}
 });
+test.each(["missing","tampered"])("remote blockmap %s prevents channel activation",async failure=>{
+ const root=mkdtempSync(join(tmpdir(),"lxe-remote-blockmap-")),cos=new FakeCos();
+ try{
+  const path=await candidate(root,"diff"),record=JSON.parse(readFileSync(path,"utf8"));
+  const file=join(root,"diff",record.file_name+".blockmap");writeFileSync(file,"blockmap");
+  record.blockmap={file_name:record.file_name+".blockmap",object_key:record.object_key+".blockmap",size:8,sha512:await sha512(file)};writeFileSync(path,JSON.stringify(record));
+  const upload=cos.uploadFile.bind(cos);
+  cos.uploadFile=(request,callback)=>upload(request,()=>{
+   if(request.Key===record.blockmap.object_key){
+    if(failure==="missing")cos.objects.delete(request.Key);else cos.hashes.set(request.Key,"changed");
+   }
+   callback(null,{});
+  });
+  await expect(main(["publish",path],{cos,lockRoot:root})).rejects.toThrow();
+  expect(cos.objects.has(CHANNEL)).toBe(false);expect(existsSync(join(root,"last-published.json"))).toBe(false);
+ }finally{rmSync(root,{recursive:true,force:true});}
+});
