@@ -14,11 +14,13 @@
   --text-soft: #52525b;
   --muted: #65656f;
   --muted-light: #65656f;
-  --accent: #2563eb;
-  --accent-strong: #1d4ed8;
-  --accent-soft: #eff6ff;
-  --accent-muted: #bfdbfe;
-  --settings-icon: #4077ff;
+  --accent: #3f3f46;
+  --accent-strong: #3f3f46;
+  --accent-soft: #f4f4f5;
+  --accent-muted: #d4d4d8;
+  --settings-primary: #27272a;
+  --settings-primary-hover: #3f3f46;
+  --settings-primary-ink: #ffffff;
   --settings-selected: #e8e8eb;
   --settings-danger-action: #b42318;
   --success: #287342;
@@ -31,7 +33,7 @@
   --danger-border: #fecdca;
   --info: var(--text-soft);
   --info-soft: var(--surface-muted);
-  --focus-ring: rgba(37, 99, 235, 0.2);
+  --focus-ring: rgba(63, 63, 70, 0.2);
   --scrim: rgba(24, 24, 27, 0.42);
   --shadow-soft: rgba(24, 24, 27, 0.06);
   --shadow-medium: rgba(24, 24, 27, 0.1);
@@ -55,10 +57,13 @@
   --text-soft: #d4d4d8;
   --muted: #a1a1aa;
   --muted-light: #a1a1aa;
-  --accent-strong: #93b4ff;
-  --accent-soft: #253149;
-  --accent-muted: #3b527d;
-  --settings-icon: #7da2ff;
+  --accent: #d4d4d8;
+  --accent-strong: #e4e4e7;
+  --accent-soft: #383838;
+  --accent-muted: #555555;
+  --settings-primary: #e4e4e7;
+  --settings-primary-hover: #f4f4f5;
+  --settings-primary-ink: #18181b;
   --settings-selected: #383838;
   --success: #8dca8d;
   --success-soft: #253429;
@@ -66,7 +71,7 @@
   --danger: #f28e85;
   --danger-soft: #3d2827;
   --danger-border: #693b38;
-  --focus-ring: rgba(125, 162, 255, 0.28);
+  --focus-ring: rgba(212, 212, 216, 0.28);
   --scrim: rgba(0, 0, 0, 0.56);
   --shadow-soft: rgba(0, 0, 0, 0.2);
   --shadow-medium: rgba(0, 0, 0, 0.28);
@@ -105,7 +110,7 @@
 }
 
 .desktop-settings-theme .desktop-settings-nav-item.active > svg {
-  color: var(--settings-icon);
+  color: var(--text-strong);
 }
 
 .desktop-settings-theme .desktop-settings-nav-item.active small {
@@ -113,8 +118,15 @@
   opacity: 1;
 }
 
+.desktop-settings-theme .desktop-appearance-option.active {
+  border-color: var(--border-strong);
+  background: var(--settings-selected);
+  color: var(--text-strong);
+  box-shadow: none;
+}
+
 .desktop-settings-theme :is(button, summary):focus-visible {
-  outline: 2px solid var(--settings-icon);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
@@ -133,7 +145,7 @@
 
 .desktop-settings-theme :is(.desktop-settings-content,
   .desktop-cloud-binding-dialog) :is(input, select):focus-visible {
-  border-color: var(--settings-icon);
+  border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
@@ -142,10 +154,25 @@
   opacity: 1;
 }
 
-.desktop-settings-theme .desktop-primary-button:hover:not(:disabled),
+.desktop-settings-theme .desktop-primary-button:not(.desktop-danger-button),
+.desktop-settings-theme .lxe-update-actions .lxe-update-primary {
+  background: var(--settings-primary);
+  border-color: var(--settings-primary);
+  color: var(--settings-primary-ink);
+}
+
+.desktop-settings-theme .desktop-primary-button:not(.desktop-danger-button):hover:not(:disabled),
 .desktop-settings-theme .lxe-update-primary:hover:not(:disabled) {
-  background: #1d4ed8;
-  border-color: #1d4ed8;
+  background: var(--settings-primary-hover);
+  border-color: var(--settings-primary-hover);
+}
+
+.desktop-settings-theme .desktop-primary-button:not(.desktop-danger-button):disabled,
+.desktop-settings-theme .lxe-update-primary:disabled {
+  background: var(--surface-muted);
+  border-color: var(--border);
+  color: var(--muted);
+  opacity: 1;
 }
 
 .desktop-settings-theme .desktop-confirm-dialog footer .desktop-danger-button {
@@ -156,11 +183,6 @@
 .desktop-settings-theme .desktop-confirm-dialog footer .desktop-danger-button:hover:not(:disabled) {
   background: #912018;
   border-color: #912018;
-}
-
-.desktop-settings-theme .lxe-update-actions .lxe-update-primary {
-  background: var(--accent);
-  border-color: var(--accent);
 }
 
 .desktop-settings-theme .lxe-update-dialog {
