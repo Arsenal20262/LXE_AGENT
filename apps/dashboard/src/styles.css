@@ -225,6 +225,8 @@ button {
   --sidebar-accent: #e3aa8d;
   --sidebar-hover: rgba(255, 255, 255, 0.055);
   --sidebar-active: rgba(255, 255, 255, 0.09);
+  --sidebar-action-bg: color-mix(in srgb, var(--sidebar-bg) 94%, white 6%);
+  --sidebar-shadow: rgba(0, 0, 0, 0.34);
   border-right-color: #312e2b;
 }
 
@@ -2049,14 +2051,16 @@ button {
   --app-titlebar-height: 41.8px;
   --app-sidebar-width: 256px;
   --sidebar-control-left: calc(var(--app-navigation-width) + 8px);
-  --navigation-bg: #272321;
-  --sidebar-bg: #211d1a;
-  --sidebar-border: rgba(255, 255, 255, 0.07);
-  --sidebar-ink: #f2ede6;
-  --sidebar-ink-soft: #a89d90;
-  --sidebar-accent: #d9a488;
-  --sidebar-hover: rgba(255, 255, 255, 0.06);
-  --sidebar-active: rgba(255, 255, 255, 0.1);
+  --navigation-bg: var(--bg);
+  --sidebar-bg: var(--bg);
+  --sidebar-border: var(--border);
+  --sidebar-ink: var(--text);
+  --sidebar-ink-soft: var(--muted);
+  --sidebar-accent: var(--accent-strong);
+  --sidebar-hover: color-mix(in srgb, var(--bg) 95%, var(--text) 5%);
+  --sidebar-active: color-mix(in srgb, var(--bg) 91%, var(--text) 9%);
+  --sidebar-action-bg: var(--sidebar-hover);
+  --sidebar-shadow: var(--shadow-strong);
 }
 
 .app-shell {
@@ -2128,7 +2132,7 @@ button {
   min-height: 0;
   padding: 16px 14px 14px;
   overflow: hidden;
-  border-right: 1px solid #2a2622;
+  border-right: 1px solid var(--sidebar-border);
   background: var(--sidebar-bg);
   color: var(--sidebar-ink-soft);
   transition: opacity 140ms ease, transform 180ms cubic-bezier(0.2, 0.75, 0.25, 1);
@@ -2203,21 +2207,21 @@ button {
 }
 
 .sidebar-window-controls.sidebar-visible .sidebar-icon-button {
-  color: #a89d90;
+  color: var(--sidebar-ink-soft);
 }
 
 .sidebar-window-controls.sidebar-visible .sidebar-icon-button.is-open,
 .sidebar-window-controls.sidebar-visible .sidebar-icon-button.is-selected {
-  color: #f2ede6;
+  color: var(--sidebar-ink);
 }
 
 .sidebar-window-controls.sidebar-visible .sidebar-icon-button:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #f2ede6;
+  background: var(--sidebar-hover);
+  color: var(--sidebar-ink);
 }
 
 .sidebar-window-controls.sidebar-visible .sidebar-icon-button:active {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--sidebar-active);
 }
 
 .app-shell.sidebar-collapsed .sidebar-window-controls .sidebar-icon-button {
@@ -2254,9 +2258,9 @@ button {
   height: min(78vh, 720px);
   max-height: calc(100vh - 64px);
   padding: 12px 14px 14px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--sidebar-border);
   border-radius: 14px;
-  box-shadow: 0 22px 52px rgba(0, 0, 0, 0.34);
+  box-shadow: 0 22px 52px var(--sidebar-shadow);
 }
 
 .app-sidebar.is-peek {
@@ -6786,7 +6790,7 @@ pre {
     padding-top: 12px;
     border: 1px solid var(--sidebar-border);
     border-radius: 14px;
-    box-shadow: 0 22px 52px rgba(0, 0, 0, 0.34);
+    box-shadow: 0 22px 52px var(--sidebar-shadow);
   }
 
   .desktop-window-frame .app-shell.sessions-focus .conversation-header {
@@ -8186,13 +8190,13 @@ pre {
 .sidebar-session-section .search-box {
   min-height: 36px;
   border-color: var(--sidebar-border);
-  background: rgba(255, 255, 255, 0.055);
+  background: var(--sidebar-hover);
   color: var(--sidebar-ink-soft);
 }
 
 .sidebar-session-section .search-box:focus-within {
-  border-color: rgba(217, 164, 136, 0.5);
-  box-shadow: 0 0 0 2px rgba(217, 164, 136, 0.12);
+  border-color: var(--sidebar-accent);
+  box-shadow: 0 0 0 2px var(--focus-ring);
 }
 
 .sidebar-session-section .search-box input {
@@ -8235,7 +8239,7 @@ pre {
   overflow-x: hidden;
   overflow-y: scroll;
   padding: 0;
-  scrollbar-color: rgba(255, 255, 255, 0.16) rgba(255, 255, 255, 0.025);
+  scrollbar-color: var(--scrollbar-thumb) transparent;
   scrollbar-gutter: stable;
   scrollbar-width: thin;
 }
@@ -8246,12 +8250,12 @@ pre {
 
 .sidebar-session-section .session-index-list::-webkit-scrollbar-track {
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.025);
+  background: transparent;
 }
 
 .sidebar-session-section .session-index-list::-webkit-scrollbar-thumb {
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.16);
+  background: var(--scrollbar-thumb);
 }
 
 .sidebar-session-section .session-index-item {
@@ -8276,8 +8280,8 @@ pre {
 .sidebar-session-section .session-index-item:hover .session-index-actions,
 .sidebar-session-section .session-index-item:focus-within .session-index-actions,
 .sidebar-session-section .session-index-item.menu-open .session-index-actions {
-  background: color-mix(in srgb, var(--sidebar-bg) 94%, white 6%);
-  box-shadow: -14px 0 12px 3px color-mix(in srgb, var(--sidebar-bg) 94%, white 6%);
+  background: var(--sidebar-action-bg);
+  box-shadow: -14px 0 12px 3px var(--sidebar-action-bg);
 }
 
 .sidebar-session-section .session-index-icon {
@@ -8319,7 +8323,7 @@ pre {
 }
 
 .sidebar-session-section .session-load-more-error {
-  color: #edaa98;
+  color: var(--danger);
 }
 
 .sidebar-session-section .session-index-item .primary-cell {
@@ -8340,11 +8344,11 @@ pre {
   display: grid;
   gap: 1.6px;
   padding: 4.8px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--border);
   border-radius: 9.6px;
-  background: #3b3936;
-  color: #f2ede6;
-  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.34);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 18px 42px var(--shadow-strong);
   font-size: 0.79rem;
 }
 
@@ -8365,7 +8369,7 @@ pre {
 
 .session-actions-menu button:hover,
 .session-actions-menu button:focus-visible {
-  background: rgba(255, 255, 255, 0.09);
+  background: var(--row-hover);
   outline: none;
 }
 
@@ -8375,19 +8379,19 @@ pre {
 }
 
 .session-actions-menu button.danger {
-  color: #ff8f8b;
+  color: var(--danger);
 }
 
 .session-actions-hint,
 .session-actions-error {
   margin: 3.1px 6.4px 2.4px;
-  color: #c7bdb2;
+  color: var(--muted);
   font-size: 0.54rem;
   line-height: 1.4;
 }
 
 .session-actions-error {
-  color: #ffaaa5;
+  color: var(--danger);
 }
 
 .session-delete-backdrop {
