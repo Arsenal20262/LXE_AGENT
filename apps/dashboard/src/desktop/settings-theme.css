@@ -52,13 +52,14 @@
   --row-hover: #333333;
   --border: #414141;
   --border-strong: #555555;
-  --text: #e4e4e7;
-  --text-strong: #f4f4f5;
-  --text-soft: #d4d4d8;
-  --muted: #a1a1aa;
-  --muted-light: #a1a1aa;
+  /* Share conversation text colours; navigation and labels use body brightness. */
+  --text: inherit;
+  --text-strong: inherit;
+  --text-soft: var(--text);
+  --muted: inherit;
+  --muted-light: var(--muted);
   --accent: #d4d4d8;
-  --accent-strong: #e4e4e7;
+  --accent-strong: var(--text);
   --accent-soft: #383838;
   --accent-muted: #555555;
   --settings-primary: #e4e4e7;
