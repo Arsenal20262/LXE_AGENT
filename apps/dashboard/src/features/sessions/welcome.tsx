@@ -111,28 +111,17 @@ export function ConversationWelcome({ enabled = true }: { enabled?: boolean }) {
         ) : !summary ? (
           <p className="welcome-status">{t.welcome.loading}</p>
         ) : (
-          <>
-            <div className="welcome-body">
-              <dl className="welcome-metrics">
-                {metricCards(t, summary).map((card) => (
-                  <div key={card.label}>
-                    <dt>{card.label}</dt>
-                    <dd title={card.value}>{card.value}</dd>
-                  </div>
-                ))}
-              </dl>
-              {history ? (
-                <>
-                  <Heatmap cells={history.heatmap} />
-                  <p className="welcome-status">
-                    {history.executions > 0
-                      ? t.welcome.longestStreak(formatNumber(history.longestStreak))
-                      : t.welcome.empty}
-                  </p>
-                </>
-              ) : null}
-            </div>
-          </>
+          <div className="welcome-body">
+            <dl className="welcome-metrics">
+              {metricCards(t, summary).map((card) => (
+                <div key={card.label}>
+                  <dt>{card.label}</dt>
+                  <dd title={card.value}>{card.value}</dd>
+                </div>
+              ))}
+            </dl>
+            {history ? <Heatmap cells={history.heatmap} /> : null}
+          </div>
         )}
       </div>
     </section>
