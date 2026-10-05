@@ -4,8 +4,8 @@
 
 ## 接手位置与依赖
 
-- 开发分支：`codex/vietnam-stock-pr4-workflow`；worktree：`/Users/hym/.codex/worktrees/e36c/LXE_AGENT1`。起点为个人 PR3 分支 `codex/vietnam-stock-pr3-workbook` 的 `a8dd62aa325c5e09fb590f4c3283fb905519b6d4`，创建前已与远端核对；没有在 `main` 开发。
-- PR4 应以个人 [PR #3](https://github.com/Arsenal20262/LXE_AGENT/pull/3) 所在分支为 base。PR3 依赖 PR2，PR2 依赖 PR1；合并前按序核对 base 和提交关系。
+- 开发分支：`codex/vietnam-stock-pr4-workflow`，在该分支的独立 worktree 中开发。起点为个人 PR3 分支 `codex/vietnam-stock-pr3-workbook` 的 `a8dd62aa325c5e09fb590f4c3283fb905519b6d4`；没有在 `main` 开发。
+- 个人 PR #4 以 [PR #3](https://github.com/Arsenal20262/LXE_AGENT/pull/3) 所在分支为 base。PR3 依赖 PR2，PR2 依赖 PR1；合并前按序核对 base 和提交关系。
 - 本模块只接通聊天中的越南备货生成。普通业务人员从 Desktop 上传或替换 SKU 映射表、长期保存四参数属于 PR5；本 PR 不接聊天临时覆盖。
 
 ## 已实现内容与调用链
@@ -37,6 +37,6 @@
 
 ## 已知边界与下一步
 
-- PR5 需完成 Desktop 端候选映射表内容校验、安全替换 current、四参数长期设置及对应配置优先级。PR4 每次对 current 私有快照做内容校验，但目前 Desktop 还没有完整业务上传入口；没有 current 时能明确拒绝且不调用雅仓。
+- PR4 收口时，Desktop 端候选映射表内容校验、安全替换 current、四参数长期设置及配置优先级留给后续 PR5。PR4 每次对 current 私有快照做内容校验；在 PR4 阶段，Desktop 尚无完整业务上传入口，没有 current 时能明确拒绝且不调用雅仓。
 - 真实雅仓当前库存导出及最终 Windows 安装包尚需现场联调。生产账号、密码及业务价格没有进入本 PR；源文件和 Office 中间文件不作为附件交付。
-- Git 状态：PR4 从 PR3 提交 `a8dd62aa` 建分支，原始四步提交为 `fd15314a`（设计与计划）、`bd73d4a5`（current 快照和五表工作流）、`7a6bcb82`（CLI、Skill 与双端契约）、`b68f759f`（本交接页）。个人仓库 `codex/vietnam-stock-pr4-workflow` 已推送，[PR #4](https://github.com/Arsenal20262/LXE_AGENT/pull/4) 以 PR3 分支为 base，仍开放、未合并；本页状态更新作为单独文档提交。创建 PR 时核对远端最新 `main` 已包含在 PR3 基线中，PR3 远端仍指向 `a8dd62aa`，GitHub 显示 PR4 对 PR3 无合并冲突。merge 须另行批准；PR4 收口后另开任务窗口处理 PR5。
+- Git 状态：PR4 从 PR3 提交 `a8dd62aa` 建分支，原始四步提交为 `fd15314a`（设计与计划）、`bd73d4a5`（current 快照和五表工作流）、`7a6bcb82`（CLI、Skill 与双端契约）、`b68f759f`（本交接页）。个人仓库 `codex/vietnam-stock-pr4-workflow` 已推送，[PR #4](https://github.com/Arsenal20262/LXE_AGENT/pull/4) 以 PR3 分支为 base，仍开放、未合并；本地 HEAD 以当前分支核对，远端 head 以 PR 页面为准。合并前须重新核对前序 PR 状态、最新 base 与冲突情况；merge 须另行批准。

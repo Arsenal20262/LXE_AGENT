@@ -2,7 +2,7 @@
 
 ## 基线、目标与边界
 
-PR6 从 PR5 的 `dbde3e56` 开始，开发分支为 `codex/vietnam-stock-pr6-partial-mapping`。PR6 依赖 [PR #5](https://github.com/Arsenal20262/LXE_AGENT/pull/5)，不在 `main` 开发，也不修改 PR5 的标题、正文或功能范围。
+PR6 的开发起点是 PR5 的 `dbde3e56`，后续已纳入 PR5 的 `c038bcf7` 历史同步点；开发分支为 `codex/vietnam-stock-pr6-partial-mapping`，评审 base 为 PR5 分支 `codex/vietnam-stock-pr5-desktop`。PR6 依赖 [PR #5](https://github.com/Arsenal20262/LXE_AGENT/pull/5)，不在 `main` 开发，也不修改 PR5 的标题、正文或功能范围。
 
 发布后运营仍只在 Desktop「工作台 → 模板与数据源 → 越南 SKU 参数表」上传一张 `.xlsx` 映射表，随后在聊天中运行现有无参数的越南备货命令。应用继续使用内置五表骨架和同一轮 VN8806 雅仓三类导出。PR6 使本轮雅仓 SKU 即使没有对应映射行，仍出现在最终五表中；已有映射行缺个别价格时，也能保留其他可计算结果。无第二个上传入口，无历史九表、相似 SKU、款号、商品名称或其他价格兜底。
 

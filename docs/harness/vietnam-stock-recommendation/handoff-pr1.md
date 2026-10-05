@@ -3,9 +3,9 @@
 ## 接手位置
 
 - 分支：`codex/vietnam-stock-recommendation`。
-- Worktree：仓库根目录下的 `.worktrees/pool-1`；主工作区仍在 `main`。
+- Worktree：该分支所属的独立 worktree；接手时用 `git worktree list` 核对实际位置，主工作区仍在 `main`。
 - `origin` 是老大的 `LXE123/LXE_AGENT`；`fork` 是个人仓库 `Arsenal20262/LXE_AGENT`。[个人仓库 PR1](https://github.com/Arsenal20262/LXE_AGENT/pull/1) 已创建，base 为个人 `main`，head 为 `codex/vietnam-stock-recommendation`，尚未合并。本轮没有向 `origin` push 或建 PR。用户计划把完成的模块按依赖顺序逐个提交给组长合并。
-- 本地 `main` 保持在 `805d1ef1`，没有在主分支开发。功能分支已无冲突地 rebase 到上游 `origin/main` 的 `dbf598fc`。个人 `fork/main` 已由 `efd39316` 快进同步到 `dbf598fc`，功能分支已推到个人仓库；实际 SHA 和 PR 状态以接手时的远端核对为准。
+- PR1 建立时，本地主工作区 `main` 位于 `805d1ef1`，功能分支已无冲突地 rebase 到当时上游 `origin/main` 的 `dbf598fc`；个人 `fork/main` 当时也快进到同一提交。功能分支已推到个人仓库。上述 SHA 是历史基线，不代表接手时的最新上游；实际 SHA 和 PR 状态须重新查询远端。
 - 目标：只完成完整模板与 SKU 参数表的资产身份、只读校验和读取。下一模块不得继续堆在本分支；PR1 收口后应在新聊天窗口领取新分支。
 
 ## 已完成的契约

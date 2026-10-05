@@ -1,10 +1,10 @@
 # 越南备货 PR6 交接：缺项 SKU 映射与五表保留
 
-> 本页记录 PR6 的本地实现与已取得的验证结果。截至 2026-10-04，设计、实现和测试已按步骤提交到当前分支；尚未推送或创建 PR6。
+> 本页记录 PR6 的实现与已取得的验证结果。截至 2026-10-05，分支已推送至个人 fork，并创建 [PR #6](https://github.com/Arsenal20262/LXE_AGENT/pull/6)；PR 尚未合并。
 
 ## 接手位置与依赖
 
-- 分支：`codex/vietnam-stock-pr6-partial-mapping`；在该分支所属 worktree 操作。从 PR5 提交 `dbde3e56` 开始；PR5 仍是开放的 [PR #5](https://github.com/Arsenal20262/LXE_AGENT/pull/5)，PR6 应以 PR5 分支为 base。没有在 `main` 开发。
+- 分支：`codex/vietnam-stock-pr6-partial-mapping`；在该分支所属 worktree 操作。开发起点是 PR5 的 `dbde3e56`，后续已纳入 PR5 的 `c038bcf7` 历史同步点；PR5 仍是开放的 [PR #5](https://github.com/Arsenal20262/LXE_AGENT/pull/5)，PR6 评审 base 为 PR5 分支 `codex/vietnam-stock-pr5-desktop`。没有在 `main` 开发。
 - 已批准设计在 `docs/superpowers/specs/2026-10-04-vietnam-partial-sku-mapping-design.md`，本地实施计划在 `docs/superpowers/plans/2026-10-04-vietnam-partial-sku-mapping.md`。设计已作为独立提交 `f159a2d5` 保存。接手时先核对项目规范、分支状态和这两份文件。
 - PR6 只改变当前 SKU 映射缺行、单项价格留空时的五表行为，以及对应的重算校验和说明。Desktop 仍只有一个 SKU 映射表槽；聊天命令仍无参数；没有新增推断匹配、历史数据回填或临时参数覆盖。
 
@@ -43,5 +43,5 @@ Desktop 上传 `.xlsx` → `lxeskill assets vietnam sku install` → 安全 ZIP�
 ## 已知边界、Git 状态与下一步
 
 - 本机只验证了合成雅仓数据和隔离资产状态。Windows 安装包、文件占用行为，以及真实雅仓 VN8806 导出和业务 XLSX 均需现场验收；没有进行生产请求。对应利润率的其他输入齐全时，显式零价触发既有除零诊断；其他依赖输入缺失时按依赖留空，零价始终不能当作空价处理。
-- 本地设计提交为 `f159a2d5`；随后四个独立提交依次为稀疏映射校验 `a120774a`、五表左连接与条件公式 `1f9333a3`、重算结果校验 `d1b19e01`、隔离集成测试 `28232d32`。现行文档、实施计划和本交接页作为最后一个文档提交；该提交的哈希以当前分支 `git log -1` 为准。提交前工作区只余这七个文档路径；提交后应再次核对 `git status`。没有修改锁文件、提交真实业务表或触及其他模块。推送、创建 PR6、合并各需单独确认。
-- 下一步确认 PR5 分支和 PR6 差异，汇报范围、验证和限制，分别申请推送与创建 PR6。PR5 及其上游仍未合并；最终合并前在当前开发分支同步最新 `main` 并处理任何冲突，再做一次全量验证。PR6 收口后用本页在新任务接手下一模块。
+- PR6 的原始独立提交依次为设计 `f159a2d5`、稀疏映射校验 `a120774a`、五表左连接与条件公式 `1f9333a3`、重算结果校验 `d1b19e01`、隔离集成测试 `28232d32`，随后以 `bbd62a66`、`cc77bf20` 更新文档，再以 `afd92b1d` 同步 PR5。截至 2026-10-05 的已推送收口提交为 `afd92b1d`；本地 HEAD 与工作区状态以当前分支核对，远端 head/base 以 PR #6 页面为准。没有修改锁文件或提交真实业务表。
+- 下一步审阅个人 fork PR #6 的差异与说明，按 PR1 → PR2 → PR3 → PR4 → PR5 → PR6 的依赖顺序处理。最终合并前在当前开发分支同步最新 `main` 并处理任何冲突，再做一次全量验证；合并仍需单独确认。真实雅仓数据与 Windows 安装版的现场验收边界见上文。

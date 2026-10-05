@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Work only on `codex/vietnam-stock-pr6-partial-mapping`, based on PR5 `dbde3e56`; never develop on `main`.
+- Work only on `codex/vietnam-stock-pr6-partial-mapping`. The implementation started from PR5 `dbde3e56` and later incorporated PR5 `c038bcf7`; review against the PR5 branch `codex/vietnam-stock-pr5-desktop`. Never develop on `main`.
 - One Desktop uploaded `.xlsx` map and the packaged five-sheet skeleton remain the only operator-side inputs. Do not call production Yacang or use history or fuzzy SKU matching.
 - A trusted current map must exist and contain at least one valid SKU; retain exact headers, unique text SKU, no formula input cells, nonblank price numeric/Excel precision checks, safe XLSX limits, manifest/digest/revision checks, and pre-Yacang failure for invalid map/config.
 - Map row absent: B/G/AE/AJ and H/AC/AF:AM blank; current Yacang source fields and independent calculations remain. Existing row with blank hot flag: B=2. Existing row with blank individual prices: blank only the field and dependent finance columns. Explicit zero is present, including the existing zero-price margin error behavior.
