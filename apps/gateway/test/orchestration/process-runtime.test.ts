@@ -420,3 +420,48 @@ test.each([false,true])("parent exit cannot release ownership before tree termin
   finish();await termination;expect(runtime.hasProcess).toBe(false);
  }
 });
+
+test.each([false, true])("concurrent protocol failures and stop share tree termination (failure=%s)", async fail => {
+  const { EventEmitter } = await import("node:events");
+  const child = Object.assign(new EventEmitter(), { pid: 424242, exitCode: null as number | null, signalCode: null });
+  const diagnostics: unknown[] = [];
+  const runtime = new ProcessAgentRuntime({
+    command: "must-not-start", cwd: process.cwd(), environment: {}, ...resourcePaths(process.cwd()),
+    dataRoot: process.cwd(), legacyWorkspace: testWorkspace,
+    logger: { debug() {}, info() {}, warn() {}, error(_message, fields) { diagnostics.push(fields); }, child() { return this; } },
+  });
+  (runtime as any).child = child;
+  let finish!: () => void, failTree!: (error: Error) => void, treeCalls = 0;
+  (runtime as any).terminateProcessTree = () => {
+    treeCalls += 1;
+    return new Promise<void>((resolve, reject) => { finish = resolve; failTree = reject; });
+  };
+  child.once("exit", () => { (runtime as any).handleExit(new Error("parent exited")); });
+  const first = (runtime as any).failConnection(new Error("first invalid response"));
+  const second = (runtime as any).failConnection(new Error("second invalid response"));
+  child.exitCode = 0;
+  child.emit("exit", 0, null);
+  let stopSettled = false;
+  const stopped = runtime.stop();
+  void stopped.then(() => { stopSettled = true; }, () => { stopSettled = true; });
+  const outcomes = Promise.allSettled([first, second, stopped]);
+  await Bun.sleep(10);
+  const stoppedBeforeTreeExit = stopSettled;
+  const failure = new Error("taskkill fixture: descendant access denied");
+  if (fail) failTree(failure); else finish();
+  const results = await outcomes;
+  expect(treeCalls).toBe(1);
+  expect(stoppedBeforeTreeExit).toBe(false);
+  expect(results.map(result => result.status)).toEqual(["fulfilled", "fulfilled", fail ? "rejected" : "fulfilled"]);
+  expect(runtime.hasProcess).toBe(fail);
+  if (fail) {
+    expect(results[2]).toMatchObject({ reason: failure });
+    expect(runtime.status().message).toBe(failure.message);
+    expect(diagnostics).toContainEqual({ error: failure });
+    const restartError = await runtime.start().catch(error => error);
+    expect(restartError).toBe(failure);
+  } else {
+    expect(runtime.status().state).toBe("stopped");
+    expect(diagnostics).toEqual([]);
+  }
+});

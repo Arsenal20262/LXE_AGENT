@@ -131,6 +131,7 @@ export class ProcessAgentRuntime implements DirectAgentRuntime {
   private incompatible = false;
   private child: ChildProcessWithoutNullStreams | undefined;
   private treeTermination: { pid: number; error?: Error } | undefined;
+  private termination: Promise<void> | undefined;
   private terminateProcessTree: ((pid: number) => Promise<void>) | undefined = process.platform === "win32"
     ? pid => new Promise((resolveTree, reject) => {
       execFile("taskkill.exe", ["/PID", String(pid), "/T", "/F"], { windowsHide: true, timeout: 3500 }, (error, _stdout, stderr) => {
@@ -263,11 +264,14 @@ export class ProcessAgentRuntime implements DirectAgentRuntime {
   }
 
   async stop(): Promise<void> {
-    this.assertTreeExitConfirmed();
     this.manuallyStopped = true;
     if (this.restartTimer) clearTimeout(this.restartTimer);
     this.restartTimer = undefined;
     this.restartAttempt = 0;
+    // A protocol failure may already be stopping the tree. Join that operation
+    // before interpreting retained ownership as a failed termination.
+    if (this.termination) await this.termination;
+    this.assertTreeExitConfirmed();
     if (!this.child) {
       this.setStatus("stopped", "");
       return;
@@ -527,7 +531,13 @@ export class ProcessAgentRuntime implements DirectAgentRuntime {
     this.rejectPending(error);
     const termination = this.terminateChild();
     const generation = this.generation;
-    await termination;
+    try { await termination; }
+    catch (cause) {
+      // Called from a stream listener: retain the real failure without creating
+      // an unhandled rejection. Ownership still prevents unsafe recovery.
+      this.logger.error("agent_cli_termination_failed", { error: cause });
+      return;
+    }
     if (generation === this.generation && !this.child && !this.stopping && !this.manuallyStopped) this.scheduleRecovery();
   }
 
@@ -598,6 +608,14 @@ export class ProcessAgentRuntime implements DirectAgentRuntime {
   }
 
   private async terminateChild(): Promise<void> {
+    if (this.termination) return this.termination;
+    const termination = this.terminateChildOnce();
+    this.termination = termination;
+    try { await termination; }
+    finally { if (this.termination === termination) this.termination = undefined; }
+  }
+
+  private async terminateChildOnce(): Promise<void> {
     this.assertTreeExitConfirmed();
     const child = this.child;
     if (!child) return;
