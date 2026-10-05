@@ -405,8 +405,8 @@ async function bootstrap(): Promise<void> {
   removeCloudResumeListener = () => powerMonitor.removeListener("resume", checkCloudAfterResume);
   const updateSupported = packagedRuntime && process.platform === "win32" && process.arch === "x64";
   const updateJournal = new UpdateJournal(join(paths.dataRoot, "updates", "last-attempt.json"));
-  const lastAttempt = updateJournal.previous(app.getVersion());
   const installedBuild = updateSupported ? JSON.parse(readFileSync(join(app.getAppPath(), "package.json"), "utf8")).lxeBuildId as string | undefined : undefined;
+  const lastAttempt = updateJournal.previous(app.getVersion(), installedBuild);
   let gatewayStopStarted = false;
   const updates = new DesktopUpdateService({
     ...(lastAttempt ? {lastAttempt} : {}),
