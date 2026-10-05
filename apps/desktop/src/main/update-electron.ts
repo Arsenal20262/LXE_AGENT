@@ -105,7 +105,10 @@ export class ElectronUpdateInstaller implements UpdateInstaller {
    await this.updater.checkForUpdates();const files=await this.updater.downloadUpdate();
    if(!files?.[0])throw new Error("安装包未下载");return files[0];
   }catch(error){
-   if((error as any)?.statusCode===403){
+   // Pinned builder-util-runtime's full-file path drops statusCode and emits
+   // this exact message; its buffer/Range paths instead retain HttpError.
+   const deniedDownload=error instanceof Error&&/^Cannot download "https?:\/\/[^"\r\n]+", status 403: /.test(error.message);
+   if((error as any)?.statusCode===403||deniedDownload){
     const expired=new Error(updateDiagnostic(error));expired.name="UpdateTicketExpiredError";throw expired;
    }
    throw error;

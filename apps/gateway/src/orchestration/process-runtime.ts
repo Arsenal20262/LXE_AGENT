@@ -265,6 +265,16 @@ export class ProcessAgentRuntime implements DirectAgentRuntime {
     this.stopping = true;
     try {
       await this.request("shutdown", {}, this.options.shutdownTimeoutMs ?? 5_000);
+      const child = this.child;
+      if (child && child.exitCode === null && child.signalCode === null) {
+        // The shutdown response is flushed just before exit. Give the real exit
+        // event a short grace period instead of racing taskkill against it.
+        await new Promise<void>(resolveExit => {
+          const finish = () => { clearTimeout(timer); child.off("exit", finish); resolveExit(); };
+          const timer = setTimeout(finish, 250);
+          child.once("exit", finish);
+        });
+      }
     } catch {
       // The process may have already exited; termination below is idempotent.
     }
