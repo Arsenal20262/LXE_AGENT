@@ -91,22 +91,17 @@ test("late model responses after cache clear cannot repopulate credentials",asyn
   expect(f.config.managedLlmState().credentials).toHaveLength(0);await s.stop();
 });
 test("direct transport ignores proxies, never sends credentials/cookies, and never follows redirects",async()=>{
-  const seen:string[]=[];const upstream=Bun.serve({hostname:"127.0.0.1",port:0,fetch(req){
-    seen.push(new URL(req.url).pathname);expect(req.headers.get("authorization")).toBeNull();expect(req.headers.get("cookie")).toBeNull();
-    expect(req.headers.get("x-lxe-client")).toBe("cli");
-    if(new URL(req.url).pathname.endsWith("redirect"))return new Response(null,{status:302,headers:{location:"/leak"}});
-    return Response.json({ok:true});
-  }});
-  const old=process.env.HTTP_PROXY;process.env.HTTP_PROXY="http://127.0.0.1:1";
-  try {
-    const c=new DirectNativeCloudClient(),signal=new AbortController().signal,server="http://127.0.0.1:"+upstream.port;
-    expect(await c.request(server,"/api/v1/device-access",signal)).toEqual({ok:true});
-    // Bun 1.4.2 on Windows crashes in libuv when .rejects waits on this live HTTP request.
-    // Settle the request before asserting; keep exercising the real transport and redirect response.
-    const redirectError = await c.request(server,"/api/v1/device-access/redirect",signal).catch(error => error);
-    expect(redirectError).toBeInstanceOf(CloudHttpError);
-    expect(seen).toHaveLength(2);
-  }finally{if(old===undefined)delete process.env.HTTP_PROXY;else process.env.HTTP_PROXY=old;upstream.stop(true);}
+  // Bun 1.4.2 on Windows retains proxy state after process.env is restored.
+  // Keep the deliberately broken proxies out of the shared test process.
+  const child = Bun.spawn([process.execPath, join(import.meta.dir, "fixtures/native-cloud-transport.ts")], {
+    env: { ...process.env, HTTP_PROXY: "http://127.0.0.1:1", http_proxy: "http://127.0.0.1:1",
+      HTTPS_PROXY: "http://127.0.0.1:1", https_proxy: "http://127.0.0.1:1",
+      ALL_PROXY: "http://127.0.0.1:1", all_proxy: "http://127.0.0.1:1", NO_PROXY: "", no_proxy: "" },
+    stdout: "pipe", stderr: "pipe",
+  });
+  const [code, stdout, stderr] = await Promise.all([child.exited, new Response(child.stdout).text(), new Response(child.stderr).text()]);
+  expect(code, `Native cloud transport fixture\n${stdout}\n${stderr}`).toBe(0);
+  expect(JSON.parse(stdout)).toEqual({ paths: ["/api/v1/device-access", "/api/v1/device-access/redirect"], redirectStatus: 302 });
 });
 test("HTTP diagnostics parse full long JSON and redact model keys before logging/display",async()=>{
   const upstream=Bun.serve({hostname:"127.0.0.1",port:0,fetch(){return Response.json({padding:"x".repeat(6000),detail:{
