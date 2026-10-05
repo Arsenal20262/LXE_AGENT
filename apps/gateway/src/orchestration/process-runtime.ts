@@ -1,6 +1,6 @@
 import { type ManagedLlmState } from "@lxe/core";
 import { randomUUID } from "node:crypto";
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { spawn, execFile, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createInterface, type Interface } from "node:readline";
 import type {
   AgentJob,
@@ -263,6 +263,8 @@ export class ProcessAgentRuntime implements DirectAgentRuntime {
     this.setStatus("stopped", "");
     this.stopping = false;
   }
+
+  get hasProcess(): boolean { return Boolean(this.child); }
 
   async restart(): Promise<void> {
     await this.stop();
@@ -563,6 +565,25 @@ export class ProcessAgentRuntime implements DirectAgentRuntime {
   private async terminateChild(): Promise<void> {
     const child = this.child;
     if (!child) return;
+    // Keep ownership until an actual exit. Sending SIGKILL is not proof of exit.
+    if (child.exitCode === null && child.signalCode === null) {
+      await new Promise<void>((resolveExit, reject) => {
+        let forceTimer: ReturnType<typeof setTimeout>;
+        let deadline: ReturnType<typeof setTimeout>;
+        const cleanup = () => { clearTimeout(forceTimer); clearTimeout(deadline); child.off("exit", exited); };
+        const exited = () => { cleanup(); resolveExit(); };
+        child.once("exit", exited);
+        forceTimer = setTimeout(() => { if (process.platform !== "win32") try { child.kill("SIGKILL"); } catch (error) { cleanup(); reject(error); } }, 1500);
+        deadline = setTimeout(() => { cleanup(); reject(new AgentProcessError(`agent-cli PID ${child.pid} did not exit after termination`, "AgentProcessExitUnconfirmed")); }, 4000);
+        try {
+          if (process.platform === "win32" && child.pid) {
+            execFile("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], {windowsHide:true,timeout:3500}, (error, _stdout, stderr) => {
+              if (error && child.exitCode === null && child.signalCode === null) { cleanup(); reject(new Error(`taskkill failed: ${error.message}; ${stderr}`)); }
+            });
+          } else child.kill("SIGTERM");
+        } catch (error) { cleanup(); reject(error); }
+      });
+    }
     this.child = undefined;
     this.generation += 1;
     this.notifications = Promise.resolve();
@@ -571,22 +592,6 @@ export class ProcessAgentRuntime implements DirectAgentRuntime {
     this.stdout = undefined;
     this.stderr = undefined;
     this.rejectPending(new AgentProcessError("agent-cli stopped", "AgentProcessStopped"));
-    if (!child.killed) child.kill("SIGTERM");
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    try {
-      await Promise.race([
-        new Promise<void>((resolveExit) => child.once("exit", () => resolveExit())),
-        new Promise<void>((resolveTimeout) => {
-          timer = setTimeout(() => {
-            child.kill("SIGKILL");
-            resolveTimeout();
-          }, 2_000);
-          timer.unref?.();
-        }),
-      ]);
-    } finally {
-      if (timer) clearTimeout(timer);
-    }
   }
 
   private rejectPending(error: Error): void {

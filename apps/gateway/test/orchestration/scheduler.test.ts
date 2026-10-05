@@ -601,3 +601,20 @@ test("admission persistence fences deletion and updates before execution", async
   finish(); await accepted;
   expect(runtime.started).toHaveLength(1);
 });
+
+test("update confirmation fence settles old admissions without starting them or accepting new work",async()=>{
+ const runtime=new RecordingRuntime(),states:string[]=[];
+ const scheduler=new SessionScheduler({runtime,onJobState:e=>states.push(e.state+":"+e.job.job_id)});
+ await scheduler.enqueue(job("s1","active"));
+ let persisted!:()=>void;
+ const admission=scheduler.enqueue(job("s2","persisting"),{beforeAccept:()=>new Promise<void>(r=>{persisted=r;})});
+ const unlock=scheduler.beginUpdate(true)!;expect(unlock).toBeFunction();
+ await expect(scheduler.enqueue(job("s3","new"))).rejects.toThrow("blocked");
+ await expect(scheduler.steerActive("s1",{text:"new input"})).rejects.toThrow("blocked");
+ const settled=scheduler.settleUpdateAdmissions();persisted();await admission;await settled;
+ expect(runtime.started.map(j=>j.job_id)).toEqual(["active"]);
+ expect(scheduler.runStatuses().map(j=>j.turn_id)).toContain("persisting");
+ await scheduler.cancelForUpdate();
+ expect(states).toContain("cleared:persisting");expect(runtime.cancelled).toEqual(["active"]);expect(runtime.cancellationReasons).toEqual(["user_stop"]);
+ unlock();expect(runtime.started.map(j=>j.job_id)).toEqual(["active"]);
+});

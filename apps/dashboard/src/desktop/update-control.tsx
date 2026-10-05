@@ -13,7 +13,7 @@ export function UpdateControl({manual=false,checkRequest=0}:{manual?:boolean;che
  const [installPending,setInstallPending]=useState(false);
  const actionPending=useRef(false);
  const revision=useRef(0);
- const installLocked=installPending||state.phase==="installing";
+ const installLocked=installPending||["preparing","installing"].includes(state.phase);
  const focusSettings=()=>requestAnimationFrame(()=>document.querySelector<HTMLElement>(
   manual?".desktop-settings-modal .desktop-close-button":".sidebar-settings-button",
  )?.focus());
@@ -32,21 +32,22 @@ export function UpdateControl({manual=false,checkRequest=0}:{manual?:boolean;che
   const timer=setInterval(()=>{void poll().catch(()=>{});},1000);
   return ()=>{stopped=true;clearInterval(timer);};
  },[]);
- const working=["checking","downloading","verifying","installing"].includes(state.phase);
+ const working=["checking","downloading","verifying","preparing","installing"].includes(state.phase);
  const ready=state.phase==="ready";
+ const available=state.phase==="available";
  const label=state.phase==="downloading"?t.downloading+(state.percent===undefined?"":" · "+Math.floor(state.percent)+"%")
-  :state.phase==="verifying"?t.verifying:state.phase==="installing"?t.installing:state.phase==="checking"?t.checking:state.phase==="error"?t.failed:t.update;
- const action=async(install=false)=>{
+  :state.phase==="verifying"?t.verifying:["preparing","installing"].includes(state.phase)?t.installing:state.phase==="checking"?t.checking:state.phase==="error"?t.failed:t.update;
+ const action=async(operation:"check"|"download"|"install"="check")=>{
   const api=window.lxe?.desktop;
-  if(!api||actionPending.current||working||!(install?api?.installUpdate:api?.checkForUpdate))return;
-  actionPending.current=true;
-  revision.current++;
-  setBusy(true);
-  setInstallPending(install);
-  if(!install&&open){setOpen(false);focusSettings();}
-  setState(previous=>({...previous,phase:install?"installing":"checking",message:undefined}));
-  try{const next=install?await api.installUpdate?.():await api.checkForUpdate?.();if(next)setState(next);}
-  catch(error){setState({phase:"error",message:String(error)});}
+  if(!api||actionPending.current||working)return;
+  const target=state.release;
+  if(operation!=="check"&&!target)return;
+  actionPending.current=true;revision.current++;setBusy(true);setInstallPending(operation==="install");
+  setState(previous=>({...previous,phase:operation==="install"?"preparing":operation==="download"?"downloading":"checking",message:undefined}));
+  try{
+   const next=operation==="install"?await api.installUpdate?.(target!):operation==="download"?await api.downloadUpdate?.(target!):await api.checkForUpdate?.();
+   if(next)setState(next);
+  }catch(error){setState(previous=>({...previous,phase:"error",failedOperation:operation,message:String(error)}));}
   finally{revision.current++;actionPending.current=false;setBusy(false);setInstallPending(false);}
  };
  const handledCheck=useRef(0);
@@ -59,13 +60,13 @@ export function UpdateControl({manual=false,checkRequest=0}:{manual?:boolean;che
  const ring=working;
  const percent=state.phase==="downloading"&&Number.isFinite(state.percent)?Math.min(100,Math.max(0,state.percent!)):undefined;
  const noUpdate=state.phase==="idle"&&Boolean(state.message);
- const manualLabel=working?label:ready?t.restart:state.phase==="error"?t.details:state.phase==="paused"?t.paused:noUpdate?t.noUpdate:t.check;
+ const manualLabel=working?label:ready?t.restart:available?t.download:state.phase==="error"?t.details:state.phase==="paused"?t.paused:noUpdate?t.noUpdate:t.check;
  return <>
   {manual?<span className="lxe-update-manual" aria-live="polite">
    <button type="button" className="lxe-update-manual-button" disabled={busy||working}
     title={state.phase==="error"?t.details:ready?t.restart:t.check}
     aria-label={noUpdate?`${manualLabel} · ${t.check}`:manualLabel}
-    onClick={()=>{if(ready||state.phase==="error")setOpen(true);else void action();}}>
+    onClick={()=>{if(ready||available||state.phase==="error")setOpen(true);else void action();}}>
     {working?<svg aria-hidden="true" viewBox="0 0 32 32" className={"lxe-update-ring"+(percent===undefined?" is-spinning":"")}>
      <circle cx="16" cy="16" r="13" className="ring-track"/>
      <circle cx="16" cy="16" r="13" className="ring-progress" pathLength="100" strokeDasharray="100" strokeDashoffset={percent===undefined?72:100-percent}/>
@@ -95,8 +96,8 @@ export function UpdateControl({manual=false,checkRequest=0}:{manual?:boolean;che
     {ready?<p>{t.confirm}</p>:null}
     <div className="lxe-update-actions">
      <button type="button" onClick={close} disabled={installLocked}>{ready?t.later:t.close}</button>
-     {ready||state.phase==="error"?<button type="button" className="lxe-update-primary" disabled={busy||working||installLocked} onClick={()=>void action(ready)}>
-      {ready?t.restart:t.retry}
+     {ready||available||state.phase==="error"?<button type="button" className="lxe-update-primary" disabled={busy||working||installLocked} onClick={()=>void action(ready?"install":available?"download":state.failedOperation??"check")}>
+      {ready?t.restart:available?t.download:t.retry}
      </button>:null}
     </div>
    </div>

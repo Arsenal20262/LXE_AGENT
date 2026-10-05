@@ -91,6 +91,8 @@ if ([int]$selection.schema_version -ne 1 -or [string]$selection.selected_version
     throw "Desktop product version selection is invalid: $versionSelectionPath"
 }
 $env:LXE_DESKTOP_PRODUCT_VERSION = [string]$selection.selected_version
+$env:LXE_DESKTOP_BUILD_ID = [string]$selection.build_id
+$env:LXE_DESKTOP_SOURCE_COMMIT = [string]$selection.source_commit
 
 $prepareParameters = @{}
 if (-not [string]::IsNullOrWhiteSpace($RuntimeRoot)) { $prepareParameters.RuntimeRoot = $RuntimeRoot }

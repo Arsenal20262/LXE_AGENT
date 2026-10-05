@@ -55,7 +55,8 @@ const DEFAULT_SHUTDOWN_TIMEOUTS: GatewayShutdownTimeouts = {
   schedulerMs: 3_000,
   activeRunsMs: 3_000,
   channelsMs: 8_000,
-  runtimeMs: 5_000,
+  // Runtime allows 5s for graceful shutdown, then 4s for confirmed termination.
+  runtimeMs: 10_000,
   startupMs: 3_000,
 };
 

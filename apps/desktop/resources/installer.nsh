@@ -1,7 +1,8 @@
 !ifndef BUILD_UNINSTALLER
 !include "${PROJECT_DIR}\resources\office-prerequisites.nsh"
+!include "${PROJECT_DIR}\resources\update-installer.nsh"
 !macro customInstall
-  Call LxeOfficePrerequisites
+  Call LxeCommitApplication
 !macroend
 !endif
 

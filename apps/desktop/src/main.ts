@@ -6,7 +6,9 @@ import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DeepSeekBalanceService } from "./main/deepseek-balance";
 import { UpdateJournal } from "./main/update-journal";
-import { DesktopUpdateService, UpdateBusyError } from "./main/update-service";
+import { readFileSync } from "node:fs";
+import { prepareUpdate } from "./main/update-preparation";
+import { DesktopUpdateService } from "./main/update-service";
 import { DesktopUpdateApi, ElectronUpdateInstaller } from "./main/update-electron";
 import { join } from "node:path";
 import {
@@ -241,7 +243,7 @@ async function bootstrap(): Promise<void> {
   let updateNetworkReady = false;
   const broadcastCloudState = (state: DesktopCloudState): void => {
     const connected = state.connection === "connected";
-    if (connected && !updateNetworkReady) void activeUpdates?.check();
+    if (connected && !updateNetworkReady) activeUpdates?.wake();
     updateNetworkReady = connected;
     for (const browserWindow of applicationWindows()) {
       if (!browserWindow.isDestroyed()) browserWindow.webContents.send(IPC_CHANNELS.cloudStateChanged, state);
@@ -398,45 +400,60 @@ async function bootstrap(): Promise<void> {
     dataRoot: paths.dataRoot,
     managedPath: paths.managedPath,
   });
-  const checkCloudAfterResume = (): void => { void cloud.check(); };
+  const checkCloudAfterResume = (): void => { void cloud.check(); activeUpdates?.wake(); };
   powerMonitor.on("resume", checkCloudAfterResume);
   removeCloudResumeListener = () => powerMonitor.removeListener("resume", checkCloudAfterResume);
   const updateSupported = packagedRuntime && process.platform === "win32" && process.arch === "x64";
   const updateJournal = new UpdateJournal(join(paths.dataRoot, "updates", "last-attempt.json"));
   const lastAttempt = updateJournal.previous(app.getVersion());
+  const installedBuild = updateSupported ? JSON.parse(readFileSync(join(app.getAppPath(), "package.json"), "utf8")).lxeBuildId as string | undefined : undefined;
+  let gatewayStopStarted = false;
   const updates = new DesktopUpdateService({
     ...(lastAttempt ? {lastAttempt} : {}),
     recordAttempt: release => updateJournal.start(release.version, release.build_id),
     recordError: error => updateJournal.error(error),
     supported: updateSupported,
     configured: () => Boolean(config.cloudConfiguration().data_server_url) && cloud.state().connection === "connected",
-    api: new DesktopUpdateApi(() => config.cloudConfiguration().data_server_url, app.getVersion()),
-    installer: updateSupported ? new ElectronUpdateInstaller(error => activeUpdates?.recordFailure(error)) : {
+    api: new DesktopUpdateApi(() => config.cloudConfiguration().data_server_url, app.getVersion(), installedBuild),
+    installer: updateSupported ? new ElectronUpdateInstaller(error => activeUpdates?.recordFailure(error), message => logger.info("desktop_update_download", {message})) : {
       download: async () => { throw new Error("Updates unsupported"); },
       verify: async () => {}, install: () => {},
     },
-    beginInstall: () => {
-      const task = syntheticPerformer.current();
-      if (task?.state === "running" || task?.state === "queued") throw new UpdateBusyError("仍有任务正在运行，请结束后再次点击更新");
-      const release = gateway.beginUpdate();
-      updateShutdown = true;
-      return () => { updateShutdown = false; release(); };
-    },
+    prepareInstall: () => prepareUpdate({
+      snapshot: () => {
+        const task = syntheticPerformer.current();
+        return [...gateway.updateTasks(), ...(manualTools?.activity() ?? []),
+          ...(task && ["running", "queued"].includes(task.state) ? ["Synthetic " + task.task_id] : [])];
+      },
+      confirm: async tasks => {
+        const options = {type: "warning" as const, title: "重启并更新 LXE Agent",
+          message: tasks.length ? `将停止 ${tasks.length} 项运行中或排队的任务，然后安装更新。` : "将关闭 LXE Agent 并安装已下载的更新。",
+          detail: tasks.length ? "已停止的任务不会自动重放。\n" + tasks.slice(0, 30).join("\n") : "应用将在安装完成后重新启动。",
+          buttons: ["稍后", tasks.length ? "停止任务并更新" : "重启更新"], defaultId: 0, cancelId: 0};
+        return (await (window ? dialog.showMessageBox(window, options) : dialog.showMessageBox(options))).response === 1;
+      },
+      fence: () => {
+        const releaseGateway = gateway.beginUpdate();
+        const releaseTools = manualTools?.beginUpdate();
+        updateShutdown = true;
+        return () => { updateShutdown = false; releaseGateway(); releaseTools?.(); };
+      },
+      settle: async () => { await gateway.settleUpdateAdmissions(); await manualTools?.settleUpdateAdmissions(); },
+    }),
     cleanup: async () => {
-      try {
-        await cloud.stop();
-        await syntheticPerformer.stop();
-        await gateway.stop(true);
-        await authBrowserHost.stop();
-        shutdownComplete = true;
-        quitting = true;
-        activeUpdates?.stop();
-        await logging.close();
-      } catch (error) {
-        quitting = false;
-        shutdownComplete = false;
-        throw new Error("更新前退出清理失败，请手动重启应用后重试：" + String(error));
-      }
+      gatewayStopStarted = false;
+      await gateway.cancelUpdateTasks();
+      await cloud.stop();
+      await syntheticPerformer.stop();
+      await manualTools?.closeSession();
+      gatewayStopStarted = true;
+      await gateway.stop(true);
+      await authBrowserHost.stop();
+    },
+    recover: async () => {
+      if (gatewayStopStarted) await gateway.recoverAfterUpdate();
+      gatewayStopStarted = false;
+      cloud.start();
     },
   });
   activeUpdates = updates;
@@ -472,7 +489,8 @@ async function bootstrap(): Promise<void> {
     },
     getUpdateState: () => updates.state(),
     checkForUpdate: () => updates.check(),
-    installUpdate: () => updates.install(),
+    downloadUpdate: target => updates.download(target),
+    installUpdate: target => updates.install(target),
     // The renderer paints its own surface but not the frame around it. macOS
     // draws its controls from the system appearance and needs nothing; Windows
     // holds whatever colour it was handed at construction, so the caption strip

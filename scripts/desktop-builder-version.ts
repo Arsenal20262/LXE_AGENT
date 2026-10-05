@@ -8,6 +8,7 @@ const desktopProductVersionPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$
 export function applyDesktopProductVersion(
   builderConfig: DesktopBuilderConfiguration,
   rawVersion: string | undefined,
+  identity?: {build_id:string;source_commit:string},
 ): void {
   const version = rawVersion?.trim() ?? "";
   if (!desktopProductVersionPattern.test(version)) {
@@ -21,5 +22,6 @@ export function applyDesktopProductVersion(
       && !Array.isArray(builderConfig.extraMetadata)
     ? builderConfig.extraMetadata as Record<string, unknown>
     : {};
-  builderConfig.extraMetadata = { ...existingExtraMetadata, version };
+  if (identity && (!/^[a-zA-Z0-9_-]{1,100}$/.test(identity.build_id) || !/^[a-f0-9]{40}$/.test(identity.source_commit))) throw new Error("Invalid desktop build identity");
+  builderConfig.extraMetadata = { ...existingExtraMetadata, version, ...(identity ? {lxeBuildId:identity.build_id,lxeSourceCommit:identity.source_commit} : {}) };
 }

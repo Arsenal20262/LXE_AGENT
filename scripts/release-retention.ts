@@ -70,13 +70,14 @@ export function cleanupCandidates(directory: string, protectedBuild?: string, lo
     let count = 0, bytes = 0;
     for (const record of candidates) {
       if (protectedIds.has(record.build_id)) continue;
-      const file = join(directory, record.build_id, record.file_name);
       try {
-        if (!existsSync(file)) continue;
-        const stat = lstatSync(file);
-        if (stat.isSymbolicLink() || !stat.isFile() || stat.size !== record.size) throw new Error("Installer is not the expected regular file");
-        unlinkSync(file); count++; bytes += stat.size;
-        log(`Removed local installer: ${record.build_id}/${record.file_name}`);
+        const files = [record, ...(record.blockmap ? [record.blockmap] : [])].map(artifact => ({artifact, file:join(directory,record.build_id,artifact.file_name)})).filter(({file}) => existsSync(file));
+        for (const {artifact,file} of files) {
+          const stat = lstatSync(file);
+          if (stat.isSymbolicLink() || !stat.isFile() || stat.size !== artifact.size) throw new Error("Artifact is not the expected regular file: " + artifact.file_name);
+        }
+        for (const {artifact,file} of files) { unlinkSync(file); bytes += artifact.size; }
+        if (files.length) { count++; log(`Removed local installer and blockmap: ${record.build_id}/${record.file_name}`); }
       } catch (error) { log(`Local cleanup kept ${record.build_id}: ${message(error)}`); }
     }
     log(`Local cleanup: removed ${count} installer(s), freed ${(bytes / 1024 / 1024).toFixed(2)} MiB; JSON records retained.`);

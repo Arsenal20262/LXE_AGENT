@@ -78,3 +78,17 @@ test("tampered candidate is rejected before upload",async()=>{
  expect(cos.uploaded).toBe(0);
  }finally{rmSync(root,{recursive:true});}
 });
+
+test("blockmap is verified and uploaded before activating channel; tampering blocks all uploads",async()=>{
+ const root=mkdtempSync(join(tmpdir(),"lxe-blockmap-publication-")),cos=new FakeCos();
+ try{
+  const path=await candidate(root,"diff"),record=JSON.parse(readFileSync(path,"utf8"));
+  const file=join(root,"diff",record.file_name+".blockmap");writeFileSync(file,"blockmap");
+  record.blockmap={file_name:record.file_name+".blockmap",object_key:record.object_key+".blockmap",size:8,sha512:await sha512(file)};
+  writeFileSync(path,JSON.stringify(record));writeFileSync(file,"tampered");
+  await expect(main(["publish",path],{cos,lockRoot:root})).rejects.toThrow("changed");expect(cos.uploaded).toBe(0);
+  writeFileSync(file,"blockmap");await main(["publish",path],{cos,lockRoot:root});
+  expect(cos.uploaded).toBe(2);expect(cos.objects.has(record.blockmap.object_key)).toBe(true);
+  expect(JSON.parse(cos.objects.get(`releases/${record.version}/${record.build_id}/release.json`)!).blockmap).toEqual(record.blockmap);
+ }finally{rmSync(root,{recursive:true,force:true});}
+});

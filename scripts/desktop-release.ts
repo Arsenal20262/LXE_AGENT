@@ -25,21 +25,26 @@ export async function main(args=process.argv.slice(2),ports?:{cos:unknown;lockRo
   if(!VERSION.test(intent.version)||!intent.notes?.trim())throw new Error("Prepare config/desktop-release.json with version and notes");
   if(git("status","--porcelain"))throw new Error("Commit source and release notes before candidate build");
   mkdirSync(join(root,"build"),{recursive:true});
-  writeFileSync(join(root,"build","desktop-version-selection.json"),JSON.stringify({schema_version:1,selected_version:intent.version,source_commit:git("rev-parse","HEAD")}));
+  const build_id=new Date().toISOString().replace(/[-:.]/g,"")+"-"+randomUUID().slice(0,8);
+  writeFileSync(join(root,"build","desktop-version-selection.json"),JSON.stringify({schema_version:1,selected_version:intent.version,source_commit:git("rev-parse","HEAD"),build_id}));
   console.log("Candidate version: "+intent.version);return;
  }
  if(action==="candidate"){
   const intent=json(intentPath),selected=json(join(root,"build","desktop-version-selection.json"));
   if(intent.version!==selected.selected_version||git("status","--porcelain")||git("rev-parse","HEAD")!==selected.source_commit)throw new Error("Source or intent changed during build");
-  const build_id=new Date().toISOString().replace(/[-:.]/g,"")+"-"+randomUUID().slice(0,8);
+  const build_id=selected.build_id;
+  if(typeof build_id!=="string"||!/^[a-zA-Z0-9_-]{1,100}$/.test(build_id))throw new Error("Build identity missing; run select before packaging");
   const file_name="LXE-Agent-"+intent.version+"-windows-x64.exe";
   const from=join(root,"dist","desktop",file_name);
-  if(!existsSync(from))throw new Error("Installer missing: "+from);
+  if(!existsSync(from)||!existsSync(from+".blockmap"))throw new Error("Installer or blockmap missing: "+from);
   const dir=join(root,"dist","desktop-candidates",build_id);mkdirSync(dir,{recursive:true});
   const artifact=join(dir,file_name);copyFileSync(from,artifact);
+  copyFileSync(from+".blockmap",artifact+".blockmap");
   write(join(dir,"candidate.json"),{schema_version:1,version:intent.version,build_id,source_commit:selected.source_commit,
    built_at:new Date().toISOString(),platform:"windows-x64",file_name,object_key:"artifacts/"+intent.version+"/"+build_id+"/"+file_name,
-   size:statSync(artifact).size,sha512:await sha512(artifact),notes:intent.notes});
+   size:statSync(artifact).size,sha512:await sha512(artifact),notes:intent.notes,
+   blockmap:{file_name:file_name+".blockmap",object_key:"artifacts/"+intent.version+"/"+build_id+"/"+file_name+".blockmap",
+    size:statSync(artifact+".blockmap").size,sha512:await sha512(artifact+".blockmap")}});
   if(process.env.LXE_RELEASE_CANDIDATE_RESULT)writeJsonAtomic(process.env.LXE_RELEASE_CANDIDATE_RESULT,{candidate:join("dist","desktop-candidates",build_id,"candidate.json")});
   console.log("Candidate saved: "+join(dir,"candidate.json"));
   if(!process.env.LXE_RELEASE_CANDIDATE_RESULT)cleanupCandidates(resolve(dir,".."),build_id);
@@ -64,7 +69,6 @@ export async function main(args=process.argv.slice(2),ports?:{cos:unknown;lockRo
   const candidatePath=resolve(arg),dir=resolve(candidatePath,"..");
   unlockCandidate=lockCandidateFiles(resolve(dir,".."));
   const record=await verifyCandidate(candidatePath);
-  const file=join(dir,record.file_name);
   console.log("Verified candidate "+record.version+" / "+record.build_id+"...");
   if(before?.release){
    const order=compareVersions(record.version,before.release.version);
@@ -77,19 +81,22 @@ export async function main(args=process.argv.slice(2),ports?:{cos:unknown;lockRo
   if(JSON.stringify({...release,published_at:undefined})!==JSON.stringify({...record,published_at:undefined}))throw new Error("Candidate differs from publication");
   const manifestKey="releases/"+record.version+"/"+record.build_id+"/release.json",existing=await get(manifestKey);
   if(existing&&JSON.stringify(existing)!==JSON.stringify(release))throw new Error("Version frozen to another build");
-  let head:any;try{head=await call("headObject",{Key:record.object_key});}catch(e:any){if(e.statusCode!==404)throw e;}
+  for(const artifact of [record,...(record.blockmap?[record.blockmap]:[])]){
+  const file=join(dir,artifact.file_name);
+  let head:any;try{head=await call("headObject",{Key:artifact.object_key});}catch(e:any){if(e.statusCode!==404)throw e;}
   if(!head){
-   console.log("Uploading installer ("+(record.size/1024/1024).toFixed(2)+" MiB)...");
+   console.log("Uploading "+artifact.file_name+" ("+(artifact.size/1024/1024).toFixed(2)+" MiB)...");
    let lastPercent=-1;
-   await call("uploadFile",{Key:record.object_key,FilePath:file,Headers:{"x-cos-meta-sha512":record.sha512},
+   await call("uploadFile",{Key:artifact.object_key,FilePath:file,Headers:{"x-cos-meta-sha512":artifact.sha512},
     onProgress:({percent}:{percent:number})=>{
      if(!Number.isFinite(percent))return;
      const value=Math.floor(Math.max(0,Math.min(1,percent))*100);
      if(value!==lastPercent){lastPercent=value;console.log("Upload progress: "+value+"%");}
     }});
   }else console.log("Installer already exists; verifying uploaded metadata...");
-  head=await call("headObject",{Key:record.object_key});
-  if(Number(head.headers["content-length"])!==record.size||head.headers["x-cos-meta-sha512"]!==record.sha512)throw new Error("Uploaded installer metadata mismatch");
+  head=await call("headObject",{Key:artifact.object_key});
+  if(Number(head.headers["content-length"])!==artifact.size||head.headers["x-cos-meta-sha512"]!==artifact.sha512)throw new Error("Uploaded artifact metadata mismatch: "+artifact.file_name);
+  }
   console.log("Saving release record...");
   if(!existing)await put(manifestKey,release);
   if(JSON.stringify(await get(channelKey))!==JSON.stringify(before))throw new Error("Channel changed; review and retry");
