@@ -6,6 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   Activity,
   AlertTriangle,
+  ChevronDown,
   Cloud,
   ExternalLink,
   Feather,
@@ -828,26 +829,32 @@ function DesktopSettingsForm({
                 onChange={event => onChange({ yacangPassword: event.target.value })} /></label>
           </div>
           {setup.yacang.managed ? <button className="desktop-clear-integration" onClick={() => onClearIntegration("yacang")} type="button"><Trash2 size={14} />{t.desktop.clearIntegration}</button> : null}
-          <div className="desktop-local-model-card">
-            <div className="desktop-local-model-heading">
-              <div><strong>{labels.vietnamTitle}</strong><span>{labels.vietnamDescription}</span></div>
+          <details className="desktop-local-model-card desktop-vietnam-settings">
+            <summary className="desktop-vietnam-settings-summary">
+              <span className="desktop-vietnam-settings-heading">
+                <strong>{labels.vietnamTitle}</strong>
+                <span>{labels.vietnamDescription}</span>
+              </span>
+              <ChevronDown aria-hidden size={16} />
+            </summary>
+            <div className="desktop-vietnam-settings-body">
+              <div className="desktop-field-grid">
+                <label><span>{labels.weight30d}</span><input inputMode="decimal" type="text" value={form.vietnamWeight30d}
+                  onChange={event => onChange({ vietnamWeight30d: event.target.value })} /></label>
+                <label><span>{labels.weight15d}</span><input inputMode="decimal" type="text" value={form.vietnamWeight15d}
+                  onChange={event => onChange({ vietnamWeight15d: event.target.value })} /></label>
+                <label><span>{labels.weight7d}</span><input inputMode="decimal" type="text" value={form.vietnamWeight7d}
+                  onChange={event => onChange({ vietnamWeight7d: event.target.value })} /></label>
+                <label><span>{labels.exchangeRate}</span><input inputMode="decimal" type="text" value={form.vietnamExchangeRate}
+                  onChange={event => onChange({ vietnamExchangeRate: event.target.value })} /></label>
+              </div>
+              <div className="desktop-local-model-actions">
+                <button className="desktop-primary-button" disabled={saving} onClick={onSaveVietnamRecommendation} type="button">
+                  {saving ? labels.vietnamSaving : labels.vietnamSave}
+                </button>
+              </div>
             </div>
-            <div className="desktop-field-grid">
-              <label><span>{labels.weight30d}</span><input inputMode="decimal" type="text" value={form.vietnamWeight30d}
-                onChange={event => onChange({ vietnamWeight30d: event.target.value })} /></label>
-              <label><span>{labels.weight15d}</span><input inputMode="decimal" type="text" value={form.vietnamWeight15d}
-                onChange={event => onChange({ vietnamWeight15d: event.target.value })} /></label>
-              <label><span>{labels.weight7d}</span><input inputMode="decimal" type="text" value={form.vietnamWeight7d}
-                onChange={event => onChange({ vietnamWeight7d: event.target.value })} /></label>
-              <label><span>{labels.exchangeRate}</span><input inputMode="decimal" type="text" value={form.vietnamExchangeRate}
-                onChange={event => onChange({ vietnamExchangeRate: event.target.value })} /></label>
-            </div>
-            <div className="desktop-local-model-actions">
-              <button className="desktop-primary-button" disabled={saving} onClick={onSaveVietnamRecommendation} type="button">
-                {saving ? labels.vietnamSaving : labels.vietnamSave}
-              </button>
-            </div>
-          </div>
+          </details>
         </div>
       </section>
     );
