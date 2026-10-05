@@ -56,3 +56,5 @@ Windows 构建与安装验收见 [打包手册](docs/desktop/packaging-pipeline.
 ## License
 
 Private Project - Internal Use Only.
+
+跨目录获取模型与网页登录见 [自动云端访问](docs/desktop-native-cloud-access.md)。

@@ -54,6 +54,7 @@ export class DesktopConfigStore {
     );
     this.cloud = new DesktopCloudConfigService(repository);
     this.setup.migrateModelCredentialStorage();
+    this.cloud.migrateManagedLlmOwner();
   }
 
   state(): DesktopSetupState {
@@ -140,6 +141,10 @@ export class DesktopConfigStore {
   recoverInterruptedCloudEnrollmentSwitch(): boolean {
     return this.cloud.recoverInterruptedSwitch();
   }
+
+  managedLlmOwner() { return this.cloud.managedLlmOwner(); }
+  managedLlmVerifiedAt(): number { return this.cloud.managedLlmVerifiedAt(); }
+  saveManagedLlmOwner(owner: import("@lxe/desktop-protocol").DesktopObservedDevice | null, verifiedAt = 0): void { this.cloud.saveManagedLlmOwner(owner, verifiedAt); }
 
   cloudObservedDevice() { return this.cloud.observedDevice(); }
 

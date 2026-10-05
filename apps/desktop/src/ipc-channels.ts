@@ -18,6 +18,7 @@ export const IPC_CHANNELS = {
   activateCloudEnrollment: "lxe:desktop:activate-cloud-enrollment",
   prepareCloudDependencies: "lxe:desktop:prepare-cloud-dependencies",
   getCloudState: "lxe:desktop:get-cloud-state",
+  clearCloudModelCache: "lxe:desktop:clear-cloud-model-cache",
   refreshCloudContext: "lxe:desktop:refresh-cloud-context",
   confirmCloudDevice: "lxe:desktop:confirm-cloud-device",
   retryCloudConnection: "lxe:desktop:retry-cloud-connection",

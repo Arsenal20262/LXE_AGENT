@@ -685,7 +685,7 @@ function InputAttachmentList({
   );
 }
 
-function ConversationModelPicker({
+export function ConversationModelPicker({
   current,
   disabled,
   loading,

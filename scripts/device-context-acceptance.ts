@@ -34,6 +34,10 @@ const cloud = new DesktopCloudService({ dataRoot: temporary, config, supported: 
   logger: createLogger("device-context-acceptance"), enrollments: new DesktopCloudEnrollmentManager(),
   provisioner: { provision: async () => { throw new Error("Unexpected provisioning"); } },
   onConfigured: async () => {}, fetch: async () => { throw new Error("Unexpected identity request"); },
+  accessClient: { request: async () => ({ response_schema: "lxe.device-access.v1", management_role: "member", management_version: 1,
+    device: { id: scenario === "changed" ? "B" : "A", kind: "managed_device", display_name: "Acceptance", wireguard_ip: scenario === "changed" ? "10.88.0.9" : "10.88.0.8" },
+    managed_llm_v2: { revision: 1, default_target: null, models: [] },
+  }) },
   contextClient: { query: (url, signal) => {
     if (url !== "http://10.88.0.1:8000") throw new CloudContextError("Unexpected company URL");
     return cli.query(`http://127.0.0.1:${mock.port}`, signal);

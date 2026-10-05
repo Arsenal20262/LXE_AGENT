@@ -328,7 +328,8 @@ async function bootstrap(): Promise<void> {
     onManagedLlmAuthenticationFailure: async (revision) => {
       config.invalidateManagedLlmCredential(revision);
       const credential = config.managedLlmCredential();
-      await gateway.updateManagedLlmCredential(credential);
+      // Startup may have awaited while the identity or cache changed. Read the current value.
+      await gateway.updateManagedLlmCredential(credential ? config.managedLlmCredential() : null);
       invalidations.push(["models"]);
       await cloud?.check();
     },
@@ -370,7 +371,8 @@ async function bootstrap(): Promise<void> {
       gateway.updateSkillPermissions(allowedSkillTypes),
     onManagedLlmCredentialChanged: async (credential) => {
       if (gateway.health().gateway === "stopped") await gateway.start();
-      await gateway.updateManagedLlmCredential(credential);
+      // Startup may have awaited while the identity or cache changed. Read the current value.
+      await gateway.updateManagedLlmCredential(credential ? config.managedLlmCredential() : null);
       if (config.state().complete) await gateway.syncModelConfiguration();
       invalidations.push(["models"]);
       broadcastHealth(gateway.health());
@@ -541,12 +543,13 @@ async function bootstrap(): Promise<void> {
     activateCloudEnrollment: (input: DesktopCloudActivationInput) => cloud.activate(input),
     prepareCloudDependencies: () => cloud.prepareDependencies(),
     getCloudState: () => cloud.state(),
+    clearCloudModelCache: () => cloud.clearModelCache(),
     refreshCloudContext: () => cloud.check(),
     confirmCloudDevice: () => cloud.confirmDevice(),
     retryCloudConnection: () => cloud.retry(),
     openCloudDestination: async (destination: DesktopCloudDestination): Promise<void> => {
       const state = cloud.state();
-      const dataServerUrl = config.cloudConfiguration().data_server_url;
+      const dataServerUrl = state.device_context?.server_url ?? "";
       if (destination === "admin_dashboard") {
         await shell.openExternal(await cloud.adminDashboardUrl());
         return;
@@ -556,8 +559,8 @@ async function bootstrap(): Promise<void> {
         return;
       }
       await shell.openExternal(resolveCloudDestinationUrl({
-        configured: state.configured,
-        connection: state.connection,
+        configured: Boolean(state.device_context?.device),
+        connection: state.native_access?.status === "connected" ? "connected" : "offline",
         dataServerUrl,
         destination,
         desktopFeatures: state.desktop_features,
