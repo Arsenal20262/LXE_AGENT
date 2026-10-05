@@ -185,21 +185,104 @@ def test_missing_current_source_stops_without_file(tmp_path: Path, change, expec
     assert not output.exists()
 
 
-@pytest.mark.parametrize("field", ("cost", "cross_border_price", "discount_price"))
-def test_missing_explicit_price_stops_without_file(tmp_path: Path, field: str) -> None:
-    values = _parameters()
-    values["VN-A"] = replace(values["VN-A"], **{field: None})
-    output = tmp_path / "absent.xlsx"
-    with pytest.raises(writer.WorkbookInputError, match=f"VN-A.*{field}"):
-        writer.write_vietnam_workbook(output, _sources(), values, writer.RecommendationConfig())
-    assert not output.exists()
+def test_unmapped_current_sku_keeps_source_rows_and_guards_dependent_formulas(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(writer, "_load_skeleton", _LOAD_REAL_SKELETON)
+    output = tmp_path / "unmapped.xlsx"
+    writer.write_vietnam_workbook(
+        output, _sources(), {"VN-A": _parameters()["VN-A"]}, writer.RecommendationConfig(),
+    )
+    book = load_workbook(output, data_only=False)
+    try:
+        main = book["越南备货清单"]
+        assert [main[f"E{row}"].value for row in (2, 3)] == ["VN-A", "VN-B"]
+        assert all(main[f"{column}3"].value is None for column in ("B", "G", "AE", "AJ"))
+        assert main["F3"].value == "产品名称 B"
+        assert main["AN3"].value == 0
+        assert main["J3"].data_type == "f"
+        assert main["AA3"].data_type == "f"
+        assert main["AB3"].data_type == "f"
+        assert [main[f"{column}3"].value for column in ("AV", "AW", "AX", "AY")] == [
+            "=数据更改!A2", "=数据更改!B2", "=数据更改!C2", "=数据更改!D2",
+        ]
+        assert main["H3"].value.startswith('=IF(ISBLANK(B3),"",')
+        assert isinstance(main["AC3"].value, ArrayFormula)
+        assert main["AC3"].value.text.startswith('=IF(ISBLANK(B3),"",')
+        for column, missing in {
+            "AF": ("AE",), "AG": ("AE", "G"), "AH": ("AE", "G"),
+            "AI": ("AE",), "AK": ("AJ",), "AL": ("AJ", "G"), "AM": ("AJ", "G"),
+        }.items():
+            formula = main[f"{column}3"].value
+            condition = (
+                f"ISBLANK({missing[0]}3)" if len(missing) == 1
+                else f"OR(ISBLANK({missing[0]}3),ISBLANK({missing[1]}3))"
+            )
+            assert formula.startswith(f'=IF({condition},"",')
+            assert all(f"ISBLANK({input_column}3)" in formula for input_column in missing)
+        for name, sku_column in (("雅仓库存", "B"), ("雅仓动销", "A"), ("库存商品信息", "B")):
+            assert [book[name][f"{sku_column}{row}"].value for row in (2, 3)] == ["VN-A", "VN-B"]
+    finally:
+        book.close()
 
 
-def test_missing_parameter_row_and_bad_hot_flag_fail(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("missing_fields", "guarded_columns"),
+    [
+        (("cost",), {"AG", "AH", "AL", "AM"}),
+        (("cross_border_price",), {"AF", "AG", "AH", "AI"}),
+        (("discount_price",), {"AK", "AL", "AM"}),
+        (("cost", "cross_border_price", "discount_price"), {"AF", "AG", "AH", "AI", "AK", "AL", "AM"}),
+    ],
+)
+def test_mapped_blank_prices_guard_only_dependent_finance(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    missing_fields: tuple[str, ...], guarded_columns: set[str],
+) -> None:
+    monkeypatch.setattr(writer, "_load_skeleton", _LOAD_REAL_SKELETON)
     values = _parameters()
-    del values["VN-A"]
-    with pytest.raises(writer.WorkbookInputError, match="VN-A.*映射"):
-        writer.write_vietnam_workbook(tmp_path / "missing.xlsx", _sources(), values, writer.RecommendationConfig())
+    values["VN-B"] = replace(values["VN-B"], **{field: None for field in missing_fields})
+    output = tmp_path / "partial.xlsx"
+    writer.write_vietnam_workbook(output, _sources(), values, writer.RecommendationConfig())
+    book = load_workbook(output, data_only=False)
+    try:
+        main = book["越南备货清单"]
+        assert main["B3"].value == 2
+        assert main["H3"].value.startswith("=IF(")
+        assert "ISBLANK" not in main["H3"].value
+        assert isinstance(main["AC3"].value, ArrayFormula)
+        assert "ISBLANK" not in main["AC3"].value.text
+        for field, column in (("cost", "G"), ("cross_border_price", "AE"), ("discount_price", "AJ")):
+            assert (main[f"{column}3"].value is None) == (field in missing_fields)
+        for column in ("AF", "AG", "AH", "AI", "AK", "AL", "AM"):
+            formula = main[f"{column}3"].value
+            assert ("ISBLANK" in formula) == (column in guarded_columns)
+    finally:
+        book.close()
+
+
+def test_explicit_zero_price_is_not_guarded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(writer, "_load_skeleton", _LOAD_REAL_SKELETON)
+    values = _parameters()
+    values["VN-B"] = replace(values["VN-B"], cross_border_price=Decimal("0"), discount_price=Decimal("0"))
+    output = tmp_path / "zero.xlsx"
+    writer.write_vietnam_workbook(output, _sources(), values, writer.RecommendationConfig())
+    book = load_workbook(output, data_only=False)
+    try:
+        main = book["越南备货清单"]
+        assert main["AE3"].value == 0
+        assert main["AJ3"].value == 0
+        assert all("ISBLANK" not in main[f"{column}3"].value for column in (
+            "AF", "AG", "AH", "AI", "AK", "AL", "AM",
+        ))
+    finally:
+        book.close()
+
+
+def test_empty_parameter_table_and_bad_hot_flag_fail(tmp_path: Path) -> None:
+    with pytest.raises(writer.WorkbookInputError, match="映射表.*SKU"):
+        writer.write_vietnam_workbook(tmp_path / "empty.xlsx", _sources(), {}, writer.RecommendationConfig())
+    values = _parameters()
     values["VN-A"] = replace(_parameters()["VN-A"], hot_flag=3)
     with pytest.raises(writer.WorkbookInputError, match="VN-A.*热销标记"):
         writer.write_vietnam_workbook(tmp_path / "bad-hot.xlsx", _sources(), values, writer.RecommendationConfig())

@@ -21,7 +21,7 @@ from services.yacang.errors import safe_remote_detail
 from shared.input_assets import slot_dir
 from shared.process_lock import interprocess_lock
 
-from .asset_contract import AssetContractError, validate_complete_sku_parameters
+from .asset_contract import AssetContractError, validate_usable_sku_parameters
 
 
 SKU_SLOT = "vietnam_sku_parameter_map"
@@ -259,7 +259,7 @@ def _validate_file(path: Path, *, label: str) -> tuple[int, str]:
         raise SkuMapStoreError(f"{label}必须是 .xlsx 文件")
     _check_zip(path)
     try:
-        validate_complete_sku_parameters(path)
+        validate_usable_sku_parameters(path)
     except AssetContractError as exc:
         raise SkuMapStoreError(str(exc)) from exc
     return info.st_size, _digest(path)
