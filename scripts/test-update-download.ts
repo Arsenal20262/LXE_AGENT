@@ -19,6 +19,7 @@ const deadline=Date.now()+10000;
 while(!existsSync(probe)&&Date.now()<deadline)await Bun.sleep(50);
 if(!existsSync(probe)||readFileSync(probe,"utf8")!=="started")throw new Error("Elevated launch did not execute its test payload");
 console.log("PASS elevated installer handoff waits for confirmed launch and preserves Unicode/space arguments");
+if(process.argv[3]==="--launch-only")process.exit(0);
 const result=await Bun.build({entrypoints:[resolve("apps/desktop/test/fixtures/update-download.electron.ts")],outdir:folder,naming:"index.js",target:"node",format:"esm",external:["electron"]});
 if(!result.success)throw new AggregateError(result.logs,"Failed to bundle native updater fixture");
 writeFileSync(join(folder,"package.json"),JSON.stringify({name:record.cache.replace(/-updater$/,""),version:"0.0.2",type:"module",main:"index.js"}));
