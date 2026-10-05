@@ -64,6 +64,14 @@ afterEach(async () => {
 });
 
 describe("ProcessAgentRuntime", () => {
+  test.skipIf(process.platform!=="win32")("Windows forced shutdown waits for the runtime and its owned child",async()=>{
+    const root=mkdtempSync(join(tmpdir(),"lxe-update-process-tree-"));temporaryRoots.push(root);
+    const pidFile=join(root,"owned.pid");
+    const runtime=new ProcessAgentRuntime({command:process.execPath,arguments:[resolve(import.meta.dirname,"fixtures/fake-agent-cli.mjs")],cwd:process.cwd(),environment:{...process.env,FAKE_OWNED_CHILD_PID:pidFile,FAKE_IGNORE_SHUTDOWN:"1"},...resourcePaths(process.cwd()),dataRoot:root,legacyWorkspace:testWorkspace,shutdownTimeoutMs:50});
+    runtimes.push(runtime);await runtime.start();const pid=Number(readFileSync(pidFile,"utf8"));
+    try { expect(()=>process.kill(pid,0)).not.toThrow();await runtime.stop();expect(runtime.hasProcess).toBe(false);expect(()=>process.kill(pid,0)).toThrow(); }
+    finally { try { process.kill(pid,"SIGKILL"); } catch {} }
+  });
   test("an error from a live child preserves ownership until actual exit", async () => {
     const runtime=new ProcessAgentRuntime({command:process.execPath,arguments:[resolve(import.meta.dirname,"fixtures/fake-agent-cli.mjs")],cwd:process.cwd(),environment:process.env,...resourcePaths(process.cwd()),dataRoot:process.cwd(),legacyWorkspace:testWorkspace});
     runtimes.push(runtime);await runtime.start();

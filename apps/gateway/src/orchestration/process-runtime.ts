@@ -579,15 +579,20 @@ export class ProcessAgentRuntime implements DirectAgentRuntime {
       await new Promise<void>((resolveExit, reject) => {
         let forceTimer: ReturnType<typeof setTimeout>;
         let deadline: ReturnType<typeof setTimeout>;
+        let parentExited = false;
+        let treeTerminated = process.platform !== "win32" || !child.pid;
         const cleanup = () => { clearTimeout(forceTimer); clearTimeout(deadline); child.off("exit", exited); };
-        const exited = () => { cleanup(); resolveExit(); };
+        const finish = () => { if (parentExited && treeTerminated) { cleanup(); resolveExit(); } };
+        const exited = () => { parentExited = true; finish(); };
         child.once("exit", exited);
         forceTimer = setTimeout(() => { if (process.platform !== "win32") try { child.kill("SIGKILL"); } catch (error) { cleanup(); reject(error); } }, 1500);
         deadline = setTimeout(() => { cleanup(); reject(new AgentProcessError(`agent-cli PID ${child.pid} did not exit after termination`, "AgentProcessExitUnconfirmed")); }, 4000);
         try {
           if (process.platform === "win32" && child.pid) {
             execFile("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], {windowsHide:true,timeout:3500}, (error, _stdout, stderr) => {
-              if (error && child.exitCode === null && child.signalCode === null) { cleanup(); reject(new Error(`taskkill failed: ${error.message}; ${stderr}`)); }
+              if (error) { cleanup(); reject(new Error(`taskkill failed: ${error.message}; ${stderr}`)); return; }
+              treeTerminated = true;
+              finish();
             });
           } else child.kill("SIGTERM");
         } catch (error) { cleanup(); reject(error); }
