@@ -41,3 +41,13 @@
 定向测试还覆盖两个独立目录、旧缓存迁移、个人设置保留、模型发布变化、身份连续性、迟到响应和旧服务端提示。
 
 上线先执行服务端 Alembic 0039 迁移并更新服务端，再更新 Agent。无需新权限协议，不改变权限模板、设备绑定和管理员角色。本轮不部署、不发布安装包、不修改 Windows 绑定；真实 Windows 联调等待新服务端可用。模拟启动配置不能替代真实 Windows 联调。
+
+## 本地验证记录（2026-10-05）
+
+- 服务端完整测试：1443 通过，在独立本机 PostgreSQL 测试库执行，无数据库测试跳过；已合并到 main（dd72795）。
+- Agent 最终实现基线：7c5a385a。完整 verify:source 退出码 0；协议生成检查、生产代码边界、全部工作区类型检查通过。
+- Bun：2056 通过、7 跳过、0 失败。跳过的是需要 Windows 的复制、发布器、Shell 处理程序、应用列表及技能回收测试。
+- Python：1964 通过、4 跳过、0 失败；保留 30 条 aiohttp 弃用告警。
+- desktop:build 退出码 0；保留 Vite 大型 chunk 提示。只构建代码，未生成或发布安装包。
+- 新自动云端页面验收及原设备权限页面验收均通过，截图已检查。使用真实 Electron 组件、临时目录与模拟服务；未访问生产 API，未执行真实 Windows 联调。
+- 最终日志：/private/tmp/native-cloud-verify-final.log、/private/tmp/native-cloud-build-final.log、/private/tmp/native-cloud-page.log、/private/tmp/native-context-regression.log。
