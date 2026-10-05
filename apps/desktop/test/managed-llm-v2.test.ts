@@ -1,3 +1,4 @@
+import { identityFixtureCloud } from "./native-access-fixture";
 import { afterEach, test, expect } from "bun:test";
 import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -21,6 +22,7 @@ function setup() {
 }
 test("cloud selection survives restart/default changes; removal selects default and personal selection stays independent", () => {
   const { root, config } = setup(); let state = makeState();
+  config.saveManagedLlmOwner({server_url:"http://company.test",kind:"managed_device",id:"fixture",display_name:"Fixture",wireguard_ip:"10.88.0.2"});
   config.saveManagedLlmState(state);
   expect(config.state().credential_source).toBe("cloud");
   config.saveRuntimePreference("deepseek", "deepseek-v4-pro", "high", "cloud");
@@ -45,7 +47,7 @@ test("v2 sync invalidates known changed keys before fetching and isolates failur
   config.saveCloudEnrollment({ deviceId: "fixture", deviceName: "Fixture", vpnIp: "10.88.0.2",
     dataServerUrl: "http://company.test", tunnelName: "", apiKey: "lxe_client_fixture.test-credential" });
   const fetched: string[] = []; const observations: number[] = [];
-  const service = new DesktopCloudService({ dataRoot: root, supported: false, config,
+  const service = identityFixtureCloud({ dataRoot: root, supported: false, config,
     enrollments: new DesktopCloudEnrollmentManager(), logger, provisioner: { provision: async () => undefined }, onConfigured: async () => undefined,
     clock: { setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0, clearInterval() {} },
     onManagedLlmCredentialChanged: () => { observations.push(config.managedLlmState().credentials.length); },

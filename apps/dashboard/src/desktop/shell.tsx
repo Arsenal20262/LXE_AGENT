@@ -1,3 +1,4 @@
+import { NativeCloudPanel } from "./native-cloud-panel";
 import { WindowsTitlebar } from "./windows-titlebar";
 import { UsagePanel } from "./usage-panel";
 import { ErpSettingsTabs } from "./erp-settings-tabs";
@@ -217,7 +218,7 @@ function DesktopNoticeMessage({
   );
 }
 
-function DesktopCloudPanel({
+export function DesktopCloudPanel({
   activating,
   cloud,
   enrollment,
@@ -252,6 +253,7 @@ function DesktopCloudPanel({
 }) {
   const t = useUiText();
   const connected = cloud.connection === "connected";
+  const nativeConnected = cloud.native_access?.status === "connected";
   const supported = cloud.connection !== "unsupported";
   const dependenciesReady = cloud.dependency_state === "ready"
     || cloud.dependency_state === "not_required";
@@ -298,8 +300,10 @@ function DesktopCloudPanel({
         headingRef={headingRef}
         title={t.desktop.sectionTitles.cloud}
       />
-      <h3>{t.desktop.cloud.permission.enrollmentTitle}</h3>
-      {!cloud.configured ? <p className="desktop-form-hint">{t.desktop.cloud.permission.enrollmentHint}</p> : null}
+      <NativeCloudPanel cloud={cloud} />
+      <h3 className="desktop-cloud-permission-heading">{t.desktop.cloud.permission.enrollmentTitle}</h3>
+      {!cloud.configured && nativeConnected ? <p className="desktop-form-hint">{t.desktop.cloud.permission.enrollmentUnconfigured}</p> : null}
+      {!cloud.configured && !nativeConnected ? <p className="desktop-form-hint">{t.desktop.cloud.permission.enrollmentHint}</p> : null}
       {supported && !dependenciesReady ? (
         <div className={`desktop-cloud-dependencies ${cloud.dependency_state}`}>
           <div>
@@ -344,9 +348,9 @@ function DesktopCloudPanel({
           </div>
         </div>
       ) : null}
-      {!supported ? (
+      {!supported && !nativeConnected ? (
         <p className="desktop-form-hint">{t.desktop.cloud.unsupportedHint}</p>
-      ) : !cloud.configured && dependenciesReady ? (
+      ) : supported && !cloud.configured && dependenciesReady ? (
         <div className="desktop-cloud-activation">
           <button className="desktop-path-button" disabled={activating} onClick={onSelect} type="button">
             <FileKey2 size={17} />
@@ -384,9 +388,9 @@ function DesktopCloudPanel({
               <strong>{t.desktop.cloud.shortcuts.title}</strong>
               <span>{t.desktop.cloud.shortcuts.description}</span>
             </div>
-            {!connected ? (
+            {!nativeConnected ? (
               <span className="desktop-cloud-shortcuts-unavailable">
-                {!cloud.configured ? t.desktop.cloud.permission.loginMissing : t.desktop.cloud.shortcuts.unavailable}
+                {t.desktop.cloud.shortcuts.unavailable}
               </span>
             ) : null}
           </div>
@@ -398,7 +402,7 @@ function DesktopCloudPanel({
               return (
                 <button
                   aria-label={`${shortcut.label}: ${shortcut.description}`}
-                  disabled={!connected}
+                  disabled={!nativeConnected}
                   key={shortcut.destination}
                   onClick={() => onOpenDestination(shortcut.destination)}
                   type="button"

@@ -1,6 +1,7 @@
+import { NativeCloudAccess, NativeIdentityChanged } from "./native-cloud-access";
+import { DirectNativeCloudClient, type NativeCloudClient } from "./native-cloud-client";
 import { companyServerUrl } from "./company-server";
 import type { DesktopObservedDevice } from "@lxe/desktop-protocol";
-import { parseManagedManifest, managedTargetKey, type ManagedLlmState } from "@lxe/core";
 import { CloudHttpError, cloudErrorMessage, limitCloudText, parseCloudError } from "./cloud-errors";
 import { randomUUID } from "node:crypto";
 import { hostname } from "node:os";
@@ -22,7 +23,6 @@ import {
   type WireGuardDependencyStatus,
   type WireGuardProvisionerPort,
 } from "./wireguard-provisioner";
-import { resolveCloudDestinationUrl } from "./cloud-destinations";
 import { wireGuardTunnelFromEnrollment } from "./wireguard-types";
 import {
   legacySnapshotCanUpgrade,
@@ -31,11 +31,6 @@ import {
   permissionSnapshotsEqual,
 } from "./cloud-permissions";
 import { CloudContextError, contextDiagnostic, type CloudContextQuery } from "./cloud-context";
-import {
-  managedLlmTargetSupported,
-  parseManagedLlmCredential,
-  parseManagedLlmStatus,
-} from "./managed-llm";
 
 export interface DesktopCloudClock {
   setTimeout(callback: () => void, delayMs: number): unknown;
@@ -61,6 +56,7 @@ const systemClock: DesktopCloudClock = {
 
 interface DesktopCloudServiceOptions {
   contextClient?: CloudContextQuery;
+  accessClient?: NativeCloudClient;
   dataRoot: string;
   llmConfigRoot?: string;
   supported: boolean;
@@ -106,6 +102,7 @@ const objectValue = (value: unknown): Record<string, unknown> | undefined =>
     : undefined;
 
 export class DesktopCloudService {
+  private readonly native: NativeCloudAccess;
   private connection: DesktopCloudState["connection"];
   private isAdmin = false;
   private lastError = "";
@@ -153,6 +150,11 @@ export class DesktopCloudService {
       });
     }
     this.permissionSnapshot = options.config.cloudPermissionSnapshot();
+    this.native = new NativeCloudAccess({ config: options.config,
+      client: options.accessClient ?? new DirectNativeCloudClient(), logger: options.logger,
+      llmConfigRoot: options.llmConfigRoot ?? join(process.cwd(), "config", "llm"),
+      now: this.now, changed: value => options.onManagedLlmCredentialChanged?.(value) });
+
   }
 
   select(path: string): DesktopCloudEnrollmentSelection {
@@ -165,6 +167,7 @@ export class DesktopCloudService {
     const cloud = this.options.config.cloudConfiguration();
     const switching = cloud.switch_in_progress;
     return {
+      native_access: this.native.state(),
       configured: cloud.managed && !switching,
       is_admin: this.isAdmin,
       device_name: switching ? "" : cloud.device_name,
@@ -193,40 +196,15 @@ export class DesktopCloudService {
   }
 
   async erpDashboardUrl(): Promise<string> {
-    if (!this.options.config.cloudConfiguration().managed && this.permissionSnapshot?.desktop_features.some(name => name === "erp_dashboard" || name === "*")) {
-      throw new Error("ERP permission is granted; device login credentials are not configured / 已有 ERP 权限，尚未配置设备登录凭据");
+    if (!this.state().desktop_features.some(name => name === "erp_dashboard" || name === "*")) {
+      throw new Error("当前设备没有 FBA ERP 访问权限");
     }
-    const state = this.state();
-    resolveCloudDestinationUrl({
-      configured: state.configured, connection: state.connection,
-      dataServerUrl: this.options.config.cloudConfiguration().data_server_url,
-      destination: "erp_dashboard", desktopFeatures: state.desktop_features,
-    });
     return this.adminDashboardUrl("erp");
   }
 
   async adminDashboardUrl(destination: "admin" | "erp" = "admin"): Promise<string> {
-    const target = this.probeTarget();
-    if (!target || this.connection !== "connected" || (destination === "admin" && !this.isAdmin)) {
-      throw new Error(destination === "erp" ? "请先连接并验证设备身份" : "请先连接并验证管理员身份");
-    }
-    const response = await this.request(`${target.dataServerUrl}/api/v1/agent-data/identity/admin-handoff`, {
-      method: "POST", headers: { authorization: `Bearer ${target.apiToken}`, "content-type": "application/json" },
-      body: JSON.stringify({ target: destination }), cache: "no-store",
-    });
-    if (!response.ok) {
-      const body = await response.text();
-      if (response.status === 401 || (destination === "admin" && response.status === 403)) this.isAdmin = false;
-      this.publishState();
-      throw new Error(this.diagnosticError(new Error(`Device handoff HTTP ${response.status}: ${body}`), target));
-    }
-    const payload = objectValue(await response.json());
-    const codePattern = destination === "erp" ? /^lxe_erp_handoff_[A-Za-z0-9_-]{32,}$/u : /^lxe_handoff_[A-Za-z0-9_-]{32,}$/u;
-    if (typeof payload?.code !== "string" || !codePattern.test(payload.code)) {
-      throw new Error("Invalid device handoff response");
-    }
-    // Separate the identity login from browsers' cached legacy shared-key page.
-    return `${target.dataServerUrl}/${destination}?auth=identity-v1#handoff=${encodeURIComponent(payload.code)}`;
+    try { return await this.native.handoff(destination); }
+    finally { this.publishState(); }
   }
 
   private validatePrincipal(payload: Record<string, unknown>, target: ManagedCloudProbeTarget): void {
@@ -261,6 +239,12 @@ export class DesktopCloudService {
     for (const controller of this.controllers) controller.abort(new Error("cloud service stopped"));
     const probe = this.probe;
     await Promise.allSettled([probe, this.round, this.confirmation].filter(Boolean));
+  }
+
+  async clearModelCache(): Promise<DesktopCloudState> {
+    this.cancelContext();
+    await this.native.clear();
+    return this.publishState();
   }
 
   check(): Promise<DesktopCloudState> {
@@ -312,6 +296,7 @@ export class DesktopCloudService {
   }
 
   private cancelContext(): void {
+    this.native.cancel();
     this.contextGeneration += 1;
     this.contextController?.abort();
     this.contextController = undefined;
@@ -375,12 +360,18 @@ export class DesktopCloudService {
       if (!current()) return;
       this.permissionError = "";
       this.permissionFailure = undefined;
+      await this.native.sync(observed);
+      if (!current()) return;
     } catch (error) {
+      if (!current()) return;
+      await this.native.failed(error instanceof Error && error.message === "Device context identity mismatch"
+        ? new NativeIdentityChanged(error.message) : error);
       if (!current()) return;
       this.permissionFresh = false;
       this.permissionError = contextDiagnostic(error instanceof Error ? error.message : String(error));
       const denied = (error instanceof CloudContextError && [401, 403].includes(error.httpStatus ?? 0))
-        || (error instanceof Error && error.message === "Device context identity mismatch");
+        || (error instanceof Error && error.message === "Device context identity mismatch")
+        || error instanceof NativeIdentityChanged;
       const temporary = error instanceof CloudContextError && (
         error.code === "cloud_connection_failed" || error.code === "cloud_context_timeout"
         || (error.httpStatus !== undefined && error.httpStatus >= 500));
@@ -628,7 +619,6 @@ export class DesktopCloudService {
       vpnIp: target.vpnIp, dataServerUrl: target.dataServerUrl, apiKey: target.apiToken,
       tunnelName: tunnel?.tunnel_name ?? "", ...(tunnel ? { wireGuard: tunnel } : {}) });
     this.permissionSnapshot = null;
-    await this.syncManagedLlmCredential(result.managed_llm, target, this.options.logger, result.managed_llm_v3 ?? result.managed_llm_v2);
     return this.setConnection("connected", "", true, result.management_role === "administrator");
   }
 
@@ -701,13 +691,6 @@ export class DesktopCloudService {
         error instanceof Error ? error.message : String(error),
       );
     }
-    try {
-      await this.syncManagedLlmCredential(payload.managed_llm, target, logger, payload.managed_llm_v3 ?? payload.managed_llm_v2);
-    } catch (error) {
-      logger.warn("managed_llm_credential_refresh_failed", {
-        observed_error: this.diagnosticError(error, target),
-      });
-    }
     logger.info("cloud_status_check_completed", {
       duration_ms: Math.max(0, this.now() - startedAt),
       http_status: response.status,
@@ -768,13 +751,6 @@ export class DesktopCloudService {
         startedAt,
         error instanceof Error ? error.message : String(error),
       );
-    }
-    try {
-      await this.syncManagedLlmCredential(payload.managed_llm, target, logger, payload.managed_llm_v3 ?? payload.managed_llm_v2);
-    } catch (error) {
-      logger.warn("managed_llm_credential_refresh_failed", {
-        observed_error: this.diagnosticError(error, target),
-      });
     }
     logger.info("cloud_device_activation_completed", {
       duration_ms: Math.max(0, this.now() - startedAt),
@@ -910,128 +886,6 @@ export class DesktopCloudService {
       || previous.allowed_skill_types.some((item) => !next.allowed_skill_types.includes(item))) {
       await this.options.onPermissionChanged?.([...next.allowed_skill_types]);
     }
-  }
-
-  private async syncManagedLlmPublication(value: unknown, target: CloudProbeTarget, logger: Logger): Promise<void> {
-    const manifest = parseManagedManifest(value);
-    const cached = this.options.config.managedLlmState();
-    // Authoritative membership/version changes invalidate old keys before any network fetch.
-    const next: ManagedLlmState = { ...manifest, credentials: cached.credentials.filter((c) => manifest.models.some((m) =>
-      m.available && managedLlmTargetSupported(this.options.llmConfigRoot ?? join(process.cwd(), "config", "llm"), m) && managedTargetKey(m) === managedTargetKey(c) && m.credential_revision === c.credential_revision)) };
-    if (JSON.stringify(next) !== JSON.stringify(cached)) {
-      this.options.config.saveManagedLlmState(next);
-      await this.options.onManagedLlmCredentialChanged?.(this.options.config.managedLlmCredential());
-    }
-    for (const model of manifest.models) {
-      if (!model.available || !model.credential_revision || !managedLlmTargetSupported(this.options.llmConfigRoot ?? join(process.cwd(), "config", "llm"), model)
-        || next.credentials.some((c) => managedTargetKey(c) === managedTargetKey(model))) continue;
-      try {
-        const path = "identity/llm-credential";
-        const query = new URLSearchParams({ provider: model.provider, model: model.model });
-        if (manifest.model_schema === 3) query.set("model_schema", "3");
-        const response = await this.request(`${target.dataServerUrl.replace(/\/+$/u, "")}/api/v1/agent-data/${path}?${query}`, {
-          method: "GET", headers: { authorization: `Bearer ${target.apiToken}` }, cache: "no-store",
-        });
-        if (!response.ok) throw new Error(`managed LLM credential request failed (HTTP ${response.status})`);
-        const credential = parseManagedLlmCredential(await response.json().catch(() => undefined), { ...model, available: true, credential_revision: model.credential_revision }, this.now());
-        next.credentials.push(credential);
-      } catch (error) {
-        logger.warn("managed_llm_credential_refresh_failed", { provider: model.provider, model: model.model, error: this.diagnosticError(error) });
-      }
-    }
-    if (JSON.stringify(next) !== JSON.stringify(this.options.config.managedLlmState())) {
-      this.options.config.saveManagedLlmState(next);
-      await this.options.onManagedLlmCredentialChanged?.(this.options.config.managedLlmCredential());
-    }
-  }
-
-  private async syncManagedLlmCredential(
-    value: unknown,
-    target: CloudProbeTarget,
-    logger: Logger,
-    manifestValue?: unknown,
-  ): Promise<void> {
-    if (manifestValue !== undefined) {
-      await this.syncManagedLlmPublication(manifestValue, target, logger);
-      return;
-    }
-    const status = parseManagedLlmStatus(value);
-    if (!status) return;
-    const cached = this.options.config.managedLlmCredential();
-    if (status.provider && status.model) {
-      this.options.config.saveManagedLlmTarget({
-        provider: status.provider,
-        model: status.model,
-      });
-    }
-    if (!status.available) {
-      if (!cached && this.options.config.managedLlmState().models.length === 0) return;
-      this.options.config.clearManagedLlmCredential();
-      await this.options.onManagedLlmCredentialChanged?.(null);
-      logger.info("managed_llm_credential_revoked", {
-        provider: cached?.provider,
-        model: cached?.model,
-        credential_revision: cached?.credential_revision,
-      });
-      return;
-    }
-    if (!managedLlmTargetSupported(
-      this.options.llmConfigRoot ?? join(process.cwd(), "config", "llm"),
-      status,
-    )) {
-      if (cached) {
-        this.options.config.clearManagedLlmCredential();
-        await this.options.onManagedLlmCredentialChanged?.(null);
-      }
-      logger.warn("managed_llm_target_unsupported", {
-        provider: status.provider,
-        model: status.model,
-      });
-      return;
-    }
-    if (cached && (cached.provider !== status.provider || cached.model !== status.model)) {
-      this.options.config.clearManagedLlmCredential();
-      await this.options.onManagedLlmCredentialChanged?.(null);
-      logger.info("managed_llm_target_changed", {
-        previous_provider: cached.provider,
-        previous_model: cached.model,
-        provider: status.provider,
-        model: status.model,
-      });
-    }
-    if (cached?.provider === status.provider
-      && cached.model === status.model
-      && cached.credential_revision === status.credential_revision) {
-      if (this.options.config.managedLlmState().models.length > 1) {
-        this.options.config.saveManagedLlmCredential(cached);
-        await this.options.onManagedLlmCredentialChanged?.(cached);
-      }
-      return;
-    }
-    const path = "identity/llm-credential";
-    const response = await this.request(
-      `${target.dataServerUrl.replace(/\/+$/u, "")}/api/v1/agent-data/${path}`,
-      {
-        method: "GET",
-        headers: { authorization: `Bearer ${target.apiToken}` },
-        cache: "no-store",
-      },
-    );
-    if (!response.ok) {
-      throw new Error(`managed LLM credential request failed (HTTP ${response.status})`);
-    }
-    const credential = parseManagedLlmCredential(
-      await response.json().catch(() => undefined),
-      status,
-      this.now(),
-    );
-    this.options.config.saveManagedLlmCredential(credential);
-    await this.options.onManagedLlmCredentialChanged?.(credential);
-    logger.info("managed_llm_credential_refreshed", {
-      provider: credential.provider,
-      model: credential.model,
-      credential_revision: credential.credential_revision,
-    });
   }
 
   private permissionState(): Pick<

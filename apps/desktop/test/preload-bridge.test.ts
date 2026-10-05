@@ -25,7 +25,7 @@ describe("preload bridge", () => {
     expect(Object.keys(bridge.desktop).sort()).toEqual([
       "showTitlebarMenu", "getUpdateState", "checkForUpdate", "installUpdate",
       "activateCloudEnrollment",
-      "confirmCloudDevice", "refreshCloudContext",
+      "confirmCloudDevice", "refreshCloudContext", "clearCloudModelCache",
       "applyAppearance",
       "cancelSyntheticPerformerTask",
       "deleteLocalModelCredential",
@@ -100,6 +100,7 @@ describe("preload bridge", () => {
     await bridge.desktop.previewDraftConversationFile("attachment-1");
     await bridge.desktop.confirmCloudDevice();
     await bridge.desktop.refreshCloudContext();
+    await bridge.desktop.clearCloudModelCache();
     let cloudConnection = "";
     const unsubscribeCloud = bridge.desktop.onCloudStateChanged((state) => {
       cloudConnection = state.connection;
@@ -215,6 +216,7 @@ describe("preload bridge", () => {
       IPC_CHANNELS.previewDraftConversationFile,
       IPC_CHANNELS.confirmCloudDevice,
       IPC_CHANNELS.refreshCloudContext,
+      IPC_CHANNELS.clearCloudModelCache,
     ]);
     expect(invocations.find(call => call.channel === IPC_CHANNELS.stageDroppedConversationFiles)?.arguments).toEqual([["/private/drop/notes.txt"]]);
     expect(invocations[22]?.arguments).toEqual([["attachment-1"]]);

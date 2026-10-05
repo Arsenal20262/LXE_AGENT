@@ -36,7 +36,8 @@ describe("desktop settings navigation model", () => {
       permission_profile: null,
     }))).toBe(true);
     expect(desktopCloudShortcutAvailable("admin_dashboard", cloudState({
-      is_admin: true,
+      is_admin: false,
+      native_access: { status: "connected", model_status: "ready", is_admin: true, verified_at: 100, last_error: "" },
       permission_profile: "replenishment",
       desktop_features: [],
     }))).toBe(true);

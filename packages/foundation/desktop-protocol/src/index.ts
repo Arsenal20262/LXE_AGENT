@@ -402,7 +402,16 @@ export interface DesktopCloudPermissionSnapshot {
   verified_at: number;
 }
 
+export interface DesktopNativeCloudAccess {
+  status: "pending" | "checking" | "connected" | "offline" | "denied" | "error";
+  model_status: "pending" | "ready" | "cached" | "unavailable" | "upgrade_required";
+  last_error: string;
+  verified_at: number;
+  is_admin: boolean;
+}
+
 export interface DesktopCloudState {
+  native_access?: DesktopNativeCloudAccess;
   device_context?: DesktopDeviceContextState;
   configured: boolean;
   is_admin: boolean;
@@ -694,7 +703,8 @@ export interface LxeDesktopBridge {
     prepareCloudDependencies(): Promise<DesktopCloudState>;
     getCloudState(): Promise<DesktopCloudState>;
     retryCloudConnection(): Promise<DesktopCloudState>;
-    refreshCloudContext(): Promise<DesktopCloudState>;
+    clearCloudModelCache(): Promise<DesktopCloudState>;
+  refreshCloudContext(): Promise<DesktopCloudState>;
     confirmCloudDevice(): Promise<DesktopCloudState>;
     openCloudDestination(destination: DesktopCloudDestination): Promise<void>;
     openLogsDirectory(): Promise<void>;
