@@ -88,6 +88,11 @@
   background: var(--bg);
 }
 
+:root:not([data-theme="dark"]) .desktop-settings-theme
+  :is(.desktop-settings-nav, .desktop-settings-modal > footer) {
+  background: var(--bg);
+}
+
 .desktop-settings-theme :is(.desktop-health-card, .desktop-maintenance-panel,
   .desktop-local-model-card, .desktop-usage-card, .desktop-logging-sink) {
   background: var(--surface);
