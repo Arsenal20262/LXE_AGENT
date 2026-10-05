@@ -10,7 +10,11 @@ class FakeCos {
  hashes=new Map<string,string>();
  failChannel=false;
  uploaded=0;
- getObject(p:any,cb:any){this.objects.has(p.Key)?cb(null,{Body:this.objects.get(p.Key)}):cb({statusCode:404});}
+ getObject(p:any,cb:any){
+  if(!this.objects.has(p.Key))return cb({statusCode:404});
+  if(p.Output){p.Output.on("error",cb);p.Output.end(this.objects.get(p.Key),()=>cb(null,{}));}
+  else cb(null,{Body:this.objects.get(p.Key)});
+ }
  headObject(p:any,cb:any){this.objects.has(p.Key)?cb(null,{headers:{"content-length":Buffer.byteLength(this.objects.get(p.Key)!),"x-cos-meta-sha512":this.hashes.get(p.Key)}}):cb({statusCode:404});}
  uploadFile(p:any,cb:any){this.uploaded++;this.objects.set(p.Key,readFileSync(p.FilePath,"utf8"));this.hashes.set(p.Key,p.Headers["x-cos-meta-sha512"]);cb(null,{});}
  putObject(p:any,cb:any){if(this.failChannel&&p.Key===CHANNEL)return cb(new Error("channel write interrupted"));this.objects.set(p.Key,p.Body);cb(null,{});}
@@ -107,5 +111,40 @@ test.each(["missing","tampered"])("remote blockmap %s prevents channel activatio
   });
   await expect(main(["publish",path],{cos,lockRoot:root})).rejects.toThrow();
   expect(cos.objects.has(CHANNEL)).toBe(false);expect(existsSync(join(root,"last-published.json"))).toBe(false);
+ }finally{rmSync(root,{recursive:true,force:true});}
+});
+
+test.each(["installer","blockmap"])("same-size remote %s corruption with unchanged metadata prevents activation",async target=>{
+ const root=mkdtempSync(join(tmpdir(),"lxe-remote-content-")),cos=new FakeCos();
+ try{
+  const path=await candidate(root,"diff"),record=JSON.parse(readFileSync(path,"utf8"));
+  const file=join(root,"diff",record.file_name+".blockmap");writeFileSync(file,"blockmap");
+  record.blockmap={file_name:record.file_name+".blockmap",object_key:record.object_key+".blockmap",size:8,sha512:await sha512(file)};
+  writeFileSync(path,JSON.stringify(record));
+  const key=target==="installer"?record.object_key:record.blockmap.object_key;
+  const upload=cos.uploadFile.bind(cos);
+  cos.uploadFile=(request,callback)=>upload(request,()=>{
+   if(request.Key===key)cos.objects.set(key,"x".repeat(cos.objects.get(key)!.length));
+   callback(null,{});
+  });
+  await expect(main(["publish",path],{cos,lockRoot:root})).rejects.toThrow("content mismatch");
+  expect(cos.objects.has(CHANNEL)).toBe(false);
+  expect(cos.objects.has(`releases/${record.version}/${record.build_id}/release.json`)).toBe(false);
+  expect(existsSync(join(root,"last-published.json"))).toBe(false);
+ }finally{rmSync(root,{recursive:true,force:true});}
+});
+
+test("interrupted remote verification preserves the original error and never activates",async()=>{
+ const root=mkdtempSync(join(tmpdir(),"lxe-remote-read-")),cos=new FakeCos();
+ try{
+  const path=await candidate(root,"one"),get=cos.getObject.bind(cos);
+  cos.getObject=(request,callback)=>{
+   if(!request.Output)return get(request,callback);
+   request.Output.write("partial");
+   request.Output.destroy(new Error("fixture connection reset"));
+   callback(new Error("fixture connection reset"));
+  };
+  await expect(main(["publish",path],{cos,lockRoot:root})).rejects.toThrow("fixture connection reset");
+  expect(cos.objects.has(CHANNEL)).toBe(false);
  }finally{rmSync(root,{recursive:true,force:true});}
 });

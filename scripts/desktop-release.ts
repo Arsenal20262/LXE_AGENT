@@ -1,4 +1,6 @@
-import {randomUUID} from "node:crypto";
+import {createHash,randomUUID} from "node:crypto";
+import {Writable} from "node:stream";
+import {finished} from "node:stream/promises";
 import {copyFileSync,existsSync,mkdirSync,readFileSync,writeFileSync,rmSync,statSync} from "node:fs";
 import {join,resolve,basename} from "node:path";
 import {execFileSync} from "node:child_process";
@@ -93,9 +95,21 @@ export async function main(args=process.argv.slice(2),ports?:{cos:unknown;lockRo
      const value=Math.floor(Math.max(0,Math.min(1,percent))*100);
      if(value!==lastPercent){lastPercent=value;console.log("Upload progress: "+value+"%");}
     }});
-  }else console.log("Installer already exists; verifying uploaded metadata...");
+  }else console.log("Artifact already exists; verifying uploaded content...");
   head=await call("headObject",{Key:artifact.object_key});
   if(Number(head.headers["content-length"])!==artifact.size||head.headers["x-cos-meta-sha512"]!==artifact.sha512)throw new Error("Uploaded artifact metadata mismatch: "+artifact.file_name);
+  // Metadata is supplied by the uploader and cannot prove the stored body is intact.
+  // Stream the object through the digest without retaining another installer in memory.
+  console.log("Verifying stored bytes: "+artifact.file_name);
+  const digest=createHash("sha512");let downloaded=0;
+  const output=new Writable({write(chunk,_encoding,callback){
+   downloaded+=chunk.length;
+   if(downloaded>artifact.size)return callback(new Error("Uploaded artifact exceeds expected size: "+artifact.file_name));
+   digest.update(chunk);callback();
+  }});
+  try{await Promise.all([finished(output),call("getObject",{Key:artifact.object_key,Output:output})]);}
+  finally{output.destroy();}
+  if(downloaded!==artifact.size||digest.digest("base64")!==artifact.sha512)throw new Error("Uploaded artifact content mismatch: "+artifact.file_name);
   }
   console.log("Saving release record...");
   if(!existing)await put(manifestKey,release);
