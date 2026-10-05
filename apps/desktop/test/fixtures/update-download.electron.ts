@@ -11,7 +11,8 @@ if(!record.appId.startsWith("com.lxe.agent.updatequalification.")||!record.cache
 app.disableHardwareAcceleration();app.setPath("userData",join(record.output,"download-profile"));
 const cache=join(process.env.LOCALAPPDATA!,record.cache);
 const hash=async(file:string)=>{const digest=createHash("sha512");for await(const part of createReadStream(file))digest.update(part);return digest.digest("base64");};
-await app.whenReady();
+void app.whenReady().then(async()=>{
+console.log("Native Electron ready; verifying real installer fixtures");
 const [oldFile,newFile]=record.artifacts.slice(1);
 const describe=async(file:string)=>({file_name:basename(file),size:statSync(file).size,sha512:await hash(file)});
 const old={...await describe(oldFile),version:"0.0.2",build_id:record.builds[1],notes:"qualification B"};
@@ -63,3 +64,4 @@ try{
  writeFileSync(join(record.output,"download-results.json"),JSON.stringify(results,null,2));
  await new Promise<void>(resolve=>server.close(()=>resolve()));app.exit(0);
 }catch(error){console.error(updateDiagnostic(error));server.close();app.exit(1);}
+}).catch(error=>{console.error(updateDiagnostic(error));app.exit(1);});
