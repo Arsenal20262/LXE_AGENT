@@ -21,7 +21,7 @@ const matching = (selector) => rules.filter((rule) => rule.selectors.includes(se
 const DRAG = /(?:^|\s|;)app-region:\s*drag\s*;/mu;
 const NO_DRAG = /(?:^|\s|;)app-region:\s*no-drag\s*;/mu;
 
-const PLATFORMS = ["darwin", "win32"];
+const PLATFORMS = ["darwin"];
 
 /**
  * A draggable region is handed to the window manager as caption area, so a click

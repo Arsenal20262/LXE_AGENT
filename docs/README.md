@@ -16,6 +16,7 @@
 - [桌面事件循环](eventloop.md)：进程、任务所有权和退出顺序。
 - [Gateway](harness/gateway/README.md)：平台接入、路由、调度、取消和出站。
 - [Gateway ↔ Agent 协议](record/20260715-agent-cli-stream-json.md)：JSON-RPC、握手、事件和错误。
+- [会话权限与工作区目录](harness/runtime/permission-policy.md)：模式存储、产物位置、目录属主与受限执行的接入条件。
 - [Runtime](harness/runtime/README.md)：执行回合、上下文、持久化和工具。
 - [Agent CLI exec](harness/runtime/agent_cli_exec.md)：一次性终端调用与独立会话存储。
 - [LLM 适配](harness/llm/README.md)：模型目录、三类协议适配和流式响应。

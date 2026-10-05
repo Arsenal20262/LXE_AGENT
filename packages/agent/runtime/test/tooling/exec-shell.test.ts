@@ -46,6 +46,7 @@ describe("ExecShellAdapter", () => {
         detached: true,
       });
       expect(shell.childEnvironment("/workspace", {
+      workspaceDirectory: "/workspace", temporaryDirectory: "/host/tmp/tools/session",
         sessionId: "session", turnId: "turn", responseRouteId: "route", execSessionId: "exec",
       })).toMatchObject({
         PATH: "/workspace/.venv/bin:/usr/bin:/bin",
@@ -158,6 +159,7 @@ describe("ExecShellAdapter", () => {
       "'/work/project/.venv/bin/python' '-I' '-B' '-m' 'lxeskill' list",
     );
     expect(shell.childEnvironment("/work/project", {
+      workspaceDirectory: "/work/project", temporaryDirectory: "/host/tmp/tools/session",
       sessionId: "s1",
       turnId: "t1",
       responseRouteId: "r1",
@@ -198,6 +200,7 @@ describe("ExecShellAdapter", () => {
       fileExists: (path) => path === managedPython,
     });
     const environment = shell.childEnvironment("C:\\Users\\demo\\workspace", {
+      workspaceDirectory: "C:\\Users\\demo\\workspace", temporaryDirectory: "/host/tmp/tools/session",
       sessionId: "s1",
       turnId: "t1",
       responseRouteId: "r1",
@@ -230,6 +233,7 @@ describe("ExecShellAdapter", () => {
       },
     });
     const environment = shell.childEnvironment("/workspace", {
+      workspaceDirectory: "/workspace", temporaryDirectory: "/host/tmp/tools/session",
       sessionId: "s1", turnId: "t1", responseRouteId: "r1", execSessionId: "e1",
     });
 
@@ -257,6 +261,7 @@ describe("ExecShellAdapter", () => {
     });
 
     const environment = shell.childEnvironment("/workspace", {
+      workspaceDirectory: "/workspace", temporaryDirectory: "/host/tmp/tools/session",
       sessionId: "s1", turnId: "t1", responseRouteId: "r1", execSessionId: "e1",
     });
     expect(environment.LXE_DATA_SERVER_URL).toBe("http://127.0.0.1:18000");

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
+import { WINDOWS_TITLEBAR_COLOURS } from "../../../desktop/src/main/window-options";
 
 import {
   DEFAULT_DASHBOARD_THEME,
@@ -10,8 +11,10 @@ import {
 const styles = readFileSync(new URL("../../src/styles.css", import.meta.url), "utf8");
 
 function tokens(selector: string): Record<string, string> {
-  const block = styles.slice(styles.indexOf(`${selector} {`));
-  const body = block.slice(0, block.indexOf("\n}"));
+  const rules = styles.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^}]*)\}/g);
+  const rule = [...rules].find(match => match[1]!.split(",").some(value => value.trim() === selector));
+  if (!rule) throw new Error(`No palette rule found for ${selector}`);
+  const body = rule[2]!;
   return Object.fromEntries(
     [...body.matchAll(/(--[a-z0-9-]+):\s*(#[0-9a-fA-F]{6})/g)].map((m) => [m[1], m[2]]),
   );
@@ -52,6 +55,10 @@ describe("dark palette", () => {
   test("keeps the requested lighter page plane without changing dark mode", () => {
     expect(light["--bg"]).toBe("#fafaf9");
     expect(dark["--bg"]).toBe("#242322");
+    expect(WINDOWS_TITLEBAR_COLOURS).toEqual({
+      light: { color: light["--bg"], symbolColor: light["--text-soft"] },
+      dark: { color: dark["--bg"], symbolColor: dark["--text-soft"] },
+    });
   });
 
   test("keeps the light plane a hair off white rather than a tint", () => {

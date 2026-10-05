@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   desktopWindowAppearance,
   DESKTOP_TITLEBAR_COLOURS,
+  WINDOWS_TITLEBAR_COLOURS,
   DESKTOP_TITLEBAR_HEIGHT,
 } from "../src/main/window-options";
 import { normalizeDesktopPlatform } from "../src/platform";
@@ -12,14 +13,14 @@ describe("desktop window appearance", () => {
       autoHideMenuBar: true,
       titleBarStyle: "hidden",
       titleBarOverlay: {
-        ...DESKTOP_TITLEBAR_COLOURS.light,
+        ...WINDOWS_TITLEBAR_COLOURS.light,
         height: DESKTOP_TITLEBAR_HEIGHT,
       },
     });
   });
 
   test("uses the same overlay contract on Linux", () => {
-    expect(desktopWindowAppearance("linux")).toEqual(desktopWindowAppearance("win32"));
+    expect(desktopWindowAppearance("linux").titleBarOverlay).toEqual({ ...DESKTOP_TITLEBAR_COLOURS.light, height: DESKTOP_TITLEBAR_HEIGHT });
   });
 
   test("uses inset native traffic lights on macOS", () => {

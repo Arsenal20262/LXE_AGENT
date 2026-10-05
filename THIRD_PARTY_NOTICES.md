@@ -181,3 +181,29 @@ https://github.com/ruilisi/fortune-sheet/blob/v1.0.4/LICENSE.
 PDF.js character maps, standard fonts, image-decoder WASM and their individual
 licenses are retained together in `dashboard/preview-pdf/`. All preview workers
 and resources are served from the packaged dashboard; no CDN is used.
+
+## Composer references
+
+The workspace file search and reference grammar, name ranking, inline reference
+editing semantics, candidate menus, sent-message reference projection and explicit skill gesture
+are adapted from DeepSeek Harness (MIT, Copyright 2026 DeepSeek), revision
+`639ed015397290b3745d163aafe02ffee4aa3f84`:
+`packages/context/file-reference-local`, `packages/client/ui-conversation`,
+`packages/client/ui-primitives`, `packages/client/ui-input-trigger`,
+`packages/client/ui-reference`, `packages/client/ui-theme`, `packages/client/ui-skill` and
+`packages/skill/tool-skill`. Source: https://github.com/deepseek-ai/deepseek-harness.
+
+The composer uses Lexical and its plain-text, history, text and utils modules
+pinned to 0.49.0 (MIT, Copyright Meta Platforms, Inc. and affiliates).
+Source: https://github.com/facebook/lexical/tree/v0.49.0.
+Their full MIT texts ship in `dashboard/legal/composer/`. LXE keeps its existing
+React 19 runtime and bundles all editor code locally.
+
+## DeepSeek Harness Windows ACL sandbox
+
+The Windows exec sandbox includes adapted code from DeepSeek Harness,
+commit `639ed015397290b3745d163aafe02ffee4aa3f84`, copyright (c) 2026 DeepSeek,
+licensed under MIT. The full license is retained in
+`packages/agent/runtime/native/windows-sandbox/LICENSE` and distributed as
+`runtime/exec-sandbox/DSH-LICENSE`. Koffi 3.1.1 and its license are distributed
+with the native launcher dependencies.

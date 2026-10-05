@@ -111,7 +111,9 @@ forbidPath("python/lxeskill_cli/shared/permission_policy_loader.py", "the retire
 forbidPath("scripts/permission_policy_admin.py", "the retired permission-policy admin tool must stay deleted");
 forbidText("packages/foundation/desktop-protocol/src/index.ts", /permission_policy_path/, "Agent protocol must not carry the retired permission-policy path");
 const retiredFeishuAuthorizationPatterns = [
-  /botSkillPolicy|PermissionPolicy|permission[_-]?policy[_-]?path|LXE_PERMISSION_POLICY_PATH/i,
+  // Session PermissionPolicyService is separate from the retired Feishu policy.
+  /\bPermissionPolicy\b/,
+  /botSkillPolicy|permission[_-]?policy[_-]?path|LXE_PERMISSION_POLICY_PATH/i,
   /(?:bot[_-]?(?:id|app[_-]?id)|botId|botAppId|union[_-]?id|unionId).{0,80}(?:allowlist|whitelist|allowed[_-]?users|skill[_-]?types|skillTypes)/is,
   /(?:allowlist|whitelist|allowed[_-]?users|skill[_-]?types|skillTypes).{0,80}(?:bot[_-]?(?:id|app[_-]?id)|botId|botAppId|union[_-]?id|unionId)/is,
 ] as const;

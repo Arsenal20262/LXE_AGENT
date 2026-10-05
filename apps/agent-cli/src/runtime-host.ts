@@ -31,6 +31,9 @@ import {
   McpManager,
   OfficialMcpConnector,
   OneShotCliRunner,
+  PermissionPolicyService,
+  PermissionApprovalService,
+  ExecutionPaths,
   registerCodingTools,
   registerToolSearch,
   registerUserQuestionTool,
@@ -113,11 +116,14 @@ export function createAgentRuntimeHost(
     LXE_LXESKILL_CATALOG_PATH: options.lxeskillCatalogPath,
     LXE_LLM_CONFIG_ROOT: options.llmConfigRoot,
     LXE_DATA_ROOT: options.dataRoot,
+    LXE_WORKSPACE_ROOT: join(options.dataRoot, "workspace"),
     PYTHONDONTWRITEBYTECODE: "1",
   };
   const databasePath = String(environment.LXE_AGENT_SQLITE_DB_PATH ?? "").trim()
     || join(options.dataRoot, "db", "agent.sqlite3");
   const store = new SqliteRuntimeStore(databasePath, { legacyWorkspace: options.legacyWorkspace });
+  const permissionPolicy = new PermissionPolicyService();
+  const executionPaths = new ExecutionPaths(options.dataRoot);
   const providerManager = new AtomicRuntimeProviderManager(
     options.dataRoot,
     environment,
@@ -131,6 +137,13 @@ export function createAgentRuntimeHost(
   const questions = new UserQuestionService(sessionId => {
     void Promise.resolve().then(() => options.onSessionChanged?.(sessionId, "questions"))
       .catch(error => logger.warn("question_notification_failed", { session_id: sessionId, error }));
+  });
+  const approvals = new PermissionApprovalService({
+    audit: (sessionId, event) => store.appendApprovalEvent(sessionId, event),
+    changed: sessionId => {
+      void Promise.resolve().then(() => options.onSessionChanged?.(sessionId, "approvals"))
+        .catch(error => logger.warn("approval_notification_failed", { session_id: sessionId, error }));
+    },
   });
   registerUserQuestionTool(tools, questions);
   const skillCatalog = new SkillCatalog(options.dataRoot, options.userSkillsRoot, {
@@ -175,6 +188,7 @@ export function createAgentRuntimeHost(
   const {
     LXE_AGENT_SOUL_PATH: _agentSoulPath,
     LXE_USER_SKILLS_ROOT: _userSkillsRoot,
+    LXE_AGENT_SQLITE_DB_PATH: _agentDatabasePath,
     ...lxeSkillEnvironment
   } = environment;
   const lxeSkillRunner = lxeSkillArgv ? new OneShotCliRunner({
@@ -201,10 +215,10 @@ export function createAgentRuntimeHost(
     logger,
   });
   const processes = registerCodingTools(tools, {
+    executionPaths, approvals,
     ...(environment.LXE_FD_PATH ? { fdPath: environment.LXE_FD_PATH } : {}),
     repositorySkillsRoot: options.skillsRoot,
     userSkillsRoot: options.userSkillsRoot,
-    artifactRoot: join(options.dataRoot, "artifacts"),
     businessCommands,
     businessCommandCatalog: cliCommands,
     execShell,
@@ -229,7 +243,8 @@ export function createAgentRuntimeHost(
   runtimeServices.push(mcpManager);
   let workspaceInstances!: WorkspaceInstanceManager;
   const dashboardService = new DashboardService({
-    questions,
+    questions, approvals,
+    onPermissionChanged: sessionId => options.onSessionChanged?.(sessionId, "permission"),
     stateRoot: options.dataRoot,
     llmConfigRoot: options.llmConfigRoot,
     skillsRoot: options.skillsRoot,
@@ -256,6 +271,7 @@ export function createAgentRuntimeHost(
       return workspaceInstances.reload(assertWorkspaceAvailable(session.workspace), "dashboard_diagnostic");
     },
   });
+  runtimeServices.push({ start: async () => {}, stop: async () => dashboardService.dispose() });
   workspaceInstances = new WorkspaceInstanceManager({
     createSearch: root => new WorkspaceSearchService(root, environment.LXE_FD_PATH ? { fdPath: environment.LXE_FD_PATH } : {}),
     soulPath: options.agentSoulPath,
@@ -264,6 +280,7 @@ export function createAgentRuntimeHost(
   });
   const providerDescriptor = providerManager.acquire().descriptor;
   const runtime = new TypeScriptAgentRuntime({
+    permissionPolicy, executionPaths, approvalAvailable: true,
     store,
     providerManager,
     environment,
@@ -274,6 +291,11 @@ export function createAgentRuntimeHost(
     }),
     tools,
     workspaceInstances,
+    onToolResult: session => dashboardService.invalidateFileCandidates(session),
+    resolveInvokedSkill: async name => {
+      await skillCatalog.refreshForUse();
+      return skillCatalog.get(name, { allowedTypes: allowedSkillTypes });
+    },
     contextWindowTokens: providerDescriptor.contextWindowTokens,
     display: {
       model: providerDescriptor.model,
@@ -285,7 +307,6 @@ export function createAgentRuntimeHost(
     ...(options.onManagedLlmAuthenticationFailure
       ? { onManagedLlmAuthenticationFailure: options.onManagedLlmAuthenticationFailure }
       : {}),
-    artifactRoot: join(options.dataRoot, "artifacts"),
     userSkillsRoot: options.userSkillsRoot,
     systemPrompt: (context) => buildSystemPrompt({
       soul: context.workspaceSnapshot?.soul ?? "",
@@ -296,7 +317,6 @@ export function createAgentRuntimeHost(
       skillPrompt: context.workspaceSnapshot?.skills.prompt ?? context.skillPrompt,
       workspaceInstructions: context.workspaceSnapshot?.instructions_prompt ?? "",
       datasets: cliDatasets,
-      artifactRoot: join(options.dataRoot, "artifacts"),
       larkCliAvailable: execShell.hasExecutable("lark-cli", context.workspace.worktree, context.workspace.directory),
     }),
     services: runtimeServices,
@@ -309,9 +329,13 @@ export function createAgentRuntimeHost(
       started = true;
     },
     stop: async () => {
-      await questions.stop();
-      await runtime.stop();
+      const errors: unknown[] = [];
+      // Audit failures must not leave processes or temporary grants alive.
+      for (const stop of [() => approvals.stop(), () => questions.stop(), () => runtime.stop()]) {
+        try { await stop(); } catch (error) { errors.push(error); }
+      }
       started = false;
+      if (errors.length) throw new AggregateError(errors, errors.map(String).join("; "));
     },
     runTurn: (job, handle) => runtime.runTurn(job, handle),
     ensureSession: (request) => store.ensureSession(request),

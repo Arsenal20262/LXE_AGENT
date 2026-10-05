@@ -1,3 +1,6 @@
+import type { ExecutionPolicy } from "../../permissions/policy";
+import { ExecSandbox, type ExecSandboxInfo } from "../../permissions/exec-sandbox";
+import { recheckExecutionBoundary, type ExecutionBoundary } from "../../permissions/boundaries";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { createLogger, runWithLogContext } from "@lxe/core";
@@ -8,6 +11,7 @@ import type { ProcessStatus } from "./public-types";
 
 interface ProcessEntry {
   id: string;
+  sandbox: ExecSandboxInfo;
   toolCallId: string;
   command: string;
   cwd: string;
@@ -47,7 +51,6 @@ interface CancellableOutputReader {
   cancel(reason?: unknown): Promise<void>;
 }
 
-const SPILL_DIRECTORY_SEGMENTS = ["var", "tmp", "exec"] as const;
 const MAX_EXEC_RECORDS_PER_SESSION = 64;
 const PROTECTED_RECENT_EXEC_RECORDS = 8;
 const OUTPUT_DRAIN_DEADLINE_MS = 2_000;
@@ -58,30 +61,40 @@ export class CodingProcessManager {
   private readonly admissionTails = new Map<string, Promise<void>>();
   private readonly logger = createLogger("runtime.coding_process");
   private nextRecency = 0;
+  private readonly sandbox: ExecSandbox;
+  private closed = false;
+  private readonly closedSessions = new Set<string>();
 
   constructor(private readonly options: {
     maxOutputBytes: number;
     tailBytes: number;
     shell: ExecShellAdapter;
-  }) {}
+    sandbox?: ExecSandbox;
+  }) { this.sandbox = options.sandbox ?? new ExecSandbox(); }
 
   async start(): Promise<void> {}
 
   async stop(): Promise<void> {
+    this.closed = true;
+    await Promise.all([...this.admissionTails.values()]);
     const incomplete = [...this.entries.values()].filter((entry) => entry.endedAt === undefined);
     await Promise.allSettled(incomplete.map((entry) =>
       this.requestTermination(entry, "process_force_killed")));
     await Promise.allSettled(incomplete.map((entry) => entry.completion));
     await Promise.allSettled([...this.entries.values()].map((entry) => entry.output.close()));
+    await this.sandbox.stop();
   }
 
   async terminateSession(sessionId: string): Promise<void> {
+    this.closedSessions.add(sessionId);
+    await this.admissionTails.get(sessionId);
     const entries = [...this.entries.values()]
       .filter((entry) => entry.sessionId === sessionId && entry.endedAt === undefined);
     await Promise.allSettled(entries.map(async (entry) => {
       await this.requestTermination(entry, "process_force_killed");
       await entry.completion;
     }));
+    await this.sandbox.releaseSession(sessionId);
   }
 
   snapshots(sessionId?: string): JsonObject[] {
@@ -103,7 +116,11 @@ export class CodingProcessManager {
     return payload;
   }
 
+  boundary(policy: ExecutionPolicy): ExecutionBoundary { return this.sandbox.boundary(policy); }
+
   async execute(request: {
+    boundary?: ExecutionBoundary;
+    executionPolicy: ExecutionPolicy;
     command: string;
     cwd: string;
     sessionId: string;
@@ -115,11 +132,12 @@ export class CodingProcessManager {
     turnId?: string;
     env?: Record<string, string>;
   }): Promise<JsonObject> {
+    const boundary = request.boundary ?? this.sandbox.boundary(request.executionPolicy);
     this.throwIfAborted(request.signal);
     const started = await this.withAdmission(request.sessionId, async () => {
       await this.enforceCapacity(request.sessionId);
       this.throwIfAborted(request.signal);
-      return this.spawnEntry(request);
+      return this.spawnEntry(request, boundary);
     });
     if ("failure" in started) return started.failure;
     const entry = started.entry;
@@ -136,7 +154,8 @@ export class CodingProcessManager {
     return this.runningPayload(entry, true);
   }
 
-  private spawnEntry(request: {
+  private async spawnEntry(request: {
+    executionPolicy: ExecutionPolicy;
     command: string;
     cwd: string;
     sessionId: string;
@@ -146,11 +165,17 @@ export class CodingProcessManager {
     toolCallId: string;
     turnId?: string;
     env?: Record<string, string>;
-  }): { entry: ProcessEntry } | { failure: JsonObject } {
+  }, boundary: ExecutionBoundary): Promise<{ entry: ProcessEntry } | { failure: JsonObject }> {
     const id = `exec_${randomUUID().replaceAll("-", "")}`;
     let child: ReturnType<typeof Bun.spawn>;
+    let sandbox: ExecSandboxInfo;
     try {
-      const spawn = this.options.shell.spawnSpec(request.command);
+      if (this.closed || this.closedSessions.has(request.sessionId)) throw new Error("Exec session or runtime closed");
+      const spawn = await this.sandbox.prepare(request.executionPolicy, this.options.shell.spawnSpec(request.command), boundary);
+      this.throwIfAborted(request.signal);
+      if (this.closed || this.closedSessions.has(request.sessionId)) throw new Error("Exec session or runtime closed");
+      recheckExecutionBoundary(request.executionPolicy, this.sandbox.paths, boundary);
+      sandbox = spawn.sandbox;
       child = Bun.spawn(spawn.argv, {
         cwd: request.cwd,
         stdin: "ignore",
@@ -160,12 +185,19 @@ export class CodingProcessManager {
         windowsHide: true,
         env: {
           ...this.options.shell.childEnvironment(request.workspace.worktree, {
+            workspaceDirectory: request.executionPolicy.workspaceRoot,
+            temporaryDirectory: spawn.temporaryDirectory,
             sessionId: request.sessionId,
             responseRouteId: request.responseRouteId,
             turnId: request.turnId ?? "",
             execSessionId: id,
           }),
           ...request.env,
+          // Dynamic host scope may vary per call; directory authority stays with the policy.
+          LXE_WORKSPACE_ROOT: request.executionPolicy.workspaceRoot,
+          TMP: spawn.temporaryDirectory,
+          TEMP: spawn.temporaryDirectory,
+          TMPDIR: spawn.temporaryDirectory,
         },
       });
     } catch (error) {
@@ -202,13 +234,14 @@ export class CodingProcessManager {
         status: "failed", exec_id: id, error: "spawned process did not expose stdout/stderr pipes",
       } };
     }
-    const spillDirectory = join(request.workspace.worktree, ...SPILL_DIRECTORY_SEGMENTS);
+    const spillDirectory = this.sandbox.paths.outputDirectory(request.executionPolicy);
     if (!this.sweptSpillRoots.has(spillDirectory)) {
       this.sweptSpillRoots.add(spillDirectory);
       sweepSpillDirectory(spillDirectory);
     }
     const entry: ProcessEntry = {
       id,
+      sandbox,
       toolCallId: request.toolCallId,
       command: request.command,
       cwd: request.cwd,
@@ -316,6 +349,7 @@ export class CodingProcessManager {
       const slice = entry.output.renderSince(entry.outputCursor);
       const payload: JsonObject = {
         exec_id: entry.id,
+        sandbox: { ...entry.sandbox },
         status: terminal ? entry.status : "running",
         new_output: slice.text || "(no new output)",
       };
@@ -440,6 +474,7 @@ export class CodingProcessManager {
     const payload: JsonObject = {
       status: entry.status,
       exec_id: entry.id,
+      sandbox: { ...entry.sandbox },
       exit_code: entry.exitCode,
       output: entry.output.renderRetained().trim() || "(no output)",
       duration_sec: this.duration(entry),
@@ -455,6 +490,7 @@ export class CodingProcessManager {
     const payload: JsonObject = {
       status: entry.status,
       exec_id: entry.id,
+      sandbox: { ...entry.sandbox },
       pid: entry.process.pid,
       duration_sec: this.duration(entry),
       message: `命令仍在运行。使用 wait(exec_id='${entry.id}') 查看新输出或终止命令。`,
@@ -470,6 +506,7 @@ export class CodingProcessManager {
     const endedAt = entry.endedAt ?? null;
     return {
       exec_id: entry.id,
+      sandbox: { ...entry.sandbox },
       tool_call_id: entry.toolCallId,
       session_id: entry.sessionId,
       origin_turn_id: entry.turnId,
@@ -641,6 +678,7 @@ export class CodingProcessManager {
   private processFields(entry: ProcessEntry): JsonObject {
     return {
       pid: entry.process.pid,
+      sandbox: { ...entry.sandbox },
       task_id: entry.id,
       status: entry.status,
       duration_ms: Math.max(0, Math.round(((entry.endedAt ?? Date.now() / 1_000) - entry.startedAt) * 1_000)),

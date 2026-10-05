@@ -57,6 +57,8 @@ export function dashboardDomainsForMutation(operation: DashboardRpcOperation): D
     case "sessions.create":
     case "sessions.send":
     case "sessions.answer":
+    case "sessions.permission.set":
+    case "sessions.approval.decide":
     case "sessions.stop":
     case "sessions.pin":
     case "workspaces.register":

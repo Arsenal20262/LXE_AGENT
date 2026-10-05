@@ -1,3 +1,6 @@
+import { join } from "node:path";
+import { ExecutionPaths } from "../../permissions/execution-paths";
+import { ExecSandbox } from "../../permissions/exec-sandbox";
 import { ModelImageProcessor } from "../../providers/model-image";
 import { ExecShellAdapter } from "../exec-shell";
 import type { ToolRegistry } from "../registry";
@@ -14,14 +17,14 @@ export function registerCodingTools(
   registry: ToolRegistry,
   options: CodingToolOptions,
 ): CodingProcessManager {
+  const executionPaths = options.executionPaths ?? new ExecutionPaths(join(process.cwd(), "var"));
   const toolOutputLimit = 10_000;
   // Anything past this is still captured: the process manager streams the full
-  // transcript to var/tmp/exec and hands the model the tail plus that path.
+  // transcript to the policy output directory and hands the model the tail plus that path.
   const processOutputLimit = Math.max(1_000, Math.trunc(options.maxOutputBytes ?? 50_000));
   const paths = new CodingPathPolicy({
     ...(options.repositorySkillsRoot === undefined ? {} : { repositorySkillsRoot: options.repositorySkillsRoot }),
     ...(options.userSkillsRoot === undefined ? {} : { userSkillsRoot: options.userSkillsRoot }),
-    ...(options.artifactRoot === undefined ? {} : { artifactRoot: options.artifactRoot }),
     ...(options.homeDirectory === undefined ? {} : { homeDirectory: options.homeDirectory }),
   });
   const ledger = new FileVersionLedger();
@@ -31,6 +34,7 @@ export function registerCodingTools(
     maxOutputBytes: processOutputLimit,
     tailBytes: 2_000,
     shell: execShell,
+    sandbox: new ExecSandbox({ paths: executionPaths }),
   });
   processes.onComplete = options.onExecComplete;
   processes.onUpdate = options.onExecUpdate;
@@ -38,6 +42,8 @@ export function registerCodingTools(
   for (const tool of createFileTools({
     paths,
     ledger,
+    executionPaths,
+    ...(options.approvals ? { approvals: options.approvals } : {}),
     imageProcessor,
     toolOutputLimit,
   })) {

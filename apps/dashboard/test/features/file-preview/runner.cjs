@@ -27,6 +27,18 @@ app.whenReady().then(async () => {
     const fs=require("node:fs"), path=require("node:path");fs.mkdirSync(process.env.LXE_PREVIEW_CAPTURE_DIR,{recursive:true});
     fs.writeFileSync(path.join(process.env.LXE_PREVIEW_CAPTURE_DIR,name+".png"),(await win.webContents.capturePage()).toPNG());
   };
+  const captureTabs = async name => {
+    if (!process.env.LXE_PREVIEW_CAPTURE_DIR) return;
+    const fs=require('node:fs'), path=require('node:path');
+    fs.mkdirSync(process.env.LXE_PREVIEW_CAPTURE_DIR,{recursive:true});
+    const theme=await js('document.documentElement.dataset.theme');
+    for (const mode of ['light','dark']) {
+      await js(`document.documentElement.dataset.theme='${mode}'`); await delay(100);
+      const clip=await js("(()=>{const r=document.querySelector('.file-sidebar').getBoundingClientRect();return {x:Math.ceil(r.x),y:Math.ceil(r.y),width:Math.floor(r.width),height:Math.min(300,Math.floor(r.height))}})()");
+      fs.writeFileSync(path.join(process.env.LXE_PREVIEW_CAPTURE_DIR,`${name}-${mode}.png`),(await win.webContents.capturePage(clip)).toPNG());
+    }
+    await js(theme ? `document.documentElement.dataset.theme=${JSON.stringify(theme)}` : 'delete document.documentElement.dataset.theme');
+  };
   const step = async (name, fn) => { await fn(); assert.deepEqual(errors, []); passed.push(name); };
   try {
     await win.loadURL(url);
@@ -41,6 +53,8 @@ app.whenReady().then(async () => {
       assert.equal(await js("Math.round(document.querySelector('.file-sidebar').getBoundingClientRect().width)"), 420);
       await click("#open-0"); assert.equal(await js("document.querySelectorAll('[role=tab]').length"), 1);
       assert.equal(await js("document.querySelector('#draft').value"), "keep this draft");
+      assert.ok(await js("(()=>{const tab=document.querySelector('.file-tab').getBoundingClientRect(),add=document.querySelector('.file-tab-new').getBoundingClientRect();return add.left-tab.right>=0&&add.left-tab.right<=8})()"), 'new tab follows the single tab');
+      await captureTabs('tabs-single');
     });
     await step("FortuneSheet React 19 mounting, selection, copying and resizing", async () => {
       await click("#open-1"); await wait("!!document.querySelector('.fortune-container canvas')", "spreadsheet canvas");
@@ -83,13 +97,15 @@ app.whenReady().then(async () => {
       assert.ok(await js("previewFixture.calls.some(c=>c.includes('\"application\":\"editor\"'))"));
     });
     await step("File tree includes hidden files and session state stays isolated", async () => {
-      await click(".file-header-actions button:first-child"); await wait("document.body.innerText.includes('.hidden')", "hidden file");
+      assert.equal(await js("document.querySelectorAll('.file-header-actions button').length"), 1);
+      await click(".file-tab-strip > button:first-of-type"); await wait("!!document.querySelector('.tools-start')", "Start page");
+      await click(".tools-start button:first-of-type"); await wait("document.body.innerText.includes('.hidden')", "hidden file");
       assert.equal(await js("document.querySelector('.file-tree .file-display-path').textContent"), "/test/workspace");
       await click(".file-tree button[title=folder]"); await wait("document.body.innerText.includes('nested.txt')", "expanded folder");
       await click(".file-tree-scroll > .file-tree-level > li:last-child > button"); await wait("document.body.innerText.includes('file-201.txt')", "second directory page");
       await js("document.querySelector('.file-tree-scroll').scrollTop=500"); await delay(100);
       await click("#open-0"); await wait("previewFixture.watches.size===0", "tree watches released");
-      await click(".file-header-actions button:first-child"); await wait("previewFixture.watches.size===2 && document.querySelector('.file-tree-scroll')?.scrollTop > 400", "tree expansion, pages and scroll restored");
+      await click("[role=tab][title='工作区文件']"); await wait("previewFixture.watches.size===2 && document.querySelector('.file-tree-scroll')?.scrollTop > 400", "tree expansion, pages and scroll restored");
       await js("previewFixture.removeTreeFile()"); await wait("!document.body.innerText.includes('nested.txt')", "visible directory auto-refresh");
       const count=await js("document.querySelectorAll('[role=tab]').length");
       await js("previewFixture.switchSession()"); await delay(100); assert.equal(await js("!!document.querySelector('.file-sidebar')"),false); assert.equal(await js("previewFixture.watches.size"),0);
@@ -152,7 +168,21 @@ app.whenReady().then(async () => {
       await js("previewFixture.slow(true);document.querySelector('#open-0').click();document.querySelector('#open-4').click()"); await delay(650);
       assert.ok(await js("document.querySelector('[role=tab][aria-selected=true]').textContent.includes('图.png')"));
       await js("previewFixture.slow(false)");
-      assert.ok(await js("(()=>{const a=document.querySelector('[aria-selected=true]').getBoundingClientRect(),r=document.querySelector('.file-tabs').getBoundingClientRect();return a.left>=r.left-1&&a.right<=r.right+1})()"));
+      const activeVisible="(()=>{const a=document.querySelector('[aria-selected=true]').closest('.file-tab').getBoundingClientRect(),r=document.querySelector('.file-tabs').getBoundingClientRect();return a.left>=r.left-1&&a.right<=r.right+1})()";
+      assert.ok(await js(activeVisible), 'the active tab and its close button stay visible');
+      await captureTabs('tabs-overflow');
+      for (let i=0;i<6;i++) {
+        await js("document.querySelector('[role=separator]').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}))");
+        await delay(40);
+      }
+      assert.equal(await js("Math.round(document.querySelector('.file-sidebar').getBoundingClientRect().width)"),320);
+      assert.ok(await js(activeVisible), 'the entire active tab fits at minimum sidebar width');
+      assert.ok(await js("(()=>{const strip=document.querySelector('.file-tab-strip').getBoundingClientRect();return [...document.querySelectorAll('.file-tab-strip>button')].every(b=>{const r=b.getBoundingClientRect();return r.left>=strip.left&&r.right<=strip.right})})()"), 'panel controls remain accessible beside overflowing tabs');
+      await captureTabs('tabs-overflow-narrow');
+      for (let i=0;i<6;i++) {
+        await js("document.querySelector('[role=separator]').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowLeft',bubbles:true}))");
+        await delay(40);
+      }
       await js("document.querySelector('[role=tab][aria-selected=true]').dispatchEvent(new KeyboardEvent('keydown',{key:'Home',bubbles:true}))");
       await wait("document.querySelector('[role=tab][aria-selected=true]')?.textContent.includes('文档.md')", "Home navigation");
     });
@@ -266,6 +296,85 @@ app.whenReady().then(async () => {
       await js("previewFixture.openFailure(false);document.querySelector('#draft').focus();document.querySelector('.file-action-notice').dispatchEvent(new MouseEvent('mouseout',{bubbles:true,relatedTarget:document.body}))");
       await wait("!document.querySelector('.file-action-notice')", "action notice expires");
       await click(".file-tab-strip > button:last-child"); await wait("previewFixture.pending.size===0 && previewFixture.workers.size===0", "hidden releases resources");
+    });
+    await step("Conversation image cards, attachments and references use centered dialogs", async () => {
+      await js("previewFixture.images(true)");
+      await wait("!!document.querySelector('#chat-images .sent-image-tile img')", "sent attachment thumbnail");
+      const layoutBefore = await js("localStorage.getItem('lxe.file-preview.v1.first')");
+      await js("document.querySelector('#chat-image-card .turn-file-card').focus()");
+      await click("#chat-image-card .turn-file-card");
+      await wait("document.querySelector('.file-image-dialog .file-image img')?.naturalWidth === 960", "artifact image dialog");
+      assert.equal(await js("!!document.querySelector('.file-sidebar')"), false, "opening a chat image does not reveal the sidebar");
+      assert.equal(await js("localStorage.getItem('lxe.file-preview.v1.first')"), layoutBefore, "dialog never enters saved tabs");
+      assert.ok(await js("(()=>{const r=document.querySelector('.file-image-dialog').getBoundingClientRect();return Math.abs(r.left+r.width/2-innerWidth/2)<2&&r.top>=20&&r.bottom<=innerHeight-20})()"), "dialog is centered and fits the viewport");
+      await js("var z=document.querySelector('.file-image-dialog .file-zoom-bar select');z.value='200';z.dispatchEvent(new Event('change',{bubbles:true}))");
+      await wait("document.querySelector('.file-image-dialog .file-zoom-bar select')?.value==='200'", "image zoom in dialog");
+      await js("var z=document.querySelector('.file-image-dialog .file-zoom-bar select');z.value='0';z.dispatchEvent(new Event('change',{bubbles:true}))");
+      await wait("document.querySelector('.file-image-dialog .file-zoom-bar select')?.value==='0'", "fit restored before capture");
+      await delay(100); await capture("chat-image-dialog-light");
+      await js("document.documentElement.dataset.theme='dark'");
+      win.setSize(640, 800); await delay(150); await capture("chat-image-dialog-dark-narrow");
+      assert.ok(await js("document.querySelector('.file-image-dialog').getBoundingClientRect().right<=innerWidth-20"));
+      win.setSize(1200, 900); await js("document.documentElement.dataset.theme='light'");
+      await click(".file-image-dialog .file-open-split button:last-child");
+      await wait("!!document.querySelector('[role=menu]')", "image application menu");
+      await js("document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}))");
+      await wait("!document.querySelector('[role=menu]')", "Escape closes nested menu first");
+      assert.equal(await js("!!document.querySelector('.file-image-dialog')"), true);
+      await js("document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}))");
+      await wait("!document.querySelector('[role=dialog]') && previewFixture.pending.size===0", "Escape closes and releases image");
+      await wait("document.activeElement===document.querySelector('#chat-image-card .turn-file-card')", "focus returns to image card");
+      await click("#chat-images .sent-image-tile");
+      await wait("document.querySelector('.sent-image-dialog > img')?.naturalWidth===960", "sent attachment expands in dialog");
+      assert.equal(await js("!!document.querySelector('.file-image-dialog') || !!document.querySelector('.file-sidebar')"), false);
+      assert.ok(await js("previewFixture.calls.includes('attachment:expanded')"), "uses expanded attachment preview");
+      await click(".sent-image-backdrop"); await wait("!document.querySelector('[role=dialog]')", "backdrop closes attachment");
+      await click("#chat-images .message-reference");
+      await wait("!!document.querySelector('.file-image-dialog .file-image img')", "chat image reference uses dialog");
+      await click(".sent-image-dialog > header button");
+      await wait("!document.querySelector('[role=dialog]') && previewFixture.pending.size===0", "close button releases image reference");
+      assert.equal(await js("document.querySelector('#draft').value"), "keep this draft");
+    });
+    await step("File-tree images stay in sidebar and dialogs preserve the active tab", async () => {
+      await click(".file-header-actions button");
+      await click("[role=tab][title='工作区文件']");
+      await wait("!!document.querySelector('.file-tree button[title=\"图.png\"]')", "image in file tree");
+      await click('.file-tree button[title="图.png"]');
+      await wait("document.querySelector('.file-sidebar .file-image img')?.naturalWidth > 0", "file tree still opens sidebar image");
+      assert.equal(await js("!!document.querySelector('[role=dialog]')"), false);
+      const count = await js("document.querySelectorAll('[role=tab]').length");
+      const saved = await js("localStorage.getItem('lxe.file-preview.v1.first')");
+      await click("#chat-image-card .turn-file-card");
+      await wait("!!document.querySelector('.file-image-dialog .file-image img')", "dialog over existing sidebar");
+      assert.equal(await js("document.querySelectorAll('[role=tab]').length"), count);
+      await click(".sent-image-dialog > header button");
+      assert.equal(await js("localStorage.getItem('lxe.file-preview.v1.first')"), saved);
+      assert.ok(await js("document.querySelector('[role=tab][aria-selected=true]').textContent.includes('图.png')"));
+      await click(".file-tab-strip > button:last-child");
+      await wait("previewFixture.pending.size===0", "closing sidebar releases its image");
+    });
+    await step("Image dialogs preserve errors and discard late work after close or navigation", async () => {
+      await js("previewFixture.fault('截图示例.svg','permission_denied')"); await click("#chat-image-card .turn-file-card");
+      await wait("document.querySelector('.file-image-dialog .file-failure-panel')?.textContent.includes('没有权限')", "image error stays in dialog");
+      assert.ok(await js("document.querySelector('.file-image-dialog .file-error-details pre').textContent.includes('EACCES')"));
+      await js("previewFixture.fault('截图示例.svg')"); await click(".file-image-dialog .file-failure-panel > button");
+      await wait("document.querySelector('.file-image-dialog .file-image img')?.naturalWidth===960", "retry loads image");
+      const before = await js("previewFixture.calls.filter(c=>c==='prepare').length");
+      await js("previewFixture.change();window.dispatchEvent(new Event('focus'))");
+      await wait(`previewFixture.calls.filter(c=>c==='prepare').length>${before} && document.querySelector('.file-image-dialog .file-image img')?.naturalWidth===960`, "image refreshes after file change");
+      await js("previewFixture.switchSession()");
+      await wait("!document.querySelector('[role=dialog]') && previewFixture.pending.size===0", "session navigation closes image and releases handle");
+      await js("previewFixture.switchSession();previewFixture.slowPrepare(true)");
+      await wait("previewFixture.session==='first'", "return to original session before clicking");
+      await click("#chat-image-card .turn-file-card");
+      await wait("!!document.querySelector('.file-image-dialog') && previewFixture.pending.size===1", "image preparation in flight");
+      await click(".sent-image-dialog > header button");
+      await wait("previewFixture.pending.size===0", "closing cancels preparation");
+      await delay(3200); assert.equal(await js("!!document.querySelector('[role=dialog]')"), false, "late preparation does not reopen image");
+      await js("previewFixture.slowPrepare(false);previewFixture.slow(true);document.querySelector('#chat-image-card .turn-file-card').click();previewFixture.switchSession()");
+      await delay(650);
+      assert.equal(await js("!!document.querySelector('[role=dialog]') || !!document.querySelector('.file-sidebar')"), false, "late metadata cannot take over another session");
+      await js("previewFixture.slow(false);previewFixture.images(false)");
     });
     console.log("LXE_PREVIEW_RESULT="+JSON.stringify({passed})); win.destroy(); app.exit(0);
   } catch(error) { console.error(error.stack||error); console.error(JSON.stringify({passed,errors})); console.error(await js("(()=>{const text=document.body.innerText;return text.length>2500?text.slice(0,800)+'\\n[truncated]\\n'+text.slice(-1400):text})()").catch(String)); console.error(await js("[...document.querySelectorAll('.file-error-details pre')].map(e=>e.textContent)").catch(String)); try {require('node:fs').writeFileSync(require('node:path').join(profile,'failure.png'),(await win.webContents.capturePage()).toPNG());}catch{} win.destroy(); app.exit(1); }

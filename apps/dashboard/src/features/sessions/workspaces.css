@@ -6,15 +6,14 @@
 .workspace-group-header:hover, .workspace-group.is-active > .workspace-group-header { background: var(--sidebar-hover); }
 .workspace-group-toggle { display: flex; align-items: center; gap: 7px; flex: 1; min-width: 0; padding: 8px 4px; border: 0; background: transparent; color: var(--sidebar-ink); text-align: left; font: inherit; font-size: .82rem; cursor: pointer; }
 .workspace-group-toggle > svg { flex-shrink: 0; color: var(--sidebar-ink-soft); }
-.workspace-group.is-active .workspace-group-toggle > svg:nth-child(2) { color: var(--accent); }
-.workspace-group-toggle .expanded { transform: rotate(90deg); }
 .workspace-group-toggle > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .workspace-icon-button { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 28px; flex-shrink: 0; padding: 0; border: 0; border-radius: 5px; background: transparent; color: var(--sidebar-ink-soft); cursor: pointer; }
 .workspace-icon-button:hover { color: var(--sidebar-ink); background: var(--sidebar-hover); }
-.workspace-group-sessions { margin-left: 19px; }
+.sidebar-session-section .workspace-group-sessions .session-index-open { grid-template-columns: 17px minmax(0, 1fr); gap: 7px; padding-left: 4px; }
+.workspace-group-sessions .session-index-icon { justify-self: center; }
 .workspace-empty { padding: 8px 20px 12px; color: var(--sidebar-ink-soft); font-size: .75rem; }
 .sidebar-session-section .workspace-group-sessions .session-index-list { overflow: visible; max-height: none; margin-right: 0; scrollbar-gutter: auto; }
-.workspace-load-more { border: 0; background: transparent; color: var(--accent-strong); padding: 7px; font: inherit; font-size: .75rem; cursor: pointer; text-align: left; }
+.workspace-load-more { border: 0; background: transparent; color: var(--sidebar-ink-soft); padding: 7px; font: inherit; font-size: .75rem; cursor: pointer; text-align: left; }
 .workspace-error, .workspace-loading { font-size: .75rem; overflow-wrap: anywhere; padding: 6px 8px; }
 .workspace-error { color: var(--danger, #c65050); }
 .session-workspace-result { display: block; color: var(--sidebar-ink-soft); font-size: .68rem; overflow: hidden; text-overflow: ellipsis; }
@@ -25,9 +24,6 @@
 .conversation-workspace-row select { max-width: min(40%, 260px); padding: 4px 5px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); font: inherit; }
 .conversation-workspace-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .conversation-workspace.is-readonly { position: relative; min-width: 0; padding: 0; border: 0; }
-.conversation-workspace-button { display: flex; align-items: center; gap: 6px; max-width: 220px; min-height: 30px; padding: 5px 7px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font: inherit; font-size: .75rem; cursor: pointer; }
-.conversation-workspace-button > svg { flex: 0 0 auto; }
-.conversation-workspace-button:hover { background: var(--row-hover); color: var(--text); }
 .conversation-workspace.is-readonly .workspace-error { position: absolute; top: 100%; right: 0; width: 300px; max-width: 70vw; padding: 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); box-shadow: var(--shadow-card); }
 @container (max-width: 480px) {
   .conversation-workspace.is-readonly .conversation-workspace-name,

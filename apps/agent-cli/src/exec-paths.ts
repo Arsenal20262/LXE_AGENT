@@ -134,6 +134,10 @@ export function execRuntimeEnvironment(
     LXE_FD_PATH: paths.fdPath,
     LXE_MANAGED_PYTHON: paths.managedPythonPath,
     LXE_OFFICE_NODE: paths.officeNodePath,
+    LXE_EXEC_SANDBOX_NODE: paths.officeNodePath,
+    LXE_EXEC_SANDBOX_RUNNER: paths.sourceRoot
+      ? join(paths.sourceRoot, "build", "exec-sandbox", "runner.mjs")
+      : join(paths.resourceRoot, "runtime", "exec-sandbox", "runner.mjs"),
     LXE_OFFICE_CLI: paths.officeCliPath,
     TMP: temporaryRoot,
     TEMP: temporaryRoot,

@@ -66,6 +66,7 @@ def isolated_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         for name in ("_workspace_root", "_internal_root", "_artifact_root", "_input_root")
     }
     monkeypatch.setenv("LXE_DATA_ROOT", str(state))
+    monkeypatch.setenv("LXE_WORKSPACE_ROOT", str(tmp_path / "workspace"))
     workspace.activate_project_workspace()
     yield state
     for name, value in original.items():
@@ -134,7 +135,7 @@ def test_install_list_replace_rollback_then_generate_one_final_workbook(
     assert result["data"]["config_source"] == "environment"
     assert result["data"]["sku_count"] == 1
     output = Path(result["data"]["output_xlsx"])
-    assert output.is_relative_to(isolated_state)
+    assert output.is_relative_to(tmp_path / "workspace" / ".lxeagent" / "artifacts")
     assert result["files"] == [str(output)]
     assert export_calls == ["VN8806"]
     assert output.is_file() and output.stat().st_size > 0
