@@ -4,7 +4,7 @@
 
 ## 接手位置和依赖
 
-- 当前分支：`codex/vietnam-stock-pr3-workbook`，worktree：`/Users/hym/.codex/worktrees/3062/LXE_AGENT1`，基于 PR2 提交 `405e5586`。未在 `main` 或 PR2 分支追加代码。
+- 当前分支：`codex/vietnam-stock-pr3-workbook`，在该分支的独立 worktree 中开发；原始开发起点为 PR2 提交 `405e5586`，后续本地同步前序文档可能改写提交号。未在 `main` 或 PR2 分支追加代码。
 - PR3 依赖个人仓库 PR2 的代码；PR2 又依赖 PR1。个人 PR [#3](https://github.com/Arsenal20262/LXE_AGENT/pull/3) 以 `codex/vietnam-stock-pr2-yacang` 为 base，head 为 `codex/vietnam-stock-pr3-workbook`，创建时显示五个提交、14 个改动路径。合并前需确认前序 PR 已合并；若 PR2 采用 squash 或 rebase 合并，须先调整 PR3 的 base。向组长仓库提交须等待前序模块按序合并并分别获得用户批准。
 - 本模块只处理离线生成：传入同一轮 PR2 `VietnamSources`、运营 SKU 映射表和新输出路径。生产雅仓调用、Vietnam Skill、Desktop 上传入口、配置接线和 `send_files` 属于后续 PR。
 
@@ -28,9 +28,9 @@
 ## 环境与验证
 
 - Python 使用本 worktree 的 `.venv` 与 `uv --frozen`；Office 使用宿主提供的绝对路径 `LXE_OFFICE_NODE`、`LXE_OFFICE_CLI`。PR3 没有新增凭据或其他环境变量。雅仓既有账号配置不在本模块读取或记录。
-- 从仓库根执行 `UV_CACHE_DIR=/private/tmp/uv-cache-pr3 uv run --frozen --no-sync pytest -q python/lxeskill_cli/tests/vietnam_replenishment python/lxeskill_cli/tests/yacang`，结果 **179 passed**。这批测试使用合成文件和本机雅仓模拟服务；首次沙箱内运行因禁止绑定 `127.0.0.1` 失败，在允许本地端口的环境重跑后全绿。最后仅调整校验器在打开文件失败时关闭句柄，随后重跑 `test_recalculation.py`，结果 **15 passed**。
+- 从仓库根执行 `uv run --frozen --no-sync pytest -q python/lxeskill_cli/tests/vietnam_replenishment python/lxeskill_cli/tests/yacang`（当时使用本地临时缓存目录），结果 **179 passed**。这批测试使用合成文件和本机雅仓模拟服务；首次沙箱内运行因禁止绑定 `127.0.0.1` 失败，在允许本地端口的环境重跑后全绿。最后仅调整校验器在打开文件失败时关闭句柄，随后重跑 `test_recalculation.py`，结果 **15 passed**。
 - 项目自带 Office Kit 真实重算通过三条合成 SKU：新品 `VN-NEW-3` 的 30/15/7 天销量均为 `1`，用公式权重与 `0.8/0.8/0` 参数独立算得日均约 `0.107948380733191`，与 `S` 一致；`R=1.2` 时 `T=ROUNDUP(S×R,2)=0.13`。其 `AC=40`、可用库存 `5`、在途 `2`，按模板 `ROUNDUP(0.13×40−5−2, -1)` 得 `H=-10`。旧品 `VN-OLD-3` 的 `3.89×70−10−3=259.3`，得 `H=260`；零动销零库存 `VN-ZERO-3` 得 `H=0`。三者的 `AA` 都等于商品表创建时间；零动销的 `AB=#DIV/0!` 仅在已审计的 `S=0` 条件下放行。主表及其余四表均已渲染并目视检查。
-- 使用本机缓存中的固定 Hatchling `1.31.0` 执行 `uv build --wheel --offline --out-dir /private/tmp/pr3-wheel` 成功。wheel 恰好包含一个 `services/vietnam_replenishment/resources/skeleton.xlsx`；骨架 10,533 字节、五表，主表仅保留表头/公式，ZIP 不含图片、绘图、批注、外链、共享字符串或历史 SKU/价格行。构建后还需在最终 Windows 安装包验收资源读取。
+- 使用本机缓存中的固定 Hatchling `1.31.0` 离线构建 wheel，并通过 `--out-dir` 将产物置于本地临时目录，结果成功。wheel 恰好包含一个 `services/vietnam_replenishment/resources/skeleton.xlsx`；骨架 10,533 字节、五表，主表仅保留表头/公式，ZIP 不含图片、绘图、批注、外链、共享字符串或历史 SKU/价格行。构建后还需在最终 Windows 安装包验收资源读取。
 - 额外用真实 Office Kit 验证：映射表跨境价为显式 `0` 时，利润率 `AH` 无法计算，生成接口明确报 SKU、字段及单元格且不留下最终文件。缺必需来源或映射字段、公式被篡改、缓存和来源不一致也均在定向用例中失败。
 
 ## 已知边界与下一步

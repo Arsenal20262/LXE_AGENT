@@ -1,10 +1,10 @@
 # 越南备货 PR5 交接：Desktop 映射表与长期参数
 
-> 本页记录 PR5 已实现和验证的范围。截至 2026-10-04，分支已推送至个人 fork，并创建 [PR #5](https://github.com/Arsenal20262/LXE_AGENT/pull/5)；PR 尚未合并。
+> 本页记录 PR5 已实现和验证的范围。截至 2026-10-05，分支已推送至个人 fork，并创建 [PR #5](https://github.com/Arsenal20262/LXE_AGENT/pull/5)；PR 尚未合并。
 
 ## 接手位置与依赖
 
-- 开发分支：`codex/vietnam-stock-pr5-desktop`；Pool worktree：`/Users/hym/PycharmProjects/LXE_AGENT1/.worktrees/pool-2`。从 PR4 分支 `codex/vietnam-stock-pr4-workflow` 的已核对提交 `b2bff2f6a5df434983a2e061161d5c34d7140777` 开始；PR5 应以 PR4 分支为 base，前序仍按 PR1 → PR2 → PR3 → PR4 → PR5 处理。没有在 `main` 开发。
+- 开发分支：`codex/vietnam-stock-pr5-desktop`；在该分支所属 worktree 操作。从 PR4 分支 `codex/vietnam-stock-pr4-workflow` 的已核对提交 `b2bff2f6a5df434983a2e061161d5c34d7140777` 开始；PR5 以 PR4 分支为 base，前序仍按 PR1 → PR2 → PR3 → PR4 → PR5 处理。没有在 `main` 开发。
 - PR5 只处理 Desktop 管理的 `vietnam_sku_parameter_map`、四个长期计算参数、必要的生成入口接线及验证。聊天本次临时覆盖另开后续 PR；当前 Skill 遇到用户明确指定“本次用某值”会说明暂不支持并停止，不忽略要求继续生成。
 - 设计与实施计划分别在 `docs/superpowers/specs/2026-10-03-vietnam-pr5-desktop-design.md`、`docs/superpowers/plans/2026-10-03-vietnam-pr5-desktop.md`。接手前仍应核对这两份文件、仓库现行规范和最新 diff。
 
@@ -65,5 +65,5 @@ Task 9 的合成集成已实际跑通：内部适配器安装 A、替换 B、回
 
 - Windows 是正式分发目标，但 Windows 文件占用、断电恢复、`os.replace` 行为和安装包内 Python 命令路由尚未现场验收。真实雅仓当前库存导出及最终五表与生产数据联调仍待现场完成；不能用本机合成测试声称完成这些验收。
 - 当前代码的候选文件校验、清单与摘要用于应用正常入口的可靠性和意外改动检测；同一系统用户若直接改写清单及版本文件，不属于本 PR 能用文件权限隔离的对抗边界。历史旧目录没有自动导入路径。
-- 本地提交从设计 `5bd72408` 起，依次为 Python 映射表存储 `46215b82`、Desktop 资产管理 `4e541114`、长期参数与工作流 `841e6375`，最后以 `0280d0c4` 提交本页、设计补记和实施计划。PR5 首轮功能代码收口于 `0280d0c4`，后续交接更新另有文档提交；没有修改锁文件或无关模块。最新远端 head 以 PR 页面为准。
+- 原始提交从设计 `5bd72408` 起，依次为 Python 映射表存储 `46215b82`、Desktop 资产管理 `4e541114`、长期参数与工作流 `841e6375`，再以 `0280d0c4` 提交本页、设计补记和实施计划。随后交接更新、越南参数界面收口与验证记录已提交；截至 2026-10-05 的已推送收口提交为 `c038bcf7`。本地 HEAD 以当前分支核对，远端 head/base 以 PR #5 页面为准；本地同步前序文档可能改写提交号。没有修改锁文件或无关模块。
 - Electron 原生窗口的合成界面交互已完成本页所述定向验收；下一步审阅 PR #5。PR1–PR4 仍未合并，须按依赖顺序处理。待上游依赖进入 `main` 后，在当前分支核对最新 `main` 和冲突、运行合并前的全量验证，再单独申请合并确认。真实雅仓数据仍需现场验收；Windows 安装版由组长负责。PR5 收口后用本页在新任务接手聊天临时覆盖等后续模块。
