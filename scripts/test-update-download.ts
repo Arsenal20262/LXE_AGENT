@@ -1,5 +1,5 @@
 import {createRequire} from "node:module";
-import {existsSync,mkdirSync,readFileSync,writeFileSync} from "node:fs";
+import {existsSync,mkdirSync,readFileSync,rmSync,writeFileSync} from "node:fs";
 import {join,resolve} from "node:path";
 import {launchUpdateInstaller} from "../apps/desktop/src/main/update-launch";
 
@@ -13,6 +13,7 @@ const downloadRecord=join(folder,"qualification.json");writeFileSync(downloadRec
 // Exercise ShellExecute's acknowledged launch with a harmless real process,
 // including spaces/Unicode in the argument and no change to a real application.
 const probe=join(folder,"提权 launch.txt");
+rmSync(probe,{force:true});
 await launchUpdateInstaller(join(record.output,"payload/resources/runtime/node/node.exe"),["-e",`require('node:fs').writeFileSync(${JSON.stringify(probe)},'started')`],true);
 const deadline=Date.now()+10000;
 while(!existsSync(probe)&&Date.now()<deadline)await Bun.sleep(50);
