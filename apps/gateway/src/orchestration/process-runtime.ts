@@ -1,6 +1,6 @@
 import { type ManagedLlmState } from "@lxe/core";
 import { randomUUID } from "node:crypto";
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { spawn, execFile, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createInterface, type Interface } from "node:readline";
 import type {
   AgentJob,
@@ -130,6 +130,14 @@ export class ProcessAgentRuntime implements DirectAgentRuntime {
   private notifications = Promise.resolve();
   private incompatible = false;
   private child: ChildProcessWithoutNullStreams | undefined;
+  private treeTermination: { pid: number; error?: Error } | undefined;
+  private terminateProcessTree: ((pid: number) => Promise<void>) | undefined = process.platform === "win32"
+    ? pid => new Promise((resolveTree, reject) => {
+      execFile("taskkill.exe", ["/PID", String(pid), "/T", "/F"], { windowsHide: true, timeout: 3500 }, (error, _stdout, stderr) => {
+        if (error) reject(new Error(`taskkill failed: ${error.message}; ${stderr}`));
+        else resolveTree();
+      });
+    }) : undefined;
   private stdout: Interface | undefined;
   private stderr: Interface | undefined;
   private state: ProcessState = "stopped";
@@ -158,7 +166,7 @@ export class ProcessAgentRuntime implements DirectAgentRuntime {
     const logging = loggingStatus(this.remoteHealthSnapshot.logging);
     return {
       state: this.state,
-      pid: this.child?.pid ?? 0,
+      pid: this.child?.pid ?? this.treeTermination?.pid ?? 0,
       message: this.statusMessage,
       ...(typeof lxeSkillAvailable === "boolean"
         ? { lxeskillAvailable: lxeSkillAvailable }
@@ -175,6 +183,7 @@ export class ProcessAgentRuntime implements DirectAgentRuntime {
   }
 
   private async launch(recovering: boolean): Promise<void> {
+    this.assertTreeExitConfirmed();
     if (this.isReady) return;
     if (this.child) await this.terminateChild();
     this.stopping = false;
@@ -208,7 +217,16 @@ export class ProcessAgentRuntime implements DirectAgentRuntime {
       this.options.onStderr?.(line);
       this.logger.debug("agent_cli_stderr", { line });
     });
-    child.once("error", (error) => { if (this.child === child) this.handleExit(error); });
+    child.on("error", (error) => {
+      if (this.child !== child) return;
+      if (!child.pid || child.exitCode !== null || child.signalCode !== null) this.handleExit(error);
+      else {
+        // A failed signal/write is not an exit. Retain ownership so a recovery
+        // cannot start another runtime alongside the still-running process.
+        this.setStatus("error", error.message);
+        this.rejectPending(error);
+      }
+    });
     child.once("exit", (code, signal) => { if (this.child === child) this.handleExit(new AgentProcessError(
       `agent-cli exited: code=${String(code ?? "")} signal=${String(signal ?? "")}`,
       "AgentProcessExited",
@@ -245,6 +263,7 @@ export class ProcessAgentRuntime implements DirectAgentRuntime {
   }
 
   async stop(): Promise<void> {
+    this.assertTreeExitConfirmed();
     this.manuallyStopped = true;
     if (this.restartTimer) clearTimeout(this.restartTimer);
     this.restartTimer = undefined;
@@ -256,12 +275,30 @@ export class ProcessAgentRuntime implements DirectAgentRuntime {
     this.stopping = true;
     try {
       await this.request("shutdown", {}, this.options.shutdownTimeoutMs ?? 5_000);
+      const child = this.child;
+      if (child && child.exitCode === null && child.signalCode === null) {
+        // The shutdown response is flushed just before exit. Give the real exit
+        // event a short grace period instead of racing taskkill against it.
+        await new Promise<void>(resolveExit => {
+          const finish = () => { clearTimeout(timer); child.off("exit", finish); resolveExit(); };
+          const timer = setTimeout(finish, 250);
+          child.once("exit", finish);
+        });
+      }
     } catch {
       // The process may have already exited; termination below is idempotent.
     }
     await this.terminateChild();
     this.setStatus("stopped", "");
     this.stopping = false;
+  }
+
+  get hasProcess(): boolean { return Boolean(this.child || this.treeTermination); }
+
+  private assertTreeExitConfirmed(): void {
+    if (this.treeTermination) throw this.treeTermination.error ?? new AgentProcessError(
+      `Owned process tree for PID ${this.treeTermination.pid} has not confirmed exit`, "AgentProcessExitUnconfirmed",
+    );
   }
 
   async restart(): Promise<void> {
@@ -547,7 +584,7 @@ export class ProcessAgentRuntime implements DirectAgentRuntime {
   }
 
   private scheduleRecovery(): void {
-    if (this.manuallyStopped || this.incompatible || this.restartTimer) return;
+    if (this.manuallyStopped || this.incompatible || this.restartTimer || this.treeTermination) return;
     const delays = this.options.restartDelaysMs ?? [];
     const delay = delays[this.restartAttempt];
     if (delay === undefined) return;
@@ -561,8 +598,44 @@ export class ProcessAgentRuntime implements DirectAgentRuntime {
   }
 
   private async terminateChild(): Promise<void> {
+    this.assertTreeExitConfirmed();
     const child = this.child;
     if (!child) return;
+    // Keep ownership until an actual exit. Sending SIGKILL is not proof of exit.
+    if (child.exitCode === null && child.signalCode === null) {
+      const terminateTree = child.pid ? this.terminateProcessTree : undefined;
+      if (terminateTree) this.treeTermination = { pid: child.pid! };
+      try { await new Promise<void>((resolveExit, reject) => {
+        let forceTimer: ReturnType<typeof setTimeout>;
+        let deadline: ReturnType<typeof setTimeout>;
+        let parentExited = false;
+        let treeTerminated = !terminateTree;
+        const cleanup = () => { clearTimeout(forceTimer); clearTimeout(deadline); child.off("exit", exited); };
+        const finish = () => { if (parentExited && treeTerminated) { cleanup(); resolveExit(); } };
+        const exited = () => { parentExited = true; finish(); };
+        child.once("exit", exited);
+        forceTimer = setTimeout(() => { if (!terminateTree) try { child.kill("SIGKILL"); } catch (error) { cleanup(); reject(error); } }, 1500);
+        deadline = setTimeout(() => { cleanup(); reject(new AgentProcessError(`agent-cli PID ${child.pid} did not exit after termination`, "AgentProcessExitUnconfirmed")); }, 4000);
+        try {
+          if (terminateTree) {
+            void terminateTree(child.pid!).then(() => {
+              treeTerminated = true;
+              finish();
+            }, error => { cleanup(); reject(error); });
+          } else child.kill("SIGTERM");
+        } catch (error) { cleanup(); reject(error); }
+      }); } catch (cause) {
+        const error = cause instanceof Error ? cause : new Error(String(cause));
+        if (this.treeTermination) {
+          // handleExit may already have released the parent. A failed tree kill
+          // still leaves descendants unconfirmed, so recovery must stay blocked.
+          this.treeTermination.error = error;
+          this.setStatus("error", error.message);
+        }
+        throw error;
+      }
+      this.treeTermination = undefined;
+    }
     this.child = undefined;
     this.generation += 1;
     this.notifications = Promise.resolve();
@@ -571,22 +644,6 @@ export class ProcessAgentRuntime implements DirectAgentRuntime {
     this.stdout = undefined;
     this.stderr = undefined;
     this.rejectPending(new AgentProcessError("agent-cli stopped", "AgentProcessStopped"));
-    if (!child.killed) child.kill("SIGTERM");
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    try {
-      await Promise.race([
-        new Promise<void>((resolveExit) => child.once("exit", () => resolveExit())),
-        new Promise<void>((resolveTimeout) => {
-          timer = setTimeout(() => {
-            child.kill("SIGKILL");
-            resolveTimeout();
-          }, 2_000);
-          timer.unref?.();
-        }),
-      ]);
-    } finally {
-      if (timer) clearTimeout(timer);
-    }
   }
 
   private rejectPending(error: Error): void {

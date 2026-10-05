@@ -8,7 +8,8 @@ const installer = readFileSync(resolve(import.meta.dirname, "../resources/instal
 describe("Windows installer runtime state", () => {
   test("defines uninstall code only while electron-builder compiles the uninstaller", () => {
     const installOnly = installer.match(/^!ifndef BUILD_UNINSTALLER\n[\s\S]*?\n!endif\s*/u)?.[0] ?? "";
-    expect(installOnly).toContain("Call LxeOfficePrerequisites");
+    expect(installOnly).toContain("Call LxeCommitApplication");
+    expect(installOnly).toContain("update-installer.nsh");
     expect(installOnly).not.toContain("Function un.");
     const uninstallOnly = installer.slice(installOnly.length);
     expect(uninstallOnly.trimStart()).toStartWith("!ifdef BUILD_UNINSTALLER");

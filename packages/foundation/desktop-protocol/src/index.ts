@@ -673,7 +673,8 @@ export interface LxeDesktopBridge {
     showTitlebarMenu?(request: import("./titlebar").DesktopTitlebarMenuRequest): Promise<import("./titlebar").DesktopTitlebarAction>;
     getUpdateState?(): Promise<import("./updates").DesktopUpdateState>;
     checkForUpdate?(): Promise<import("./updates").DesktopUpdateState>;
-    installUpdate?(): Promise<import("./updates").DesktopUpdateState>;
+    downloadUpdate?(target: import("./updates").DesktopUpdateIdentity): Promise<import("./updates").DesktopUpdateState>;
+    installUpdate?(target: import("./updates").DesktopUpdateIdentity): Promise<import("./updates").DesktopUpdateState>;
     selectWorkspace(): Promise<string | null>;
     getWorkspaceApplications(input?: { refresh?: boolean }): Promise<WorkspaceApplication[]>;
     openWorkspace(directory: string, applicationId?: string): Promise<void>;
