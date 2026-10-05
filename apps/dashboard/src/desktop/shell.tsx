@@ -2,6 +2,7 @@ import { WindowsTitlebar } from "./windows-titlebar";
 import { UsagePanel } from "./usage-panel";
 import { ErpSettingsTabs } from "./erp-settings-tabs";
 import { DeviceContextPanel } from "./device-context-panel";
+import "./settings-theme.css";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode, type RefObject } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -982,6 +983,7 @@ function DesktopSettingsForm({
 }
 
 function CloudBindingDialog({
+  settingsTheme,
   activating,
   cloud,
   enrollment,
@@ -992,6 +994,7 @@ function CloudBindingDialog({
   onPasswordChange,
   onSelect,
 }: {
+  settingsTheme: boolean;
   activating: boolean;
   cloud: DesktopCloudState;
   enrollment: DesktopCloudEnrollmentSelection | null;
@@ -1009,7 +1012,7 @@ function CloudBindingDialog({
   const dialogRef = useDialogFocus<HTMLElement>(true, closeDialog);
   const currentDevice = [cloud.device_name.trim(), cloud.vpn_ip.trim()].filter(Boolean).join(" · ");
   return (
-    <div className="modal-backdrop desktop-cloud-binding-backdrop" onMouseDown={(event) => {
+    <div className={`modal-backdrop desktop-cloud-binding-backdrop${settingsTheme ? " desktop-settings-theme" : ""}`} onMouseDown={(event) => {
       if (event.target === event.currentTarget) closeDialog();
     }}>
       <section
@@ -1084,10 +1087,12 @@ function CloudBindingDialog({
 }
 
 function DesktopConfirmationDialog({
+  settingsTheme,
   confirmation,
   onCancel,
   onConfirm,
 }: {
+  settingsTheme: boolean;
   confirmation: DesktopConfirmation;
   onCancel: () => void;
   onConfirm: () => void;
@@ -1107,7 +1112,7 @@ function DesktopConfirmationDialog({
       ? t.desktop.confirm.deleteKeyDescription
       : t.desktop.confirm.clearDescription(confirmation.label);
   return (
-    <div className="modal-backdrop desktop-confirm-backdrop" onMouseDown={(event) => {
+    <div className={`modal-backdrop desktop-confirm-backdrop${settingsTheme ? " desktop-settings-theme" : ""}`} onMouseDown={(event) => {
       if (event.target === event.currentTarget) onCancel();
     }}>
       <section
@@ -1662,6 +1667,7 @@ export function DesktopShell({
   );
   const confirmationDialog = confirmation ? (
     <DesktopConfirmationDialog
+      settingsTheme={settingsOpen}
       confirmation={confirmation}
       onCancel={() => setConfirmation(null)}
       onConfirm={confirmPendingAction}
@@ -1669,6 +1675,7 @@ export function DesktopShell({
   ) : null;
   const cloudBindingDialog = cloudBindingDialogOpen ? (
     <CloudBindingDialog
+      settingsTheme={settingsOpen}
       activating={cloudActivating}
       cloud={cloud}
       enrollment={cloudEnrollment}
@@ -1762,7 +1769,7 @@ export function DesktopShell({
         />
       ) : null}
       {settingsOpen ? (
-        <div className="modal-backdrop desktop-settings-backdrop" onMouseDown={(event) => {
+        <div className="modal-backdrop desktop-settings-backdrop desktop-settings-theme" onMouseDown={(event) => {
           if (event.target === event.currentTarget) closeSettings();
         }}>
           <form
