@@ -96,6 +96,7 @@ export function UpdateControl({manual=false,checkRequest=0}:{manual?:boolean;che
     {ready?<p>{t.confirm}</p>:null}
     <div className="lxe-update-actions">
      <button type="button" onClick={close} disabled={installLocked}>{ready?t.later:t.close}</button>
+     {state.phase==="error"&&state.failedOperation!=="check"?<button type="button" disabled={busy||working} onClick={()=>void action("check")}>{t.check}</button>:null}
      {ready||available||state.phase==="error"?<button type="button" className="lxe-update-primary" disabled={busy||working||installLocked} onClick={()=>void action(ready?"install":available?"download":state.failedOperation??"check")}>
       {ready?t.restart:available?t.download:t.retry}
      </button>:null}

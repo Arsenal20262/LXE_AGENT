@@ -428,7 +428,7 @@ async function bootstrap(): Promise<void> {
       confirm: async tasks => {
         const options = {type: "warning" as const, title: "重启并更新 LXE Agent",
           message: tasks.length ? `将停止 ${tasks.length} 项运行中或排队的任务，然后安装更新。` : "将关闭 LXE Agent 并安装已下载的更新。",
-          detail: tasks.length ? "已停止的任务不会自动重放。\n" + tasks.slice(0, 30).join("\n") : "应用将在安装完成后重新启动。",
+          detail: tasks.length ? "将清空等待执行的任务，并关闭应用内终端。已停止的任务不会自动重放。" : "应用将在安装完成后重新启动。",
           buttons: ["稍后", tasks.length ? "停止任务并更新" : "重启更新"], defaultId: 0, cancelId: 0};
         return (await (window ? dialog.showMessageBox(window, options) : dialog.showMessageBox(options))).response === 1;
       },

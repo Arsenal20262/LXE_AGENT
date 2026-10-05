@@ -361,3 +361,21 @@ describe("ProcessAgentRuntime", () => {
     });
   });
 });
+
+test("termination waits for exit even when the child already reports killed",async()=>{
+ const {EventEmitter}=await import("node:events");
+ const child=Object.assign(new EventEmitter(),{exitCode:null,signalCode:null,killed:true,kill:()=>{setTimeout(()=>child.emit("exit",null,"SIGTERM"),50);return true;}});
+ const runtime=new ProcessAgentRuntime({command:"unused",cwd:process.cwd(),environment:{},...resourcePaths(process.cwd()),dataRoot:process.cwd(),legacyWorkspace:testWorkspace});
+ (runtime as any).child=child;
+ let completed=false;
+ const termination=(runtime as any).terminateChild().then(()=>{completed=true;});
+ await Bun.sleep(10);expect(completed).toBe(false);expect(runtime.hasProcess).toBe(true);
+ await termination;expect(runtime.hasProcess).toBe(false);
+});
+test("unconfirmed exit rejects and retains ownership after forced termination",async()=>{
+ const {EventEmitter}=await import("node:events");
+ const child=Object.assign(new EventEmitter(),{exitCode:null,signalCode:null,killed:true,kill:()=>true});
+ const runtime=new ProcessAgentRuntime({command:"unused",cwd:process.cwd(),environment:{},...resourcePaths(process.cwd()),dataRoot:process.cwd(),legacyWorkspace:testWorkspace});
+ (runtime as any).child=child;
+ await expect((runtime as any).terminateChild()).rejects.toThrow("did not exit");expect(runtime.hasProcess).toBe(true);
+},6000);

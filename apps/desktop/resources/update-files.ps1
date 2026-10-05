@@ -14,7 +14,7 @@ function Move-Entry([string]$from, [string]$to) {
 function Write-Journal {
     $temporary = $script:journalPath + '.tmp'
     [IO.File]::WriteAllText($temporary, ($script:journal | ConvertTo-Json -Depth 5 -Compress), $utf8)
-    if ([IO.File]::Exists($script:journalPath)) { [IO.File]::Replace($temporary, $script:journalPath, $null) }
+    if ([IO.File]::Exists($script:journalPath)) { [IO.File]::Replace($temporary, $script:journalPath, [NullString]::Value) }
     else { [IO.File]::Move($temporary, $script:journalPath) }
 }
 function Restore-Program {

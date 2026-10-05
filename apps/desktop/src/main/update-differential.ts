@@ -29,7 +29,7 @@ export async function downloadDifferential(options:{
     if(range&&response.statusCode<400){
      const match=/^bytes=(\d+)-(\d+)$/.exec(range);
      const expected=match?`bytes ${match[1]}-${match[2]}/${options.info.size}`:undefined;
-     if(response.statusCode!==206||response.headers["content-range"]!==expected){
+     if(response.statusCode!==206||String(response.headers["content-range"])!==expected){
       request.emit("error",new Error(`Range unsupported or invalid: HTTP ${response.statusCode}, Content-Range=${String(response.headers["content-range"])}`));
       request.abort();return;
      }
