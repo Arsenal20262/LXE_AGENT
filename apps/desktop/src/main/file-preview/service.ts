@@ -23,6 +23,7 @@ export function previewKind(extension: string): FilePreviewKind {
   return "unsupported";
 }
 export interface FileServiceRuntime {
+  resolveSkill?(session: string, name: string): Promise<string | undefined>;
   resolveWorkspaceDirectory(session: string): Promise<string>;
   resolveArtifact(session: string, id: string): Promise<string | undefined>;
   resolveAttachment(session: string, id: string): Promise<string | undefined>;
@@ -50,7 +51,7 @@ export class FilePreviewService {
   async resolve(ref: SessionFileRef): Promise<string> {
     const runtime = this.runtime();
     if (ref.kind === "workspace") return workspacePath(await runtime.resolveWorkspaceDirectory(ref.session_id), ref.path);
-    const path = await (ref.kind === "artifact" ? runtime.resolveArtifact(ref.session_id, ref.id) : runtime.resolveAttachment(ref.session_id, ref.id));
+    const path = await (ref.kind === "skill" ? runtime.resolveSkill?.(ref.session_id, ref.id) : ref.kind === "artifact" ? runtime.resolveArtifact(ref.session_id, ref.id) : runtime.resolveAttachment(ref.session_id, ref.id));
     if (!path) throw invalidFileReference("File is not part of this conversation");
     return path;
   }

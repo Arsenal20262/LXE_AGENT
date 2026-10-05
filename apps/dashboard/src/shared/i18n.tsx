@@ -8,6 +8,8 @@ const LEGACY_LANGUAGE_STORAGE_KEY = "agent-dashboard-language";
 export type Language = "zh" | "en";
 
 export const ZH_TEXT = {
+  workspaceOpen: { openIn: (name: string) => `用 ${name} 打开工作区`, more: "选择应用打开工作区", explorer: "文件资源管理器", system: "系统文件管理器", terminal: "终端" },
+  composerReferences: { files: "文件", skills: "技能", workspace: "工作区", loading: "加载中…", empty: "没有匹配项", browse: "进入目录", navigation: "目录导航", enter: (name: string) => `进入 ${name}` },
   manualTools: { start: "开始", newTab: "新标签页", newTerminal: "新建终端", terminal: "终端", browser: "浏览器", filesDescription: "浏览此会话工作区里的文件", terminalDescription: "在工作区运行命令", browserDescription: "浏览网页", ended: "终端已结束", reopen: "重新打开", back: "后退", forward: "前进", address: "网页地址", go: "前往", enterAddress: "输入网址开始浏览" },
   filePreview: { fileMissing: "文件不存在", missingSource: "源文件不存在", missingDescription: "文件不存在，可能已被移动或删除", denied: "没有权限读取此文件", invalidFile: "无法访问此文件引用", appsFailed: "无法获取应用列表", previewFailed: "文件预览失败", readFailed: "文件读取失败", openFailed: "打开文件失败", revealFailed: "文件定位失败", recheck: "重新检查", errorDetails: "错误详情", copyError: "复制错误详情",  zoom: "缩放", zoomIn: "放大", zoomOut: "缩小", html: "网页预览", htmlSource: "源码", rendered: "渲染", plain: "纯文本", code: "代码", imageView: "图片", tableView: "表格", view: "查看方式", copyLoaded: "复制已加载内容", copied: "已复制", workspaceOpen: "在系统文件管理器中打开", rotate: "旋转页面", page: "页", files: "工作区文件", toggle: "工具侧栏", close: "关闭", expand: "展开", collapse: "还原", refresh: "刷新", loading: "正在准备预览…", retry: "重试", unsupported: "此格式暂不支持预览，请使用系统应用打开。", open: "打开文件", apps: "选择应用打开", reveal: "在文件管理器中显示", defaultApp: "默认", more: "加载更多", wrap: "自动换行", copy: "复制", fit: "适应宽度", history: "发送时的图片", formulas: "显示文件中保存的公式结果，预览不会重新计算。", missing: "部分公式没有保存结果。", omitted: "此预览未显示：", fonts: "缺失字体：", empty: "空文件夹", unavailable: "桌面文件服务不可用", chart: "图表", image: "图片", shape: "形状", conditional: "条件格式", size: "预览超出大小或单元格数量限制", timeout: "表格解析超过 15 秒", encoding: "文本编码无效，请使用 UTF-8 或带 BOM 的 UTF-16", readonly: "只读", source: "查看原文件", nativeError: "系统打开失败", resize: "调整预览宽度" },
   updates: {title:"应用更新",update:"更新",check:"检查更新",downloading:"正在下载",verifying:"正在校验更新",installing:"正在准备重启",checking:"检查中…",noUpdate:"暂无更新",paused:"更新已暂停",details:"更新失败 · 查看详情",failed:"更新失败",retry:"重试",close:"关闭",later:"稍后",restart:"重启更新",confirm:"将关闭并重新启动 LXE。有任务正在运行时不会安装，请先结束任务。"},
@@ -23,6 +25,7 @@ export const ZH_TEXT = {
 
   skillDisplayName: (name: string) => skillDisplayName(name, "zh"),
   sessionStatus: {waiting_input:"等待回答",running:"运行中",stopping:"正在停止",queued:"排队中",completed:"已完成，尚未查看",error:"执行失败，尚未查看",cancelled:"已停止",idle:"暂无未查看结果",unknown:"上次运行结果未确认",unavailable:"状态暂不可用",syncError:"状态同步失败"},
+  permissions: { mode:"权限模式", readOnly:"不修改普通文件", workspaceWrite:"可写工作区和平台临时区域", fullAccess:"不施加文件沙箱限制", confirmTitle:"启用 Full access？", confirmBody:"允许本地工具在操作系统权限范围内修改文件，包括工作区以外的文件。", cancel:"取消", confirm:"启用 Full access", waiting:"等待审批", pending:"项待审批", request:(mode: string) => `允许本次操作使用 ${mode} 权限：`, cwd:"工作目录", originalCommand:"查看原始命令", write:"写入", edit:"编辑", viewContents:"查看写入内容", viewChanges:"查看修改", before:"修改前", after:"修改后", deny:"拒绝", allow:"允许一次" },
   userQuestions: {waiting:"等待回答",received:"回答已接收",done:"完成",retry:"重试提交",skip:"跳过",skipQuestion:"跳过当前问题",skipped:"已跳过",submitting:"正在提交…",stop:"停止本次任务",stopping:"正在停止…",pagination:"问题分页",previous:"上一题",next:"下一题",multiple:"可多选，也可以补充文字",custom:"自己的回答",customPlaceholder:"填写自己的回答…",freeText:"回答"},
   language: {
     label: "语言",
@@ -334,7 +337,6 @@ export const ZH_TEXT = {
     error: "执行失败",
     unavailable: "Gateway 或 Agent 尚未就绪",
     modelUnavailable: "模型未配置，对话暂不可用",
-    inputHint: "Enter 发送，Shift + Enter 换行",
     characterCount: (count: string, maximum: string) => `${count} / ${maximum}`,
     contextMeter: {
       noData: "暂无数据",
@@ -880,6 +882,8 @@ export type UiText = typeof ZH_TEXT;
 export const UI_TEXT: Record<Language, UiText> = {
   zh: ZH_TEXT,
   en: {
+    workspaceOpen: { openIn: (name: string) => `Open workspace in ${name}`, more: "Choose workspace application", explorer: "File Explorer", system: "System file manager", terminal: "Terminal" },
+    composerReferences: { files: "Files", skills: "Skills", workspace: "Workspace", loading: "Loading…", empty: "No matches", browse: "Browse folder", navigation: "Folder navigation", enter: (name: string) => `Open ${name}` },
     manualTools: { start: "Start", newTab: "New tab", newTerminal: "New terminal", terminal: "Terminal", browser: "Browser", filesDescription: "Browse this session’s workspace", terminalDescription: "Run commands in the workspace", browserDescription: "Browse web pages", ended: "Terminal has ended", reopen: "Reopen", back: "Back", forward: "Forward", address: "Web address", go: "Go", enterAddress: "Enter an address to browse" },
     filePreview: { fileMissing: "File not found", missingSource: "Source file not found", missingDescription: "File not found. It may have been moved or deleted.", denied: "You do not have permission to read this file", invalidFile: "This file reference cannot be accessed", appsFailed: "Unable to get applications", previewFailed: "File preview failed", readFailed: "Unable to read file", openFailed: "Unable to open file", revealFailed: "Unable to reveal file", recheck: "Check again", errorDetails: "Error details", copyError: "Copy error details",  zoom: "Zoom", zoomIn: "Zoom in", zoomOut: "Zoom out", html: "Web preview", htmlSource: "Source", rendered: "Rendered", plain: "Plain text", code: "Code", imageView: "Image", tableView: "Table", view: "View as", copyLoaded: "Copy loaded content", copied: "Copied", workspaceOpen: "Open workspace in file manager", rotate: "Rotate pages", page: "Page", files: "Workspace files", toggle: "Tools sidebar", close: "Close", expand: "Expand", collapse: "Restore", refresh: "Refresh", loading: "Preparing preview…", retry: "Retry", unsupported: "Preview is unavailable for this format. Open it in a system application.", open: "Open file", apps: "Open with application", reveal: "Show in file manager", defaultApp: "Default", more: "Load more", wrap: "Wrap lines", copy: "Copy", fit: "Fit width", history: "Image as sent", formulas: "Showing saved formula results. Preview does not recalculate.", missing: "Some formulas have no saved result.", omitted: "Not displayed in this preview: ", fonts: "Missing fonts: ", empty: "Empty folder", unavailable: "Desktop file service is unavailable", chart: "Charts", image: "Images", shape: "Shapes", conditional: "Conditional formatting", size: "Preview exceeds the file or cell limit", timeout: "Spreadsheet parsing exceeded 15 seconds", encoding: "Invalid text encoding; use UTF-8 or BOM-marked UTF-16", readonly: "Read only", source: "Open source", nativeError: "System open failed", resize: "Resize preview" },
     updates: {title:"App update",update:"Update",check:"Check for updates",downloading:"Downloading",verifying:"Verifying update",installing:"Preparing restart",checking:"Checking…",noUpdate:"No updates available",paused:"Updates paused",details:"Update failed · Details",failed:"Update failed",retry:"Retry",close:"Close",later:"Later",restart:"Restart and update",confirm:"LXE will close and restart. Finish all running tasks before installing."},
@@ -894,7 +898,8 @@ export const UI_TEXT: Record<Language, UiText> = {
     },
     skillDisplayName: (name: string) => skillDisplayName(name, "en"),
     sessionStatus: {waiting_input:"Waiting for answer",running:"Running",stopping:"Stopping",queued:"Queued",completed:"Completed, not viewed",error:"Failed, not viewed",cancelled:"Stopped",idle:"No unviewed results",unknown:"Previous run result unconfirmed",unavailable:"Status unavailable",syncError:"Status sync failed"},
-    userQuestions: {waiting:"Waiting for answer",received:"Answer received",done:"Done",retry:"Retry submission",skip:"Skip",skipQuestion:"Skip this question",skipped:"Skipped",submitting:"Submitting…",stop:"Stop this task",stopping:"Stopping…",pagination:"Question pages",previous:"Previous question",next:"Next question",multiple:"Choose any and optionally add text",custom:"Your own answer",customPlaceholder:"Write your own answer…",freeText:"Answer"},
+    permissions: { mode:"Permission mode", readOnly:"Do not modify ordinary files", workspaceWrite:"Write workspace and platform temporary regions", fullAccess:"No file sandbox restriction", confirmTitle:"Enable Full access?", confirmBody:"Allow local tools to modify files within operating-system permissions, including files outside the workspace.", cancel:"Cancel", confirm:"Enable Full access", waiting:"Waiting for approval", pending:"pending approvals", request:(mode: string) => `Allow this operation with ${mode} permissions:`, cwd:"Working directory", originalCommand:"View original command", write:"Write", edit:"Edit", viewContents:"View file contents", viewChanges:"View changes", before:"Before", after:"After", deny:"Reject", allow:"Allow once" },
+  userQuestions: {waiting:"Waiting for answer",received:"Answer received",done:"Done",retry:"Retry submission",skip:"Skip",skipQuestion:"Skip this question",skipped:"Skipped",submitting:"Submitting…",stop:"Stop this task",stopping:"Stopping…",pagination:"Question pages",previous:"Previous question",next:"Next question",multiple:"Choose any and optionally add text",custom:"Your own answer",customPlaceholder:"Write your own answer…",freeText:"Answer"},
     language: {
       label: "Language",
       zh: "中文",
@@ -1205,7 +1210,6 @@ export const UI_TEXT: Record<Language, UiText> = {
       error: "Run failed",
       unavailable: "Gateway or Agent is not ready",
       modelUnavailable: "No model configured. Chat is unavailable.",
-      inputHint: "Enter to send, Shift + Enter for a new line",
       characterCount: (count: string, maximum: string) => `${count} / ${maximum}`,
       contextMeter: {
       noData: "No data",

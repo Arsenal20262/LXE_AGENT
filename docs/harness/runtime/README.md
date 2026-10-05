@@ -14,7 +14,7 @@ Runtime package 提供执行核心，但不提供产品 composition root。真�
 
 | 领域 | Runtime 做什么 |
 | --- | --- |
-| Turn | 固定本轮 provider 与权限快照，执行 step loop，返回 completed、cancelled 或 error |
+| Turn | 固定本轮 provider 与技能快照，每次工具调用解析会话权限，执行 step loop，返回 completed、cancelled 或 error |
 | Context | replay 历史、修复工具闭合、估算预算并按需压缩 |
 | Provider | 适配模型请求、处理 stream、retry、overflow 和 usage |
 | Tools | 管理 native、MCP、deferred 和 skill-owned 工具 |
@@ -44,6 +44,7 @@ Runtime package 提供执行核心，但不提供产品 composition root。真�
 - [Agent CLI exec](agent_cli_exec.md)：一次性脚本调用、输出、会话与安全边界。
 - [Turn Execution](turn_execution.md)：turn snapshot、provider、tool 和 final outcome。
 - [Turn Step Lifecycle](turn_step_lifecycle.md)：单个 step 的固定顺序。
+- [会话权限与工作区目录](permission-policy.md)：权限状态、统一策略、产物与临时目录。
 - [Workspace Instance](workspace_instances.md)：会话工作区、AGENTS 指令、缓存刷新和回收。
 - [Context](context/README.md)：history、预算、Transcript v2 和 compaction。
 - [Tools](tools/README.md)：工具可见性、执行、进程和业务命令边界。

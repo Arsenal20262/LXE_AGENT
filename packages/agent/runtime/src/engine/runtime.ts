@@ -1,8 +1,13 @@
+import { ExecutionPaths } from "../permissions/execution-paths";
+import { workspaceArtifactRoot } from "@lxe/core";
+import { join } from "node:path";
+import { invokedSkillNames, renderInvokedSkill } from "../tooling/skill-invocations";
+import { type PermissionPolicyService } from "../permissions/policy";
 import { normalizeToolResultImages } from "../tooling/tool-result-images";
 import type { ToolDisplayOutput } from "../tooling/tool-display";
 import { contextFingerprint } from "./context-meter";
 import { turnAbortedMessage } from "./turn-aborted";
-import { captureEnvironment, environmentChanged, environmentMessage } from "./environment-context";
+import { captureEnvironment, environmentChanged, environmentMessage, permissionEnvironment } from "./environment-context";
 import { randomUUID } from "node:crypto";
 import { basename, isAbsolute } from "node:path";
 import type { AgentJob, EmitRequest, JsonObject, WorkspaceContext } from "@lxe/protocol";
@@ -76,6 +81,8 @@ export interface TypeScriptAgentRuntimeOptions {
   wireTraceController?: RuntimeWireTraceControllerPort;
   tools: ToolRegistry;
   toolExposure?: ToolExposureOptions | (() => ToolExposureOptions);
+  resolveInvokedSkill?: (name: string, workspace: WorkspaceContext) => Promise<{ name: string; root: string; content: string } | undefined>;
+  onToolResult?: (session: string) => void;
   skillSnapshot?: (workspace: WorkspaceContext) => RuntimeSkillSnapshot;
   workspaceInstances?: RuntimeWorkspaceInstanceProvider;
   resolveSkillMetadata?: (skillName: string) => { module: string } | undefined;
@@ -89,7 +96,9 @@ export interface TypeScriptAgentRuntimeOptions {
     model: string,
     credentialRevision: string,
   ) => Promise<void> | void;
-  artifactRoot?: string;
+  permissionPolicy: PermissionPolicyService;
+  executionPaths?: ExecutionPaths;
+  approvalAvailable?: boolean;
   userSkillsRoot?: string;
   systemPrompt: string | ((context: SystemPromptContext) => string);
   /** Defaults to unlimited steps; a finite limit reserves the last step for a tool-free reply. */
@@ -166,6 +175,7 @@ export class TypeScriptAgentRuntime implements AgentRuntime {
     turnId?: string,
   ): Promise<void> {
     await this.options.store.appendMessage(sessionId, message, reason, turnId);
+    if (reason.startsWith("tool_results")) this.options.onToolResult?.(sessionId);
     await this.notifySessionChanged(sessionId, "messages");
   }
 
@@ -203,7 +213,8 @@ export class TypeScriptAgentRuntime implements AgentRuntime {
     await Promise.allSettled([...this.active].map(async (handle) => {
       if (!handle.signal.aborted) this.logger.warn("runtime stopped with active turn");
     }));
-    await Promise.allSettled([...(this.options.services ?? [])].reverse().map((service) => service.stop()));
+    const stopped = await Promise.allSettled([...(this.options.services ?? [])].reverse().map((service) => service.stop()));
+    for (const result of stopped) if (result.status === "rejected") this.logger.error("runtime_service_stop_failed", { error: result.reason });
     await this.options.workspaceInstances?.disposeAll("runtime_stop");
     await this.options.store.stop();
     this.started = false;
@@ -237,6 +248,7 @@ export class TypeScriptAgentRuntime implements AgentRuntime {
       throw new Error(`job workspace does not match session: ${job.session_id}`);
     }
     const workspace = assertWorkspaceAvailable(session.workspace);
+    const executionPaths = this.options.executionPaths ?? new ExecutionPaths(join(process.cwd(), "var"));
     const providerSnapshot = this.options.providerManager?.acquire();
     const provider = providerSnapshot?.provider ?? this.options.provider;
     if (!provider) throw new Error("runtime provider is not configured");
@@ -472,7 +484,26 @@ export class TypeScriptAgentRuntime implements AgentRuntime {
         ? heartbeatPrompt(pendingEvents)
         : userContentWithSystemEvents(job.user_input, job.user_content_blocks, pendingEvents);
       const userMessage: RuntimeMessage = { role: "user", content: withTurnContext(userContent, job.diagnostics), message_id: job.message_id, ...(typeof job.raw_data.client_message_id === "string" ? { client_message_id: job.raw_data.client_message_id } : {}) };
-      messages.push(userMessage);
+      const loadInvokedSkills = async (text: string, seen = new Set<string>()): Promise<RuntimeMessage[]> => {
+        const injected: RuntimeMessage[] = [];
+        for (const name of invokedSkillNames(text)) {
+          if (seen.has(name) || !toolExposure.allowsSkill(name)) continue;
+          const skill = await this.options.resolveInvokedSkill?.(name, workspace);
+          handle.signal.throwIfAborted();
+          if (!skill) continue;
+          await toolExposure.activateSkill(name);
+          seen.add(name);
+          injected.push({ role: "user", content: renderInvokedSkill(skill), invoked_skills: [name] });
+        }
+        return injected;
+      };
+      const instructions = heartbeat ? [] : await loadInvokedSkills(job.user_input).catch(async error => {
+        // Keep the submitted input in history even if an explicit skill cannot be read.
+        await this.appendMessage(job.session_id, userMessage, "turn_input", job.job_id);
+        throw error;
+      });
+      if (instructions.length) userMessage.invoked_skills = instructions.flatMap(item => item.role === "user" ? item.invoked_skills ?? [] : []);
+      messages.push(userMessage, ...instructions);
       const firstTools = heartbeat || (this.options.maxSteps ?? DEFAULT_MAX_STEPS) <= 1 ? [] : toolExposure.schemas();
       const initialMeasurement = contextPipeline.measure(systemPrompt, messages, firstTools,
         fingerprintFor(firstTools, (this.options.maxSteps ?? DEFAULT_MAX_STEPS) <= 1));
@@ -488,6 +519,7 @@ export class TypeScriptAgentRuntime implements AgentRuntime {
         pendingEventCount: pendingEvents.length,
       });
       await this.appendMessage(job.session_id, userMessage, heartbeat ? "heartbeat" : "turn_input", job.job_id);
+      for (const instruction of instructions) await this.appendMessage(job.session_id, instruction, "skill_invocation", job.job_id);
       await saveDisplay(initialMeasurement);
       await finalAnswerStreamer?.updateContext(initialMeasurement);
       if (!heartbeat && job.user_content_blocks.some((block) => block.type === "local_file")) {
@@ -496,12 +528,15 @@ export class TypeScriptAgentRuntime implements AgentRuntime {
 
       const appendSteering = async (steeringMessages = handle.drainSteering()): Promise<number> => {
         let appended = 0;
+        const seen = new Set<string>();
         for (const steering of steeringMessages) {
           const text = String(steering.text ?? "").trim();
           if (!text) continue;
-          const message: RuntimeMessage = { role: "user", content: text };
-          messages.push(message);
+          const instructions = await loadInvokedSkills(text, seen);
+          const message: RuntimeMessage = { role: "user", content: text, ...(instructions.length ? { invoked_skills: instructions.flatMap(item => item.role === "user" ? item.invoked_skills ?? [] : []) } : {}) };
+          messages.push(message, ...instructions);
           await this.appendMessage(job.session_id, message, "steering", job.job_id);
+          for (const instruction of instructions) await this.appendMessage(job.session_id, instruction, "skill_invocation", job.job_id);
           appended += 1;
         }
         return appended;
@@ -526,8 +561,16 @@ export class TypeScriptAgentRuntime implements AgentRuntime {
           await saveDisplay(measurement);
           await finalAnswerStreamer?.updateContext(measurement);
         };
+        const captureCurrentEnvironment = async () => {
+          const current = await this.options.store.getSession(job.session_id);
+          if (!current || !sameWorkspaceContext(current.workspace, workspace)) throw new Error("Session workspace changed before model request");
+          const policy = this.options.permissionPolicy.resolve(current);
+          return captureEnvironment({ ...systemPromptContext, artifactRoot: workspaceArtifactRoot(workspace.directory),
+            permissions: permissionEnvironment(policy, executionPaths, this.options.approvalAvailable === true && job.source.platform === "desktop"),
+            ...(this.options.userSkillsRoot ? { userSkillsRoot: this.options.userSkillsRoot } : {}) });
+        };
         const prepareRequestContext = async (): Promise<void> => {
-          let snapshot = captureEnvironment({ ...systemPromptContext, ...(this.options.artifactRoot ? { artifactRoot: this.options.artifactRoot } : {}), ...(this.options.userSkillsRoot ? { userSkillsRoot: this.options.userSkillsRoot } : {}) });
+          let snapshot = await captureCurrentEnvironment();
           let environment = environmentMessage(snapshot);
           const prepared = await contextPipeline.prepare({
             sessionId: job.session_id,
@@ -550,7 +593,7 @@ export class TypeScriptAgentRuntime implements AgentRuntime {
             throw new ContextOverflowError(prepared.afterTokens, contextPipeline.hardLimitTokens);
           }
           // Summarization can span midnight; refresh the clock after it finishes.
-          snapshot = captureEnvironment({ ...systemPromptContext, ...(this.options.artifactRoot ? { artifactRoot: this.options.artifactRoot } : {}), ...(this.options.userSkillsRoot ? { userSkillsRoot: this.options.userSkillsRoot } : {}) });
+          snapshot = await captureCurrentEnvironment();
           environment = environmentMessage(snapshot);
           if (environmentChanged(messages, snapshot)) {
             const tokens = contextPipeline.measure(systemPrompt, [...messages, environment], toolSchemas, fingerprint).tokens;
@@ -748,7 +791,11 @@ export class TypeScriptAgentRuntime implements AgentRuntime {
           let toolDisplayStatus: import("@lxe/protocol").ToolStepStatus = "success";
           let toolDisplayOutput: ToolDisplayOutput | undefined;
           try {
+            const currentSession = await this.options.store.getSession(job.session_id);
+            if (!currentSession || !sameWorkspaceContext(currentSession.workspace, workspace)) throw new Error("Session workspace changed before tool execution");
+            const executionPolicy = this.options.permissionPolicy.resolve(currentSession);
             const executed = await this.options.tools.execute(call.name, call.arguments, {
+              executionPolicy,
               handle,
               platform: String(job.source.platform ?? "").trim(),
               session_id: job.session_id,

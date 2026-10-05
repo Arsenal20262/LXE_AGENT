@@ -84,3 +84,12 @@ test("late send acknowledgements cannot overwrite a running or completed activit
   expect(accepted.active?.client_message_id).toBe("client");
   expect(conversationRows([],accepted.active?[accepted.active]:[],[pending]).filter(row=>row.message?.role === "user")).toHaveLength(1);
 });
+
+test("explicit skill markers survive history while injected instructions stay internal", () => {
+  const message = { ...stored, content: "使用 /office-xlsx /unknown", invoked_skills: ["office-xlsx"] };
+  const injected = { role: "user", content: "<skill_content>full instructions</skill_content>", source_reason: "skill_invocation" } as SessionMessage;
+  const rows = conversationRows([message, injected], [], []).filter(row => row.kind === "message");
+  expect(rows).toHaveLength(1);
+  expect(rows[0]?.message?.invoked_skills).toEqual(["office-xlsx"]);
+  expect(rows[0]?.message?.content).toBe(message.content);
+});

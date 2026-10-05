@@ -1,3 +1,4 @@
+import { permissionInputProperties } from "../../permissions/approvals";
 import type { JsonObject } from "@lxe/protocol";
 
 export interface TextEdit { oldText: string; newText: string }
@@ -6,6 +7,7 @@ export interface EditInput { path: string; edits: TextEdit[] }
 export const editInputSchema: JsonObject = {
   type: "object",
   properties: {
+    ...permissionInputProperties,
     path: { type: "string", minLength: 1, pattern: "\\S", description: "File path, relative to the session directory or absolute." },
     edits: {
       type: "array", minItems: 1,
@@ -32,7 +34,7 @@ export function validateEditInput(value: unknown): EditInput {
   if (["file_path", "old_string", "new_string", "replace_all"].some((key) => key in value)) {
     throw new Error(`Legacy edit arguments are no longer supported. ${example}`);
   }
-  if (Object.keys(value).some((key) => key !== "path" && key !== "edits")) {
+  if (Object.keys(value).some((key) => key !== "path" && key !== "edits" && key !== "sandbox_permissions" && key !== "justification")) {
     throw new Error(`edit input contains unknown fields. ${example}`);
   }
   if (typeof value.path !== "string" || !value.path.trim()) throw new Error(`edit path must be a non-empty string. ${example}`);

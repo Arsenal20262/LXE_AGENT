@@ -15,6 +15,7 @@ describe("desktop runtime state", () => {
       const dataRoot = join(root, "var");
       const paths = prepareDesktopRuntimeState(dataRoot);
       for (const path of Object.values(paths)) expect(existsSync(path)).toBeTrue();
+      expect(existsSync(join(dataRoot, "artifacts"))).toBeFalse();
       expect(readdirSync(dataRoot).some((name) => name.startsWith(".lxe-write-probe-"))).toBeFalse();
     } finally {
       rmSync(root, { recursive: true, force: true });

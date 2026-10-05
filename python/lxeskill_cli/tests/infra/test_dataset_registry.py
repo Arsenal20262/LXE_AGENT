@@ -77,38 +77,58 @@ def test_legacy_dirs_do_not_collide_with_active_dirs() -> None:
     assert not (legacy & ACTIVE_DIRS), sorted(legacy & ACTIVE_DIRS)
 
 
-def test_legacy_dirs_migrate_once_and_preserve_contents(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_workspace_datasets_share_only_within_selected_workspace(tmp_path, monkeypatch) -> None:
     from shared import workspace
+    from shared.datasets import dataset_dir
+    from lxeskill.business import ArtifactPathError, allowed_output_file
 
-    root = tmp_path / "artifacts"
-    (root / "mabang_fba_delivery").mkdir(parents=True)
-    (root / "mabang_fba_delivery" / "SP1.csv").write_text("data", encoding="utf-8")
-    (root / "mabang_replenishment_templates").mkdir(parents=True)
-    (root / "mabang_replenishment_templates" / "templates.json").write_text("{}", encoding="utf-8")
+    data_root = tmp_path / "var"
+    old = data_root / "artifacts" / "mabang_fba_delivery" / "SP1.csv"
+    old.parent.mkdir(parents=True)
+    old.write_text("legacy", encoding="utf-8")
+    first, second = tmp_path / "first", tmp_path / "second"
+    dataset_id = next(iter(DATASETS))
+    try:
+        monkeypatch.setenv("LXE_DATA_ROOT", str(data_root))
+        monkeypatch.setenv("LXE_WORKSPACE_ROOT", str(first))
+        workspace.activate_project_workspace()
+        output = dataset_dir(dataset_id) / "shared.csv"
+        output.parent.mkdir(parents=True)
+        output.write_text("current", encoding="utf-8")
+        assert allowed_output_file(str(output)) == output.resolve()
+        workspace.activate_project_workspace()  # another CLI call in the same workspace
+        assert (dataset_dir(dataset_id) / "shared.csv").read_text() == "current"
+        monkeypatch.setenv("LXE_WORKSPACE_ROOT", str(second))
+        workspace.activate_project_workspace()
+        assert dataset_dir(dataset_id) == second / ".lxeagent" / "artifacts" / DATASETS[dataset_id].dir
+        assert not (dataset_dir(dataset_id) / "shared.csv").exists()
+        with pytest.raises(ArtifactPathError):
+            allowed_output_file(str(output))
+        with pytest.raises(ArtifactPathError):
+            allowed_output_file(str(old))
+        assert list(old.parent.iterdir()) == [old]
+        assert old.read_text() == "legacy"
+        assert not (data_root / "artifacts" / "fba").exists()
+    finally:
+        monkeypatch.undo()
+        workspace.activate_project_workspace()
 
-    workspace._migrate_legacy_artifact_dirs(root)
-    workspace._migrate_legacy_artifact_dirs(root)  # idempotent
 
-    assert (root / "fba" / "delivery_csv" / "SP1.csv").read_text(encoding="utf-8") == "data"
-    assert (root / "replenish" / "algorithm_templates" / "templates.json").exists()
-    assert not (root / "mabang_fba_delivery").exists()
-
-
-def test_migration_never_merges_when_both_directories_exist(tmp_path: Path) -> None:
+def test_standalone_cli_uses_cwd_and_keeps_app_state_separate(tmp_path, monkeypatch) -> None:
     from shared import workspace
-
-    root = tmp_path / "artifacts"
-    (root / "mabang_fba_delivery").mkdir(parents=True)
-    (root / "mabang_fba_delivery" / "legacy.csv").write_text("old", encoding="utf-8")
-    (root / "fba" / "delivery_csv").mkdir(parents=True)
-    (root / "fba" / "delivery_csv" / "current.csv").write_text("new", encoding="utf-8")
-
-    workspace._migrate_legacy_artifact_dirs(root)
-
-    assert (root / "mabang_fba_delivery" / "legacy.csv").exists(), "legacy data must survive"
-    assert not (root / "fba" / "delivery_csv" / "legacy.csv").exists(), "must not silently merge"
+    caller = tmp_path / "caller"
+    caller.mkdir()
+    try:
+        monkeypatch.delenv("LXE_WORKSPACE_ROOT", raising=False)
+        monkeypatch.setenv("LXE_DATA_ROOT", str(tmp_path / "state"))
+        monkeypatch.chdir(caller)
+        workspace.activate_project_workspace()
+        assert workspace.artifact_root() == caller / ".lxeagent" / "artifacts"
+        assert workspace.internal_root() == tmp_path / "state" / "lxeskill"
+        assert workspace.input_root() == tmp_path / "state" / "inputs"
+    finally:
+        monkeypatch.undo()
+        workspace.activate_project_workspace()
 
 
 @pytest.mark.parametrize("doc", sorted(skills_root().rglob("SKILL.md")), ids=lambda p: p.parent.name)

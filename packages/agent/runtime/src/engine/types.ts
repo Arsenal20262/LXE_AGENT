@@ -6,6 +6,7 @@ import type {
   EmitRequest,
   JsonObject,
   JsonValue,
+  PermissionMode,
   ToolStepStatus,
   WorkspaceContext,
 } from "@lxe/protocol";
@@ -41,6 +42,9 @@ export interface RuntimeEnvironmentSnapshot {
   cwd: string;
   worktree: string;
   artifact_root?: string;
+  permission_mode?: string;
+  permission_description?: string;
+  permission_approvals?: string;
   user_skills_root?: string;
   os: string;
   bun_version: string;
@@ -50,6 +54,7 @@ export interface RuntimeEnvironmentSnapshot {
 }
 
 export interface RuntimeConversationMessage {
+  invoked_skills?: string[];
   contextTokenAnchor?: import("./context-meter").ContextTokenAnchor;
   message_id?: string;
   client_message_id?: string;
@@ -125,6 +130,7 @@ export interface RuntimeHandle {
 
 export interface RuntimeSessionRecord {
   session_id: string;
+  permission_mode: PermissionMode;
   source: JsonObject;
   workspace: WorkspaceContext;
 }

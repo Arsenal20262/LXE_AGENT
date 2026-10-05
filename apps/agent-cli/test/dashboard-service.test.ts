@@ -776,3 +776,39 @@ test("sessions.create validates and canonicalizes directories, reuses blanks, an
     await expect(service.call({ operation: "sessions.create", input: { directory: join(root, "missing") } })).rejects.toThrow("ENOENT");
   } finally { await store.stop(); }
 });
+
+test("composer candidates and skills use the session workspace and current catalog permissions", async () => {
+  const root = mkdtempSync(join(tmpdir(), "lxe-composer-rpc-")); roots.push(root);
+  const skillsRoot = join(root, "skills"), userRoot = join(root, "user"), a = join(root, "a"), b = join(root, "b");
+  for (const dir of [skillsRoot, userRoot, a, b]) mkdirSync(dir);
+  for (const [name, type] of [["office-demo", "default"], ["blocked", "amazon_fba"]]) {
+    mkdirSync(join(skillsRoot, name!));
+    writeFileSync(join(skillsRoot, name!, "SKILL.md"), `---\nname: ${name}\ntype: ${type}\ndescription: fixture\n---\n# ${name}`);
+  }
+  writeFileSync(join(a, "中文 file.md"), "a"); writeFileSync(join(b, "other.md"), "b");
+  const store = new SqliteRuntimeStore(join(root, "agent.sqlite3"));
+  await store.start();
+  await store.ensureSession({ session_id: "a", workspace: workspaceFor(a), source: { platform: "desktop" } });
+  await store.ensureSession({ session_id: "b", workspace: workspaceFor(b), source: { platform: "desktop" } });
+  const service = new DashboardService({ stateRoot: root, llmConfigRoot: join(root, "llm"), skillsRoot, userSkillsRoot: userRoot,
+    sharedSkillsRoot: false, environment: {}, store, tools: new ToolRegistry(), mcpConfig: { servers: [] }, allowedSkillTypes: new Set(["default"]) });
+  const candidates = (session_id: string, query = "") => service.call({ operation: "sessions.files.candidates", input: { session_id, query } });
+  try {
+    expect((await candidates("a")).items).toEqual([{ path: "中文 file.md", kind: "file" }]);
+    expect((await candidates("b")).items).toEqual([{ path: "other.md", kind: "file" }]);
+    expect((await candidates("a", "../b/")).items).toEqual([]);
+    await expect(candidates("absent")).rejects.toThrow("session not found");
+    expect((await service.call({ operation: "skills.list", input: { session_id: "a" } })).items.map(s => s.name)).toEqual(["office-demo"]);
+    expect(await service.call({ operation: "skills.content", input: { name: "office-demo", session_id: "a" } })).toMatchObject({ content: expect.stringContaining("# office-demo"), location: join(skillsRoot, "office-demo", "SKILL.md") });
+    await expect(service.call({ operation: "skills.content", input: { name: "blocked", session_id: "a" } })).rejects.toThrow("skill not found");
+    await expect(service.call({ operation: "skills.content", input: { name: "../office-demo", session_id: "a" } })).rejects.toThrow("skill not found");
+    await expect(service.call({ operation: "skills.list", input: { session_id: "absent" } })).rejects.toThrow("session not found");
+    expect((await service.call({ operation: "skills.list", input: {} })).items).toHaveLength(1);
+    await candidates("a", "中文"); writeFileSync(join(a, "中文 new.md"), "new"); service.invalidateFileCandidates("a");
+    await candidates("a", "中文");
+    for (let i = 0; i < 100 && (await candidates("a", "中文")).items.length < 2; i++) await new Promise(resolve => setTimeout(resolve, 5));
+    expect((await candidates("a", "中文")).items).toHaveLength(2);
+    await service.call({ operation: "sessions.delete", input: { session_id: "a" } });
+    await expect(candidates("a")).rejects.toThrow("session not found");
+  } finally { service.dispose(); await store.stop(); }
+});

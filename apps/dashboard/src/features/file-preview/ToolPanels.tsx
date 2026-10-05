@@ -22,7 +22,9 @@ export function TerminalPanel({ sessionId, tab, restart }: { sessionId: string; 
     if (!container.current) return;
     let disposed = false, sequence = -1, initialized = false;
     const pending: ManualToolEvent[] = [];
-    const terminal = new Terminal({ fontSize: 13, fontFamily: "ui-monospace, SFMono-Regular, Consolas, monospace", scrollback: 1000, cursorBlink: true, theme: { background: "#202225", foreground: "#e4e4e7" } });
+    // xterm draws text itself, so resolve the same CSS token used by code blocks.
+    const fontFamily = getComputedStyle(container.current).getPropertyValue("--font-mono").trim() || "monospace";
+    const terminal = new Terminal({ fontSize: 13, fontFamily, scrollback: 1000, cursorBlink: true, theme: { background: "#202225", foreground: "#e4e4e7" } });
     const fit = new FitAddon(); terminal.loadAddon(fit); terminal.open(container.current);
     const fail = (cause: unknown) => { if (!disposed) setError(errorText(cause)); };
     const api = toolBridge();

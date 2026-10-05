@@ -150,6 +150,7 @@ export class DesktopGateway {
       if (!this.runtime) throw new Error("Agent runtime is unavailable");
       return {
         resolveWorkspaceDirectory: session => this.runtime!.resolveWorkspaceDirectory(session),
+        resolveSkill: async (session_id, name) => (await this.runtime!.dashboardCall({ operation: "skills.content", input: { session_id, name } })).location,
         resolveArtifact: (session, id) => this.runtime!.resolveArtifact(session, id),
         resolveAttachment: async (session, id) => await this.runtime!.resolveAttachment(session, id)
           ?? this.composition?.parts.conversations.resolveAttachmentPreview(session, id),
@@ -208,6 +209,8 @@ export class DesktopGateway {
       LXE_FD_PATH: this.options.paths.fdPath,
       LXE_MANAGED_PYTHON: this.options.paths.managedPythonPath,
       LXE_OFFICE_NODE: this.options.paths.officeNodePath,
+      LXE_EXEC_SANDBOX_NODE: this.options.paths.officeNodePath,
+      LXE_EXEC_SANDBOX_RUNNER: this.options.paths.execSandboxRunnerPath,
       LXE_OFFICE_CLI: this.options.paths.officeCliPath,
       PYTHONDONTWRITEBYTECODE: "1",
       PYTHONNOUSERSITE: "1",

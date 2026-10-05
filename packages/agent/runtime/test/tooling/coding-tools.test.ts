@@ -13,7 +13,7 @@ import { ToolExecutionError, ToolRegistry } from "../../src/tooling/registry";
 import { registerToolSearch } from "../../src/tooling/tool-search";
 import type { WorkspaceSearchService } from "../../src/tooling/workspace-search";
 import { removeTemporaryRoot } from "../temp-directory";
-import { workspaceFor } from "../workspace";
+import { policyFor, workspaceFor } from "../workspace";
 
 const roots: string[] = [];
 const projectRoot = repositoryRoot(import.meta.dir);
@@ -49,6 +49,7 @@ const context = (workspaceRoot: string = projectRoot, controller = new AbortCont
   response_route_id: "route-1",
   tool_call_id: "tool-exec-1",
   workspace: workspaceFor(workspaceRoot),
+  executionPolicy: policyFor(workspaceRoot),
   handle: {
     signal: controller.signal,
     cancelled: false,
@@ -65,6 +66,7 @@ const sessionContext = (
   ...context(directory),
   session_id: sessionId,
   workspace: workspaceFor(directory, worktree),
+  executionPolicy: policyFor(directory, sessionId, worktree),
 });
 
 const onePixelPng = (): Uint8Array => {
@@ -275,7 +277,6 @@ describe("native coding tools", () => {
     const processes = registerCodingTools(registry, {
       repositorySkillsRoot,
       userSkillsRoot: join(home, ".agents", "skills"),
-      artifactRoot,
       homeDirectory: home,
       ripgrepPath: null,
     });

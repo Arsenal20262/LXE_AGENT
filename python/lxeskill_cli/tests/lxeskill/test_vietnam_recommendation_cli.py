@@ -73,8 +73,10 @@ def test_json_input_cannot_override_current_map(
 def test_success_delivers_only_final_workbook(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
 ) -> None:
+    workspace = tmp_path / "workspace"
+    monkeypatch.setenv("LXE_WORKSPACE_ROOT", str(workspace))
     monkeypatch.setenv("LXE_DATA_ROOT", str(tmp_path / "state"))
-    output = tmp_path / "state" / "artifacts" / "vietnam" / "recommendations" / "run" / "越南备货清单.xlsx"
+    output = workspace / ".lxeagent" / "artifacts" / "vietnam" / "recommendations" / "run" / "越南备货清单.xlsx"
     output.parent.mkdir(parents=True)
     output.write_bytes(b"synthetic workbook")
     monkeypatch.setattr(
