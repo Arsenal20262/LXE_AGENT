@@ -14,6 +14,27 @@ export class DesktopCloudConfigService {
     private readonly repository: DesktopConfigRepository,
   ) {}
 
+  managedLlmOwner() { return structuredClone(this.repository.readSecrets().managed_llm_owner ?? null); }
+
+  saveManagedLlmOwner(owner: import("@lxe/desktop-protocol").DesktopObservedDevice | null): void {
+    const secrets = this.repository.readSecrets();
+    secrets.managed_llm_owner = structuredClone(owner);
+    this.repository.commit(this.repository.readConfig(), secrets);
+  }
+
+  migrateManagedLlmOwner(): void {
+    const secrets = this.repository.readSecrets();
+    if (secrets.managed_llm_owner || (!secrets.managed_llm_credential && !secrets.managed_llm_state?.credentials.length)) return;
+    const config = this.repository.readConfig();
+    const cloud = config.cloud;
+    if (cloud.managed && !cloud.switch_in_progress && cloud.device_id && cloud.vpn_ip && cloud.data_server_url) {
+      secrets.managed_llm_owner = { server_url: companyServerUrl(cloud), id: cloud.device_id,
+        kind: secrets.data_server_api_key.startsWith("lxe_identity_") ? "system_administrator" : "managed_device",
+        display_name: cloud.device_name, wireguard_ip: cloud.vpn_ip };
+    } else this.clearManagedLlm(config, secrets);
+    this.repository.commit(config, secrets);
+  }
+
   configuration(): DesktopCloudConfiguration {
     const cloud = this.repository.readConfig().cloud;
     return {
@@ -189,6 +210,7 @@ export class DesktopCloudConfigService {
     _config: ReturnType<DesktopConfigRepository["readConfig"]>,
     secrets: ReturnType<DesktopConfigRepository["readSecrets"]>,
   ): void {
+    secrets.managed_llm_owner = null;
     secrets.managed_llm_credential = null;
     secrets.managed_llm_state = { revision: 0, default_target: null, models: [], credentials: [] };
   }

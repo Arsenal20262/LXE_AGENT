@@ -11413,3 +11413,6 @@ pre {
   flex-shrink: 0;
   white-space: nowrap;
 }
+
+.native-cloud-access .native-cloud-clear { justify-self: start; max-width: 100%; white-space: normal; text-align: left; }
+.native-cloud-access :is(p, h3) { margin: 0; overflow-wrap: anywhere; }

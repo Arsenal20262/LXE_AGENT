@@ -22,9 +22,9 @@ export const desktopCloudBindingSwitchAvailable = (cloud: DesktopCloudState): bo
 
 export const desktopCloudShortcutAvailable = (
   destination: DesktopCloudDestination,
-  cloud: Pick<DesktopCloudState, "is_admin" | "desktop_features">,
+  cloud: Pick<DesktopCloudState, "is_admin" | "desktop_features" | "native_access">,
 ): boolean => {
-  if (destination === "admin_dashboard") return cloud.is_admin;
+  if (destination === "admin_dashboard") return cloud.native_access?.is_admin ?? false;
   if (destination === "erp_dashboard") {
     return cloud.desktop_features.includes("*")
       || cloud.desktop_features.includes("erp_dashboard");

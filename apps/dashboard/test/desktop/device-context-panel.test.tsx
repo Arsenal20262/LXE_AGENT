@@ -19,7 +19,7 @@ test.each(["zh", "en"] as const)("unbound device permissions render in %s indepe
   expect(html).toContain("Device A");
   expect(html).toContain(UI_TEXT[language].desktop.cloud.permission.labels.services.mabang_read);
   expect(html).toContain(UI_TEXT[language].skillTypes.replenishment);
-  expect(html).toContain(UI_TEXT[language].desktop.cloud.permission.loginMissing);
+  expect(html).not.toContain(UI_TEXT[language].desktop.cloud.permission.loginMissing);
   expect(html).not.toContain(UI_TEXT[language].desktop.cloud.permission.confirm);
 });
 test("identity changes render explicit confirmation and clear old grants", () => {

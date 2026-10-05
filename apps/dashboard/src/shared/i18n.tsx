@@ -725,6 +725,12 @@ export const ZH_TEXT = {
         switchedConnected: (device: string) => `已切换到 ${device || "新设备"}`,
         switchedRetry: (device: string) => `已切换到 ${device || "新设备"}，等待联网验证`
       },
+      nativeAccess: {
+        title: "自动云端访问", locale: "zh-CN", checked: "最近验证", clearCache: "清除本目录模型缓存",
+        cacheHint: "缓存仅保存在本目录。清除不会撤销设备权限；保持公司连接时，下次刷新会重新获取。",
+        states: { pending: "等待识别设备", checking: "正在验证设备", connected: "设备已识别", offline: "暂时无法验证设备", denied: "设备访问被拒绝", error: "云端访问异常" },
+        models: { pending: "等待模型同步", ready: "云端模型已同步", cached: "模型使用缓存", unavailable: "暂无可用云端模型", upgrade_required: "使用云端模型需要升级 Agent" },
+      },
       permission: {
         title: "设备 Skill 权限",
         profile: "权限档案",
@@ -744,13 +750,14 @@ export const ZH_TEXT = {
           packing_sp_update: "装箱 SP 映射", reconciliation_adjust: "对账调整", inventory_import: "历史库存补录", inventory_cancel: "撤销库存补录", supplier_rename: "供应商更名" },
         },
         contextTitle: "当前设备与权限", previousDevice: "上次确认的设备",
-        enrollmentTitle: "设备接入与身份凭据",
-        enrollmentHint: "自动识别不配置模型凭据或网页登录；需要这些能力时，请完成设备接入。",
+        enrollmentTitle: "本目录接入配置",
+        enrollmentUnconfigured: "本目录尚未配置接入；不影响模型同步和已授权的网页登录。",
+        enrollmentHint: "公司 VPN 已连接时，模型和网页登录可自动识别设备。此处仅管理本目录的设备接入与隧道。",
         server: "公司服务器", device: "当前设备", skills: "可用技能", features: "桌面功能",
         services: "业务服务", actions: "ERP 操作", unknown: "待查询", empty: "未授权",
         refresh: "刷新权限", confirm: "确认使用当前设备",
         changed: "当前网络设备身份已变化，原权限已清空。请确认后重新查询；此操作不转移凭据或历史数据。",
-        checked: "最近验证", loginMissing: "已有功能授权；网页登录仍需配置设备身份凭据。",
+        checked: "最近验证", loginMissing: "验证设备后即可打开已授权网页。",
         status: {
           pending_verification: "待验证",
           denied: "查询被拒绝",
@@ -1596,7 +1603,13 @@ export const UI_TEXT: Record<Language, UiText> = {
           switchedConnected: (device: string) => `Switched to ${device || "the new device"}`,
           switchedRetry: (device: string) => `Switched to ${device || "the new device"}; waiting for network verification`
         },
-        permission: {
+        nativeAccess: {
+        title: "Automatic cloud access", locale: "en-US", checked: "Last verified", clearCache: "Clear model cache in this directory",
+        cacheHint: "Cache is stored in this directory. Clearing it does not revoke device access; the next refresh downloads it again while connected.",
+        states: { pending: "Waiting for device discovery", checking: "Verifying device", connected: "Device recognized", offline: "Device cannot be verified right now", denied: "Device access denied", error: "Cloud access error" },
+        models: { pending: "Waiting for models", ready: "Cloud models synchronized", cached: "Using cached models", unavailable: "No cloud models available", upgrade_required: "Upgrade Agent to use cloud models" },
+      },
+      permission: {
           title: "Device Skill access",
           profile: "Permission profile",
           version: "Version",
@@ -1615,13 +1628,14 @@ export const UI_TEXT: Record<Language, UiText> = {
             packing_sp_update: "Packing SP mapping", reconciliation_adjust: "Adjust reconciliation", inventory_import: "Import historical inventory", inventory_cancel: "Cancel inventory import", supplier_rename: "Rename suppliers" },
           },
           contextTitle: "Current device and permissions", previousDevice: "Last confirmed device",
-          enrollmentTitle: "Device enrollment and identity credentials",
-          enrollmentHint: "Discovery does not configure model credentials or web login. Complete enrollment when those capabilities are needed.",
+          enrollmentTitle: "Enrollment for this directory",
+          enrollmentUnconfigured: "This directory is not enrolled. Model sync and authorized web login are available independently.",
+          enrollmentHint: "On the company VPN, models and web login recognize this device automatically. This section manages enrollment and the tunnel for this directory.",
           server: "Company server", device: "Current device", skills: "Skills", features: "Desktop features",
           services: "Business services", actions: "ERP actions", unknown: "Awaiting query", empty: "No grants",
           refresh: "Refresh permissions", confirm: "Confirm current device",
           changed: "The network device identity changed. Previous grants were cleared. Confirm to query again; credentials and historical data are not transferred.",
-          checked: "Last verified", loginMissing: "Feature access is granted; web login still requires device identity credentials.",
+          checked: "Last verified", loginMissing: "Verify the device to open authorized web pages.",
           status: {
             pending_verification: "Awaiting verification",
             denied: "Query denied",
