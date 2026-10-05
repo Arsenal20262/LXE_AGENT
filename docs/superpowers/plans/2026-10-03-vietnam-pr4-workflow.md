@@ -169,12 +169,12 @@ def generate_current_vietnam_recommendation() -> VietnamRecommendationRun:
 - Consumes: Task 2 `generate_current_vietnam_recommendation()`。
 - Produces: `run(arguments: dict) -> dict`；catalog command `lxeskill vietnam stock recommend`，`output_xlsx` 是唯一 deliverable。
 
-- [ ] **Step 1: 写失败契约测试。** 检查 catalog 中新命令的模块、owner、空 schema、无 `x-lxe-asset-slot`、唯一 `output_xlsx` deliverable、失败不交付。对 `run({"map_path":"/tmp/other.xlsx"})` 断言 `invalid_arguments` 且未调用业务层；对空参数 mock 业务结果断言成功字段与一条最终 `files`。更新 Python 命令数 45→46、module 数 39→40、Skill 数 36→37、owner 数 29→30；更新 Bun dataset 模块集合增加 `vietnam`、Skill 发现数量 15→16。`doctor` 统计以实际注册结果校准，不猜计数。
+- [ ] **Step 1: 写失败契约测试。** 检查 catalog 中新命令的模块、owner、空 schema、无 `x-lxe-asset-slot`、唯一 `output_xlsx` deliverable、失败不交付。对 `run({"map_path":"synthetic-map.xlsx"})` 断言 `invalid_arguments` 且未调用业务层；对空参数 mock 业务结果断言成功字段与一条最终 `files`。更新 Python 命令数 45→46、module 数 39→40、Skill 数 36→37、owner 数 29→30；更新 Bun dataset 模块集合增加 `vietnam`、Skill 发现数量 15→16。`doctor` 统计以实际注册结果校准，不猜计数。
 
 ```python
 def test_cli_rejects_supplied_map_path_before_business(monkeypatch):
     monkeypatch.setattr(generate, "generate_current_vietnam_recommendation", lambda: (_ for _ in ()).throw(AssertionError("called")))
-    result = generate.run({"map_path": "/tmp/other.xlsx"})
+    result = generate.run({"map_path": "synthetic-map.xlsx"})
     assert result["success"] is False
     assert result["error"]["code"] == "invalid_arguments"
 ```
