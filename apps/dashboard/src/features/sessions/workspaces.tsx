@@ -37,12 +37,6 @@ function WorkspaceGroup({ workspace, label, active, props, onActions }: {
   const query = useSessionsInfiniteQuery("", props.enabled && expanded, workspace.directory);
   const sessions = flattenSessionPages(query.data?.pages);
   const statuses = useSessionStatus(sessions.items.map(item => item.session_id), props.enabled && expanded, props.display, false);
-  const [openError, setOpenError] = useState("");
-  const open = async () => {
-    setOpenError("");
-    try { await window.lxe!.desktop.openWorkspace(workspace.directory); }
-    catch (error) { setOpenError(queryError(error)); }
-  };
   return <section data-workspace-directory={workspace.directory} className={active ? "workspace-group is-active" : "workspace-group"}>
     <div className="workspace-group-header">
       <button type="button" className="workspace-group-toggle" aria-expanded={expanded} title={workspace.directory} onClick={() => props.onExpandedChange(workspace.directory, !expanded)}>
@@ -50,13 +44,11 @@ function WorkspaceGroup({ workspace, label, active, props, onActions }: {
         <span>{label}</span>
         {workspace.directory === props.defaultDirectory ? <small className="workspace-default-badge">{t.workspaces.defaultBadge}</small> : null}
       </button>
-      <button type="button" className="workspace-icon-button" title={t.workspaces.open} aria-label={`${t.workspaces.open}: ${label}`} onClick={() => void open()}><FolderOpen size={14} /></button>
       <button type="button" className="workspace-icon-button workspace-actions-trigger" disabled={!props.enabled}
         title={t.workspaces.actions} aria-label={`${t.workspaces.actions}: ${label}`} aria-haspopup="menu"
         onClick={event => onActions(workspace, event.currentTarget)}><MoreHorizontal size={16} /></button>
       <button type="button" className="workspace-icon-button" title={t.workspaces.newIn(label)} aria-label={t.workspaces.newIn(label)} onClick={() => props.onNew(workspace.directory)}><Plus size={16} /></button>
     </div>
-    {openError ? <div className="workspace-error" role="alert">{openError}</div> : null}
     {expanded ? <div className="workspace-group-sessions">
       <SessionsIndex {...props} embedded searchOpen={false} query="" sessions={props.currentBlank?.workspace.directory === workspace.directory ? [{ ...props.currentBlank, title: t.conversation.newTitle }, ...sessions.items.filter(item => item.session_id !== props.currentBlank?.session_id)] : sessions.items}
         statuses={statuses.items} statusUnavailable={!statuses.ready} statusError={statuses.error}
