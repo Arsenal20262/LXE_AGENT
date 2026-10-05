@@ -233,8 +233,6 @@ export const ZH_TEXT = {
     hour: (hour: string) => `${hour}:00`,
     heatmapAria: "每日技能执行热力图",
     heatmapDay: (day: string, count: string) => `${day}：${count} 次执行`,
-    longestStreak: (count: string) => `最长连续 ${count} 天`,
-    empty: "还没有运行记录，发一条消息就开始了。",
     loading: "正在统计…"
   },
   common: {
@@ -1106,8 +1104,6 @@ export const UI_TEXT: Record<Language, UiText> = {
       hour: (hour: string) => `${hour}:00`,
       heatmapAria: "Daily skill runs",
       heatmapDay: (day: string, count: string) => `${day}: ${count} runs`,
-      longestStreak: (count: string) => `Longest streak ${count}d`,
-      empty: "Nothing has run yet. Send a message to start.",
       loading: "Counting…"
     },
     common: {

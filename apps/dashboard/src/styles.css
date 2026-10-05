@@ -8665,7 +8665,7 @@ pre {
 .welcome-panel {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
   padding: 16px;
   border: 1px solid var(--border);
   border-radius: 14px;
@@ -8716,6 +8716,7 @@ pre {
 
 .welcome-metrics {
   display: grid;
+  margin: 0;
   gap: 6px;
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
@@ -8766,7 +8767,7 @@ pre {
 .welcome-body {
   display: grid;
   width: 100%;
-  gap: 14px;
+  gap: 12px;
 }
 
 .welcome-heatmap {
@@ -8805,6 +8806,7 @@ pre {
 .welcome-heatmap-cell[data-level="4"] { background: var(--heatmap-level-4); }
 
 .welcome-status {
+  margin: 0;
   color: var(--muted);
   font-size: 0.75rem;
 }
