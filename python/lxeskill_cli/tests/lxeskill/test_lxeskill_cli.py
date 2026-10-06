@@ -23,8 +23,8 @@ def _records(capsys) -> list[dict]:
 def test_catalog_defines_every_cli_command_and_hidden_alias() -> None:
     catalog = load_catalog()
 
-    assert len(catalog) == 49
-    assert sum(bool(entry.get("module")) for entry in catalog.values()) == 43
+    assert len(catalog) == 50
+    assert sum(bool(entry.get("module")) for entry in catalog.values()) == 44
     assert sum(entry.get("handler") == "browser" for entry in catalog.values()) == 2
     assert sum(entry.get("visibility") == "maintenance" for entry in catalog.values()) == 4
     assert len({tuple(entry["command_path"]) for entry in catalog.values()}) == len(catalog)
@@ -162,7 +162,7 @@ def test_doctor_reports_repository_contract_without_adding_a_list_command(capsys
             "command": "doctor",
             "ok": True,
             "data": {
-                "catalog_commands": 49,
+                "catalog_commands": 50,
                 "business_commands": 41,
                 "skill_files": 37,
                 "owner_skills": 30,
@@ -737,4 +737,21 @@ def test_managed_execution_rejects_undeclared_attachment_argument() -> None:
         "managed_execution": {"attachment_argument": "other_path"},
     }
     with pytest.raises(RuntimeError, match="managed execution"):
+        validate_managed_execution(entry)
+
+
+@pytest.mark.parametrize("artifact_paths", [
+    None,
+    [{"field": "output_xlsx", "role": "diagnostic"}],
+    [{"field": "artifacts[].path", "role": "deliverable"}],
+    [{"field": "output.path", "role": "deliverable"}],
+    [{"field": "output_xlsx", "role": "deliverable"}, {"field": "audit", "role": "diagnostic"}],
+    [{"field": "output_xlsx", "role": "deliverable", "extension": ".csv"}],
+])
+def test_managed_execution_rejects_unsupported_artifact_contract(artifact_paths) -> None:
+    from lxeskill.business import validate_managed_execution
+
+    entry = dict(load_catalog()["vietnam_replenishment_generate"])
+    entry["artifact_paths"] = artifact_paths
+    with pytest.raises(RuntimeError, match="managed execution artifact"):
         validate_managed_execution(entry)

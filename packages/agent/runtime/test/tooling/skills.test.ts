@@ -80,6 +80,9 @@ describe("skill context", () => {
     const vietnamPolicy = skills.find((skill) => skill.name === "vietnam-stock-recommendation")?.content ?? "";
     expect(vietnamPolicy).toContain("当前消息恰好只有一个附件，且它是 `.xlsx` `local_file`");
     expect(vietnamPolicy).toContain("managed_lxeskill");
+    expect(vietnamPolicy).toContain('{"command_id":"vietnam_replenishment_bind_sku"}');
+    expect(vietnamPolicy).toContain("唯一合规 XLSX 加明确生成要求时，直接绑定再生成");
+    expect(vietnamPolicy).toContain("不要为取得附件 ID 搜索目录、读取会话记录或读取 XLSX");
     expect(vietnamPolicy).toContain("vietnam_replenishment_bind_sku");
     expect(vietnamPolicy).toContain("vietnam_replenishment_generate");
     expect(vietnamPolicy).toContain("attachment_id");
@@ -103,7 +106,11 @@ describe("skill context", () => {
     expect(vietnamPolicy).toContain("紧邻附件已成功绑定时不重复绑定");
     expect(vietnamPolicy).toContain("本条及紧邻上一条均无待处理新附件");
     expect(vietnamPolicy).toContain("多附件未确认、非 `.xlsx` 附件或绑定失败时不进入生成");
-    expect(vietnamPolicy).toContain("仅有附件且无法确定越南备货用途时先询问");
+    expect(vietnamPolicy).toContain("`ask_user_question` 弹出“仅绑定 / 绑定并查询”两个单选项");
+    expect(vietnamPolicy).toContain('"id":"vietnam_sku_action"');
+    expect(vietnamPolicy).toContain("表单答案在当前轮可继续处理当前附件");
+    expect(vietnamPolicy).toContain("仅上传一份 `.xlsx`");
+    expect(vietnamPolicy).toContain("用户随后在聊天中紧邻回复时按确认/继续处理规则使用该附件");
     expect(vietnamPolicy).toContain("不要求先询问用途");
     expect(vietnamPolicy).toContain("不跨多轮复用历史附件");
     expect(vietnamPolicy).toContain("多附件必须先确认");

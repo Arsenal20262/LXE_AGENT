@@ -132,6 +132,27 @@ def validate_template(path: str | Path) -> TemplateContract:
 _PARAMETER_HEADERS = ("SKU", "成本", "跨境价", "折扣价", "热销标记")
 
 
+def has_sku_parameter_headers(path: str | Path) -> bool:
+    """Recognize the first sheet's header row without inspecting SKU records."""
+    try:
+        workbook = load_workbook(path, read_only=True, data_only=False)
+    except Exception as exc:
+        raise AssetContractError(f"读取 SKU 参数表失败: {type(exc).__name__}: {exc}") from exc
+
+    try:
+        first_row = next(workbook.worksheets[0].iter_rows(min_row=1, max_row=1, values_only=True), ())
+        columns = {
+            value.strip()
+            for value in first_row
+            if isinstance(value, str) and value.strip()
+        }
+        return all(header in columns for header in _PARAMETER_HEADERS)
+    except Exception as exc:
+        raise AssetContractError(f"读取 SKU 参数表失败: {type(exc).__name__}: {exc}") from exc
+    finally:
+        workbook.close()
+
+
 def _blank(value: object) -> bool:
     return value is None or isinstance(value, str) and not value.strip()
 
@@ -278,6 +299,7 @@ __all__ = [
     "AssetContractError",
     "SkuParameters",
     "TemplateContract",
+    "has_sku_parameter_headers",
     "load_sku_parameters",
     "validate_template",
     "validate_usable_sku_parameters",

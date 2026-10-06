@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { RuntimeAttachmentRecord, RuntimeMessage, RuntimeMessageContent } from "../../src/engine/types";
 import { resolveManagedAttachment } from "../../src/tooling/managed-lxeskill-attachment";
+import { ToolExecutionError } from "../../src/tooling/registry";
 
 const roots: string[] = [];
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
@@ -76,7 +77,21 @@ describe("managed lxeskill attachment source", () => {
     expect(() => select([user("message-now", [block(changed)])], changed)).toThrow(/changed/);
     const missing = attachment();
     rmSync(missing.path);
-    expect(() => select([user("message-now", [block(missing)])], missing)).toThrow(/missing/);
+    try {
+      select([user("message-now", [block(missing)])], missing);
+      throw new Error("expected a missing attachment failure");
+    } catch (error) {
+      expect(error).toBeInstanceOf(ToolExecutionError);
+      expect((error as Error).message).toContain("ENOENT");
+      expect((error as Error).message).not.toContain(missing.path);
+    }
+  });
+
+  test("a declared extension can reuse the same provenance check without changing the default XLSX contract", () => {
+    const csv = attachment("synthetic.csv");
+    expect(resolveManagedAttachment({ messages: [user("message-now", [block(csv)])], attachment: csv,
+      currentTurnId: "turn-upload", allowedExtensions: [".csv"] })).toBe(realpathSync(csv.path));
+    expect(() => select([user("message-now", [block(csv)])], csv)).toThrow(/XLSX/);
   });
 
   test("does not skip an unidentified user message or a compaction boundary", () => {

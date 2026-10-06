@@ -5,8 +5,8 @@ import { extname, isAbsolute } from "node:path";
 import type { RuntimeAttachmentRecord, RuntimeMessage } from "../engine/types";
 import type { LxeSkillCommandDefinition } from "./lxeskill-command";
 import type { CliTerminalResult } from "./one-shot-cli";
-import { resolveManagedAttachment } from "./managed-lxeskill-attachment";
-import { ToolExecutionError, type ToolDefinition } from "./registry";
+import { resolveManagedAttachment, selectManagedAttachmentId } from "./managed-lxeskill-attachment";
+import { safeToolFailureObservation, ToolExecutionError, type ToolDefinition } from "./registry";
 
 export interface ManagedLxeSkillToolOptions {
   commands: readonly LxeSkillCommandDefinition[];
@@ -16,30 +16,54 @@ export interface ManagedLxeSkillToolOptions {
 }
 
 const reject = (message: string): never => { throw new ToolExecutionError("invalid_argument", message); };
+const rejectResult = (message: string): never => { throw new ToolExecutionError("unclassified", message); };
 
 function validateDeliverable(terminal: CliTerminalResult, entry: LxeSkillCommandDefinition, workspaceRoot: string): void {
   const deliverables = entry.artifactPaths?.filter((path) => path.role === "deliverable") ?? [];
   if (deliverables.length === 0) {
-    if (terminal.files.length !== 0) reject("managed command unexpectedly returned files");
+    if (terminal.files.length !== 0) rejectResult("managed command unexpectedly returned files");
     return;
   }
-  if (deliverables.length !== 1 || terminal.files.length !== 1) reject("managed command must return exactly one deliverable");
+  if (deliverables.length !== 1 || terminal.files.length !== 1) rejectResult("managed command must return exactly one deliverable");
   const declared = terminal.data[deliverables[0]!.field];
   const raw = terminal.files[0]!;
   if (typeof declared !== "string" || typeof raw !== "string" || raw !== declared
     || !isAbsolute(raw) || extname(raw).toLowerCase() !== ".xlsx") {
-    reject("managed command returned an invalid XLSX artifact");
+    rejectResult("managed command returned an invalid XLSX artifact");
   }
+  let operation = "lstat";
+  let resolvedFile = "";
+  let resolvedRoot = "";
   try {
-    if (lstatSync(raw).isSymbolicLink()) reject("managed command artifact is a symbolic link");
-    const file = realpathSync(raw);
-    const artifactRoot = realpathSync(workspaceArtifactRoot(workspaceRoot));
-    if (!pathContains(artifactRoot, file) || !statSync(file).isFile() || statSync(file).size <= 0) {
-      reject("managed command returned an invalid workspace artifact");
+    if (lstatSync(raw).isSymbolicLink()) rejectResult("managed command artifact is a symbolic link");
+    operation = "realpath artifact";
+    resolvedFile = realpathSync(raw);
+    operation = "realpath workspace artifact root";
+    resolvedRoot = realpathSync(workspaceArtifactRoot(workspaceRoot));
+    if (!pathContains(resolvedRoot, resolvedFile)) rejectResult("managed command returned an invalid workspace artifact");
+    operation = "stat";
+    const fileStat = statSync(resolvedFile);
+    if (!fileStat.isFile() || fileStat.size <= 0) {
+      rejectResult("managed command returned an invalid workspace artifact");
     }
   } catch (error) {
     if (error instanceof ToolExecutionError) throw error;
-    return reject("managed command artifact is missing or inaccessible");
+    const cause = error as NodeJS.ErrnoException;
+    const filesystemOperation = typeof cause?.syscall === "string" ? cause.syscall : operation;
+    const filesystemCode = typeof cause?.code === "string" ? cause.code : undefined;
+    let message = (error instanceof Error ? error.message : String(error))
+      .replaceAll(raw, "[artifact]");
+    if (workspaceRoot) message = message.replaceAll(workspaceRoot, "[workspace]");
+    if (resolvedFile) message = message.replaceAll(resolvedFile, "[artifact]");
+    if (resolvedRoot) message = message.replaceAll(resolvedRoot, "[artifact root]");
+    const observed = safeToolFailureObservation(
+      typeof cause?.path === "string" && cause.path
+        ? message.replaceAll(cause.path, "[path]") : message,
+    );
+    throw new ToolExecutionError("unclassified",
+      `managed command artifact validation failed during ${filesystemOperation}: ${observed}`,
+      { type: "managed_artifact_validation_error", operation: filesystemOperation,
+        ...(filesystemCode ? { filesystem_code: filesystemCode } : {}), observed_message: observed });
   }
 }
 
@@ -49,14 +73,14 @@ export function createManagedLxeSkillTool(options: ManagedLxeSkillToolOptions): 
     .map((entry) => [entry.name, entry] as const));
   return {
     name: "managed_lxeskill",
-    description: "Run a registered business command using host-verified chat attachments. Use command_id from the lxeskill catalog; pass attachment_id only when binding an uploaded XLSX. The host selects fixed CLI arguments and returns the real CLI result.",
+    description: "Run a registered business command using host-verified chat attachments. Use command_id from the lxeskill catalog; for one eligible chat XLSX, omit attachment_id and the host selects it; use attachment_id only for a confirmed selection from multiple files. The host selects fixed CLI arguments and returns the real CLI result.",
     platforms: ["desktop"],
     ownerSkills: [...new Set([...commands.values()].flatMap((entry) => entry.ownerSkills))],
     input_schema: {
       type: "object",
       properties: {
         command_id: { type: "string", enum: [...commands.keys()], description: "Registered managed lxeskill command ID." },
-        attachment_id: { type: "string", description: "Stored ID of the selected chat XLSX attachment, for attachment commands only." },
+        attachment_id: { type: "string", description: "Optional stored ID for a confirmed selection from multiple chat files. Omit for one eligible XLSX; the host selects it." },
       },
       required: ["command_id"],
       additionalProperties: false,
@@ -88,12 +112,17 @@ export function createManagedLxeSkillTool(options: ManagedLxeSkillToolOptions): 
       const argv = entry.command.slice("lxeskill ".length).split(" ");
       const attachmentArgument = entry.managedExecution?.attachmentArgument;
       if (attachmentArgument) {
-        const attachmentId = input.attachment_id;
-        if (typeof attachmentId !== "string" || !attachmentId.trim()) throw new ToolExecutionError("invalid_argument", "attachment_id is required");
         if (!context.turn_id) throw new ToolExecutionError("invalid_argument", "current chat turn is required for attachment binding");
+        const messages = await options.loadMessages(context.session_id);
+        const requestedId = input.attachment_id;
+        if (requestedId !== undefined && (typeof requestedId !== "string" || !requestedId.trim())) {
+          throw new ToolExecutionError("invalid_argument", "attachment_id must be a nonempty stored ID");
+        }
+        const attachmentId = requestedId === undefined
+          ? selectManagedAttachmentId(messages, context.turn_id)
+          : requestedId as string;
         const attachment = await options.resolveAttachment(context.session_id, attachmentId);
         if (!attachment) throw new ToolExecutionError("invalid_argument", "attachment_id is not a stored attachment in this session");
-        const messages = await options.loadMessages(context.session_id);
         const path = resolveManagedAttachment({ messages, attachment, currentTurnId: context.turn_id });
         argv.push(`--${attachmentArgument.replaceAll("_", "-")}`, path);
       } else if (Object.prototype.hasOwnProperty.call(input, "attachment_id")) {

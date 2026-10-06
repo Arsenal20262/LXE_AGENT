@@ -47,6 +47,14 @@ def validate_managed_execution(entry: dict[str, Any]) -> None:
             or not isinstance(schema, dict) or schema.get("type") != "object"
             or schema.get("additionalProperties") is not False):
         raise RuntimeError(f"invalid managed execution contract for {name}")
+    artifact_paths = entry.get("artifact_paths", [])
+    if (not isinstance(artifact_paths, list) or len(artifact_paths) > 1
+            or any(not isinstance(item, dict) or set(item) != {"field", "role"}
+                   or item.get("role") != "deliverable"
+                   or not isinstance(item.get("field"), str)
+                   or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", item["field"])
+                   for item in artifact_paths)):
+        raise RuntimeError(f"invalid managed execution artifact contract for {name}")
     properties = schema.get("properties")
     required = schema.get("required", [])
     attachment_argument = declaration.get("attachment_argument")
@@ -65,6 +73,29 @@ def validate_managed_execution(entry: dict[str, Any]) -> None:
             or not isinstance(file_input, dict)
             or file_input.get("accepted_extensions") != [".xlsx"]):
         raise RuntimeError(f"invalid managed execution XLSX input for {name}")
+
+
+def validate_preselection_probe(entry: dict[str, Any]) -> None:
+    """Require internal, input-only catalog probes with one fixed path argument."""
+    if "preselection_probe" not in entry:
+        return
+    name = str(entry.get("name") or "<unknown>")
+    schema = entry.get("input_schema")
+    properties = schema.get("properties") if isinstance(schema, dict) else None
+    field = properties.get("source_path") if isinstance(properties, dict) else None
+    timeout = entry.get("timeout_ms")
+    if (entry["preselection_probe"] is not True or entry.get("visibility") != "internal"
+            or entry.get("exposed") is not False or entry.get("session_mode") != "none"
+            or entry.get("owner_skills") != [] or "managed_execution" in entry
+            or not isinstance(timeout, int) or isinstance(timeout, bool) or not 0 < timeout <= 2**53 - 1
+            or not isinstance(schema, dict) or schema.get("type") != "object"
+            or schema.get("additionalProperties") is not False
+            or not isinstance(properties, dict) or set(properties) != {"source_path"}
+            or not isinstance(field, dict) or field.get("type") != "string"
+            or type(field.get("minLength")) is not int or field["minLength"] != 1
+            or schema.get("required") != ["source_path"]
+            or ("artifact_paths" in entry and entry["artifact_paths"] != [])):
+        raise RuntimeError(f"invalid preselection probe contract for {name}")
 
 
 def load_catalog() -> dict[str, dict[str, Any]]:
@@ -152,6 +183,7 @@ def load_catalog() -> dict[str, dict[str, Any]]:
             if expected != name:
                 raise RuntimeError(f"script tool naming mismatch: {module} -> {name}")
         validate_managed_execution(entry)
+        validate_preselection_probe(entry)
         entries[name] = entry
     return entries
 

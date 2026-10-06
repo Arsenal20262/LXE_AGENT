@@ -15,6 +15,7 @@ export interface LxeSkillCommandDefinition {
   attributionSkill?: string;
   artifactPaths?: ArtifactPathDeclaration[];
   managedExecution?: { attachmentArgument?: string };
+  preselectionProbe?: true;
   timeoutMs?: number;
 }
 
@@ -89,7 +90,9 @@ const artifactPathsOf = (
 const MANAGED_TOKEN = /^[a-z][a-z0-9-]*$/u;
 const MANAGED_ARGUMENT = /^[a-z][a-z0-9_]*$/u;
 
-const managedExecutionOf = (raw: Record<string, unknown>, commandPath: string[], ownerSkills: string[]) => {
+const managedExecutionOf = (
+  raw: Record<string, unknown>, commandPath: string[], ownerSkills: string[], artifactPaths: ArtifactPathDeclaration[],
+) => {
   if (!Object.prototype.hasOwnProperty.call(raw, "managed_execution")) return undefined;
   const value = raw.managed_execution;
   const declaration = value && typeof value === "object" && !Array.isArray(value)
@@ -107,6 +110,15 @@ const managedExecutionOf = (raw: Record<string, unknown>, commandPath: string[],
     || schema.additionalProperties !== false || !properties || !Array.isArray(required)) {
     throw new Error(`invalid managed execution contract: ${String(raw.name ?? "")}`);
   }
+  const rawArtifactPaths = raw.artifact_paths;
+  if ((rawArtifactPaths !== undefined && !Array.isArray(rawArtifactPaths))
+    || artifactPaths.length > 1
+    || artifactPaths.some(item => item.role !== "deliverable" || !/^[A-Za-z_]\w*$/u.test(item.field))
+    || (Array.isArray(rawArtifactPaths) && rawArtifactPaths.some(item =>
+      !item || typeof item !== "object" || Array.isArray(item)
+      || Object.keys(item).some(key => key !== "field" && key !== "role")))) {
+    throw new Error(`invalid managed execution artifact contract: ${String(raw.name ?? "")}`);
+  }
   if (!Object.prototype.hasOwnProperty.call(declaration, "attachment_argument")) {
     if (Object.keys(properties).length !== 0 || required.length !== 0)
       throw new Error(`invalid managed execution inputs: ${String(raw.name ?? "")}`);
@@ -123,6 +135,28 @@ const managedExecutionOf = (raw: Record<string, unknown>, commandPath: string[],
     || fileInput.accepted_extensions.length !== 1 || fileInput.accepted_extensions[0] !== ".xlsx")
     throw new Error(`invalid managed execution XLSX input: ${String(raw.name ?? "")}`);
   return { attachmentArgument: argument };
+};
+
+const preselectionProbeOf = (raw: Record<string, unknown>, ownerSkills: string[]): true | undefined => {
+  if (!Object.prototype.hasOwnProperty.call(raw, "preselection_probe")) return undefined;
+  const schema = raw.input_schema && typeof raw.input_schema === "object" && !Array.isArray(raw.input_schema)
+    ? raw.input_schema as Record<string, unknown> : null;
+  const properties = schema?.properties && typeof schema.properties === "object" && !Array.isArray(schema.properties)
+    ? schema.properties as Record<string, unknown> : null;
+  const field = properties?.source_path && typeof properties.source_path === "object" && !Array.isArray(properties.source_path)
+    ? properties.source_path as Record<string, unknown> : null;
+  const timeout = raw.timeout_ms;
+  if (raw.preselection_probe !== true || raw.visibility !== "internal" || raw.exposed !== false
+    || raw.session_mode !== "none" || ownerSkills.length !== 0 || raw.managed_execution !== undefined
+    || !Number.isSafeInteger(timeout) || Number(timeout) <= 0
+    || !schema || schema.type !== "object" || schema.additionalProperties !== false
+    || !properties || Object.keys(properties).length !== 1 || !field || field.type !== "string"
+    || field.minLength !== 1 || !Array.isArray(schema.required)
+    || schema.required.length !== 1 || schema.required[0] !== "source_path"
+    || (raw.artifact_paths !== undefined && (!Array.isArray(raw.artifact_paths) || raw.artifact_paths.length !== 0))) {
+    throw new Error(`invalid preselection probe contract: ${String(raw.name ?? "")}`);
+  }
+  return true;
 };
 
 export function loadLxeSkillCommandCatalog(path: string): LxeSkillCommandDefinition[] {
@@ -143,7 +177,8 @@ export function loadLxeSkillCommandCatalog(path: string): LxeSkillCommandDefinit
     const ownerSkills = Array.isArray(raw.owner_skills)
       ? raw.owner_skills.map((item) => String(item).trim()).filter(Boolean)
       : [];
-    const managedExecution = managedExecutionOf(raw, commandPath, ownerSkills);
+    const managedExecution = managedExecutionOf(raw, commandPath, ownerSkills, artifactPaths);
+    const preselectionProbe = preselectionProbeOf(raw, ownerSkills);
     const explicitAttribution = String(raw.attribution_skill ?? "").trim();
     if (ownerSkills.length > 1 && !explicitAttribution) {
       throw new Error(`multi-owner lxeskill command requires attribution_skill: ${entry.name}`);
@@ -161,6 +196,7 @@ export function loadLxeSkillCommandCatalog(path: string): LxeSkillCommandDefinit
       ...(attributionSkill ? { attributionSkill } : {}),
       ...(artifactPaths.length ? { artifactPaths } : {}),
       ...(managedExecution ? { managedExecution, timeoutMs: Number(raw.timeout_ms) } : {}),
+      ...(preselectionProbe ? { preselectionProbe, timeoutMs: Number(raw.timeout_ms) } : {}),
     };
   });
 }

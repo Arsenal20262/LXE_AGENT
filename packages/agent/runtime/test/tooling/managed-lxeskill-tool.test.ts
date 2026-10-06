@@ -9,7 +9,7 @@ import type { CliTerminalResult } from "../../src/tooling/one-shot-cli";
 import type { LxeSkillCommandDefinition } from "../../src/tooling/lxeskill-command";
 import { createManagedLxeSkillTool } from "../../src/tooling/managed-lxeskill-tool";
 import { PermissionPolicyService } from "../../src/permissions/policy";
-import { ToolRegistry } from "../../src/tooling/registry";
+import { ToolExecutionError, ToolRegistry } from "../../src/tooling/registry";
 
 const roots: string[] = [];
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
@@ -50,6 +50,43 @@ describe("managed lxeskill tool", () => {
     expect(response.files).toBeUndefined();
   });
 
+  test("bind selects the sole current chat XLSX without a model-supplied attachment ID", async () => {
+    const f = fixture();
+    f.messages([
+      { role: "user", message_id: "message-1", content: [{ type: "local_file", ...f.attachment }] },
+      { role: "user", content: "Synthetic environment context", environmentContext: {} },
+    ] as RuntimeMessage[]);
+    await f.registry.execute("managed_lxeskill", { command_id: bind.name }, f.context);
+    expect(f.calls).toEqual([{ argv: ["vietnam", "sku", "bind", "--source-path", realpathSync(f.attachment.path)], workspaceRoot: f.workspaceRoot, timeoutMs: 180_000 }]);
+  });
+
+  test("bind selects a sole immediately previous XLSX after a continuation", async () => {
+    const f = fixture();
+    f.messages([
+      { role: "user", message_id: "message-1", content: [{ type: "local_file", ...f.attachment }] },
+      { role: "user", content: "Synthetic environment context", environmentContext: {} },
+      { role: "user", message_id: "message-2", content: "继续处理这份表" },
+      { role: "user", content: "Synthetic environment context", environmentContext: {} },
+    ] as RuntimeMessage[]);
+    await f.registry.execute("managed_lxeskill", { command_id: bind.name }, { ...f.context, turn_id: "turn-2" });
+    expect(f.calls).toHaveLength(1);
+    expect(f.calls[0]?.argv).toEqual(["vietnam", "sku", "bind", "--source-path", realpathSync(f.attachment.path)]);
+  });
+
+  test("automatic binding rejects multiple or older attachments before the CLI", async () => {
+    const f = fixture();
+    const block = { type: "local_file", ...f.attachment };
+    f.messages([{ role: "user", message_id: "message-1", content: [block, { ...block, attachment_id: "other" }] }] as RuntimeMessage[]);
+    await expect(f.registry.execute("managed_lxeskill", { command_id: bind.name }, f.context)).rejects.toThrow(/multiple attachments/);
+    f.messages([
+      { role: "user", message_id: "message-1", content: [block] },
+      { role: "user", message_id: "message-2", content: "unrelated" },
+      { role: "user", message_id: "message-3", content: "use old upload" },
+    ] as RuntimeMessage[]);
+    await expect(f.registry.execute("managed_lxeskill", { command_id: bind.name }, { ...f.context, turn_id: "turn-3" })).rejects.toThrow(/immediately previous/);
+    expect(f.calls).toEqual([]);
+  });
+
   test("generate accepts no attachment and reports one existing workspace XLSX", async () => {
     const f = fixture(); const artifactRoot = workspaceArtifactRoot(f.workspaceRoot);
     mkdirSync(artifactRoot, { recursive: true }); const output = join(artifactRoot, "recommendation.xlsx"); writeFileSync(output, "synthetic");
@@ -85,6 +122,29 @@ describe("managed lxeskill tool", () => {
     const missing = join(workspaceArtifactRoot(f.workspaceRoot), "missing.xlsx");
     f.result(terminal("vietnam stock recommend", { success: true, output_xlsx: missing }, [missing]));
     await expect(f.registry.execute("managed_lxeskill", { command_id: generate.name }, f.context)).rejects.toThrow(/artifact/);
+  });
+
+  test("reports output validation as a result failure with the observed filesystem error", async () => {
+    const f = fixture();
+    const missing = join(workspaceArtifactRoot(f.workspaceRoot), "missing.xlsx");
+    f.result(terminal("vietnam stock recommend", { success: true, output_xlsx: missing }, [missing]));
+    const failure = await f.registry.execute("managed_lxeskill", { command_id: generate.name }, f.context)
+      .then(() => { throw new Error("expected artifact validation to fail"); }, error => {
+        if (!(error instanceof ToolExecutionError)) throw error;
+        return error;
+      });
+    expect(failure).toBeInstanceOf(ToolExecutionError);
+    expect(failure.code).toBe("unclassified");
+    expect(failure.details).toMatchObject({ operation: "lstat", filesystem_code: "ENOENT" });
+    expect(failure.modelContent()).toMatch(/lstat.*ENOENT/);
+    expect(failure.modelContent()).not.toContain(missing);
+  });
+
+  test("does not blame model arguments for malformed successful CLI output", async () => {
+    const f = fixture();
+    f.result(terminal("vietnam stock recommend", { success: true, output_xlsx: "missing.xlsx" }, []));
+    await expect(f.registry.execute("managed_lxeskill", { command_id: generate.name }, f.context))
+      .rejects.toMatchObject({ code: "unclassified" });
   });
 
   test("runner timeout and cancellation do not retry", async () => {

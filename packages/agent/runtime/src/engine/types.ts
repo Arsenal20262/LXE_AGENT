@@ -12,6 +12,7 @@ import type {
 } from "@lxe/protocol";
 import type { RuntimeWireTraceAttempt } from "../providers/wire-trace";
 import type { WorkspaceLease, WorkspaceSnapshot } from "../workspace/instance-manager";
+import type { SkillCatalogSnapshot } from "../tooling/skills";
 
 export interface TextBlock extends JsonObject {
   type: "text";
@@ -219,11 +220,8 @@ export interface RuntimeAttachmentRecord extends JsonObject {
   ts: number;
 }
 
-export interface RuntimeSkillSnapshot {
-  readonly names: readonly string[];
-  readonly prompt: string;
-  readonly modules: Readonly<Record<string, string>>;
-  readonly locations?: Readonly<Record<string, string>>;
+export interface RuntimeSkillSnapshot extends Omit<SkillCatalogSnapshot, "preselection"> {
+  readonly preselection?: SkillCatalogSnapshot["preselection"];
 }
 
 export interface RuntimeStore {

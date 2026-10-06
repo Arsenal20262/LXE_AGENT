@@ -1,7 +1,7 @@
 import { lstatSync, realpathSync, statSync } from "node:fs";
 import { extname, isAbsolute } from "node:path";
 import type { RuntimeAttachmentRecord, RuntimeConversationMessage, RuntimeMessage } from "../engine/types";
-import { ToolExecutionError } from "./registry";
+import { safeToolFailureObservation, ToolExecutionError } from "./registry";
 
 interface LocalFileBlock {
   attachment_id: string;
@@ -30,43 +30,58 @@ function files(message: RuntimeConversationMessage): LocalFileBlock[] {
   });
 }
 
+function selectedFile(messages: readonly RuntimeMessage[], currentTurnId: string, attachmentId?: string): LocalFileBlock {
+  if (!currentTurnId) denied("current attachment context is missing");
+  const visible = messages.filter(userMessage)
+    .filter(message => !message.environmentContext && !injectedSkill(message));
+  const current = visible.at(-1);
+  if (!current || !realUser(current)) return denied("current message cannot be verified");
+  const currentFiles = files(current);
+  if (currentFiles.length > 0) {
+    if (currentFiles.length > 1) denied("multiple attachments require confirmation in a following message");
+    const selected = currentFiles[0]!;
+    if (selected.turn_id !== currentTurnId) denied("current attachment turn does not match");
+    return selected;
+  }
+  const previous = visible.at(-2);
+  if (!previous || !realUser(previous)) return denied("attachment is not from the current or immediately previous message");
+  const previousIndex = messages.lastIndexOf(previous);
+  const currentIndex = messages.lastIndexOf(current);
+  if (messages.slice(previousIndex + 1, currentIndex).some((message) => message.role === "compactionSummary")) {
+    return denied("attachment adjacency cannot be verified across compaction");
+  }
+  const previousFiles = files(previous);
+  if (!attachmentId && previousFiles.length > 1) denied("multiple attachments require confirmation in a following message");
+  const selected = attachmentId
+    ? previousFiles.find(file => file.attachment_id === attachmentId)
+    : previousFiles[0];
+  if (!selected) return denied("attachment is not from the current or immediately previous message");
+  if (selected.turn_id === currentTurnId) denied("previous attachment turn does not match");
+  return selected;
+}
+
+/** Select a sole nearby chat attachment without exposing its stored ID to the model. */
+export function selectManagedAttachmentId(messages: readonly RuntimeMessage[], currentTurnId: string): string {
+  return selectedFile(messages, currentTurnId).attachment_id;
+}
+
 /** Check objective source provenance; the Skill still decides whether text confirms a prior attachment. */
 export function resolveManagedAttachment(input: {
   messages: readonly RuntimeMessage[];
   attachment: RuntimeAttachmentRecord;
   currentTurnId: string;
+  allowedExtensions?: readonly string[];
 }): string {
   const { messages, attachment, currentTurnId } = input;
-  if (!currentTurnId || !attachment?.attachment_id) denied("current attachment context is missing");
-  const userMessages = messages.filter(userMessage);
-  const visible = userMessages.filter(message => !message.environmentContext && !injectedSkill(message));
-  const current = visible.at(-1);
-  if (!current || !realUser(current)) return denied("current message cannot be verified");
-  const currentFiles = files(current);
-  let selected: LocalFileBlock | undefined;
-  if (currentFiles.length > 0) {
-    if (currentFiles.length > 1) denied("multiple attachments require confirmation in a following message");
-    selected = currentFiles[0];
-    if (selected?.turn_id !== currentTurnId) denied("current attachment turn does not match");
-  } else {
-    const previous = visible.at(-2);
-    if (!previous || !realUser(previous)) return denied("attachment is not from the current or immediately previous message");
-    const previousIndex = messages.lastIndexOf(previous);
-    const currentIndex = messages.lastIndexOf(current);
-    if (messages.slice(previousIndex + 1, currentIndex).some((message) => message.role === "compactionSummary")) {
-      return denied("attachment adjacency cannot be verified across compaction");
-    }
-    selected = files(previous).find(file => file.attachment_id === attachment.attachment_id);
-    if (!selected) return denied("attachment is not from the current or immediately previous message");
-    if (selected.turn_id === currentTurnId) denied("previous attachment turn does not match");
-  }
+  if (!attachment?.attachment_id) denied("current attachment context is missing");
+  const selected = selectedFile(messages, currentTurnId, attachment.attachment_id);
   if (!selected || selected.attachment_id !== attachment.attachment_id
     || selected.turn_id !== attachment.turn_id || selected.path !== attachment.path
     || selected.name !== attachment.name || selected.size_bytes !== attachment.size_bytes) {
     denied("attachment record does not match the selected message file");
   }
-  if (!isAbsolute(attachment.path) || extname(attachment.path).toLowerCase() !== ".xlsx") {
-    denied("selected attachment must be an absolute XLSX file");
+  if (!isAbsolute(attachment.path) || !(input.allowedExtensions ?? [".xlsx"]).includes(extname(attachment.path).toLowerCase())) {
+    denied(input.allowedExtensions ? "selected attachment has an unsupported extension or path" : "selected attachment must be an absolute XLSX file");
   }
   try {
     if (lstatSync(attachment.path).isSymbolicLink()) denied("selected attachment is a symbolic link");
@@ -76,7 +91,9 @@ export function resolveManagedAttachment(input: {
     return path;
   } catch (cause) {
     if (cause instanceof ToolExecutionError) throw cause;
-    if (cause instanceof Error && "code" in cause && cause.code === "ENOENT") denied("selected attachment is missing");
+    if (cause instanceof Error && "code" in cause && cause.code === "ENOENT") {
+      denied(`selected attachment is missing: ${safeToolFailureObservation(cause.message.replaceAll(attachment.path, "[attachment-path]"))}`);
+    }
     throw cause;
   }
 }

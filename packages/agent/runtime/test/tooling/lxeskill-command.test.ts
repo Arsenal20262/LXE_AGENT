@@ -227,3 +227,55 @@ test("managed execution rejects an undeclared attachment argument", () => {
     expect(() => loadLxeSkillCommandCatalog(invalidPath)).toThrow(/managed execution/);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
+
+test("managed catalog accepts only zero or one flat deliverable declaration", () => {
+  const path = join(process.cwd(), "python/lxeskill_cli/lxeskill/catalog.json");
+  const original = JSON.parse(readFileSync(path, "utf8")) as { entries: Array<Record<string, unknown>> };
+  const directory = mkdtempSync(join(tmpdir(), "lxe-managed-artifacts-"));
+  try {
+    const invalidPath = join(directory, "catalog.json");
+    for (const artifactPaths of [
+      null,
+      [{ field: "output_xlsx", role: "diagnostic" }],
+      [{ field: "artifacts[].path", role: "deliverable" }],
+      [{ field: "output.path", role: "deliverable" }],
+      [{ field: "output_xlsx", role: "deliverable" }, { field: "audit", role: "diagnostic" }],
+      [{ field: "output_xlsx", role: "deliverable", extension: ".csv" }],
+    ]) {
+      const document = structuredClone(original);
+      document.entries.find(entry => entry.name === "vietnam_replenishment_generate")!.artifact_paths = artifactPaths;
+      writeFileSync(invalidPath, JSON.stringify(document));
+      expect(() => loadLxeSkillCommandCatalog(invalidPath)).toThrow(/managed execution artifact/);
+    }
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("preselection probes are internal, unexposed and accept only one source path", () => {
+  const path = join(process.cwd(), "python/lxeskill_cli/lxeskill/catalog.json");
+  const probe = loadLxeSkillCommandCatalog(path).filter(entry => entry.preselectionProbe);
+  expect(probe.map(entry => entry.name)).toEqual(["vietnam_replenishment_probe_sku"]);
+  expect(probe[0]).toMatchObject({
+    command: "lxeskill vietnam sku probe",
+    visibility: "internal",
+    ownerSkills: [],
+    preselectionProbe: true,
+    timeoutMs: 30000,
+  });
+
+  const original = JSON.parse(readFileSync(path, "utf8")) as { entries: Array<Record<string, unknown>> };
+  const directory = mkdtempSync(join(tmpdir(), "lxe-preselection-catalog-"));
+  try {
+    const invalidPath = join(directory, "catalog.json");
+    for (const change of [
+      { visibility: "business" }, { exposed: true }, { session_mode: "lxe_session" },
+      { owner_skills: ["stock"] }, { preselection_probe: false },
+      { input_schema: { type: "object", properties: {}, additionalProperties: false } },
+      { artifact_paths: [{ field: "output", role: "deliverable" }] },
+    ]) {
+      const document = structuredClone(original);
+      Object.assign(document.entries.find(entry => entry.name === "vietnam_replenishment_probe_sku")!, change);
+      writeFileSync(invalidPath, JSON.stringify(document));
+      expect(() => loadLxeSkillCommandCatalog(invalidPath)).toThrow(/preselection probe/);
+    }
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
