@@ -1,4 +1,4 @@
-param([Parameter(Mandatory=$true)][string]$Qualification)
+param([Parameter(Mandatory=$true)][string]$Qualification,[switch]$ResumeMigration)
 $ErrorActionPreference = 'Stop'
 $q = Get-Content -LiteralPath $Qualification -Raw -Encoding UTF8 | ConvertFrom-Json
 if ($q.appId -notmatch '^com\.lxe\.agent\.updatequalification\.[a-f0-9]{8}$') { throw 'Isolated application identity required' }
@@ -42,28 +42,38 @@ function Uninstall([string]$root) {
     Assert (-not (Test-Path -LiteralPath (Join-Path $root ($q.productName + '.exe')))) 'Program was not removed'
 }
 
-Install $q.artifacts[1] $first
-Bun-Step @('scripts/qualify-desktop-data.ts','seed',$Qualification)
-Bun-Step @('scripts/qualify-desktop-data.ts','native',$Qualification,'seed',$first)
+if (-not $ResumeMigration) {
+    Install $q.artifacts[1] $first
+    Bun-Step @('scripts/qualify-desktop-data.ts','seed',$Qualification)
+    Bun-Step @('scripts/qualify-desktop-data.ts','native',$Qualification,'seed',$first)
+} else {
+    Assert (Test-Path -LiteralPath (Join-Path $first 'var\config\secrets.bin')) 'Cannot resume without the original encrypted fixture'
+}
 $original = Hashes (Join-Path $first 'var')
+[IO.File]::WriteAllText((Join-Path $q.output 'source-before.sha256'),$original)
 Install $q.artifacts[2] $second
 Assert (Test-Path -LiteralPath (Join-Path $first ($q.productName + '.exe'))) 'Changing directory removed the original program'
 Assert ((Hashes (Join-Path $first 'var')) -eq $original) 'Changing directory modified the original data'
 Assert (Test-Path -LiteralPath (Join-Path $second 'lxe-legacy-data.ini')) 'Installer did not preserve migration provenance'
 
 # Exercise the packaged main process, including bootstrap profile and automatic relaunch.
+$oldFailure = if (Test-Path -LiteralPath ($data + '.migration-error.json')) { [IO.File]::ReadAllText($data + '.migration-error.json') } else { '' }
 $started = Start-Process -FilePath (Join-Path $second ($q.productName + '.exe')) -PassThru
 try {
     $marker = Join-Path $data 'migrations\data-location-v1.json'
     $deadline = [DateTime]::UtcNow.AddSeconds(120)
     while (-not (Test-Path -LiteralPath $marker) -and [DateTime]::UtcNow -lt $deadline) {
-        if (Test-Path -LiteralPath ($data + '.migration-error.json')) { throw ([IO.File]::ReadAllText($data + '.migration-error.json')) }
+        if (Test-Path -LiteralPath ($data + '.migration-error.json')) {
+            $failure = [IO.File]::ReadAllText($data + '.migration-error.json')
+            if ($failure -ne $oldFailure) { throw $failure }
+        }
         Start-Sleep -Milliseconds 300
     }
     Assert (Test-Path -LiteralPath $marker) 'Packaged automatic migration did not finish'
     Start-Sleep -Seconds 3
 } finally { Stop-IsolatedApplication $second }
 Assert ((Hashes (Join-Path $first 'var')) -eq $original) 'Migration changed the source data'
+[IO.File]::WriteAllText((Join-Path $q.output 'source-after.sha256'),(Hashes (Join-Path $first 'var')))
 
 $hidden = $first + '.qualification-backup'
 Move-Item -LiteralPath $first -Destination $hidden

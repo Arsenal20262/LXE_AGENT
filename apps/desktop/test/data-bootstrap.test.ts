@@ -6,7 +6,7 @@ import { bootstrapUserData } from "../src/main/data-bootstrap";
 import { DATA_LOCATION_MARKER } from "../src/main/data-migration";
 import type { DesktopPaths } from "../src/main/paths";
 
-const unusedStorage = {isEncryptionAvailable: () => {throw new Error("must not read credentials");},decryptString: () => "",encryptString: () => Buffer.alloc(0)};
+const unusedStorage = async () => {throw new Error("must not read credentials");};
 test("multiple legacy sources are shown for selection and cancellation leaves them untouched", async () => {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "lxe-data-selection-")));
   try {

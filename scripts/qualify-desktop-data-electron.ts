@@ -7,6 +7,7 @@ import { bootstrapUserData } from "../apps/desktop/src/main/data-bootstrap";
 import { acquireDataRootLock, dataRootInitialized } from "../apps/desktop/src/main/data-migration";
 import { resolveDesktopPaths } from "../apps/desktop/src/main/paths";
 import { cloneSecrets } from "../apps/desktop/src/main/config-store/model";
+import { validateCredentialCopy } from "../apps/desktop/src/main/data-credentials";
 
 const input = process.argv.find(value => value.startsWith("--qualification="))!.slice("--qualification=".length);
 const q = JSON.parse(readFileSync(input,"utf8"));
@@ -35,7 +36,7 @@ app.whenReady().then(async () => {
     const release = acquireDataRootLock(data);
     try {
       const paths = resolveDesktopPaths({packaged:true, appPath:join(install,"resources/app.asar"),executablePath:join(install,q.productName+".exe"),resourcesPath:join(install,"resources"),environment:{LOCALAPPDATA:process.env.LOCALAPPDATA},dataDirectoryName:q.productName});
-      assert.equal(await bootstrapUserData(paths,q.appId,safeStorage,async () => {throw new Error("Unexpected ambiguous sources");}),true);
+      assert.equal(await bootstrapUserData(paths,q.appId,copy => validateCredentialCopy(copy,join(install,q.productName+".exe")),async () => {throw new Error("Unexpected ambiguous sources");}),true);
     } finally {release();}
   }
   if (mode !== "seed") {

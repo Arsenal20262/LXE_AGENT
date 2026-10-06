@@ -96,6 +96,18 @@ import { WindowsWireGuardProvisioner } from "./main/wireguard-provisioner";
 import { acquireDataRootLock, dataRootInitialized } from "./main/data-migration";
 import { bootstrapUserData } from "./main/data-bootstrap";
 import { normalizeDesktopPlatform } from "./platform";
+import { MIGRATION_CREDENTIAL_ARGUMENT, runMigrationCredentialProbe, validateCredentialCopy } from "./main/data-credentials";
+
+const credentialProbe = process.argv.find(value => value.startsWith(MIGRATION_CREDENTIAL_ARGUMENT));
+if (credentialProbe !== undefined) {
+  void runMigrationCredentialProbe(credentialProbe.slice(MIGRATION_CREDENTIAL_ARGUMENT.length), app, safeStorage)
+    .then(() => app.exit(0)).catch(error => {
+      process.stderr.write(`${error instanceof Error ? error.stack : error}\n`);
+      app.exit(1);
+    });
+} else startDesktop();
+
+function startDesktop(): void {
 
 const logger = createLogger("desktop.main");
 
@@ -733,7 +745,7 @@ async function bootstrap(): Promise<void> {
 if (hasSingleInstanceLock) {
   app.whenReady().then(async () => {
     if (needsDataBootstrap) {
-      const completed = await bootstrapUserData(desktopPaths, dataIdentity.lxeDataAppId ?? "com.lxe.agent", safeStorage, async sources => {
+      const completed = await bootstrapUserData(desktopPaths, dataIdentity.lxeDataAppId ?? "com.lxe.agent", validateCredentialCopy, async sources => {
         const result = await dialog.showMessageBox({type: "question", title: "选择旧数据", message: "发现多份 LXE Agent 数据，请选择要迁移的一份。原数据将保留。",
           buttons: [...sources, "取消"], cancelId: sources.length, noLink: true});
         return sources[result.response];
@@ -766,3 +778,4 @@ app.on("before-quit", (event) => {
   event.preventDefault();
   void shutdownApplication();
 });
+}

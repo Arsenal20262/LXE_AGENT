@@ -1,14 +1,12 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { dataRootInitialized, initializeDataRoot, legacyDataSources } from "./data-migration";
 import { relocateGatewayData } from "./gateway-store";
 import type { DesktopPaths } from "./paths";
-import type { SafeStoragePort } from "./config-store/repository";
 
 const run = promisify(execFile);
-export async function bootstrapUserData(paths: DesktopPaths, appId: string, safeStorage: SafeStoragePort,
+export async function bootstrapUserData(paths: DesktopPaths, appId: string, validateCredentials: (copy: string) => Promise<void>,
   select: (sources: string[]) => Promise<string | undefined>): Promise<boolean> {
   if (dataRootInitialized(paths.dataRoot)) return true;
   const sources = legacyDataSources(paths.projectRoot, appId);
@@ -25,12 +23,7 @@ export async function bootstrapUserData(paths: DesktopPaths, appId: string, safe
       relocateGatewayData(join(copy, "db", "gateway.sqlite3"), from, to);
       await run(paths.managedPythonPath, ["-m", "shared.db.relocate_data", "--copy", copy, "--source", from, "--target", to], {windowsHide: true, maxBuffer: 1024 * 1024});
     },
-    validateCredentials: async copy => {
-      const secrets = join(copy, "config", "secrets.bin");
-      if (!existsSync(secrets)) return;
-      if (!safeStorage.isEncryptionAvailable()) throw new Error("Secure credential storage is unavailable during migration");
-      JSON.parse(safeStorage.decryptString(readFileSync(secrets)));
-    },
+    validateCredentials,
   });
   return true;
 }

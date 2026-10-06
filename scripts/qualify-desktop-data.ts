@@ -6,6 +6,7 @@ import { createRequire } from "node:module";
 import { SqliteRuntimeStore } from "../packages/agent/runtime/src/state/storage";
 import { cloneConfig } from "../apps/desktop/src/main/config-store/model";
 import { resolveMachineIdentity } from "../packages/foundation/core/src/machine-identity";
+import { MIGRATION_CREDENTIAL_ARGUMENT } from "../apps/desktop/src/main/data-credentials";
 
 const [mode,input,submode,install] = process.argv.slice(2);
 const q = JSON.parse(readFileSync(input!,"utf8"));
@@ -31,6 +32,13 @@ if (mode === "seed") {
   const python=new Database(join(source,"db/lxeskill.sqlite3"));
   python.exec("CREATE TABLE ziniao_store_sessions (host_id TEXT NOT NULL, browser_oauth TEXT NOT NULL, browser_id INTEGER NOT NULL, browser_name TEXT DEFAULT '', debugging_port INTEGER DEFAULT 0, download_path TEXT DEFAULT '', browser_path TEXT DEFAULT '', core_type TEXT DEFAULT '', core_version TEXT DEFAULT '', created_at TEXT DEFAULT '', updated_at TEXT DEFAULT '', PRIMARY KEY(host_id,browser_oauth))");
   python.query("INSERT INTO ziniao_store_sessions(host_id,browser_oauth,browser_id,download_path,browser_path) VALUES('qualification','fake',1,?,?)").run(join(source,"downloads"),"C:\\external-browser");python.close();
+} else if(mode === "probe-credentials") {
+  const failure=JSON.parse(readFileSync(target+".migration-error.json","utf8"));
+  assert.ok(failure.stage.startsWith(target+".migrating-"));
+  const desktop=createRequire(resolve("apps/desktop/package.json"));
+  const result=Bun.spawnSync([desktop("electron") as string,resolve("apps/desktop/dist/main.js"),MIGRATION_CREDENTIAL_ARGUMENT+failure.stage],{stdout:"pipe",stderr:"pipe",timeout:90_000,env:{...process.env,ELECTRON_RUN_AS_NODE:undefined}});
+  assert.equal(result.exitCode,0,result.stderr.toString());
+  writeFileSync(join(q.output,"credential-probe-results.json"),JSON.stringify({copied_profile_decrypts:true}));
 } else if (mode === "native") {
   const build=await Bun.build({entrypoints:[resolve("scripts/qualify-desktop-data-electron.ts")],outdir:q.output,target:"node",format:"cjs",external:["electron"]});
   if(!build.success)throw new AggregateError(build.logs,"Native migration probe build failed");
