@@ -116,6 +116,14 @@ if (mode === "run-and-quit") {
   assert.equal((gateway.query("SELECT workspace_directory FROM gateway_sessions").get() as any).workspace_directory,join(target,"workspace"));gateway.close();
   const python=checkedDatabase(join(target,"db/lxeskill.sqlite3"));
   assert.equal((python.query("SELECT download_path FROM ziniao_store_sessions").get() as any).download_path,join(target,"downloads"));python.close();
+  const store=new SqliteRuntimeStore(join(target,"db/agent.sqlite3"));await store.start();
+  try {
+    assert.ok(JSON.stringify(await store.loadMessages("migration")).includes("迁移测试"));
+    for(const item of [await store.resolveAttachment("migration","a"),await store.resolveArtifact("migration","artifact")]){
+      assert.equal(item?.path,join(target,"workspace/中文 file.txt"));
+      assert.equal(readFileSync(item!.path,"utf8"),"preserved workspace data");
+    }
+  } finally {await store.stop();}
   writeFileSync(join(q.output,"data-content-results.json"),JSON.stringify({machine:true,workspace:true,sessions:true,attachments:true,artifacts:true,gateway:true,python:true}));
 } else throw new Error(`Unknown qualification operation: ${mode}`);
 console.log(`PASS isolated data qualification ${mode} ${submode??""}`);
