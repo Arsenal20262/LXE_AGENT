@@ -75,7 +75,8 @@ export function legacyDataSources(installRoot: string, appId: string): string[] 
 const excluded = (name: string): boolean => {
   const path = name.replaceAll("\\", "/");
   return path === "tmp" || path === "electron/cache"
-    || ["config/settings.lock", "config/auth.lock"].includes(path)
+    || ["config/settings.lock", "config/auth.lock", "config/skill-states.local.json.lock"].includes(path)
+    || (/^db\/lxeskill\//.test(path) && path.endsWith(".lock"))
     || (/^electron\//.test(path) && /(^|\/)(Cache|Code Cache|GPUCache|DawnCache|ShaderCache|SingletonLock|SingletonCookie|SingletonSocket|LOCK|lockfile)$/.test(path));
 };
 async function hash(path: string): Promise<string> {

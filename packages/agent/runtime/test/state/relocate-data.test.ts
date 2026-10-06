@@ -26,9 +26,14 @@ test("offline relocation preserves history text and rebuilds attachment offsets 
     await store.ensureSession({session_id: "s", source: {}, workspace: {directory: workspace, worktree: workspace}});
     await store.appendMessage("s", {role:"user",content:[{type:"text",text:`Read ${workspace}`},{type:"local_file",attachment_id:"a",turn_id:"t",path:join(workspace,"中文.txt"),name:"中文.txt",size_bytes:3,media_type:"text/plain",ts:1}]}, "turn_input", "t");
     await store.stop();
+    mkdirSync(join(source, "config"), {recursive: true});
+    writeFileSync(join(source, "config/skill-states.local.json"), JSON.stringify({version:1,disabled:[join(source,"skills/disabled/SKILL.md"),join(root,"external/SKILL.md")]}));
     const before = readFileSync(join(source,"db/session_transcripts/s.jsonl"));
     cpSync(source, copy, {recursive: true});
     await relocateAgentData(copy,source,target);
+    const disabled = JSON.parse(readFileSync(join(copy, "config/skill-states.local.json"), "utf8")).disabled;
+    const key = (path: string) => process.platform === "win32" ? path.toLowerCase() : path;
+    expect(disabled).toEqual([join(target,"skills/disabled",process.platform === "win32" ? "skill.md" : "SKILL.md"),key(join(root,"external/SKILL.md"))]);
     expect(readFileSync(join(source,"db/session_transcripts/s.jsonl"))).toEqual(before);
     const history = readFileSync(join(copy,"db/session_transcripts/s.jsonl"),"utf8");
     expect(history).toContain(JSON.stringify(`Read ${workspace}`));

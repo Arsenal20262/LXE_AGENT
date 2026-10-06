@@ -4,10 +4,16 @@ import { join } from "node:path";
 import { relocateStoredPath } from "@lxe/core";
 import { SqliteRuntimeStore } from "./storage";
 import { parseDocument } from "yaml";
+import { readSkillStates } from "../tooling/skill-files";
 
 /** Operates only on an offline COPY. Never opens the source database. */
 export async function relocateAgentData(copy: string, source: string, target: string): Promise<void> {
   const relocate = (value: string) => relocateStoredPath(value, source, target);
+  const skillState = join(copy, "config", "skill-states.local.json");
+  if (existsSync(skillState)) {
+    const disabled = Object.keys(readSkillStates(skillState)).map(relocate);
+    writeFileSync(skillState, JSON.stringify({version: 1, disabled}, null, 2) + "\n");
+  }
   const mcp = join(copy, "config", "mcp_servers.local.yaml");
   if (existsSync(mcp)) {
     const document = parseDocument(readFileSync(mcp, "utf8"));
