@@ -92,6 +92,43 @@
       "input_schema": {"type": "object", "properties": {"action": {"type": "string", "enum": ["list"]}}, "additionalProperties": false}
     },
     {
+      "name": "assets_vietnam_sku_install",
+      "command_path": ["assets", "vietnam", "sku", "install"],
+      "visibility": "internal",
+      "session_mode": "none",
+      "module": "services.assets.vietnam_sku_install",
+      "owner_skills": [],
+      "timeout_ms": 180000,
+      "exposed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "source_path": {"type": "string", "minLength": 1},
+          "expected_revision": {"type": "string", "pattern": "^(?:[0-9a-f]{32})?$"}
+        },
+        "required": ["source_path", "expected_revision"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "assets_vietnam_sku_rollback",
+      "command_path": ["assets", "vietnam", "sku", "rollback"],
+      "visibility": "internal",
+      "session_mode": "none",
+      "module": "services.assets.vietnam_sku_rollback",
+      "owner_skills": [],
+      "timeout_ms": 30000,
+      "exposed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "expected_revision": {"type": "string", "pattern": "^[0-9a-f]{32}$"}
+        },
+        "required": ["expected_revision"],
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "media_synthetic_performer",
       "command_path": ["media", "synthetic-performer"],
       "legacy_aliases": ["media_synthetic_performer"],
