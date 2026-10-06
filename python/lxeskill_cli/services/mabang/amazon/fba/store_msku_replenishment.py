@@ -633,11 +633,12 @@ def _display_optional_int(value: int | None) -> int | str:
 
 
 def _row_key(row: dict[str, Any] | InventoryInputRow) -> tuple[str, str, str, str]:
+    """Match blank source parents to the inventory reader's display placeholder."""
     if isinstance(row, InventoryInputRow):
-        return (row.msku, row.parent_asin, row.asin, row.local_sku)
+        return (row.msku, _clean_text(row.parent_asin) or "未填写父ASIN", row.asin, row.local_sku)
     return (
         _clean_text(row.get("MSKU")),
-        _clean_text(row.get("父ASIN")),
+        _clean_text(row.get("父ASIN")) or "未填写父ASIN",
         _clean_text(row.get("ASIN")),
         _clean_text(row.get("本地SKU")),
     )
