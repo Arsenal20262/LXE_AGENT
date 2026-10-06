@@ -12,6 +12,10 @@ function Prepare([string]$name) {
     $script:result = $install + '.log'
     [IO.Directory]::CreateDirectory((Join-Path $install 'var\db')) | Out-Null
     [IO.Directory]::CreateDirectory($stage) | Out-Null
+    foreach ($root in @($install, $stage)) {
+        [IO.Directory]::CreateDirectory((Join-Path $root 'resources')) | Out-Null
+        [IO.File]::WriteAllText((Join-Path $root 'resources\app.asar'), 'qualification application')
+    }
     [IO.File]::WriteAllText((Join-Path $install 'a.exe'), 'old-a')
     [IO.File]::WriteAllText((Join-Path $install 'z.exe'), 'old-z')
     [IO.File]::WriteAllText((Join-Path $install 'var\db\agent.sqlite3'), 'database sentinel')
@@ -19,7 +23,7 @@ function Prepare([string]$name) {
     [IO.File]::WriteAllText((Join-Path $stage 'z.exe'), 'new-z')
 }
 function Run([string]$action, [int]$expected=0) {
-    & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $helper -Action $action -InstallRoot $install -StageRoot $stage -BackupRoot $backup -ResultPath $result
+    & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $helper -Action $action -InstallRoot $install -StageRoot $stage -BackupRoot $backup -ResultPath $result -ExecutableName 'a.exe'
     Assert ($LASTEXITCODE -eq $expected) "$action exit $LASTEXITCODE, expected $expected`: $([IO.File]::ReadAllText($result))"
     Assert ([IO.File]::ReadAllText((Join-Path $install 'var\db\agent.sqlite3')) -eq 'database sentinel') 'var was modified'
 }
@@ -55,5 +59,18 @@ Prepare 'cleanup-diagnostic'
 Run 'Commit'
 Assert ([IO.File]::ReadAllText($result).Contains('fixture extraction failure')) 'Cleanup overwrote the original failure'
 $passed += 'staging cleanup preserves the original extraction diagnostic'
+Prepare 'data-overlap'
+$previousDataRoot = $env:LXE_DATA_ROOT
+try {
+    $env:LXE_DATA_ROOT = Join-Path $install 'data'
+    Run 'Promote' 2
+} finally { $env:LXE_DATA_ROOT = $previousDataRoot }
+Assert ([IO.File]::ReadAllText((Join-Path $install 'a.exe')) -eq 'old-a') 'Overlapping data directory changed program'
+$passed += 'installation cannot overlap an explicit data directory'
+Prepare 'unrelated-directory'
+Remove-Item -LiteralPath (Join-Path $install 'resources\app.asar')
+Run 'Promote' 2
+Assert ([IO.File]::ReadAllText((Join-Path $install 'a.exe')) -eq 'old-a') 'Unrelated nonempty directory was overwritten'
+$passed += 'unrelated nonempty directories are rejected without changes'
 $passed | ForEach-Object { Write-Host "PASS $_" }
 Write-Host "Passed $($passed.Count) Windows filesystem scenarios. Artifacts: $OutputRoot"
