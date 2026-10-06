@@ -714,3 +714,27 @@ def test_absent_skill_scope_is_unrestricted(monkeypatch, capsys) -> None:
     catalog = load_catalog()
     visible = [entry for entry in catalog.values() if str(entry.get("visibility") or "") != "internal"]
     assert len(record["data"]["commands"]) == len(visible)
+
+
+def test_only_vietnam_commands_opt_into_managed_execution() -> None:
+    catalog = load_catalog()
+    managed = {name: entry["managed_execution"] for name, entry in catalog.items() if "managed_execution" in entry}
+    assert managed == {
+        "vietnam_replenishment_bind_sku": {"attachment_argument": "source_path"},
+        "vietnam_replenishment_generate": {},
+    }
+
+
+def test_managed_execution_rejects_undeclared_attachment_argument() -> None:
+    from lxeskill.business import validate_managed_execution
+
+    entry = {
+        "name": "synthetic_bind",
+        "visibility": "business",
+        "command_path": ["synthetic", "bind"],
+        "input_schema": {"type": "object", "properties": {"source_path": {"type": "string"}},
+                         "required": ["source_path"], "additionalProperties": False},
+        "managed_execution": {"attachment_argument": "other_path"},
+    }
+    with pytest.raises(RuntimeError, match="managed execution"):
+        validate_managed_execution(entry)

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   loadLxeSkillCommandCatalog,
@@ -201,4 +202,28 @@ test("Mabang Brazil delivers original batches through a separate ERP skill", () 
     artifactPaths: [{ field: "artifacts[].path", role: "deliverable" }],
   });
   expect(loadLxeSkillDatasets(path).find(entry => entry.id === "mabang_brazil_exports")?.dir).toBe("mabang/brazil/exports");
+});
+
+
+test("only the two Vietnam commands opt into managed execution", () => {
+  const path = join(process.cwd(), "python/lxeskill_cli/lxeskill/catalog.json");
+  const managed = loadLxeSkillCommandCatalog(path).filter(entry => entry.managedExecution);
+  expect(managed.map(entry => entry.name)).toEqual([
+    "vietnam_replenishment_bind_sku", "vietnam_replenishment_generate",
+  ]);
+  expect(managed[0]?.managedExecution).toEqual({ attachmentArgument: "source_path" });
+  expect(managed[1]?.managedExecution).toEqual({});
+});
+
+test("managed execution rejects an undeclared attachment argument", () => {
+  const path = join(process.cwd(), "python/lxeskill_cli/lxeskill/catalog.json");
+  const document = JSON.parse(readFileSync(path, "utf8")) as { entries: Array<Record<string, unknown>> };
+  const bind = document.entries.find(entry => entry.name === "vietnam_replenishment_bind_sku")!;
+  bind.managed_execution = { attachment_argument: "other_path" };
+  const directory = mkdtempSync(join(tmpdir(), "lxe-managed-catalog-"));
+  try {
+    const invalidPath = join(directory, "catalog.json");
+    writeFileSync(invalidPath, JSON.stringify(document));
+    expect(() => loadLxeSkillCommandCatalog(invalidPath)).toThrow(/managed execution/);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
 });
