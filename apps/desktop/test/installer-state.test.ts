@@ -6,6 +6,12 @@ const installer = readFileSync(resolve(import.meta.dirname, "../resources/instal
   .replaceAll("\r\n", "\n");
 
 describe("Windows installer runtime state", () => {
+  test("an application update clears only the legacy injected var override", () => {
+    const update=readFileSync(resolve(import.meta.dirname,"../resources/update-installer.nsh"),"utf8");
+    expect(update).toContain('${If} ${isUpdated}\n    ReadEnvStr $R0 "LXE_DATA_ROOT"');
+    expect(update).toContain('${If} $R0 == "$INSTDIR\\var"');
+    expect(update).toContain('SetEnvironmentVariable(t "LXE_DATA_ROOT", p 0)');
+  });
   test("uninstall always preserves var and never removes the tunnel", () => {
     expect(installer).toContain("Call un.LxeRemoveProgramFilesPreservingVar");
     expect(installer).toContain('StrCmp $R1 "var" lxe_remove_next');

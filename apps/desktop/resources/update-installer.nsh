@@ -40,6 +40,14 @@ FunctionEnd
 !macroend
 
 !macro LxeStageApplication
+  # Older desktops inject their default var into every child process. It is not
+  # a user override; carrying it across an update would suppress first-run migration.
+  ${If} ${isUpdated}
+    ReadEnvStr $R0 "LXE_DATA_ROOT"
+    ${If} $R0 == "$INSTDIR\var"
+      System::Call 'kernel32::SetEnvironmentVariable(t "LXE_DATA_ROOT", p 0)i.r0'
+    ${EndIf}
+  ${EndIf}
   ReadRegStr $LxePrevious SHELL_CONTEXT "${INSTALL_REGISTRY_KEY}" InstallLocation
   ReadRegStr $LxePreviousUser HKCU "${INSTALL_REGISTRY_KEY}" InstallLocation
   ReadRegStr $LxePreviousMachine HKLM "${INSTALL_REGISTRY_KEY}" InstallLocation
