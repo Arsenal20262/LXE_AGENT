@@ -12,6 +12,19 @@ export function updateConnectionReady(state:UpdateCloudState):boolean {
   && state.native_access?.status === "connected";
 }
 
+export class UpdateConnectionMonitor {
+ private ready=false;
+ restored(state:UpdateCloudState):boolean {
+  if(!state.device_context?.server_url || state.device_context.pending_device
+   || ["offline","denied","error"].includes(state.native_access?.status ?? "")) {
+   this.ready=false;return false;
+  }
+  // Periodic cloud probes transiently enter pending/checking without going offline.
+  if(!updateConnectionReady(state))return false;
+  const restored=!this.ready;this.ready=true;return restored;
+ }
+}
+
 export class DesktopUpdateApi implements UpdateApi{
  constructor(private cloud:()=>UpdateCloudState,private version:string,private buildId?:string,
   private request:(url:URL,init:RequestInit)=>Promise<Response> = (url,init)=>fetch(url,init)){}

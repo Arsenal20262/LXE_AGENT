@@ -1,6 +1,6 @@
 import {expect,test} from "bun:test";
 import type {DesktopCloudState,DesktopUpdateRelease} from "@lxe/desktop-protocol";
-import {DesktopUpdateApi,updateConnectionReady} from "../src/main/update-api";
+import {DesktopUpdateApi,UpdateConnectionMonitor,updateConnectionReady} from "../src/main/update-api";
 import {companyServerUrl} from "../src/main/company-server";
 
 function fixture(managed=false) {
@@ -34,6 +34,23 @@ test("offline manual checks preserve the actual network error and recovery enabl
  f.state.native_access!.status="connected";f.respond(()=>Response.json({state:"up_to_date"}));
  expect(updateConnectionReady(f.state)).toBe(true);
  expect((await f.api.latest()).state).toBe("up_to_date");
+});
+
+test("routine cloud probes do not wake updates, but actual network recovery wakes once",()=>{
+ const f=fixture(),monitor=new UpdateConnectionMonitor();
+ expect(monitor.restored(f.state)).toBe(true);
+ for(const status of ["pending","checking","connected","connected"] as const) {
+  f.state.native_access!.status=status;
+  expect(monitor.restored(f.state)).toBe(false);
+ }
+ for(const failure of ["offline","denied","error"] as const) {
+  f.state.native_access!.status=failure;expect(monitor.restored(f.state)).toBe(false);
+  f.state.native_access!.status="checking";expect(monitor.restored(f.state)).toBe(false);
+  f.state.native_access!.status="connected";expect(monitor.restored(f.state)).toBe(true);
+  expect(monitor.restored(f.state)).toBe(false);
+ }
+ f.state.device_context!.server_url="";expect(monitor.restored(f.state)).toBe(false);
+ f.state.device_context!.server_url=companyServerUrl(f.config);expect(monitor.restored(f.state)).toBe(true);
 });
 
 test("missing address and pending device identity block requests before transport",async()=>{

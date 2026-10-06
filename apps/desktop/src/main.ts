@@ -10,7 +10,7 @@ import { readFileSync } from "node:fs";
 import { prepareUpdate } from "./main/update-preparation";
 import { DesktopUpdateService } from "./main/update-service";
 import { ElectronUpdateInstaller } from "./main/update-electron";
-import { DesktopUpdateApi, updateConnectionReady } from "./main/update-api";
+import { DesktopUpdateApi, UpdateConnectionMonitor, updateConnectionReady } from "./main/update-api";
 import { join } from "node:path";
 import {
   app,
@@ -241,11 +241,9 @@ async function bootstrap(): Promise<void> {
       if (!browserWindow.isDestroyed()) browserWindow.webContents.send(IPC_CHANNELS.statusChanged, health);
     }
   };
-  let updateNetworkReady = false;
+  const updateConnection = new UpdateConnectionMonitor();
   const broadcastCloudState = (state: DesktopCloudState): void => {
-    const connected = updateConnectionReady(state);
-    if (connected && !updateNetworkReady) activeUpdates?.wake();
-    updateNetworkReady = connected;
+    if (updateConnection.restored(state)) activeUpdates?.wake();
     for (const browserWindow of applicationWindows()) {
       if (!browserWindow.isDestroyed()) browserWindow.webContents.send(IPC_CHANNELS.cloudStateChanged, state);
     }
