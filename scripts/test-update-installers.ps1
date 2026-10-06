@@ -50,7 +50,7 @@ for ($i=1; $i -lt 3; $i++) {
     Assert ((Get-FileHash -LiteralPath (Join-Path $cache 'installer.exe') -Algorithm SHA512).Hash -eq (Get-FileHash -LiteralPath $q.artifacts[$i] -Algorithm SHA512).Hash) 'Installed cache does not match committed installer'
     Write-Host "PASS installed version 0.0.$($i+1), preserved var, seeded matching installer cache"
 }
-# Default uninstall must preserve data. The explicit delete fixture uses a no-op tunnel helper.
+# Both default uninstall and legacy deletion flags must preserve data.
 $uninstaller = Get-ChildItem -LiteralPath $install -Filter 'Uninstall*.exe' | Select-Object -First 1
 Assert ($null -ne $uninstaller) 'Uninstaller missing'
 $process = Start-Process -FilePath $uninstaller.FullName -ArgumentList '/S' -Wait -PassThru
@@ -60,8 +60,8 @@ Assert ((Data-Hashes) -eq $before) 'Default uninstall removed data'
 Install $q.artifacts[2]
 $uninstaller = Get-ChildItem -LiteralPath $install -Filter 'Uninstall*.exe' | Select-Object -First 1
 $process = Start-Process -FilePath $uninstaller.FullName -ArgumentList '/S /DELETE_LXE_DATA=1' -Wait -PassThru
-Assert ($process.ExitCode -eq 0) 'Explicit data removal failed'
-Wait-Removed (Join-Path $install 'var')
-Assert (-not (Test-Path -LiteralPath (Join-Path $install 'var'))) 'Explicit uninstall retained data unexpectedly'
-[IO.File]::WriteAllText((Join-Path $q.output 'install-results.json'), '{"legacy_upgrade":true,"new_upgrade":true,"var_preserved":true,"cache_matches":true,"locked_file_rollback":true,"uninstall_keep":true,"uninstall_delete":true}')
-Write-Host "PASS default uninstall retains var; explicit fixture deletion removes it; no real tunnel changed"
+Assert ($process.ExitCode -eq 0) 'Uninstall with the legacy data flag failed'
+Wait-Removed (Join-Path $install ($q.productName + '.exe'))
+Assert ((Data-Hashes) -eq $before) 'Legacy deletion flag removed data'
+[IO.File]::WriteAllText((Join-Path $q.output 'install-results.json'), '{"legacy_upgrade":true,"new_upgrade":true,"var_preserved":true,"cache_matches":true,"locked_file_rollback":true,"uninstall_keep":true,"legacy_delete_ignored":true}')
+Write-Host "PASS both default and legacy deletion uninstall retain data; no real tunnel changed"

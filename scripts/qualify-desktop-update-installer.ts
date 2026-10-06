@@ -43,7 +43,7 @@ export async function qualify(payload:string,legacyRef:string,resumeRoot?:string
    win:{...production.win,artifactName:`LXE-Update-Qualification-${version}.exe`},extraMetadata:metadata,
    directories:{...production.directories,output:join(output,version)},
    nsis:{...production.nsis,include:n===1?legacy:join(desktop,"resources/installer.nsh"),
-    useZip:n===1,differentialPackage:n!==1,createDesktopShortcut:false,createStartMenuShortcut:false},publish:null};
+    useZip:n===1,differentialPackage:n!==1,shortcutName:product,createDesktopShortcut:true,createStartMenuShortcut:true},publish:null};
   console.log("Building isolated installer "+version+" using "+config.appId);
   await build({projectDir:desktop,prepackaged:clone,config,targets:Platform.WINDOWS.createTarget(["nsis"],Arch.x64),publish:"never"});
   artifacts.push(join(output,version,`LXE-Update-Qualification-${version}.exe`));

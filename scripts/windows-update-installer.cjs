@@ -61,8 +61,8 @@ Function un.onInit
   \${If} $0 == "all"
     StrCpy $installMode "all"
     SetShellVarContext all
-  \${ElseIf} $0 == "current"
-    StrCpy $installMode "current"
+  \${ElseIf} $0 == "CurrentUser"
+    StrCpy $installMode "CurrentUser"
     SetShellVarContext current
   \${EndIf}
   ReadRegStr $0 SHELL_CONTEXT "\${INSTALL_REGISTRY_KEY}" InstallLocation
@@ -70,6 +70,14 @@ Function un.onInit
   \${If} $0 == $INSTDIR
     StrCpy $LxeOwnsRegistration "1"
   \${EndIf}`);
+ s=replaceOnce(s,'Function un.checkAppRunning\n  !insertmacro CHECK_APP_RUNNING\nFunctionEnd',`Function un.checkAppRunning
+  ReadRegStr $0 SHELL_CONTEXT "\${INSTALL_REGISTRY_KEY}" InstallLocation
+  \${If} $0 == $INSTDIR
+    !insertmacro CHECK_APP_RUNNING
+  \${EndIf}
+FunctionEnd`);
+ s=replaceOnce(s,'    call un.checkAppRunning\n  \${else}','    # Check after restoring the original uninstaller directory.\n  \${else}');
+ s=replaceOnce(s,'    !insertmacro customUnInit\n  !endif\nFunctionEnd','    !insertmacro customUnInit\n  !endif\n  ${If} ${Silent}\n    Call un.checkAppRunning\n  ${EndIf}\nFunctionEnd');
  s=replaceOnce(s,'  \${ifNot} \${isKeepShortcuts}','  \${If} $LxeOwnsRegistration == "1"\n  \${ifNot} \${isKeepShortcuts}');
  s=replaceOnce(s,'  Var /GLOBAL isDeleteAppData','  \${EndIf}\n\n  Var /GLOBAL isDeleteAppData');
  const start=s.indexOf('  Var /GLOBAL isDeleteAppData'),end=s.indexOf('  DeleteRegKey SHELL_CONTEXT "${UNINSTALL_REGISTRY_KEY}"');
