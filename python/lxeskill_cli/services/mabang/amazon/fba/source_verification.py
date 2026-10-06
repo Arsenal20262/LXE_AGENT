@@ -22,6 +22,8 @@ from .store_resolver import ID_TYPE_FBA_WAREHOUSE, ID_TYPE_SHOP
 
 SHEET = "源数据核验信息"
 VERSION = 4
+ROW_METADATA_KIND = "metadata_rows_v1"
+MAX_CELL_CHARACTERS = 32767
 TAG_COLUMNS = ("绑定核验结果", "是否通过绑定核验", "未通过原因")
 
 
@@ -112,13 +114,28 @@ def _table(workbook: Any) -> tuple[list[str], list[dict[str, Any]], list[int]]:
 
 
 def _write_info(workbook: Any, metadata: dict[str, Any], skus: tuple[LocalSkuDefinition, ...] = ()) -> None:
+    # Keep the logical metadata unchanged: its fingerprint includes the ordered
+    # unverified records, but their storage must not grow a single Excel cell.
+    records = [(ROW_METADATA_KIND, {key: value for key, value in metadata.items() if key != "unverified_rows"})]
+    records.extend(("unverified", item) for item in metadata["unverified_rows"])
+    records.extend(("sku", sku.to_record()) for sku in skus)
+    serialized = []
+    for row_number, (kind, record) in enumerate(records, 2):
+        text = json.dumps(record, ensure_ascii=False)
+        if len(text) > MAX_CELL_CHARACTERS:
+            raise SourceVerificationError(
+                f"核验记录超过单元格字符上限: kind={kind}, cell=B{row_number}, "
+                f"length={len(text)}, limit={MAX_CELL_CHARACTERS}"
+            )
+        serialized.append((kind, text))
+    # Validate every length before replacing the existing sheet; openpyxl would
+    # otherwise silently truncate oversized strings during assignment.
     if SHEET in workbook.sheetnames:
         del workbook[SHEET]
     sheet = workbook.create_sheet(SHEET)
     sheet.append(("kind", "json"))
-    sheet.append(("metadata", json.dumps(metadata, ensure_ascii=False)))
-    for sku in skus:
-        sheet.append(("sku", json.dumps(sku.to_record(), ensure_ascii=False)))
+    for record in serialized:
+        sheet.append(record)
     sheet.sheet_state = "hidden"
 
 
@@ -127,13 +144,26 @@ def _read_info(workbook: Any) -> tuple[dict[str, Any], tuple[LocalSkuDefinition,
         raise SourceVerificationError("文件缺少源数据核验信息；请重新下载 MSKU 源表并重跑销量和库存报表（仅支持单店单站点）")
     values = list(workbook[SHEET].iter_rows(values_only=True))
     try:
-        if tuple(values[0]) != ("kind", "json") or values[1][0] != "metadata":
+        if tuple(values[0]) != ("kind", "json") or values[1][0] not in ("metadata", ROW_METADATA_KIND):
             raise ValueError("核验信息格式错误")
         metadata = json.loads(values[1][1])
-        skus = tuple(LocalSkuDefinition.from_record(json.loads(row[1])) for row in values[2:] if row[0] == "sku")
+        if not isinstance(metadata, dict):
+            raise ValueError("metadata 必须为 JSON 对象")
+        row_format = values[1][0] == ROW_METADATA_KIND
+        if row_format:
+            if "unverified_rows" in metadata:
+                raise ValueError("分行格式不能包含内嵌 unverified_rows")
+            metadata["unverified_rows"] = []
+        sku_records = []
+        for row_number, row in enumerate(values[2:], 3):
+            if row[0] == "unverified" and row_format:
+                metadata["unverified_rows"].append(json.loads(row[1]))
+            elif row[0] == "sku":
+                sku_records.append(LocalSkuDefinition.from_record(json.loads(row[1])))
+            else:
+                raise ValueError(f"第 {row_number} 行为重复或未知核验记录类型: {row[0]!r}")
+        skus = tuple(sku_records)
         definition_map(skus)
-        if any(row[0] != "sku" for row in values[2:]):
-            raise ValueError("旧版或未知核验记录，请重新下载 MSKU 并重跑销量和库存报表")
         if metadata["scope"] != "xlsx_all":
             raise ValueError("源数据范围不是全量 XLSX")
         excluded = metadata["unverified_rows"]
@@ -193,9 +223,12 @@ def annotate_source(path: Path, snapshot: SkuCatalogSnapshot, *, requested_store
                 sheet.cell(index, offset, value)
         _write_info(workbook, metadata, snapshot.skus)
         workbook.save(path)
-        return metadata
     finally:
         workbook.close()
+    verified = load_verified_source(path, store_name=requested_store_name)
+    if verified.metadata != metadata or verified.skus != snapshot.skus:
+        raise SourceVerificationError("源表保存后读回的核验信息与写入前不一致")
+    return metadata
 
 
 @dataclass(frozen=True)
@@ -251,6 +284,8 @@ def stamp_report(path: str | Path, metadata: dict[str, Any]) -> None:
         workbook.save(path)
     finally:
         workbook.close()
+    if read_report_metadata(path) != metadata:
+        raise SourceVerificationError("报表保存后读回的核验信息与写入前不一致")
 
 
 def require_matching_reports(sales: Path, inventory: Path, *, store_name: str) -> dict[str, Any]:

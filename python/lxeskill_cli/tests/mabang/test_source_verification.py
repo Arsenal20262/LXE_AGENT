@@ -290,6 +290,7 @@ def test_version_three_catalog_files_remain_readable_but_cannot_mix_with_new_rou
     del metadata['store_id'], metadata['id_type'], metadata['snapshot_id']
     metadata['snapshot_id'] = active._digest([metadata, [item.to_record() for item in new.skus]])
     workbook = load_workbook(path)
+    workbook[active.SHEET].cell(2, 1, "metadata")
     workbook[active.SHEET].cell(2, 2, json.dumps(metadata))
     workbook.save(path); workbook.close()
     old = active.load_verified_source(path, store_name='shop')
@@ -303,9 +304,8 @@ def test_version_three_catalog_files_remain_readable_but_cannot_mix_with_new_rou
         invalid = dict(metadata, **{field: None})
         report = tmp_path/f'{field}.xlsx'
         shutil.copyfile(path, report)
-        active.stamp_report(report, invalid)
         with pytest.raises(active.SourceVerificationError, match='核验字段无效'):
-            active.read_report_metadata(report)
+            active.stamp_report(report, invalid)
 
 
 def test_unverified_marker_blocks_positive_inventory_and_preserves_full_key(tmp_path):

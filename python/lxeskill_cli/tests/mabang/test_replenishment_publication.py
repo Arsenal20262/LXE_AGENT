@@ -10,6 +10,13 @@ from openpyxl import Workbook, load_workbook
 from services.mabang.amazon.fba import report_staging, store_msku_replenishment as rep
 from services.mabang.amazon.fba.replenishment_formula_sheet import cache_formula_values
 from test_replenishment_formula_sheet import case_row
+from test_source_verification import source, row
+from services.mabang.amazon.fba.source_verification import read_report_metadata
+
+
+@pytest.fixture
+def source_metadata(tmp_path):
+    return read_report_metadata(source(tmp_path / "input" / "source.xlsx", [row()]))
 
 
 def existing_report(path):
@@ -19,7 +26,9 @@ def existing_report(path):
 
 @pytest.mark.parametrize("existing", [False, True])
 @pytest.mark.parametrize("stage", ["save", "metadata", "cache", "integrity", "publish"])
-def test_failure_never_publishes_or_changes_previous_report(tmp_path, monkeypatch, existing, stage):
+def test_failure_never_publishes_or_changes_previous_report(tmp_path, monkeypatch, existing, stage, source_metadata):
+    tmp_path = tmp_path / "output"
+    tmp_path.mkdir()
     target = tmp_path / "202609071712-Amazon-Test_备货建议.xlsx"
     previous = existing_report(target) if existing else None
     failure = OSError(f"actual failure at {stage}")
@@ -45,13 +54,15 @@ def test_failure_never_publishes_or_changes_previous_report(tmp_path, monkeypatc
 
         monkeypatch.setattr(os, "replace", fail_publication)
     with pytest.raises(OSError) as caught:
-        rep.write_replenishment_report([case_row("NEW")], target, source_metadata={"fixture": True})
+        rep.write_replenishment_report([case_row("NEW")], target, source_metadata=source_metadata)
     assert caught.value is failure
     assert target.read_bytes() == previous if existing else not target.exists()
     assert list(tmp_path.iterdir()) == ([target] if existing else [])
 
 
-def test_publish_happens_once_after_handles_close_and_complete_validation(tmp_path, monkeypatch):
+def test_publish_happens_once_after_handles_close_and_complete_validation(tmp_path, monkeypatch, source_metadata):
+    tmp_path = tmp_path / "output"
+    tmp_path.mkdir()
     target = tmp_path / "result.xlsx"
     previous = existing_report(target)
     archives = []
@@ -80,7 +91,7 @@ def test_publish_happens_once_after_handles_close_and_complete_validation(tmp_pa
 
     monkeypatch.setattr(ZipFile, "__init__", track)
     monkeypatch.setattr(os, "replace", replace)
-    assert rep.write_replenishment_report([case_row("NEW")], target, source_metadata={"fixture": True}) == target
+    assert rep.write_replenishment_report([case_row("NEW")], target, source_metadata=source_metadata) == target
     assert len(publications) == 1
     assert target.read_bytes() != previous
     assert list(tmp_path.iterdir()) == [target]
