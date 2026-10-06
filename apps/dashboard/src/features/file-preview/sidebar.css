@@ -429,7 +429,8 @@
 .file-excel #luckysheet-sheet-content { flex:1; min-width:0 }
 .file-excel .fortune-sheettab-container { flex:1; min-width:0; max-width:100% }
 .file-excel .luckysheet-sheets-item { flex:none }
-.file-excel .fortune-sheettab-container-c { display:flex; flex:1; min-width:0; overflow-x:auto; scrollbar-width:none }
+/* Outrank FortuneSheet's scoped overflow:hidden so native trackpad scrolling works. */
+.file-excel .fortune-sheettab-container .fortune-sheettab-container-c { display:flex; flex:1; min-width:0; overflow-x:auto; overflow-y:hidden; overscroll-behavior-x:contain; scrollbar-width:none }
 .file-excel .fortune-sheettab-container-c::-webkit-scrollbar { display:none }
 .file-excel .fortune-zoom-container,.file-excel .fortune-sheettab-scroll,.file-excel .fortune-sheet-area-right { flex:none }
 .file-excel .fortune-fx-input-container { min-width:0 }

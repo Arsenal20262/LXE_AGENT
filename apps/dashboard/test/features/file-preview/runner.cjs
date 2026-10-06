@@ -59,6 +59,21 @@ app.whenReady().then(async () => {
     await step("FortuneSheet React 19 mounting, selection, copying and resizing", async () => {
       await click("#open-1"); await wait("!!document.querySelector('.fortune-container canvas')", "spreadsheet canvas");
       await wait("document.body.innerText.includes('Sales') && document.body.innerText.includes('Notes')", "worksheet tabs");
+      const tabs = await js("(() => {const e=document.querySelector('.fortune-sheettab-container-c'),r=e.getBoundingClientRect();return {x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2),width:e.clientWidth,scrollWidth:e.scrollWidth,overflow:getComputedStyle(e).overflowX}})()");
+      assert.ok(tabs.scrollWidth > tabs.width, "fixture worksheets overflow the tab strip");
+      win.webContents.focus();
+      win.webContents.sendInputEvent({ type: "mouseMove", x:tabs.x, y:tabs.y });
+      win.webContents.sendInputEvent({ type: "mouseWheel", x:tabs.x, y:tabs.y, deltaX:-120, deltaY:0, hasPreciseScrollingDeltas:true });
+      await wait("document.querySelector('.fortune-sheettab-container-c').scrollLeft > 20", `horizontal trackpad scrolling (overflow-x: ${tabs.overflow})`);
+      const tabScroll = await js("document.querySelector('.fortune-sheettab-container-c').scrollLeft");
+      win.webContents.sendInputEvent({ type: "mouseWheel", x:tabs.x, y:tabs.y, deltaX:120, deltaY:0, hasPreciseScrollingDeltas:true });
+      await wait(`document.querySelector('.fortune-sheettab-container-c').scrollLeft < ${tabScroll - 20}`, "reverse trackpad scrolling");
+      await js("document.querySelector('.fortune-sheettab-container-c').scrollLeft=0");
+      await click("#fortune-sheettab-rightscroll");
+      await wait("document.querySelector('.fortune-sheettab-container-c').scrollLeft > 20", "worksheet navigation arrow still scrolls");
+      await click("#fortune-sheettab-leftscroll");
+      await wait("document.querySelector('.fortune-sheettab-container-c').scrollLeft < 1", "worksheet navigation returns to first sheet");
+      assert.equal(await js("document.querySelector('.luckysheet-sheets-item-active .luckysheet-sheets-item-name').textContent"), "Sales", "scrolling the strip does not change the active worksheet");
       const canvas = await js("(() => { const c=document.querySelector('.fortune-container canvas'), r=c.getBoundingClientRect(); return { x:r.x,y:r.y,width:r.width,height:r.height }; })()");
       assert.ok(canvas.width > 100 && canvas.height > 100);
       win.webContents.focus();
