@@ -25,3 +25,5 @@ Windows 安装版默认把数据放在 `%LOCALAPPDATA%\LXE Agent`，默认工作
 桌面负责复制、发布目录以及迁移配置和 Gateway 数据；安装包内 `agent-cli relocate-data --copy <暂存目录> --source <旧数据目录> --target <最终数据目录>` 负责 Bun 运行时数据库、会话文件和派生索引；`python -m shared.db.relocate_data` 只处理 Python 自己的 `lxeskill.sqlite3`。离线入口只应对暂存副本执行。
 
 迁移完成标记位于 `migrations/data-location-v1.json`。启动锁和失败诊断位于数据目录旁，因此加锁不会提前初始化目标目录。迁移范围只涉及本地数据位置，不改变设备身份、不重新创建 WireGuard 隧道，也不引入数据库降级或启动健康回滚。
+
+源码与 Windows 隔离安装验证结果见[验证记录](data-location-validation.md)。
