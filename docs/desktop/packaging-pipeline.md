@@ -361,7 +361,7 @@ LXE Agent/
 用户双击 `LXE Agent.exe` 后，主链路是：
 
 1. Electron Runtime 启动，并从 `app.asar` 加载 `main.js`。
-2. Main 确定 `resources` 和 `var` 路径，初始化配置、日志、数据库和单实例锁。
+2. Main 确定程序资源和独立数据目录，取得单实例锁；首次启动先迁移旧数据，再初始化配置、日志和数据库。
 3. 配置完成后，Main 在自己的进程里启动 Gateway。
 4. Gateway 启动 `resources/runtime/agent-cli/agent-cli.exe` 子进程，通过 NDJSON 与它通信。
 5. Agent CLI 按任务需要调用私有 Python、`lxeskill`、Node CLI、ripgrep 或 fd；马帮认证通过 Main 的受控服务操作独立 Electron 窗口，紫鸟使用用户配置的客户端和配对 Selenium。桌面媒体任务由 Main 直接启动私有 Python 和 ExifTool。

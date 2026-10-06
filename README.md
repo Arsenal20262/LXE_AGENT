@@ -40,8 +40,8 @@ Windows 构建与安装验收见 [打包手册](docs/desktop/packaging-pipeline.
 
 ## 数据与隐私
 
-- 公司下发的模型密钥与业务集成凭证由 Electron 安全存储加密保存；用户自带的本地模型 Key 明文保存在 `var/config/auth.json`，仅依靠当前用户的文件系统权限保护。
-- 源码开发和预览将配置、会话及日志保存在当前 checkout 的 `var/`；Windows 安装包使用安装目录的 `var/`。
+- 公司下发的模型密钥与业务集成凭证由 Electron 安全存储加密保存；用户自带的本地模型 Key 明文保存在数据目录的 `config/auth.json`，仅依靠当前用户的文件系统权限保护。
+- 源码开发和预览使用当前 checkout 的 `var/`；Windows 安装版默认使用 `%LOCALAPPDATA%\LXE Agent`。更换程序目录和卸载都会保留数据，旧版数据自动迁移规则见[程序与用户数据](docs/desktop/data-location.md)。
 - Data Server 同步由配置和业务凭据控制，启用后按批上传回合用量统计。
 - 真实业务 Excel、认证信息、日志和本地 `.env` 文件不会进入桌面安装包。
 
