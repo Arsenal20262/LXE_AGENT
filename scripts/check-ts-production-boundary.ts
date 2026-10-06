@@ -86,13 +86,15 @@ requireText("apps/desktop/package.json", /"pack:win"\s*:\s*"electron-builder [^"
 requireText("apps/desktop/src/preview.ts", /LXE_DESKTOP_PREVIEW\s*=\s*"1"/, "preview launcher must select the internal preview mode");
 requireText("apps/desktop/src/preview.ts", /delete environment\.LXE_DATA_ROOT/, "preview launcher must discard external desktop data roots");
 requireText("apps/desktop/src/dev.ts", /delete desktopEnvironment\.LXE_DATA_ROOT/, "development launcher must discard external desktop data roots");
-requireText("apps/desktop/src/main/paths.ts", /targetPath\.join\(projectRoot, "var"\)/, "desktop state must use the project-local var root");
-forbidText("apps/desktop/src/main/paths.ts", /environment\.LXE_DATA_ROOT|userDataPath/, "desktop state roots must not fall back to external application data");
+requireText("apps/desktop/src/main/paths.ts", /targetPath\.join\(projectRoot, "var"\)/, "source desktop state must use the checkout-local var root");
+requireText("apps/desktop/src/main/paths.ts", /if \(options\.packaged && platform === "win32"\)/, "external data roots must be restricted to Windows packaged applications");
+requireText("apps/desktop/src/main/paths.ts", /environment\.LOCALAPPDATA/, "Windows packaged data must default to the user's local application data");
+forbidText("apps/desktop/src/main/paths.ts", /userDataPath/, "desktop state roots must not silently fall back to Electron's default profile");
 for (const pathName of ["userData", "sessionData", "temp", "logs", "crashDumps"]) {
   requireText(
     "apps/desktop/src/main/runtime-state.ts",
     new RegExp(`setPath\\(\\"${pathName}\\"`),
-    `Electron ${pathName} must be routed into the project var root`,
+    `Electron ${pathName} must be routed into the selected data root`,
   );
 }
 forbidText("apps/desktop/src/preview.ts", /https?:\/\/|\bfetch\b|VITE|5173|8765|LXE_DASHBOARD_DEV_URL\s*=/, "production preview must not start or target an HTTP Renderer");
@@ -101,7 +103,7 @@ requireText("apps/desktop/src/main.ts", /usesPackagedRuntime\(launchMode\)/, "de
 requireText("apps/desktop/src/main/desktop-gateway.ts", /sourceEnvironment:\s*\{ \.\.\.configuredEnvironment, \.\.\.processEnvironment \}/, "source development and Preview must use the resolved settings environment");
 requireText("apps/desktop/src/main/desktop-gateway.ts", /managedEnvironment:\s*configuredEnvironment/, "packaged Desktop must use the managed Data Server environment");
 requireText("apps/desktop/src/main/desktop-gateway.ts", /withoutDataServerEnvironment\(configuredEnvironment\)/, "Gateway must remove inherited Data Server values before applying its mode policy");
-requireText("apps/desktop/src/main/desktop-gateway.ts", /machineIdentityPath:\s*join\(this\.options\.paths\.dataRoot, "db", "machine_identity\.json"\)/, "Data Server machine identity must remain under the canonical var root");
+requireText("apps/desktop/src/main/desktop-gateway.ts", /machineIdentityPath:\s*join\(this\.options\.paths\.dataRoot, "db", "machine_identity\.json"\)/, "Data Server machine identity must remain under the canonical data root");
 requireText("apps/desktop/src/main/desktop-gateway.ts", /allowedSkillTypes:\s*\(\)\s*=>\s*readonly string\[\]/, "Desktop Runtime Skill visibility must come from the device permission snapshot");
 forbidText("apps/desktop/src/main/desktop-gateway.ts", /botSkillPolicy|permissionPolicy|LXE_PERMISSION_POLICY_PATH/, "Desktop Runtime must not retain the retired Feishu permission policy");
 requirePath("apps/gateway/src/channels/feishu/adapter.ts", "Feishu remote ingress must remain available");
