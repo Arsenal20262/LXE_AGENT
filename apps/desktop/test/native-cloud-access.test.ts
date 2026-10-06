@@ -9,6 +9,8 @@ import { DesktopConfigStore } from "../src/main/config-store";
 import { CloudContextError } from "../src/main/cloud-context";
 import { CloudHttpError, parseCloudError } from "../src/main/cloud-errors";
 import { DirectNativeCloudClient } from "../src/main/native-cloud-client";
+import { DesktopUpdateApi, updateConnectionReady } from "../src/main/update-api";
+import { DesktopUpdateService } from "../src/main/update-service";
 const roots: string[] = [];
 const safe = { isEncryptionAvailable: () => true, encryptString: (s: string) => Buffer.from(s), decryptString: (b: Buffer) => b.toString() };
 const logs: unknown[] = [];
@@ -58,6 +60,30 @@ test("two independent unbound Windows directories fetch models and open scoped b
   expect(b.config.managedLlmState().credentials).toHaveLength(1);
   await x.check();expect(a.config.managedLlmState().credentials).toHaveLength(1);
   await x.stop();await y.stop();
+});
+test("fresh Windows installation checks updates automatically through native discovery without enrollment",async()=>{
+  const f=fixture(),cloud=f.make();
+  const requests:string[]=[];
+  const updates=new DesktopUpdateService({supported:true,configured:()=>updateConnectionReady(cloud.state()),
+    api:new DesktopUpdateApi(()=>cloud.state(),"0.3.1",undefined,async url=>{
+      requests.push(url.href);return Response.json({state:"up_to_date"});
+    }),
+    installer:{download:async()=>{throw Error("must not download automatically");},verify:async()=>{},install:()=>{throw Error("must not install automatically");}},
+    prepareInstall:async()=>undefined,cleanup:async()=>{},
+  });
+  try {
+    await cloud.start();
+    expect(f.config.cloudConfiguration()).toMatchObject({managed:false,data_server_url:""});
+    expect(cloud.state().connection).not.toBe("connected");
+    expect(updateConnectionReady(cloud.state())).toBe(true);
+    updates.start();updates.wake();
+    const deadline=Date.now()+4000;
+    while(!requests.length&&Date.now()<deadline)await Bun.sleep(20);
+    expect(requests).toEqual(["http://10.88.0.1:8000/api/v1/desktop-updates/latest?platform=windows-x64&current_version=0.3.1"]);
+    expect(updates.state()).toMatchObject({phase:"idle",message:"已是最新版本"});
+    f.setOffline(true);await cloud.check();expect(updateConnectionReady(cloud.state())).toBe(false);
+    f.setOffline(false);await cloud.check();expect(updateConnectionReady(cloud.state())).toBe(true);
+  } finally {updates.stop();await cloud.stop();}
 });
 test("offline restart retains owned cache; denial removes it; local credentials and preferences survive",async()=>{
   const f=fixture();f.config.saveLocalModelCredential({provider:"deepseek",api_key:"personal"});

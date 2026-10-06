@@ -9,7 +9,8 @@ import { UpdateJournal } from "./main/update-journal";
 import { readFileSync } from "node:fs";
 import { prepareUpdate } from "./main/update-preparation";
 import { DesktopUpdateService } from "./main/update-service";
-import { DesktopUpdateApi, ElectronUpdateInstaller } from "./main/update-electron";
+import { ElectronUpdateInstaller } from "./main/update-electron";
+import { DesktopUpdateApi, updateConnectionReady } from "./main/update-api";
 import { join } from "node:path";
 import {
   app,
@@ -242,7 +243,7 @@ async function bootstrap(): Promise<void> {
   };
   let updateNetworkReady = false;
   const broadcastCloudState = (state: DesktopCloudState): void => {
-    const connected = state.connection === "connected";
+    const connected = updateConnectionReady(state);
     if (connected && !updateNetworkReady) activeUpdates?.wake();
     updateNetworkReady = connected;
     for (const browserWindow of applicationWindows()) {
@@ -413,8 +414,8 @@ async function bootstrap(): Promise<void> {
     recordAttempt: release => updateJournal.start(release.version, release.build_id),
     recordError: error => updateJournal.error(error),
     supported: updateSupported,
-    configured: () => Boolean(config.cloudConfiguration().data_server_url) && cloud.state().connection === "connected",
-    api: new DesktopUpdateApi(() => config.cloudConfiguration().data_server_url, app.getVersion(), installedBuild),
+    configured: () => updateConnectionReady(cloud.state()),
+    api: new DesktopUpdateApi(() => cloud.state(), app.getVersion(), installedBuild),
     installer: updateSupported ? new ElectronUpdateInstaller(error => activeUpdates?.recordFailure(error), message => logger.info("desktop_update_download", {message})) : {
       download: async () => { throw new Error("Updates unsupported"); },
       verify: async () => {}, install: () => {},
