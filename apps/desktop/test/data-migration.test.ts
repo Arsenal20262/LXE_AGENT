@@ -95,3 +95,19 @@ test("UTF-16 installer hints discover multiple sources without mixing applicatio
   expect(legacyDataSources(install, "test.id")).toEqual([join(install,"var"), source]);
   expect(() => legacyDataSources(install, "wrong.id")).toThrow("another application");
 });
+
+test.skipIf(process.platform !== "win32")("a Windows sharing violation preserves the source and permits migration after release", async () => {
+  const {source,target,ports}=fixture(),file=join(source,"workspace/中文.txt");
+  const script=`$ErrorActionPreference='Stop'; $handle=[IO.File]::Open('${file.replaceAll("'","''")}',[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::None); try {[Console]::Out.WriteLine('locked'); [Console]::Out.Flush(); [Console]::ReadLine() | Out-Null} finally {$handle.Dispose()}`;
+  const child=Bun.spawn(["powershell.exe","-NoProfile","-NonInteractive","-EncodedCommand",Buffer.from(script,"utf16le").toString("base64")],{stdin:"pipe",stdout:"pipe",stderr:"pipe"});
+  try {
+    const reader=child.stdout.getReader();
+    const first=await reader.read();reader.releaseLock();
+    expect(new TextDecoder().decode(first.value)).toContain("locked");
+    await expect(initializeDataRoot(target,source,ports)).rejects.toThrow();
+    expect(existsSync(target)).toBe(false);
+  } finally {child.stdin.write("release\n");child.stdin.end();await child.exited;}
+  expect(readFileSync(file,"utf8")).toBe("important bytes");
+  await initializeDataRoot(target,source,ports);
+  expect(dataRootInitialized(target)).toBe(true);
+},20000);
