@@ -207,6 +207,24 @@ describe("WorkspaceInstanceManager", () => {
     nestedAfter.release();
   });
 
+  test("metadata-only preselection changes invalidate workspace snapshots", async () => {
+    const { manager, resourceRoot, workspace } = setup();
+    const before = await manager.acquire(workspace());
+    before.release();
+    const skillPath = join(resourceRoot, "skills", "demo", "SKILL.md");
+    writeFileSync(skillPath, [
+      "---", "name: demo", "type: default", "description: Demo workflow",
+      "preselect:", "  text_phrases: [查询泰国备货]", "---", "# Demo", "",
+    ].join("\n"), "utf8");
+    const reload = await manager.reload(workspace(), "test_preselection_metadata");
+    const after = await manager.acquire(workspace());
+    expect(reload.changed).toBe(true);
+    expect(after.snapshot.skills.prompt).toBe(before.snapshot.skills.prompt);
+    expect(after.snapshot.skills.preselection[0]?.textPhrases).toEqual(["查询泰国备货"]);
+    expect(after.snapshot.generation).toBeGreaterThan(before.snapshot.generation);
+    after.release();
+  });
+
   test("does not advance generation when a forced reload finds identical content", async () => {
     const { manager, workspace } = setup();
     const lease = await manager.acquire(workspace());
