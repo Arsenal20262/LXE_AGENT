@@ -92,6 +92,25 @@ module.exports = async ({js, step, settle, load, state, waitFor}) => {
     assert.ok(await js(`behavior.session.discarded.includes('Default chat-0')`));
     assert.equal((await current()).selection.selectedSession.workspace.directory, '/fixture/survivor');
   });
+  await step('deleting the selected conversation enters a new blank without retaining its resources', async () => {
+    await create('/fixture/selected-delete');
+    const id=(await current()).selection.selectedSessionId;
+    await js(`behavior.session.seedCleanup(${JSON.stringify(id)}); behavior.session.draft(${JSON.stringify(id)},'removed draft',1); ${actions}.deleteSession(behavior.session.current.selection.selectedSession)`);
+    await waitFor(`behavior.session.current.selection.selectedSessionId !== ${JSON.stringify(id)} && behavior.session.current.selection.newConversation`, 'new blank after deletion');
+    assert.equal((await current()).selection.selectedSession.workspace.directory, '/fixture/default');
+    assert.deepEqual(await js(`behavior.session.cleaned(${JSON.stringify(id)})`), {history:0,activity:null,preview:null,zoom:0,attachments:[]});
+  });
+  await step('skill entry appends its prompt only when creation still owns selection', async () => {
+    await js(`${actions}.startSkillConversation('use', {name:'office-xlsx'})`); await settle();
+    const id=(await current()).selection.selectedSessionId;
+    const draft=await js(`sessionStorage.getItem('lxe.composer-draft.' + ${JSON.stringify(id)})`);
+    assert.match(draft, /Use the office-xlsx skill/);
+    await js(`behavior.holdCreation(true); void ${actions}.startSkillConversation('create')`); await settle();
+    await js(`${navigate}.openDashboardSection('home')`); await settle();
+    await js('behavior.releaseCreations()'); await settle();
+    assert.equal((await current()).section, 'home');
+    assert.equal(await js(`sessionStorage.getItem('lxe.composer-draft.' + ${JSON.stringify(id)})`), draft);
+  });
   await step('browser back and forward retain the conversation and restore capability preference', async () => {
     const selection=(await current()).selection.selectedSessionId, viewKey=(await current()).viewKey;
     await js(`${navigate}.openCapabilityView('models')`); await settle();

@@ -7,6 +7,15 @@ import { fileURLToPath } from "node:url";
 const testDir = path.dirname(fileURLToPath(import.meta.url));
 const sourceDir = path.resolve(testDir, "../../src");
 const expectedModules = [
+  "api/model-actions.ts",
+  "api/mcp-actions.ts",
+  "api/session-actions.ts",
+  "features/sessions/use-conversation-events.ts",
+  "features/sessions/use-session-workspace.ts",
+  "shared/use-dashboard-navigation.ts",
+  "features/sessions/SessionSidebar.tsx",
+  "features/sessions/ConversationPage.tsx",
+  "features/capabilities/CapabilitiesPage.tsx",
   "api/client.ts",
   "api/payloads.ts",
   "api/queries.ts",
@@ -34,12 +43,13 @@ const expectedModules = [
 ];
 const expectedEntryImports = [
   "./features/details/view",
-  "./features/integrations/view",
-  "./features/models/view",
+  "./features/sessions/SessionSidebar",
+  "./features/sessions/ConversationPage",
+  "./features/capabilities/CapabilitiesPage",
   "./features/runtime-status/view",
-  "./features/sessions/view",
-  "./features/skills/user-view",
-  "./features/tools/view"
+  "./features/sessions/use-session-workspace",
+  "./features/sessions/use-conversation-events",
+  "./shared/use-dashboard-navigation"
 ];
 
 function sourceFiles(directory) {
@@ -74,10 +84,30 @@ test("dashboard entry delegates feature views to dedicated modules", () => {
       assert.doesNotMatch(source, /from ["'][^"']*main["']/);
     });
 
-  sourceFiles(sourceDir)
+  const files = sourceFiles(sourceDir);
+  assert.ok(files.length > expectedModules.length, "boundary scan must cover the Dashboard source tree");
+  files
     .filter((file) => !["api/client.ts", "api/queries.ts", "api/model-actions.ts", "api/mcp-actions.ts", "api/session-actions.ts"].includes(sourceRelativePath(file)))
     .forEach((file) => {
       const source = readFileSync(file, "utf8");
       assert.doesNotMatch(source, /\bcallDashboard\b/, `${file} must use query hooks or typed actions`);
     });
+});
+
+test("App connects persistent owners while pages receive data and semantic actions", () => {
+  const main = readFileSync(path.join(sourceDir, "main.tsx"), "utf8");
+  assert.doesNotMatch(main, /useQueryClient|setQueryData|invalidateQueries|removeQueries|ConversationDisplayController|prepareDraftMove|moveConversationAttachments|applyDesktopStreamBatch/);
+  for (const hook of ["useSessionWorkspace", "useConversationEvents", "useModelActions", "useMcpActions", "useDashboardNavigation"]) {
+    assert.equal((main.match(new RegExp(hook + "\\(", "g")) || []).length, 1, hook + " has one App owner");
+    assert.ok(main.indexOf(hook + "(") < main.indexOf("  return ("), hook + " remains mounted above page branches");
+  }
+  for (const file of ["features/sessions/SessionSidebar.tsx", "features/sessions/ConversationPage.tsx", "features/capabilities/CapabilitiesPage.tsx"]) {
+    const page = readFileSync(path.join(sourceDir, file), "utf8");
+    assert.doesNotMatch(page, /callDashboard|useQueryClient|setQueryData|invalidateQueries|removeQueries|sessionActions|useSessionWorkspace\(|useConversationEvents\(/, file);
+  }
+  const requests = readFileSync(path.join(sourceDir, "api/session-actions.ts"), "utf8");
+  assert.doesNotMatch(requests, /useState|useRef|queryClient|composer-draft|attachment-draft|display-controller/);
+  const workflow = readFileSync(path.join(sourceDir, "features/sessions/use-session-workspace.ts"), "utf8");
+  assert.equal((workflow.match(/new ConversationDisplayController\(/g) || []).length, 1);
+  assert.match(workflow, /useState\(\(\) => new ConversationDisplayController\(\)\)/);
 });

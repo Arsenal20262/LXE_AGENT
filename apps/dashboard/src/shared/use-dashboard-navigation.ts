@@ -15,7 +15,6 @@ function routeStateFromLocation(): DashboardRouteSelection {
   return dashboardRouteFromHistory(window.history.state, storedCapabilityView);
 }
 
-
 export function useDashboardNavigation() {
   const [initialRoute] = useState(() => routeStateFromLocation());
   const [activeSection, setActiveSection] = useState<DashboardSection>(initialRoute.section);
@@ -35,11 +34,9 @@ export function useDashboardNavigation() {
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
-
   useEffect(() => {
     storeCapabilityView(capabilityView, browserStorage());
   }, [capabilityView]);
-
 
   function pushDashboardRoute(
     section: DashboardSection,
@@ -90,7 +87,6 @@ export function useDashboardNavigation() {
     setActiveSection("activity");
     setActivityView(view);
   }
-
 
   return { activeSection, capabilityView, activityView, workbenchView,
     openDashboardSection, openWorkbenchView, openCapabilityView, openActivityView } as const;

@@ -1,9 +1,11 @@
+import { SessionSidebar } from "./features/sessions/SessionSidebar";
+import { ConversationPage } from "./features/sessions/ConversationPage";
+import { CapabilitiesPage } from "./features/capabilities/CapabilitiesPage";
 import { useDashboardNavigation, browserStorage } from "./shared/use-dashboard-navigation";
 import { useSessionWorkspace } from "./features/sessions/use-session-workspace";
 import { useModelActions } from "./api/model-actions";
 import { useMcpActions } from "./api/mcp-actions";
 import { useConversationEvents } from "./features/sessions/use-conversation-events";
-import { FilePreviewLayout } from "./features/file-preview/Sidebar";
 import { useEffect, useLayoutEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { createRoot } from "react-dom/client";
@@ -16,9 +18,6 @@ import {
   BriefcaseBusiness,
   House,
   MessageSquareText,
-  PanelLeftClose,
-  PanelLeftOpen,
-  Search,
   Sparkles,
 } from "lucide-react";
 
@@ -26,7 +25,6 @@ import "./styles.css";
 import "./desktop/update-control.css";
 import "./shared/navigation-rail.css";
 import { SidebarStatus } from "./desktop/sidebar-status";
-import { WorkspacesIndex, WorkspaceControl } from "./features/sessions/workspaces";
 import { DashboardQueryProvider } from "./api/query-client";
 import {
   queryError,
@@ -36,7 +34,6 @@ import {
   useSkillsQuery,
   useToolsetsQuery,
 } from "./api/queries";
-import { EmptyState } from "./shared/components";
 import { formatDate, formatNumber } from "./shared/format";
 import {
   I18nContext,
@@ -55,17 +52,9 @@ import {
 } from "./shared/appearance";
 import type { DetailTarget } from "./shared/ui/detail-target";
 import { DetailModal } from "./features/details/view";
-import { McpServicesView } from "./features/integrations/view";
 import { DashboardHome } from "./features/home/view";
-import { ModelsView } from "./features/models/view";
 import { RuntimeStatusPopover } from "./features/runtime-status/view";
-import {
-  SessionDetailView
-} from "./features/sessions/view";
-import { SkillsCatalogView } from "./features/skills/user-view";
-import { AddSkillMenu } from "./features/skills/add-menu";
 import { StatsView } from "./features/stats/view";
-import { ToolsView } from "./features/tools/view";
 import { SyntheticPerformerWorkbench } from "./features/workbench/view";
 import { WorkbenchIndex } from "./features/workbench/index-view";
 import { InputAssetsWorkbench, useInputAssetSlots } from "./features/workbench/input-assets-view";
@@ -75,10 +64,7 @@ import { DashboardRootErrorBoundary } from "./root-error-boundary";
 import { useThreeStateSidebar } from "./shared/use-three-state-sidebar";
 import { SidebarResizer } from "./shared/sidebar-resizer";
 import { NavigationRail } from "./shared/navigation-rail";
-import { WorkspaceView } from "./shared/workspace-view";
 import type {
-  ActivityView,
-  CapabilityView,
   DashboardSection,
 } from "./shared/navigation";
 const DOCS_HOME_PATH = "README.md";
@@ -152,7 +138,6 @@ function App({
     || activeSection === "activity"
     || activeSection === "workbench"
     || activeSection === "sessions";
-  const mcpToolset = toolsetsQuery.data?.items.find((toolset) => toolset.name === "mcp");
   const activeQueries = activeSection === "sessions"
     ? [...workspace.queryStatus, modelsQuery, currentModelQuery]
     : activeSection === "capabilities" && capabilityView === "models"
@@ -178,12 +163,6 @@ function App({
     { id: "capabilities", label: t.nav.capabilities, icon: <Sparkles size={16} /> },
     { id: "activity", label: t.nav.activity, icon: <ChartColumn size={16} /> },
   ];
-  const capabilityItems: Array<{ id: CapabilityView; label: string }> = [
-    { id: "skills", label: t.nav.skills },
-    { id: "tools", label: t.nav.tools },
-    { id: "connections", label: t.nav.connections },
-    { id: "models", label: t.nav.models },
-  ];
   const pageTitle = activeSection === "home"
     ? t.home.title
     : activeSection === "sessions"
@@ -208,9 +187,6 @@ function App({
       onOpenSettings={(section) => onOpenDesktopSettings?.(section)}
     />
   );
-  const sessionSidebarExpanded = sidebar.expanded;
-  const sidebarMode = sidebar.mode;
-  const sidebarVisible = sidebar.visible;
   const shellClassName = [
     "app-shell",
     sidebar.collapsed ? "sidebar-collapsed" : "",
@@ -228,74 +204,7 @@ function App({
           onNavigate={openDashboardSection}
           footer={<SidebarStatus onOpen={() => onOpenDesktopSettings?.("status")} />}
         />
-        <div
-          className={sidebarVisible ? "sidebar-window-controls sidebar-visible" : "sidebar-window-controls"}
-          {...sidebar.controlProps}
-        >
-          <button
-            aria-controls="app-sidebar"
-            aria-expanded={sidebarVisible}
-            aria-label={sessionSidebarExpanded ? t.sidebar.collapse : t.sidebar.expand}
-            className={
-              sidebarVisible
-                ? "sidebar-icon-button sidebar-toggle-button is-open"
-                : "sidebar-icon-button sidebar-toggle-button"
-            }
-            onClick={sidebar.toggle}
-            ref={sidebar.toggleRef}
-            title={sessionSidebarExpanded ? t.sidebar.collapse : t.sidebar.expand}
-            type="button"
-          >
-            {sessionSidebarExpanded ? <PanelLeftClose size={17} /> : <PanelLeftOpen size={17} />}
-          </button>
-        </div>
-        {sessionSidebarExpanded ? <button
-          className="sidebar-dismiss"
-          type="button"
-          aria-label={t.sidebar.collapse}
-          onClick={sidebar.toggle}
-          tabIndex={-1}
-        /> : null}
-        <aside
-          aria-hidden={!sidebarVisible}
-          aria-label={t.workspaces.title}
-          className={`app-sidebar is-${sidebarMode}`}
-          id="app-sidebar"
-          inert={!sidebarVisible}
-          ref={sidebar.panelRef}
-          {...sidebar.panelProps}
-        >
-          <div className="sidebar-list-header">
-            <span>{t.app.title}</span>
-            <button
-              aria-label={t.sessions.searchAria}
-              aria-pressed={workspace.sidebar.searchOpen}
-              className={
-                workspace.sidebar.searchOpen
-                  ? "sidebar-icon-button sidebar-search-button is-selected"
-                  : "sidebar-icon-button sidebar-search-button"
-              }
-              onClick={workspace.actions.openSearch}
-              title={t.sessions.searchAria}
-              type="button"
-            >
-              <Search size={17} />
-            </button>
-          </div>
-          <div className="sidebar-session-section">
-            <WorkspacesIndex
-              {...workspace.sidebar}
-              onExpandedChange={workspace.actions.expandWorkspace}
-              onRename={workspace.actions.renameWorkspace}
-              onRetryWorkspaces={workspace.actions.retryWorkspaces}
-              onChoose={workspace.actions.chooseNewWorkspace}
-              onQueryChange={workspace.actions.changeSearch}
-              {...workspace.actions.sessionIndex}
-              onTransientInteractionChange={sidebar.onTransientInteractionChange}
-              visible={sidebarVisible}
-            />
-          </div>
-        </aside>
+        <SessionSidebar sidebar={sidebar} data={workspace.sidebar} actions={workspace.actions} />
 
         <section className={showDashboardHome ? "main-panel dashboard-home-panel" : "main-panel"}>
           {!showDashboardHome && !hasEmbeddedPageHeader ? (
@@ -316,51 +225,21 @@ function App({
               <div className="dashboard-refresh-indicator" role="status">{t.common.updating}</div>
             ) : null}
             {activeSection === "sessions" ? (
-              <section className="sessions-conversation-shell">
-                <FilePreviewLayout sessionId={selectedSessionId ?? ""}>
-                {selectedSessionId || newConversation ? (
-                  <SessionDetailView
-                    workspaceControl={<WorkspaceControl
-                      directory={selectedSession?.workspace.directory ?? desktopHealth.workspace_root}
-                      defaultDirectory={desktopHealth.workspace_root}
-                      workspaces={workspace.sidebar.workspaces}
-                      editable={newConversation}
-                      disabled={!dashboardRuntimeReady || workspace.conversation.pendingMessages.some(item => !item.error)}
-                      onChange={workspace.actions.switchConversationWorkspace}
-                      onChoose={workspace.actions.chooseConversationWorkspace}
-                    />}
-                    {...workspace.conversation}
-                    onQuestionAnswered={workspace.actions.questionAnswered}
-                    onApprovalChanged={workspace.actions.approvalChanged}
-                    currentModel={currentModelQuery.data ?? null}
-                    models={modelsQuery.data?.items ?? []}
-                    modelLoading={dashboardRuntimeReady
-                      && (modelsQuery.isPending || currentModelQuery.isPending)}
-                    modelSaving={modelSaving}
-                    thinkingSaving={thinkingSaving}
-                    newConversation={newConversation}
-                    runtimeReady={dashboardRuntimeReady}
-                    runtimeUnavailableMessage={setupComplete
-                      ? t.conversation.unavailable
-                      : t.conversation.modelUnavailable}
-                    onLoadOlder={workspace.actions.loadOlder}
-                    onLoadNewer={workspace.actions.loadNewer}
-                    onVisibleGroups={workspace.actions.visibleGroupsChanged}
-                    onJumpToLatest={workspace.actions.jumpToLatest}
-                    onModelChange={setCurrentModel}
-                    onThinkingLevelChange={setCurrentThinkingLevel}
-                    onSend={workspace.actions.sendConversation}
-                    onStop={workspace.actions.stopConversation}
-                    onOpenFile={workspace.actions.openConversationFile}
-                    onRevealFile={workspace.actions.revealConversationFile}
-                    onOpenAttachment={workspace.actions.openConversationAttachment}
-                    onFollowingChange={workspace.actions.followingChanged}
-                  />
-                ) : (
-                  <EmptyState label={selectedSessionId ? t.sessionDetail.loading : t.sessions.selectPrompt} />
-                )}
-                </FilePreviewLayout>
-              </section>
+              <ConversationPage
+                selection={workspace.selection}
+                conversation={workspace.conversation}
+                workspace={workspace.sidebar}
+                actions={workspace.actions}
+                setupComplete={setupComplete}
+                model={{
+                  currentModel: currentModelQuery.data ?? null,
+                  models: modelsQuery.data?.items ?? [],
+                  modelLoading: dashboardRuntimeReady && (modelsQuery.isPending || currentModelQuery.isPending),
+                  modelSaving, thinkingSaving,
+                  onModelChange: setCurrentModel,
+                  onThinkingLevelChange: setCurrentThinkingLevel,
+                }}
+              />
             ) : null}
             {activeSection === "home" ? (
               <DashboardHome
@@ -390,54 +269,20 @@ function App({
               />
             ) : null}
             {activeSection === "capabilities" ? (
-              <WorkspaceView
-                activeView={capabilityView}
-                items={capabilityItems}
-                label={t.nav.capabilities}
-                onSelect={openCapabilityView}
-                actions={capabilityView === "skills" ? <AddSkillMenu disabled={!dashboardRuntimeReady}
-                  onAdd={() => startSkillConversation("create")} /> : undefined}
-              >
-                {capabilityView === "models" ? (
-                  !dashboardRuntimeReady ? <EmptyState label={t.conversation.unavailable} />
-                    : modelsQuery.isPending || currentModelQuery.isPending ? <EmptyState label={t.common.loading} />
-                    : !modelsQuery.data || !currentModelQuery.data
-                      ? <EmptyState label={t.common.errorPrefix(t.errors.api, queryError(modelsQuery.error || currentModelQuery.error))} />
-                      : <ModelsView
-                          models={modelsQuery.data.items}
-                          current={currentModelQuery.data}
-                        />
-                ) : null}
-                {capabilityView === "skills" ? (
-                  !dashboardRuntimeReady ? <EmptyState label={t.conversation.unavailable} />
-                    : skillsQuery.isPending || commandsQuery.isPending ? <EmptyState label={t.common.loading} />
-                    : skillsQuery.data && commandsQuery.data
-                      ? <SkillsCatalogView
-                          skills={skillsQuery.data.items}
-                          commands={commandsQuery.data.items}
-                          onOpen={setDetailTarget}
-                          onConversation={startSkillConversation}
-                        />
-                      : <EmptyState label={t.common.errorPrefix(t.errors.api, queryError(skillsQuery.error || commandsQuery.error))} />
-                ) : null}
-                {capabilityView === "tools" ? (
-                  !dashboardRuntimeReady ? <EmptyState label={t.conversation.unavailable} />
-                    : toolsetsQuery.isPending ? <EmptyState label={t.common.loading} />
-                    : toolsetsQuery.data
-                      ? <ToolsView toolsets={toolsetsQuery.data.items} onOpen={setDetailTarget} />
-                      : <EmptyState label={t.common.errorPrefix(t.errors.api, queryError(toolsetsQuery.error))} />
-                ) : null}
-                {capabilityView === "connections" ? (
-                  !dashboardRuntimeReady ? <EmptyState label={t.conversation.unavailable} />
-                    : toolsetsQuery.isPending ? <EmptyState label={t.common.loading} />
-                    : <McpServicesView
-                        mcpError={!toolsetsQuery.data ? queryError(toolsetsQuery.error) : ""}
-                        mcpSavingId={mcpSavingId}
-                        mcpToolset={mcpToolset}
-                        onToggleMcpServer={toggleMcpServer}
-                      />
-                ) : null}
-              </WorkspaceView>
+              <CapabilitiesPage
+                capabilityView={capabilityView}
+                openCapabilityView={openCapabilityView}
+                dashboardRuntimeReady={dashboardRuntimeReady}
+                modelsQuery={modelsQuery}
+                currentModelQuery={currentModelQuery}
+                skillsQuery={skillsQuery}
+                commandsQuery={commandsQuery}
+                toolsetsQuery={toolsetsQuery}
+                onOpenDetail={setDetailTarget}
+                startSkillConversation={startSkillConversation}
+                mcpSavingId={mcpSavingId}
+                toggleMcpServer={toggleMcpServer}
+              />
             ) : null}
             {activeSection === "activity" ? (
               <section className="workspace-view">

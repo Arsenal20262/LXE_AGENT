@@ -83,7 +83,7 @@ function workspaceRpc(call: { operation: string; input: Record<string, unknown> 
       if (holdCreation) await new Promise<void>(resolve => pendingCreations.push(resolve));
       const directory = String(input.directory);
       let session = workspaceSessions.find(row => row.blank && row.workspace.directory === directory);
-      if (!session) { session = { ...workspaceSession(`Blank ${workspaceSessions.length}`, directory), blank: true }; workspaceSessions.push(session); }
+      if (!session) { session = { ...workspaceSession(`Blank ${crypto.randomUUID()}`, directory), blank: true }; workspaceSessions.push(session); }
       registerWorkspace(directory);
       return { ...session };
     })();

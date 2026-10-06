@@ -20,6 +20,10 @@ bun run --cwd apps/dashboard typecheck
 
 测试覆盖以下场景：
 
+- **模型与 MCP 操作（5）**：成功提交、提前更新界面、按凭据来源更新缓存、失败回滚；保存期间禁止重复操作和发送，保留实际错误。
+- **会话事件（4）**：按会话和动画帧合并流式事件；重复事件不重复追加，缺失事件补查；完成时刷新列表和历史；卸载取消待处理帧与监听，重新挂载只有一份订阅。
+- **会话流程（9）**：真实挂载 `useSessionWorkspace` 和导航 hook，验证创建响应乱序、页面和会话切换、文字与截图合并超限时保留草稿、Runtime 延后创建、发送失败和晚到响应、停止与置顶、删除后的缓存和本地资源清理、技能入口、浏览器前进后退和能力页偏好恢复。
+
 - **弹窗（3）**：首次聚焦跳过隐藏及禁用控件，Tab 双向循环；嵌套弹窗只关闭最上层，
   并逐层恢复焦点；没有控件时焦点留在弹窗内。
 - **输入框（5）**：中文合成期间 Enter 不发送，Shift+Enter 换行，Enter 正常发送；
@@ -38,7 +42,8 @@ Tab、Enter、Shift+Enter 通过 Electron 原生输入进入 Chromium；中文�
 CompositionEvent 和带 `isComposing` 的 KeyboardEvent，覆盖 React 事件处理分支。
 这不替代操作系统输入法的人工验收。拖放使用浏览器 DataTransfer/File 和 DragEvent。
 
-生产的焦点 hook、ConversationComposer、完整 App 及 Query hooks 都直接执行。
+生产的焦点 hook、ConversationComposer、完整 App、拆出的页面与流程 hooks 及 Query hooks 都直接执行。
+桌面会话事件 fixture 使用可触发、可取消的监听集合，流式用例经过生产订阅模块。
 断言检查焦点、输入内容、回调参数、请求记录与可见结果。测试 runner 只在完整执行预期
 场景后报告成功；构建、加载、断言、超时、Renderer 退出或页面错误均以失败退出。
 

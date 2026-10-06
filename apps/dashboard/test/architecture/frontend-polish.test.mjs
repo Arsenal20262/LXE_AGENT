@@ -9,6 +9,7 @@ const sourceDir = path.resolve(testDir, "../../src");
 const readSource = (relativePath) => readFileSync(path.join(sourceDir, relativePath), "utf8");
 
 const workflow = readFileSync(path.join(sourceDir, "features/sessions/use-session-workspace.ts"), "utf8");
+const sessionSidebar = readSource("features/sessions/SessionSidebar.tsx");
 const main = readSource("main.tsx");
 const status = readSource("desktop/sidebar-status.tsx");
 const models = readSource("features/models/view.tsx");
@@ -23,14 +24,14 @@ test("sidebar status entry opens desktop settings", () => {
 
 test("workspace sessions persist in the application sidebar with compact rows", () => {
   assert.match(styles, /container-name:\s*dashboard-main/);
-  assert.equal((main.match(/<WorkspacesIndex/g) || []).length, 1);
+  assert.equal((sessionSidebar.match(/<WorkspacesIndex/g) || []).length, 1);
   assert.match(workflow, /const sessionsQuery = useSessionsInfiniteQuery\(debouncedQuery, dashboardRuntimeReady\);/);
-  assert.match(main, /const sidebarMode = sidebar\.mode;/);
+  assert.match(sessionSidebar, /const sidebarMode = sidebar\.mode;/);
   assert.doesNotMatch(main, /activeSection === "sessions" && sessionSidebarExpanded/);
-  assert.match(main, /className="sidebar-session-section"/);
+  assert.match(sessionSidebar, /className="sidebar-session-section"/);
   assert.match(workflow, /selectedSessionId: activeSection === "sessions" \? selectedSessionId : ""/);
-  assert.match(main, /onTransientInteractionChange=\{sidebar\.onTransientInteractionChange\}/);
-  assert.match(main, /visible=\{sidebarVisible\}/);
+  assert.match(sessionSidebar, /onTransientInteractionChange=\{sidebar\.onTransientInteractionChange\}/);
+  assert.match(sessionSidebar, /visible=\{sidebarVisible\}/);
   assert.match(sessions, /const transientInteractionActive = Boolean\(menu\);/);
   assert.match(sessions, /onTransientInteractionChange\?\.\(transientInteractionActive\)/);
   assert.match(sessions, /if \(visible\) return;\s*closeMenu\(false\);/);

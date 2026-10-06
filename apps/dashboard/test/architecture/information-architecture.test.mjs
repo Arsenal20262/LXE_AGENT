@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 const testDir = path.dirname(fileURLToPath(import.meta.url));
 const sourceDir = path.resolve(testDir, "../../src");
 const navigation = readFileSync(path.join(sourceDir, "shared/use-dashboard-navigation.ts"), "utf8");
+const capabilities = readFileSync(path.join(sourceDir, "features/capabilities/CapabilitiesPage.tsx"), "utf8");
 const main = readFileSync(path.join(sourceDir, "main.tsx"), "utf8");
 const styles = readFileSync(path.join(sourceDir, "styles.css"), "utf8");
 const tools = readFileSync(path.join(sourceDir, "features/tools/view.tsx"), "utf8");
@@ -36,7 +37,7 @@ test("media workbench keeps filesystem paths behind the desktop bridge", () => {
 });
 
 test("capabilities use compact child navigation while activity opens statistics directly", () => {
-  assert.match(main, /const capabilityItems:[\s\S]*"skills"[\s\S]*"tools"[\s\S]*"connections"[\s\S]*"models"/);
+  assert.match(capabilities, /const capabilityItems:[\s\S]*"skills"[\s\S]*"tools"[\s\S]*"connections"[\s\S]*"models"/);
   assert.doesNotMatch(main, /const activityItems/);
   assert.doesNotMatch(main, /useBackgroundTasksQuery/);
   assert.match(main, /activeSection === "activity"[\s\S]*<StatsView/);

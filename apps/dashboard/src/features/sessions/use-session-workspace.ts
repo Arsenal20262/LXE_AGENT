@@ -243,7 +243,6 @@ export function useSessionWorkspace({ activeSection, runtimeReady: dashboardRunt
   const selectedBusy = Boolean(conversationActivity?.active || conversationActivity?.queued.length);
   const deleteBlockedSessionIds = useMemo(() => selectedBusy ? [selectedSessionId] : [], [selectedBusy, selectedSessionId]);
 
-
   return {
     selection: { selectedSessionId, newConversation, selectedSession } as const,
     sidebar: {

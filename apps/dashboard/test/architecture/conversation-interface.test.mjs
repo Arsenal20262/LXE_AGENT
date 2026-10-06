@@ -9,6 +9,7 @@ const fileAttachmentDisplay = readFileSync(path.join(sourceDir, "features/sessio
 const events = readFileSync(path.join(sourceDir, "features/sessions/use-conversation-events.ts"), "utf8");
 const workflow = readFileSync(path.join(sourceDir, "features/sessions/use-session-workspace.ts"), "utf8");
 const actions = readFileSync(path.join(sourceDir, "api/session-actions.ts"), "utf8");
+const page = readFileSync(path.join(sourceDir, "features/sessions/ConversationPage.tsx"), "utf8");
 const main = readFileSync(path.join(sourceDir, "main.tsx"), "utf8");
 const queries = readFileSync(path.join(sourceDir, "api/queries.ts"), "utf8");
 const conversation = readFileSync(path.join(sourceDir, "features/sessions/conversation.ts"), "utf8");
@@ -35,7 +36,8 @@ test("the composer switches the shared model before the next turn", () => {
   assert.match(view, /current\?\.provider !== provider[\s\S]*current\.model !== model[\s\S]*current\.credential_source !== credentialSource/);
   assert.match(view, /disabled=\{saving \|\| !choice\.selectable\}/);
   assert.match(main, /activeSection === "sessions" \|\| \(capabilitiesOpen && capabilityView === "models"\)/);
-  assert.match(main, /onModelChange=\{setCurrentModel\}/);
+  assert.match(main, /onModelChange: setCurrentModel/);
+  assert.match(page, /\{\.\.\.model\}/);
   assert.doesNotMatch(view, /t\.models\.moreModels|onOpenModels/);
   assert.match(styles, /\.conversation-model-menu \{[^}]*position:\s*absolute[^}]*bottom:\s*calc\(100% \+ 9px\)/s);
   assert.match(styles, /\.conversation-model-option:disabled \{[^}]*opacity:\s*0\.46;[^}]*filter:\s*grayscale\(1\)/s);
@@ -50,8 +52,8 @@ test("the composer edits thinking effort using the shared next-turn preference",
   assert.match(view, /event\.detail === 0/);
   assert.doesNotMatch(view, /const slideToClientX = [\s\S]*?applyLevel\(level\);[\s\S]*?const handleTrackPointerDown/);
   assert.match(view, /onThinkingLevelChange/);
-  assert.match(main, /thinkingSaving=\{thinkingSaving\}/);
-  assert.match(main, /onThinkingLevelChange=\{setCurrentThinkingLevel\}/);
+  assert.match(main, /modelSaving, thinkingSaving/);
+  assert.match(main, /onThinkingLevelChange: setCurrentThinkingLevel/);
   assert.match(styles, /\.conversation-thinking-menu \{[^}]*bottom:\s*calc\(100% \+ 9px\)/s);
 });
 

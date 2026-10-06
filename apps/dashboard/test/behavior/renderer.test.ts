@@ -44,7 +44,7 @@ for (const suite of ["session-workspace", "app-actions", "conversation-events", 
       expect(line, `Renderer did not report completed scenarios\n${stdout}\n${stderr}`).toBeDefined();
       const report = JSON.parse(line!.slice("LXE_BEHAVIOR_RESULT=".length));
       expect(report.suite).toBe(suite);
-      expect(report.passed).toHaveLength({ "session-workspace": 7, "app-actions": 5, "conversation-events": 4, dialog: 3, composer: 5, references: 13, readiness: 5, sidebar: 6, "windows-titlebar": 4, workspaces: 15, mermaid: 3, permissions: 10, updates: 4 }[suite]);
+      expect(report.passed).toHaveLength({ "session-workspace": 9, "app-actions": 5, "conversation-events": 4, dialog: 3, composer: 5, references: 13, readiness: 5, sidebar: 6, "windows-titlebar": 4, workspaces: 15, mermaid: 3, permissions: 10, updates: 4 }[suite]);
     } finally {
       clearTimeout(timer);
       if (child.exitCode === null) { child.kill(); await child.exited; }

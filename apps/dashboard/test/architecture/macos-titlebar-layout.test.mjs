@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 const testDir = path.dirname(fileURLToPath(import.meta.url));
 const sourceDir = path.resolve(testDir, "../../src");
 const styles = readFileSync(path.join(sourceDir, "styles.css"), "utf8");
+const sessionSidebar = readFileSync(path.join(sourceDir, "features/sessions/SessionSidebar.tsx"), "utf8");
 const main = readFileSync(path.join(sourceDir, "main.tsx"), "utf8");
 const sidebar = readFileSync(path.join(sourceDir, "shared/use-three-state-sidebar.ts"), "utf8");
 
@@ -39,7 +40,7 @@ test("collapsed sidebar offers a delayed interactive peek before fixed expansion
   assert.match(sidebar, /peekSuppressedRef\.current = true;[\s\S]*?setCollapsed\(true\);/);
   assert.match(sidebar, /peekSuppressedRef\.current = true;[\s\S]*?setPeekOpen\(false\);[\s\S]*?toggleRef\.current\?\.focus\(\);/);
   assert.match(sidebar, /onPointerEnter: \(\) => \{[\s\S]*?panelHoveredRef\.current = true;/);
-  assert.match(main, /onTransientInteractionChange=\{sidebar\.onTransientInteractionChange\}/);
+  assert.match(sessionSidebar, /onTransientInteractionChange=\{sidebar\.onTransientInteractionChange\}/);
   assert.match(styles, /\.app-sidebar\.is-peek,[\s\S]*?position:\s*fixed;[\s\S]*?max-height:\s*calc\(100vh - 64px\);/);
   assert.match(styles, /\.app-sidebar\.is-peek\s*\{[^}]*visibility:\s*visible;/s);
 });
@@ -72,7 +73,7 @@ test("macOS conversations merge the page header into the native title-bar row", 
 });
 
 test("sidebar wires window controls, mode, and home navigation", () => {
-  assert.match(main, /className=\{sidebarVisible \? "sidebar-window-controls sidebar-visible"/);
-  assert.match(main, /className=\{`app-sidebar is-\$\{sidebarMode\}`\}/);
+  assert.match(sessionSidebar, /className=\{sidebarVisible \? "sidebar-window-controls sidebar-visible"/);
+  assert.match(sessionSidebar, /className=\{`app-sidebar is-\$\{sidebarMode\}`\}/);
   assert.match(main, /\{ id: "home", label: t\.nav\.home, icon: <House size=\{16\} \/> \}/);
 });
