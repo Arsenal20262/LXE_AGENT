@@ -2,6 +2,13 @@
   "schema_version": 2,
   "resources": [
     {
+      "id": "data-migration",
+      "owner": "desktop-data-migration",
+      "source": { "kind": "file", "path": "apps/desktop/resources/data-migration-idle.ps1" },
+      "target": "data-migration-idle.ps1",
+      "platforms": ["win32-x64"]
+    },
+    {
       "id": "agent",
       "owner": "bun-agent-runtime",
       "source": { "kind": "file", "path": "SOUL.md" },

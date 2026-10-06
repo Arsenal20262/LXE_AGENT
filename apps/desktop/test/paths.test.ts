@@ -48,7 +48,7 @@ describe("desktop private runtime paths", () => {
       executablePath,
       resourcesPath: root,
       environment: {
-        LXE_DATA_ROOT: "C:\\Users\\tester\\AppData\\Roaming\\ignored",
+        LOCALAPPDATA: "C:\\Users\\tester\\AppData\\Local",
         USERPROFILE: "C:\\Users\\tester",
       },
       platform: "win32",
@@ -63,8 +63,8 @@ describe("desktop private runtime paths", () => {
     expect(paths.lxeskillCatalogPath).toBe(win32.join(root, "lxeskill", "catalog.json"));
     expect(paths.llmConfigRoot).toBe(win32.join(root, "config", "llm"));
     expect(paths.mcpDefaultPath).toBe(win32.join(root, "config", "mcp_servers.default.yaml"));
-    expect(paths.dataRoot).toBe("D:\\Apps\\LXE Agent\\var");
-    expect(paths.defaultWorkspaceRoot).toBe("D:\\Apps\\LXE Agent\\var\\workspace");
+    expect(paths.dataRoot).toBe("C:\\Users\\tester\\AppData\\Local\\LXE Agent");
+    expect(paths.defaultWorkspaceRoot).toBe(win32.join(paths.dataRoot, "workspace"));
     expect(paths.agentCommand).toBe(win32.join(root, "runtime", "agent-cli", "agent-cli.exe"));
     expect(paths.agentArguments).toEqual([]);
     expect(paths.lxeskillModulePath).toBe(
@@ -121,7 +121,16 @@ describe("desktop private runtime paths", () => {
 test("pins packaged fd even if the host configures another executable", () => {
   const paths = resolveDesktopPaths({
     packaged: true, appPath: "C:\\app\\resources\\app.asar", executablePath: "C:\\app\\LXE Agent.exe",
-    resourcesPath: "C:\\app\\resources", platform: "win32", environment: { LXE_FD_PATH: "C:\\other\\fd.exe" },
+    resourcesPath: "C:\\app\\resources", platform: "win32", environment: { LXE_FD_PATH: "C:\\other\\fd.exe", LOCALAPPDATA: "C:\\Users\\test\\AppData\\Local" },
   });
   expect(paths.fdPath).toBe("C:\\app\\resources\\runtime\\tools\\fd.exe");
+});
+
+test("packaged data override is absolute and separate from program files", () => {
+  const options = {packaged: true, appPath: "D:\\App\\resources\\app.asar", executablePath: "D:\\App\\LXE Agent.exe", resourcesPath: "D:\\App\\resources", platform: "win32" as const};
+  expect(resolveDesktopPaths({...options, environment: {LXE_DATA_ROOT: "E:\\我的数据\\LXE"}}).dataRoot).toBe("E:\\我的数据\\LXE");
+  for (const root of ["relative", "D:", "\\data", "D:\\App\\var", "D:\\"]) {
+    expect(() => resolveDesktopPaths({...options, environment: {LXE_DATA_ROOT: root}})).toThrow();
+  }
+  expect(() => resolveDesktopPaths({...options, environment: {}})).toThrow("LOCALAPPDATA");
 });

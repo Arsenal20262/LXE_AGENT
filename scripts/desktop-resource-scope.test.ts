@@ -57,7 +57,7 @@ describe("desktop resource scope", () => {
     expect(() => validateResourceScope(repositoryRoot, incompleteOwner)).toThrow("entry is incomplete");
 
     const overlappingTarget = structuredClone(scope);
-    overlappingTarget.resources[1]!.target = "agent";
+    overlappingTarget.resources.find(entry => entry.id === "skills")!.target = "agent";
     expect(() => validateResourceScope(repositoryRoot, overlappingTarget)).toThrow("targets overlap");
 
     const invalidKind = structuredClone(scope);

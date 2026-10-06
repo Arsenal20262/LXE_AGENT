@@ -205,6 +205,7 @@ const wireGuardTarget = scopeEntry("wireguard").target;
 const wireGuardResourceRoot = join(repositoryRoot, "apps", "desktop", "resources", "wireguard");
 
 const extraResources: BuilderFileSet[] = [
+  exactFileSet(join(repositoryRoot, "apps", "desktop", "resources", "data-migration-idle.ps1"), "data-migration-idle.ps1"),
   exactFileSet(join(repositoryRoot, "apps", "desktop", "resources", "app-update.yml"), "app-update.yml"),
   { from: execSandbox, to: scopeEntry("runtime-exec-sandbox").target, filter: ["**/*", "!node_modules/**/*"] },
   { from: join(execSandbox, "node_modules"), to: `${scopeEntry("runtime-exec-sandbox").target}/node_modules`, filter: ["**/*"] },

@@ -3,7 +3,9 @@ param(
     [Parameter(Mandatory=$true)][string]$InstallRoot,
     [Parameter(Mandatory=$true)][string]$StageRoot,
     [Parameter(Mandatory=$true)][string]$BackupRoot,
-    [Parameter(Mandatory=$true)][string]$ResultPath
+    [Parameter(Mandatory=$true)][string]$ResultPath,
+    [string]$ProductName = 'LXE Agent',
+    [string]$ExecutableName = 'LXE Agent.exe'
 )
 $ErrorActionPreference = 'Stop'
 $utf8 = New-Object System.Text.UTF8Encoding($false)
@@ -50,6 +52,20 @@ try {
     }
     $script:journalPath = Join-Path $BackupRoot 'transaction.json'
     if ($Action -eq 'Promote') {
+        $dataRoots = @((Join-Path $env:LOCALAPPDATA $ProductName))
+        if ($env:LXE_DATA_ROOT) { $dataRoots += $env:LXE_DATA_ROOT }
+        foreach ($dataRoot in $dataRoots) {
+            $dataPath = [IO.Path]::GetFullPath($dataRoot).TrimEnd('\')
+            if ($InstallRoot.Equals($dataPath, [StringComparison]::OrdinalIgnoreCase) -or
+                $InstallRoot.StartsWith($dataPath + '\', [StringComparison]::OrdinalIgnoreCase) -or
+                $dataPath.StartsWith($InstallRoot + '\', [StringComparison]::OrdinalIgnoreCase)) { throw "Installation overlaps user data: $dataPath" }
+        }
+        if ([IO.Directory]::Exists($InstallRoot)) {
+            $entries = @(Get-ChildItem -LiteralPath $InstallRoot -Force | Where-Object Name -ne 'var')
+            if ($entries.Count -and -not ([IO.File]::Exists((Join-Path $InstallRoot $ExecutableName)) -and [IO.File]::Exists((Join-Path $InstallRoot 'resources\app.asar')))) {
+                throw "Installation directory is not empty and is not an LXE installation: $InstallRoot"
+            }
+        }
         if (Test-Path -LiteralPath (Join-Path $StageRoot 'var')) { throw 'Installer payload must not contain var' }
         if (-not [IO.Directory]::Exists($StageRoot)) { throw "Staged application is missing: $StageRoot" }
         [IO.Directory]::CreateDirectory($InstallRoot) | Out-Null

@@ -38,6 +38,7 @@ export interface DesktopPathOptions {
   platform?: NodeJS.Platform;
   arch?: string;
   pathExists?: (path: string) => boolean;
+  dataDirectoryName?: string;
 }
 
 export function resolveDesktopPaths(options: DesktopPathOptions): DesktopPaths {
@@ -57,7 +58,24 @@ export function resolveDesktopPaths(options: DesktopPathOptions): DesktopPaths {
   const projectRoot = options.packaged
     ? targetPath.dirname(targetPath.resolve(options.executablePath))
     : sourceRoot;
-  const dataRoot = targetPath.join(projectRoot, "var");
+  let dataRoot = targetPath.join(projectRoot, "var");
+  if (options.packaged && platform === "win32") {
+    const configured = environment.LXE_DATA_ROOT?.trim();
+    const base = configured || environment.LOCALAPPDATA?.trim();
+    if (!base || !win32.isAbsolute(base) || !/^[a-z]:\\/i.test(win32.normalize(base))) {
+      throw new Error(`${configured ? "LXE_DATA_ROOT" : "LOCALAPPDATA"} must be an absolute local Windows path: ${base ?? ""}`);
+    }
+    const name = options.dataDirectoryName ?? "LXE Agent";
+    if (!name || /[\\/:]/.test(name) || name === "." || name === "..") throw new Error(`Invalid data directory name: ${name}`);
+    dataRoot = configured ? win32.normalize(configured) : win32.join(base, name);
+    const overlaps = (parent: string, child: string) => {
+      const relative = win32.relative(parent, child);
+      return relative === "" || (!relative.startsWith("..\\") && relative !== ".." && !win32.isAbsolute(relative));
+    };
+    if (dataRoot === win32.parse(dataRoot).root || overlaps(projectRoot, dataRoot) || overlaps(dataRoot, projectRoot)) {
+      throw new Error(`Data directory must be separate from the installation: ${dataRoot}`);
+    }
+  }
   const userSkillsRoot = resolveUserSkillsRoot(dataRoot, environment, platform);
   const executable = platform === "win32" ? ".exe" : "";
   const agentCommand = options.packaged

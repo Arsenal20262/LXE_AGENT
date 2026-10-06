@@ -93,6 +93,8 @@ import {
   desktopWindowAppearance,
 } from "./main/window-options";
 import { WindowsWireGuardProvisioner } from "./main/wireguard-provisioner";
+import { acquireDataRootLock, dataRootInitialized } from "./main/data-migration";
+import { bootstrapUserData } from "./main/data-bootstrap";
 import { normalizeDesktopPlatform } from "./platform";
 
 const logger = createLogger("desktop.main");
@@ -113,17 +115,30 @@ const launchMode = resolveDesktopLaunchMode({
 });
 const productionRenderer = usesProductionRenderer(launchMode);
 const packagedRuntime = usesPackagedRuntime(launchMode);
-const desktopPaths = resolveDesktopPaths({
+const dataIdentity = packagedRuntime && process.platform === "win32"
+  ? JSON.parse(readFileSync(join(app.getAppPath(), "package.json"), "utf8")) : {};
+const desktopPaths = (() => { try { return resolveDesktopPaths({
   packaged: packagedRuntime,
   appPath: app.getAppPath(),
   executablePath: process.execPath,
   resourcesPath: process.resourcesPath,
   environment: process.env,
-});
+  dataDirectoryName: dataIdentity.lxeDataDirectoryName ?? "LXE Agent",
+}); } catch (error) {
+  reportDesktopStartupFailure(error, {writeStderr: message => process.stderr.write(message), showError: (title, detail) => dialog.showErrorBox(title, detail)});
+  app.exit(1);
+  throw error;
+} })();
 let runtimeStateReady = false;
+let needsDataBootstrap = false;
+let releaseDataLock: (() => void) | undefined;
+app.once("quit", () => releaseDataLock?.());
 try {
-  const runtimeState = prepareDesktopRuntimeState(desktopPaths.dataRoot);
-  configureElectronRuntimeState(app, runtimeState);
+  needsDataBootstrap = packagedRuntime && process.platform === "win32" && !process.env.LXE_DATA_ROOT?.trim()
+    && !dataRootInitialized(desktopPaths.dataRoot);
+  if (needsDataBootstrap) releaseDataLock = acquireDataRootLock(desktopPaths.dataRoot);
+  const runtimeState = prepareDesktopRuntimeState(needsDataBootstrap ? `${desktopPaths.dataRoot}.bootstrap` : desktopPaths.dataRoot);
+  configureElectronRuntimeState(app, runtimeState, needsDataBootstrap ? {} : process.env);
   runtimeStateReady = true;
   if (launchMode === "preview") {
     process.stderr.write(
@@ -709,8 +724,20 @@ async function bootstrap(): Promise<void> {
 }
 
 if (hasSingleInstanceLock) {
-  app.whenReady().then(() => {
-    app.setAppUserModelId("com.lxe.agent");
+  app.whenReady().then(async () => {
+    if (needsDataBootstrap) {
+      const completed = await bootstrapUserData(desktopPaths, dataIdentity.lxeDataAppId ?? "com.lxe.agent", safeStorage, async sources => {
+        const result = await dialog.showMessageBox({type: "question", title: "选择旧数据", message: "发现多份 LXE Agent 数据，请选择要迁移的一份。原数据将保留。",
+          buttons: [...sources, "取消"], cancelId: sources.length, noLink: true});
+        return sources[result.response];
+      });
+      shutdownComplete = true;
+      releaseDataLock?.(); releaseDataLock = undefined;
+      if (completed) app.relaunch();
+      app.exit(0);
+      return;
+    }
+    app.setAppUserModelId(dataIdentity.lxeDataAppId ?? "com.lxe.agent");
     if (desktopPlatform === "win32") Menu.setApplicationMenu(null);
     return bootstrap();
   }).catch((error) => {

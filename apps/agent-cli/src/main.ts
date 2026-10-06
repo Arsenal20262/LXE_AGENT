@@ -3,6 +3,8 @@ import { createLogger } from "@lxe/core";
 import type { AgentServerOutput } from "@lxe/desktop-protocol";
 import { AgentProtocolServer } from "./server";
 import { runExecCommand } from "./exec-command";
+import { relocateAgentData } from "@lxe/runtime";
+import { isAbsolute, resolve } from "node:path";
 
 const logger = createLogger("agent.cli.main");
 
@@ -19,7 +21,16 @@ console.log = (...values: unknown[]): void => {
   process.stderr.write(`${values.map(String).join(" ")}\n`);
 };
 
-if (mode === "exec") {
+if (mode === "relocate-data") {
+  const roots = ["--copy", "--source", "--target"].map(optionValue);
+  if (roots.some(value => !isAbsolute(value)) || new Set(roots.map(value => resolve(value))).size !== 3) {
+    process.stderr.write("relocate-data requires distinct absolute --copy, --source and --target paths\n");
+    process.exitCode = 2;
+  } else void relocateAgentData(roots[0]!, roots[1]!, roots[2]!).catch(error => {
+    process.stderr.write(`${error instanceof Error ? error.stack : error}\n`);
+    process.exitCode = 1;
+  });
+} else if (mode === "exec") {
   void runExecCommand(arguments_.slice(1)).then((code) => {
     process.exitCode = code;
   }).catch((error) => {

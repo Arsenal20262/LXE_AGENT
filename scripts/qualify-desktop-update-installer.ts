@@ -33,7 +33,7 @@ export async function qualify(payload:string,legacyRef:string,resumeRoot?:string
   const version=`0.0.${n}`;
   const artifact=join(output,version,`LXE-Update-Qualification-${version}.exe`);
   if(n===1&&resumeRoot&&existsSync(artifact)){artifacts.push(artifact);continue;}
-  const metadata={...JSON.parse(readFileSync(join(application,"package.json"),"utf8")),name,productName:product,version,lxeBuildId:`qualification-${id}-${n}`};
+  const metadata={...JSON.parse(readFileSync(join(application,"package.json"),"utf8")),name,productName:product,version,lxeBuildId:`qualification-${id}-${n}`,lxeDataDirectoryName:product,lxeDataAppId:"com.lxe.agent.updatequalification."+id};
   writeFileSync(join(application,"package.json"),JSON.stringify(metadata));
   writeFileSync(join(application,"qualification-version.txt"),version);
   rmSync(join(clone,"resources/app.asar"));rmSync(join(clone,"resources/app.asar.unpacked"),{recursive:true,force:true});

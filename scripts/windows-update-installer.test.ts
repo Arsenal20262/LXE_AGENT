@@ -10,13 +10,24 @@ test("pinned installer stages before shutdown and promotes before registration",
  const result=adapter.installSection(section,"installer-helper.nsh");
  expect(result.indexOf("!insertmacro LxeStageApplication")).toBeLessThan(result.indexOf("!insertmacro CHECK_APP_RUNNING"));
  expect(result.indexOf("Call LxePromoteApplication")).toBeLessThan(result.indexOf("!insertmacro registryAddInstallInfo"));
- expect(result).toContain('${If} $R4 == $INSTDIR');
+ expect(result).not.toContain('Call uninstallOldVersion');
  expect(adapter.installerHelper(helper)).not.toContain('!insertmacro copyFile "$EXEPATH"');
  expect(()=>adapter.installSection(section.replace("!insertmacro installApplicationFiles","new template"),"x")).toThrow("template changed");
  expect(()=>adapter.installerHelper(helper+helper)).toThrow("template changed");
 });
-test("upgrade path selection is fixed and first installation keeps its directory page",()=>{
+test("manual installations retain the directory page and update skips it without replacing /D",()=>{
  const result=adapter.assisted(readFileSync(join(templates,"assistedInstaller.nsh"),"utf8"));
  expect(result).toContain("MUI_PAGE_DIRECTORY");expect(result).toContain("Function LxeDirectoryPagePre");
- expect(result).toContain('ReadRegStr $0 SHELL_CONTEXT "${INSTALL_REGISTRY_KEY}" InstallLocation');
+ expect(result).toContain('${If} ${isUpdated}');
+ expect(result.slice(0,result.indexOf('!macro initMultiUser'))).not.toContain('StrCpy $INSTDIR');
+});
+
+test("retained uninstaller uses its own root and guards shared registration",()=>{
+ const source=readFileSync(join(templates,"uninstaller.nsh"),"utf8");
+ const result=adapter.uninstaller(source);
+ expect(result).toContain('StrCpy $LxeUninstallRoot $INSTDIR');
+ expect(result).toContain('StrCpy $INSTDIR $LxeUninstallRoot');
+ expect(result).toContain('${If} $LxeOwnsRegistration == "1"');
+ expect(result).not.toContain('RMDir /r "$APPDATA');
+ expect(()=>adapter.uninstaller(source.replace('  !insertmacro initMultiUser','changed'))).toThrow('template changed');
 });

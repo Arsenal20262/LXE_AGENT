@@ -5,9 +5,12 @@ Var LxeBackup
 Var LxeCommitted
 Var LxeResult
 Var LxeResultCode
+Var LxePrevious
+Var LxePreviousUser
+Var LxePreviousMachine
 
 !macro LxeRunTransaction ACTION
-  nsExec::ExecToStack '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\lxe-update-files.ps1" -Action ${ACTION} -InstallRoot "$LxeFinal" -StageRoot "$LxeStage" -BackupRoot "$LxeBackup" -ResultPath "$LxeResult"'
+  nsExec::ExecToStack '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\lxe-update-files.ps1" -Action ${ACTION} -InstallRoot "$LxeFinal" -StageRoot "$LxeStage" -BackupRoot "$LxeBackup" -ResultPath "$LxeResult" -ProductName "${PRODUCT_NAME}" -ExecutableName "${APP_EXECUTABLE_FILENAME}"'
   Pop $LxeResultCode
   Pop $R1
   DetailPrint $R1
@@ -36,10 +39,9 @@ FunctionEnd
 !macroend
 
 !macro LxeStageApplication
-  ReadRegStr $R4 SHELL_CONTEXT "${INSTALL_REGISTRY_KEY}" InstallLocation
-  ${If} $R4 != ""
-    StrCpy $INSTDIR $R4
-  ${EndIf}
+  ReadRegStr $LxePrevious SHELL_CONTEXT "${INSTALL_REGISTRY_KEY}" InstallLocation
+  ReadRegStr $LxePreviousUser HKCU "${INSTALL_REGISTRY_KEY}" InstallLocation
+  ReadRegStr $LxePreviousMachine HKLM "${INSTALL_REGISTRY_KEY}" InstallLocation
   StrCpy $LxeFinal $INSTDIR
   System::Call 'ole32::CoCreateGuid(g .r0)i.r1'
   ${If} $1 != 0
@@ -59,6 +61,16 @@ FunctionEnd
   StrCpy $INSTDIR $LxeStage
   SetOutPath $INSTDIR
   !insertmacro installApplicationFiles
+  # A UTF-16 BOM makes WriteINIStr preserve Chinese paths on every system locale.
+  FileOpen $R3 "$INSTDIR\lxe-legacy-data.ini" w
+  FileWriteByte $R3 255
+  FileWriteByte $R3 254
+  FileClose $R3
+  WriteINIStr "$INSTDIR\lxe-legacy-data.ini" "LXE" "appId" "${APP_ID}"
+  WriteINIStr "$INSTDIR\lxe-legacy-data.ini" "LXE" "scope" "$installMode"
+  WriteINIStr "$INSTDIR\lxe-legacy-data.ini" "LXE" "previous" "$LxePrevious"
+  WriteINIStr "$INSTDIR\lxe-legacy-data.ini" "LXE" "perUser" "$LxePreviousUser"
+  WriteINIStr "$INSTDIR\lxe-legacy-data.ini" "LXE" "perMachine" "$LxePreviousMachine"
   File /oname=7zip-installer-LICENSE.txt "${PROJECT_DIR}\resources\7zip-LICENSE.txt"
   File /oname=7zip-installer-COPYING.txt "${PROJECT_DIR}\resources\7zip-COPYING.txt"
   !ifdef UNINSTALLER_ICON

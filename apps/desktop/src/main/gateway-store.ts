@@ -1,4 +1,4 @@
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import type {
@@ -11,7 +11,27 @@ import {
   sameWorkspaceContext,
   SessionWorkspaceMismatchError,
   workspaceContextFrom,
+  relocateStoredPath,
 } from "@lxe/core";
+
+/** Relocate gateway-owned workspace identities in the offline migration copy. */
+export function relocateGatewayData(path: string, source: string, target: string): void {
+  if (!existsSync(path)) return;
+  const db = new DatabaseSync(path);
+  try {
+    const integrity = db.prepare("PRAGMA integrity_check").all();
+    if (integrity.length !== 1 || Object.values(integrity[0]!)[0] !== "ok") throw new Error(`Gateway database integrity_check: ${JSON.stringify(integrity)}`);
+    db.exec("BEGIN IMMEDIATE");
+    const columns = db.prepare("PRAGMA table_info(gateway_sessions)").all();
+    for (const field of ["workspace_directory", "workspace_worktree"]) if (columns.some(c => c.name === field)) {
+      for (const row of db.prepare(`SELECT rowid AS id, ${field} AS value FROM gateway_sessions`).all()) {
+        const old = String(row.value), next = relocateStoredPath(old, source, target);
+        if (old !== next) db.prepare(`UPDATE gateway_sessions SET ${field}=? WHERE rowid=?`).run(next, row.id!);
+      }
+    }
+    db.exec("COMMIT; PRAGMA wal_checkpoint(TRUNCATE)");
+  } finally { db.close(); }
+}
 import type {
   DirectGatewayStorage,
   ResponseRoutePatch,
