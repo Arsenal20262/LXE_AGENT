@@ -74,7 +74,7 @@ try {
 $dataBeforeUninstall = Hashes $data
 $previousDataRoot = $env:LXE_DATA_ROOT
 try {
-    $env:LXE_DATA_ROOT = Join-Path $q.output 'independent data 中文'
+    $env:LXE_DATA_ROOT = Join-Path $q.output ('independent data ' + [char]0x4E2D + [char]0x6587)
     Start-Process -FilePath (Join-Path $second ($q.productName + '.exe')) | Out-Null
     $deadline = [DateTime]::UtcNow.AddSeconds(90)
     while (-not (Test-Path -LiteralPath (Join-Path $env:LXE_DATA_ROOT 'db\agent.sqlite3')) -and [DateTime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 300 }
