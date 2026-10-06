@@ -16,7 +16,7 @@ const source = join(q.installRoot,"var"), target=join(process.env.LOCALAPPDATA!,
 // Allow SQLite to recover a hot journal from a previous interrupted qualification run.
 // These are writable isolated copies, never the original var or production databases.
 function checkedDatabase(path: string): Database {
-  const db=new Database(path,{create:false});
+  const db=new Database(path,{create:false,readwrite:true});
   assert.deepEqual(db.query("PRAGMA integrity_check").values(),[["ok"]]);
   return db;
 }
