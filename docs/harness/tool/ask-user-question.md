@@ -4,6 +4,8 @@
 
 一次询问 1–3 个问题，每个问题有独立 `id`、`question`，可带 `header`、1–8 个 `options[{label, description?}]` 和 `multi_select`。不传选项就是自由回答。单选接受一个选项或自己的文字，多选可以同时选择选项并补充文字。每题都需确认答案或显式跳过，不预选。
 
+问题参数校验失败时，工具返回 `code: invalid_argument` 和 `violations[{path, message}]`，一次列出发现的问题，例如 `questions[0].id: required field is missing`。问题和选项中的未知字段会被拒绝，误写 `multiSelect` 会明确提示改用 `multi_select`。模型应按路径修正参数后重新调用，不原样重试，也不把参数错误归因于表单故障。校验失败不会创建待回答表单；取消、来源限制和其他实际运行异常保留各自的错误分类。
+
 模型收到的工具结果是 `{"answers":[{"id":"scope","selected":["店铺 A"]}]}`，自由回答放在 `custom`。跳过题返回 `{"id":"scope","selected":[]}`，省略 `custom`；全部跳过也是正常结果。空答案表示用户未提供信息，不表示同意或授权；AI 应结合已有信息继续，不凭空补答案或在没有新信息时反复追问。回答只针对该问题，不扩大原任务和授权范围。
 
 ## 谁负责等待

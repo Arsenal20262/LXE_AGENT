@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { UserQuestionService, registerUserQuestionTool } from "../../src/tooling/user-questions";
-import { ToolRegistry } from "../../src/tooling/registry";
+import { ToolExecutionError, ToolRegistry } from "../../src/tooling/registry";
 import { policyFor, testWorkspace } from "../workspace";
 
 const input = { questions: [
@@ -15,6 +15,34 @@ function context(session_id = "s", controller = new AbortController(), platform 
 }
 
 describe("runtime user question ownership", () => {
+  test("classifies argument errors before creating a form, without reclassifying UI failures", async () => {
+    const changes: string[] = [];
+    const service = new UserQuestionService(id => changes.push(id));
+    let caught: unknown;
+    try {
+      await service.ask({ questions: [{ question: "如何处理？", multiSelect: false }] }, context());
+    } catch (error) { caught = error; }
+    expect(caught).toBeInstanceOf(ToolExecutionError);
+    const error = caught as ToolExecutionError;
+    expect(JSON.parse(error.modelContent())).toMatchObject({
+      code: "invalid_argument", cause_known: true, operation: "ask_user_question",
+      observed_message: error.message,
+      violations: expect.arrayContaining([{ path: "questions[0].id", message: "required field is missing" }]),
+    });
+    expect(service.snapshot()).toEqual([]);
+    expect(changes).toEqual([]);
+
+    const registry = new ToolRegistry();
+    const uiFailure = new Error("question transport disconnected");
+    registerUserQuestionTool(registry, { ask: async () => { throw uiFailure; } });
+    await expect(registry.execute("ask_user_question", input, context())).rejects.toBe(uiFailure);
+
+    const controller = new AbortController();
+    const wait = service.ask(input, context("s", controller));
+    controller.abort();
+    await expect(wait).rejects.toMatchObject({ code: "failed_precondition" });
+  });
+
   test.each(["mixed", "all-skipped"])("explicit skips are normal answers, scoped and idempotent: %s", async kind => {
     const service = new UserQuestionService(() => {});
     const a = service.ask(input, context("a"));

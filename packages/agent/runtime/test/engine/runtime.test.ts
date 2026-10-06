@@ -336,6 +336,44 @@ describe("TypeScriptAgentRuntime", () => {
     await runtime.stop();
   });
 
+  test("question argument diagnostics reach the next model request with paths and classification", async () => {
+    const store = new MemoryStore();
+    const tools = new ToolRegistry();
+    const questions = new UserQuestionService(() => {});
+    registerUserQuestionTool(tools, questions);
+    let modelCalls = 0;
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy, store, tools, systemPrompt: "test",
+      emitter: { emit: async () => {}, typing: async () => {} },
+      provider: { summarize, turn: async request => {
+        modelCalls++;
+        if (modelCalls === 1) return messageFixture({ stopReason: "toolUse", content: [
+          { type: "tool_call", id: "invalid-question", name: "ask_user_question", arguments: {
+            questions: [{ question: "如何处理？", multiSelect: false, options: [{ label: "继续" }] }],
+          } },
+        ] });
+        const result = request.messages.flatMap(m => Array.isArray(m.content) ? m.content : [])
+          .find(b => b.type === "tool_result" && b.tool_call_id === "invalid-question");
+        expect(result?.type).toBe("tool_result");
+        if (result?.type !== "tool_result" || typeof result.content !== "string") throw new Error("Missing model-visible validation result");
+        expect(result.is_error).toBe(true);
+        expect(JSON.parse(result.content)).toMatchObject({
+          code: "invalid_argument", cause_known: true,
+          violations: expect.arrayContaining([
+            { path: "questions[0].id", message: "required field is missing" },
+            { path: 'questions[0]["multiSelect"]', message: "unknown field; use multi_select instead" },
+          ]),
+        });
+        expect(questions.snapshot()).toEqual([]);
+        return messageFixture({ stopReason: "stop", content: [{ type: "text", text: "Arguments need correction" }] });
+      } },
+    });
+    await runtime.start();
+    try {
+      expect((await runtime.runTurn(job({ source: { platform: "desktop" } }), handle())).status).toBe("completed");
+      expect(modelCalls).toBe(2);
+    } finally { await runtime.stop(); }
+  });
+
   test.each(["answer", "skip", "cancel"])("desktop questions pause the model and close transcript calls on %s", async action => {
     const store = new MemoryStore(); // Its persisted source is feishu: the desktop turn must take precedence.
     const tools = new ToolRegistry();

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import {
-  parseUserQuestions, parseUserQuestionSubmission, validateUserQuestionAnswers,
+  parseUserQuestions, parseUserQuestionSubmission, validateUserQuestionAnswers, UserQuestionValidationError,
   type JsonObject, type PendingUserQuestion, type SubmitUserQuestionAnswer, type UserQuestionAnswer,
 } from "@lxe/protocol";
 import { ToolExecutionError, type ToolDefinition, type ToolRegistry } from "./registry";
@@ -34,10 +34,25 @@ export class UserQuestionService {
     context.handle.signal.throwIfAborted();
     if (!context.turn_id || !context.tool_call_id) throw failure("User questions require a live turn and tool call");
     if (this.pending.has(context.session_id)) throw failure("This session already has a pending question");
+    let questions;
+    try {
+      questions = parseUserQuestions(input.questions);
+    } catch (error) {
+      if (!(error instanceof UserQuestionValidationError)) throw error;
+      throw new ToolExecutionError("invalid_argument", error.message, {
+        type: "tool_failure", operation: "ask_user_question", cause_known: true,
+        observed_message: error.message,
+        verified_reason: "The supplied question arguments failed validation before a form was created.",
+        violations: error.violations.map(issue => ({ ...issue })),
+        retryability: "not_retryable",
+        next_action: "Correct the listed argument paths using the tool schema before calling again. Do not repeat unchanged arguments or attribute this validation failure to the form UI.",
+        inference_policy: "verified_reason_only",
+      });
+    }
     const request: PendingUserQuestion = {
       request_id: randomUUID(), session_id: context.session_id,
       turn_id: context.turn_id, tool_call_id: context.tool_call_id,
-      questions: parseUserQuestions(input.questions),
+      questions,
     };
     const signal = context.handle.signal;
     const answers = await new Promise<UserQuestionAnswer[]>((resolve, reject) => {

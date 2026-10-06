@@ -39,36 +39,76 @@ const text = (value: unknown, field: string, max = 8192): string => {
   return value.trim();
 };
 
+/** Model argument violations, kept distinct from interaction/lifecycle failures. */
+export class UserQuestionValidationError extends Error {
+  constructor(readonly violations: Array<{ path: string; message: string }>) {
+    super(`Invalid question arguments: ${violations.map(issue => `${issue.path}: ${issue.message}`).join("; ")}`);
+    this.name = "UserQuestionValidationError";
+  }
+}
+
 export function parseUserQuestions(value: unknown): UserQuestion[] {
+  const violations: UserQuestionValidationError["violations"] = [];
+  const issue = (path: string, message: string) => { violations.push({ path, message }); };
+  const readText = (value: unknown, path: string, max = 8192): string => {
+    if (value === undefined) issue(path, "required field is missing");
+    else if (typeof value !== "string") issue(path, "must be a string");
+    else if (!value.trim()) issue(path, "must be non-empty text");
+    else if (value.length > max) issue(path, `must be at most ${max} characters (received ${value.length})`);
+    return typeof value === "string" ? value.trim() : "";
+  };
+  const readObject = (value: unknown, path: string, fields: string[]): Record<string, unknown> | undefined => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      issue(path, "must be an object");
+      return undefined;
+    }
+    for (const key of Object.keys(value)) {
+      if (!fields.includes(key)) issue(`${path}[${JSON.stringify(key)}]`,
+        key === "multiSelect" && fields.includes("multi_select")
+          ? "unknown field; use multi_select instead" : "unknown field");
+    }
+    return value as Record<string, unknown>;
+  };
   if (!Array.isArray(value) || value.length < 1 || value.length > 3) {
-    throw new Error("questions must contain between 1 and 3 questions");
+    throw new UserQuestionValidationError([{ path: "questions", message: "must contain between 1 and 3 questions" }]);
   }
   const ids = new Set<string>();
-  return value.map(raw => {
-    const item = object(raw);
-    const id = text(item.id, "question id", 100);
-    if (ids.has(id)) throw new Error(`Duplicate question id: ${id}`);
+  const questions: UserQuestion[] = [];
+  value.forEach((raw, index) => {
+    const path = `questions[${index}]`;
+    const item = readObject(raw, path, ["id", "question", "header", "options", "multi_select"]);
+    if (!item) return;
+    const id = readText(item.id, `${path}.id`, 100);
+    if (ids.has(id)) issue(`${path}.id`, "must be unique within questions");
     ids.add(id);
-    if (item.multi_select !== undefined && typeof item.multi_select !== "boolean") throw new Error("multi_select must be a boolean");
+    if (item.multi_select !== undefined && typeof item.multi_select !== "boolean") issue(`${path}.multi_select`, "must be a boolean");
     let options: UserQuestion["options"];
     if (item.options !== undefined) {
-      if (!Array.isArray(item.options) || item.options.length < 1 || item.options.length > 8) throw new Error("options must contain between 1 and 8 choices");
-      const labels = new Set<string>();
-      options = item.options.map(rawOption => {
-        const option = object(rawOption);
-        const label = text(option.label, "option label", 300);
-        if (labels.has(label)) throw new Error(`Duplicate option label: ${label}`);
-        labels.add(label);
-        return { label, ...(option.description === undefined ? {} : { description: text(option.description, "option description") }) };
-      });
+      if (!Array.isArray(item.options) || item.options.length < 1 || item.options.length > 8) {
+        issue(`${path}.options`, "must contain between 1 and 8 choices");
+      } else {
+        const labels = new Set<string>();
+        options = [];
+        item.options.forEach((rawOption, optionIndex) => {
+          const optionPath = `${path}.options[${optionIndex}]`;
+          const option = readObject(rawOption, optionPath, ["label", "description"]);
+          if (!option) return;
+          const label = readText(option.label, `${optionPath}.label`, 300);
+          if (labels.has(label)) issue(`${optionPath}.label`, "must be unique within this question's options");
+          labels.add(label);
+          options!.push({ label, ...(option.description === undefined ? {} : { description: readText(option.description, `${optionPath}.description`) }) });
+        });
+      }
     }
-    return {
-      id, question: text(item.question, "question"),
-      ...(item.header === undefined ? {} : { header: text(item.header, "header", 100) }),
+    questions.push({
+      id, question: readText(item.question, `${path}.question`),
+      ...(item.header === undefined ? {} : { header: readText(item.header, `${path}.header`, 100) }),
       ...(options === undefined ? {} : { options }),
-      ...(item.multi_select === undefined ? {} : { multi_select: item.multi_select }),
-    };
+      ...(typeof item.multi_select === "boolean" ? { multi_select: item.multi_select } : {}),
+    });
   });
+  if (violations.length) throw new UserQuestionValidationError(violations);
+  return questions;
 }
 
 /** Structural validation at the IPC boundary; membership is checked by the owner. */
