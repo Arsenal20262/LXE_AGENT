@@ -14,6 +14,10 @@ test("pinned installer stages before shutdown and promotes before registration",
  expect(adapter.installerHelper(helper)).not.toContain('!insertmacro copyFile "$EXEPATH"');
  expect(()=>adapter.installSection(section.replace("!insertmacro installApplicationFiles","new template"),"x")).toThrow("template changed");
  expect(()=>adapter.installerHelper(helper+helper)).toThrow("template changed");
+ const util=readFileSync(join(templates,"include/installUtil.nsh"),"utf8");
+ expect(adapter.installUtil(util)).not.toContain('Function uninstallOldVersion');
+ expect(adapter.installUtil(util)).not.toContain('ExecWait');
+ expect(()=>adapter.installUtil(util.replace('Function GetInQuotes','Function changed'))).toThrow('template changed');
 });
 test("manual installations retain the directory page and update skips it without replacing /D",()=>{
  const result=adapter.assisted(readFileSync(join(templates,"assistedInstaller.nsh"),"utf8"));

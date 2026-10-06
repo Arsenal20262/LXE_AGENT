@@ -89,6 +89,17 @@ FunctionEnd`);
  return s;
 }
 function cleanupExits(source){return source.replaceAll(/^(\s*)Quit\s*$/gm,'$1!ifndef BUILD_UNINSTALLER\n$1Call LxeCleanupApplication\n$1!endif\n$1Quit');}
+function installUtil(source){
+ let s=source.replaceAll('\r\n','\n');
+ // The transactional installer never invokes an older uninstaller. Remove its
+ // private helpers too: pinned NSIS correctly treats unused functions as errors.
+ for(const name of ['GetInQuotes','GetFileParent','uninstallOldVersion']){
+  const blocks=[...s.matchAll(new RegExp('^Function '+name+'\\n[\\s\\S]*?^FunctionEnd','gm'))];
+  if(blocks.length!==1)throw new Error('Pinned NSIS template changed: Function '+name);
+  s=replaceOnce(s,blocks[0][0],'');
+ }
+ return s;
+}
 async function installAdapter(context){
  const desktopRequire=createRequire(join(context.packager.projectDir,'package.json'));
  const builderRequire=createRequire(desktopRequire.resolve('electron-builder/package.json'));
@@ -116,11 +127,12 @@ async function installAdapter(context){
   adapted=replaceOnce(adapted,'!include "assistedInstaller.nsh"',`!include "${ui}"`);
   adapted=replaceOnce(adapted,'!include "uninstaller.nsh"',`!include "${uninstall}"`);
   for(const name of ['allowOnlyOneInstallerInstance.nsh','installUtil.nsh']){
-   const file=join(output,name);await writeFile(file,cleanupExits(await readFile(join(templates,'include',name),'utf8')));
+   const file=join(output,name),original=await readFile(join(templates,'include',name),'utf8');
+   await writeFile(file,cleanupExits(name==='installUtil.nsh'?installUtil(original):original));
    adapted=replaceOnce(adapted,`!include "${name}"`,`!include "${file}"`);
   }
   return `!define LXE_SEVENZIP_PATH "${tool}"\n${await compute.call(this,adapted,...args)}`;
  };
 }
 module.exports=installAdapter;
-Object.assign(module.exports,{replaceOnce,installSection,installerHelper,assisted,uninstaller,cleanupExits});
+Object.assign(module.exports,{replaceOnce,installSection,installerHelper,assisted,uninstaller,cleanupExits,installUtil});
