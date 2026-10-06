@@ -62,8 +62,8 @@ export function resolveDesktopPaths(options: DesktopPathOptions): DesktopPaths {
   if (options.packaged && platform === "win32") {
     const configured = environment.LXE_DATA_ROOT?.trim();
     const base = configured || environment.LOCALAPPDATA?.trim();
-    if (!base || !win32.isAbsolute(base) || !/^[a-z]:\\/i.test(win32.normalize(base))) {
-      throw new Error(`${configured ? "LXE_DATA_ROOT" : "LOCALAPPDATA"} must be an absolute local Windows path: ${base ?? ""}`);
+    if (!base || !win32.isAbsolute(base) || !/^(?:[a-z]:\\|\\\\[^\\]+\\[^\\]+(?:\\|$))/i.test(win32.normalize(base))) {
+      throw new Error(`${configured ? "LXE_DATA_ROOT" : "LOCALAPPDATA"} must be an absolute Windows path: ${base ?? ""}`);
     }
     const name = options.dataDirectoryName ?? "LXE Agent";
     if (!name || /[\\/:]/.test(name) || name === "." || name === "..") throw new Error(`Invalid data directory name: ${name}`);

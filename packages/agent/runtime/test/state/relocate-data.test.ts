@@ -1,10 +1,21 @@
 import { expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
-import { cpSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { SqliteRuntimeStore } from "../../src/state/storage";
 import { relocateAgentData } from "../../src/state/relocate-data";
+
+test("offline relocation rejects a corrupt agent database without replacing it", async () => {
+  const root = mkdtempSync(join(tmpdir(), "lxe-agent-corrupt-"));
+  try {
+    mkdirSync(join(root, "copy/db"), {recursive: true});
+    const file = join(root, "copy/db/agent.sqlite3");
+    writeFileSync(file, "invalid sqlite bytes");
+    await expect(relocateAgentData(join(root, "copy"), join(root, "old"), join(root, "new"))).rejects.toThrow();
+    expect(readFileSync(file, "utf8")).toBe("invalid sqlite bytes");
+  } finally { rmSync(root, {recursive: true, force: true}); }
+});
 
 test("offline relocation preserves history text and rebuilds attachment offsets under the new root", async () => {
   const root = mkdtempSync(join(tmpdir(), "lxe-agent-relocation-"));

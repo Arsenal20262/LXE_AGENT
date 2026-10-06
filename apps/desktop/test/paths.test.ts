@@ -129,6 +129,7 @@ test("pins packaged fd even if the host configures another executable", () => {
 test("packaged data override is absolute and separate from program files", () => {
   const options = {packaged: true, appPath: "D:\\App\\resources\\app.asar", executablePath: "D:\\App\\LXE Agent.exe", resourcesPath: "D:\\App\\resources", platform: "win32" as const};
   expect(resolveDesktopPaths({...options, environment: {LXE_DATA_ROOT: "E:\\我的数据\\LXE"}}).dataRoot).toBe("E:\\我的数据\\LXE");
+  expect(resolveDesktopPaths({...options, environment: {LXE_DATA_ROOT: "\\\\server\\share\\LXE"}}).dataRoot).toBe("\\\\server\\share\\LXE");
   for (const root of ["relative", "D:", "\\data", "D:\\App\\var", "D:\\"]) {
     expect(() => resolveDesktopPaths({...options, environment: {LXE_DATA_ROOT: root}})).toThrow();
   }
