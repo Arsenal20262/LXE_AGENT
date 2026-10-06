@@ -10,6 +10,7 @@ export * from "./tooling/mcp";
 export * from "./operations/maintenance";
 export * from "./operations/lxeskill-runtime";
 export * from "./tooling/one-shot-cli";
+export * from "./tooling/managed-lxeskill-tool";
 export * from "./tooling/lxeskill-command";
 export * from "./providers/model-image";
 export * from "./providers/config-paths";
