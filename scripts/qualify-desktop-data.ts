@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { Database } from "bun:sqlite";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { createRequire } from "node:module";
 import { createServer } from "node:net";
@@ -95,10 +95,17 @@ if (mode === "run-and-quit") {
 } else if(mode === "check-explicit") {
   const independent=join(q.output,"independent data 中文");
   assert.equal(JSON.parse(readFileSync(join(q.output,"explicit-runtime-state.json"),"utf8")).workspace_root,join(independent,"workspace"));
-  assert.notDeepEqual(JSON.parse(readFileSync(join(independent,"db/machine_identity.json"),"utf8")),JSON.parse(readFileSync(join(q.output,"expected-machine.json"),"utf8")));
-  const db=checkedDatabase(join(independent,"db/agent.sqlite3"));
-  assert.equal((db.query("SELECT COUNT(*) AS n FROM agent_sessions WHERE session_id='migration'").get() as any).n,0);db.close();
-  writeFileSync(join(q.output,"data-explicit-results.json"),JSON.stringify({explicit_root:true,no_automatic_import:true,independent_identity:true}));
+  assert.ok(existsSync(join(independent,"config/settings.json")));
+  assert.equal(existsSync(join(independent,"workspace/中文 file.txt")),false);
+  // A fresh setup creates its machine identity and Agent DB only when those services start.
+  const identity=join(independent,"db/machine_identity.json");
+  if(existsSync(identity))assert.notDeepEqual(JSON.parse(readFileSync(identity,"utf8")),JSON.parse(readFileSync(join(q.output,"expected-machine.json"),"utf8")));
+  const database=join(independent,"db/agent.sqlite3");
+  if(existsSync(database)){
+    const db=checkedDatabase(database);
+    assert.equal((db.query("SELECT COUNT(*) AS n FROM agent_sessions WHERE session_id='migration'").get() as any).n,0);db.close();
+  }
+  writeFileSync(join(q.output,"data-explicit-results.json"),JSON.stringify({explicit_root:true,no_automatic_import:true,no_imported_identity:true}));
 } else if(mode === "check") {
   assert.deepEqual(JSON.parse(readFileSync(join(target,"db/machine_identity.json"),"utf8")),JSON.parse(readFileSync(join(q.output,"expected-machine.json"),"utf8")));
   assert.equal(readFileSync(join(target,"workspace/中文 file.txt"),"utf8"),"preserved workspace data");
