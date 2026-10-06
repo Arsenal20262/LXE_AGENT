@@ -69,6 +69,20 @@ describe("managed lxeskill attachment source", () => {
     expect(() => select([user("message-now", [block(missing)])], missing)).toThrow(/missing/);
   });
 
+  test("does not skip an unidentified user message or a compaction boundary", () => {
+    const record = attachment();
+    expect(() => select([
+      user("message-upload", [block(record)]), { role: "user", content: "intervening input" },
+      user("message-confirm", "继续处理"),
+    ], record, "turn-confirm")).toThrow(/immediately previous/);
+    expect(() => select([
+      user("message-upload", [block(record)]),
+      { role: "compactionSummary", summary: "Synthetic summary", tokensBefore: 100,
+        details: { readFiles: [], modifiedFiles: [] } },
+      user("message-confirm", "继续处理"),
+    ], record, "turn-confirm")).toThrow(/compaction/);
+  });
+
   test("rejects mismatched record identity and a later steering message", () => {
     const record = attachment();
     const wrong = { ...record, path: join(tmpdir(), "other.xlsx") };

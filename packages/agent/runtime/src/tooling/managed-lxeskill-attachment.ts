@@ -42,7 +42,6 @@ export function resolveManagedAttachment(input: {
   const visible = userMessages.filter(message => !injectedSkill(message));
   const current = visible.at(-1);
   if (!current || !realUser(current)) return denied("current message cannot be verified");
-  const human = visible.filter(realUser);
   const currentFiles = files(current);
   let selected: LocalFileBlock | undefined;
   if (currentFiles.length > 0) {
@@ -50,8 +49,13 @@ export function resolveManagedAttachment(input: {
     selected = currentFiles[0];
     if (selected?.turn_id !== currentTurnId) denied("current attachment turn does not match");
   } else {
-    const previous = human.at(-2);
-    if (!previous) return denied("attachment is not from the current or immediately previous message");
+    const previous = visible.at(-2);
+    if (!previous || !realUser(previous)) return denied("attachment is not from the current or immediately previous message");
+    const previousIndex = messages.lastIndexOf(previous);
+    const currentIndex = messages.lastIndexOf(current);
+    if (messages.slice(previousIndex + 1, currentIndex).some((message) => message.role === "compactionSummary")) {
+      return denied("attachment adjacency cannot be verified across compaction");
+    }
     selected = files(previous).find(file => file.attachment_id === attachment.attachment_id);
     if (!selected) return denied("attachment is not from the current or immediately previous message");
     if (selected.turn_id === currentTurnId) denied("previous attachment turn does not match");

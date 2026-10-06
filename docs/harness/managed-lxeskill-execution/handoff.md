@@ -8,13 +8,13 @@
 
 ## 调用链与权限
 
-聊天中的 `vietnam-stock-recommendation` Skill 判断意图和附件优先级 → `managed_lxeskill` 接收登记命令 ID，以及绑定时的附件 ID → Runtime 按当前/紧邻上一条真实用户消息核验附件来源与 XLSX 文件 → Agent CLI 宿主使用现有受管 Python 构造固定 CLI 参数，注入当前会话工作区和 Skill 范围 → Python 原有 bind 或 generate 逻辑执行 → Runtime 校验 terminal 和当前工作区内的最终 XLSX → Agent 确认成功后用 `send_files` 交付。
+聊天中的 `vietnam-stock-recommendation` Skill 判断意图和附件优先级 → `managed_lxeskill` 接收登记命令 ID，以及绑定时的附件 ID → Runtime 按当前/紧邻上一条真实用户消息核验附件来源与 XLSX 文件；遇会话压缩或无法识别的中间用户消息时拒绝复用紧邻附件 → Agent CLI 宿主使用现有受管 Python 构造固定 CLI 参数，注入当前会话工作区和 Skill 范围 → Python 原有 bind 或 generate 逻辑执行 → Runtime 校验 terminal 和当前工作区内的最终 XLSX → Agent 确认成功后用 `send_files` 交付。
 
 Read Only 不执行；Workspace Write 可调用登记命令，但受控宿主可写应用内部数据目录，这不扩大模型通用文件权限。桌面通用 `exec` 遇到登记命令会在审批前提示改用受控工具；其他命令仍遵循原权限和审批。工具调用失败不自动重试或回退到 `exec`。绑定和生成是两个独立调用，是否继续由 Skill 判断；文件不会由受控工具自动发送。
 
 ## 验证结果
 
-- Bun 定向回归：6 个测试文件，58 通过、0 失败。覆盖 catalog、附件来源、受控工具、Skill 文案、审批和桌面宿主的合成集成测试。
+- Bun 定向回归：6 个测试文件，59 通过、0 失败。覆盖 catalog、附件来源、受控工具、Skill 文案、审批和桌面宿主的合成集成测试。
 - Python catalog/infra 定向回归：406 通过、2 跳过、4 条已有依赖弃用提示。
 - Runtime 与 Agent CLI TypeScript 类型检查通过；TypeScript 生产边界检查通过；Agent CLI 构建成功。
 - 全部自动化测试使用合成附件或假 CLI，没有读取真实 SKU 表，也没有调用雅仓生产接口。`git diff --check` 在提交前通过。

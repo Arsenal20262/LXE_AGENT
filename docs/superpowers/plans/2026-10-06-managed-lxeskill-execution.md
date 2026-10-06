@@ -90,8 +90,8 @@ The implementation is ready for user testing only if Task 1–4 contract tests a
 ## 执行记录
 
 - Catalog：Python/Bun 双端校验已通过；本地独立提交 `efe7cd00`。
-- 附件来源：合成测试和 Runtime 类型检查已通过；本地独立提交 `54b66dc5`。
+- 附件来源：合成测试和 Runtime 类型检查已通过；本地独立提交 `54b66dc5`。复查时补充了会话压缩及无法识别的中间用户消息拒绝规则，单独修正提交。
 - 受控工具：假 CLI 与桌面宿主合成集成测试、权限回归、Runtime/Agent CLI 类型检查和 Agent CLI 构建已通过；本地独立提交 `2be5c58f`。
-- Skill 与文档：静态规则测试已通过。最终定向回归为 Bun 58 通过、Python 406 通过/2 跳过；TypeScript 生产边界检查通过。
+- Skill 与文档：静态规则测试已通过。最终定向回归为 Bun 59 通过、Python 406 通过/2 跳过；TypeScript 生产边界检查通过。
 - 未运行真实模型、真实雅仓、真实业务文件、Windows 安装版和 Office 重算链路。旧桌面服务若仍在 PR7 worktree，不能用其结果验收本分支。
 - 本地提交之外的 push、PR、merge 均需另行批准。
