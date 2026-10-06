@@ -68,7 +68,9 @@ app.whenReady().then(async () => {
   };
   try {
     await load();
-    if (suite === "app-actions" || suite === "conversation-events") {
+    if (suite === "session-workspace") {
+      await require("./session-workspace.cjs")({js, step, settle, load, state, waitFor});
+    } else if (suite === "app-actions" || suite === "conversation-events") {
       await require("./app-actions.cjs")({suite, js, step, settle, click, type, focus, key, state, waitFor});
     } else if (suite === "updates") {
       await js("behavior.mountUpdates()");

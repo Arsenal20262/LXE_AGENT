@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 const testDir = path.dirname(fileURLToPath(import.meta.url));
 const sourceDir = path.resolve(testDir, "../../src");
+const navigation = readFileSync(path.join(sourceDir, "shared/use-dashboard-navigation.ts"), "utf8");
 const main = readFileSync(path.join(sourceDir, "main.tsx"), "utf8");
 const styles = readFileSync(path.join(sourceDir, "styles.css"), "utf8");
 const tools = readFileSync(path.join(sourceDir, "features/tools/view.tsx"), "utf8");
@@ -41,7 +42,7 @@ test("capabilities use compact child navigation while activity opens statistics 
   assert.match(main, /activeSection === "activity"[\s\S]*<StatsView/);
   assert.match(readFileSync(path.join(sourceDir, "shared/workspace-view.tsx"), "utf8"), /aria-current=\{activeView === item\.id \? "page" : undefined\}/);
   assert.match(styles, /\.workspace-subnav-item\.active/);
-  assert.match(main, /const nextActivityView = section === "activity" \? "stats" : activityView/);
+  assert.match(navigation, /const nextActivityView = section === "activity" \? "stats" : activityView/);
 });
 
 test("pages enable only the server queries required by their active views", () => {

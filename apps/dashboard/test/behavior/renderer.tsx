@@ -1,3 +1,4 @@
+import { SessionWorkspaceFixture, sessionFixture } from "./session-workspace-fixture";
 import { AppActionsFixture, actionFixture } from "./app-actions-fixture";
 import { useApprovalsQuery } from "../../src/api/queries";
 import type { PendingApproval, PendingUserQuestion, PermissionMode } from "@lxe/desktop-protocol";
@@ -125,6 +126,7 @@ function workspaceRpc(call: { operation: string; input: Record<string, unknown> 
       persistWorkspaces();
       return { session_id: row.session_id, turn_id: "turn", message_id: "message", created: false, state: "queued" };
     })();
+    case "sessions.stop": return { session_id: input.session_id, stopped: true };
     case "sessions.pin": {
       const row = workspaceSessions.find(row => row.session_id === input.session_id)!;
       row.pinned_at = input.pinned ? 1 : 0; return row;
@@ -332,6 +334,12 @@ function renderActions(subscribed = true) {
   </QueryClientProvider></I18nContext.Provider>));
 }
 const fixture = {
+  session: sessionFixture,
+  mountSessionWorkspace() {
+    reset(); history.replaceState({ section: "sessions" }, "");
+    flushSync(() => root!.render(<I18nContext.Provider value={UI_TEXT.en}><QueryClientProvider client={queryClient!}><SessionWorkspaceFixture /></QueryClientProvider></I18nContext.Provider>));
+  },
+  releaseCreation(index: number) { pendingCreations.splice(index, 1)[0]?.(); },
   actions: actionFixture,
   mountActions() { reset(); actionFixture.reset(); renderActions(); },
   subscribeActions(value: boolean) { renderActions(value); },

@@ -1,21 +1,15 @@
+import { useDashboardNavigation, browserStorage } from "./shared/use-dashboard-navigation";
+import { useSessionWorkspace } from "./features/sessions/use-session-workspace";
 import { useModelActions } from "./api/model-actions";
 import { useMcpActions } from "./api/mcp-actions";
 import { useConversationEvents } from "./features/sessions/use-conversation-events";
-import { forgetComposerEditor } from "./features/sessions/ReferenceComposer";
-import { moveConversationAttachments, forgetConversationAttachments } from "./features/sessions/attachment-draft";
-import { forgetPreviewSession } from "./features/file-preview/reading-state";
 import { FilePreviewLayout } from "./features/file-preview/Sidebar";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { createRoot } from "react-dom/client";
-import { useQueryClient } from "@tanstack/react-query";
 import type {
-  DashboardRpcResult,
   DesktopCloudState,
-  DesktopConversationActivityPayload,
-  DesktopConversationTurnPayload,
   DesktopHealth,
-  DesktopInputAttachmentPayload,
 } from "@lxe/desktop-protocol";
 import {
   ChartColumn,
@@ -32,28 +26,13 @@ import "./styles.css";
 import "./desktop/update-control.css";
 import "./shared/navigation-rail.css";
 import { SidebarStatus } from "./desktop/sidebar-status";
-import { ConversationDisplayController, sendConversationMessage } from "./features/sessions/display-controller";
 import { WorkspacesIndex, WorkspaceControl } from "./features/sessions/workspaces";
-import { WORKSPACE_EXPANDED_STORAGE_KEY } from "./features/sessions/workspace-state";
-import { useStoredExpanded } from "./shared/ui/use-stored-expanded";
-import { useConversationEntry } from "./features/sessions/use-conversation-entry";
-import { useSessionStatus } from "./api/queries";
-import { acknowledgeConversationSend } from "./features/sessions/presentation";
-import { callDashboard } from "./api/client";
-import { dashboardQueryKeys } from "./api/query-keys";
 import { DashboardQueryProvider } from "./api/query-client";
 import {
-  flattenSessionPages,
   queryError,
   useCommandsQuery,
   useCurrentModelQuery,
   useModelsQuery,
-  useConversationActivityQuery,
-  useSessionConversationQuery,
-  useSessionsInfiniteQuery,
-  useSessionWorkspacesQuery,
-  useUserQuestionsQuery,
-  useApprovalsQuery,
   useSkillsQuery,
   useToolsetsQuery,
 } from "./api/queries";
@@ -74,7 +53,6 @@ import {
   initialDashboardTheme,
   resolveTheme,
 } from "./shared/appearance";
-import type { SessionPayload } from "./api/payloads";
 import type { DetailTarget } from "./shared/ui/detail-target";
 import { DetailModal } from "./features/details/view";
 import { McpServicesView } from "./features/integrations/view";
@@ -84,10 +62,8 @@ import { RuntimeStatusPopover } from "./features/runtime-status/view";
 import {
   SessionDetailView
 } from "./features/sessions/view";
-import { SkillsCatalogView, type SkillConversationAction } from "./features/skills/user-view";
+import { SkillsCatalogView } from "./features/skills/user-view";
 import { AddSkillMenu } from "./features/skills/add-menu";
-import { appendComposerDraftPrompt, prepareDraftMove } from "./features/sessions/composer-draft";
-import type { SkillPayload } from "@lxe/desktop-protocol";
 import { StatsView } from "./features/stats/view";
 import { ToolsView } from "./features/tools/view";
 import { SyntheticPerformerWorkbench } from "./features/workbench/view";
@@ -96,12 +72,6 @@ import { InputAssetsWorkbench, useInputAssetSlots } from "./features/workbench/i
 import { DesktopShell } from "./desktop/shell";
 import type { DesktopSettingsSection } from "./desktop/settings-model";
 import { DashboardRootErrorBoundary } from "./root-error-boundary";
-import {
-  dashboardRouteFromHistory,
-  type WorkbenchView,
-  readStoredCapabilityView,
-  storeCapabilityView,
-} from "./shared/navigation";
 import { useThreeStateSidebar } from "./shared/use-three-state-sidebar";
 import { SidebarResizer } from "./shared/sidebar-resizer";
 import { NavigationRail } from "./shared/navigation-rail";
@@ -109,30 +79,9 @@ import { WorkspaceView } from "./shared/workspace-view";
 import type {
   ActivityView,
   CapabilityView,
-  DashboardRouteSelection,
   DashboardSection,
 } from "./shared/navigation";
 const DOCS_HOME_PATH = "README.md";
-
-function browserStorage(): Storage | undefined {
-  try {
-    return window.localStorage;
-  } catch {
-    return undefined;
-  }
-}
-
-function routeStateFromLocation(): DashboardRouteSelection {
-  const storedCapabilityView = readStoredCapabilityView(browserStorage());
-  return dashboardRouteFromHistory(window.history.state, storedCapabilityView);
-}
-
-// Event handlers keep their latest closure without invalidating the sidebar on stream ticks.
-function useLatestCallback<A extends unknown[], R>(callback: (...args: A) => R) {
-  const latest = useRef(callback);
-  useLayoutEffect(() => { latest.current = callback; });
-  return useCallback((...args: A) => latest.current(...args), []);
-}
 
 function App({
   desktopCloud,
@@ -149,13 +98,8 @@ function App({
   onOpenDesktopSettings?: (section?: DesktopSettingsSection) => void;
   setupComplete: boolean;
 }) {
-  const queryClient = useQueryClient();
-  const [initialRoute] = useState(() => routeStateFromLocation());
   const t = UI_TEXT[language];
-  const [activeSection, setActiveSection] = useState<DashboardSection>(initialRoute.section);
-  const [capabilityView, setCapabilityView] = useState<CapabilityView>(initialRoute.capabilityView);
-  const [activityView, setActivityView] = useState<ActivityView>(initialRoute.activityView);
-  const [workbenchView, setWorkbenchView] = useState<WorkbenchView>(initialRoute.workbenchView);
+  const { activeSection, capabilityView, activityView, workbenchView, openDashboardSection, openWorkbenchView, openCapabilityView, openActivityView } = useDashboardNavigation();
   const assetSlots = useInputAssetSlots();
   const assetSlotStatus = assetSlots.slots
     ? t.inputAssets.slotSummary(
@@ -165,36 +109,16 @@ function App({
     : "";
   const [error, setError] = useState("");
   const [detailTarget, setDetailTarget] = useState<DetailTarget>(null);
-  const [query, setQuery] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState("");
-  const [selectedSessionId, updateSelectedSessionId] = useState("");
-  const [conversationDisplay] = useState(() => new ConversationDisplayController());
-  const setSelectedSessionId = (id: string) => { workspaceSelectionRevision.current++; conversationDisplay.select(id); updateSelectedSessionId(id); };
-  const [newConversation, setNewConversation] = useState(false);
-  const [blankSession, setBlankSession] = useState<SessionPayload | null>(null);
-  useConversationEntry(conversationDisplay, selectedSessionId, activeSection === "sessions");
   const sidebar = useThreeStateSidebar(browserStorage());
-  const [sessionSearchOpen, setSessionSearchOpen] = useState(false);
-  const [sessionSearchFocusKey, setSessionSearchFocusKey] = useState(0);
   const dashboardRuntimeReady = desktopHealth.gateway === "ready"
     && desktopHealth.agent_cli === "ready";
 
-  const sessionsQuery = useSessionsInfiniteQuery(debouncedQuery, dashboardRuntimeReady);
-  const workspacesQuery = useSessionWorkspacesQuery(dashboardRuntimeReady);
-  const [expandedWorkspaces, setWorkspaceExpanded] = useStoredExpanded(WORKSPACE_EXPANDED_STORAGE_KEY);
-  const workspaceSelectionRevision = useRef(0);
-  const creatingSession = useRef(0);
-  const deferredNewDirectory = useRef<string | undefined>(undefined);
-  useLayoutEffect(() => { workspaceSelectionRevision.current++; }, [activeSection]);
-  const sessionDetailQuery = useSessionConversationQuery(
-    selectedSessionId,
-    dashboardRuntimeReady && activeSection === "sessions",
-    conversationDisplay,
-  );
-  const conversationActivityQuery = useConversationActivityQuery(
-    selectedSessionId,
-    dashboardRuntimeReady && activeSection === "sessions",
-  );
+  const workspace = useSessionWorkspace({
+    activeSection, runtimeReady: dashboardRuntimeReady, defaultDirectory: desktopHealth.workspace_root,
+    onEnterSessions: () => openDashboardSection("sessions"), onOpenSearch: sidebar.openForSearch, onError: setError,
+  });
+  const { selectedSessionId, newConversation, selectedSession } = workspace.selection;
+  const { openSession, startSkillConversation } = workspace.actions;
   const capabilitiesOpen = activeSection === "capabilities";
   const modelsQuery = useModelsQuery(
     dashboardRuntimeReady
@@ -212,269 +136,16 @@ function App({
       && capabilitiesOpen
       && (capabilityView === "tools" || capabilityView === "connections"),
   );
-  const sessions = useMemo(() => flattenSessionPages(sessionsQuery.data?.pages), [sessionsQuery.data?.pages]);
-  const questionsQuery = useUserQuestionsQuery(dashboardRuntimeReady, selectedSessionId);
-  const pendingQuestions = dashboardRuntimeReady ? questionsQuery.data?.items ?? [] : [];
-  const approvalsQuery = useApprovalsQuery(dashboardRuntimeReady, selectedSessionId);
-  const pendingApprovals = dashboardRuntimeReady ? approvalsQuery.data?.items ?? [] : [];
-  const waitingSessionIds = new Set([...pendingQuestions, ...pendingApprovals].map(q => q.session_id));
-  const sessionStatuses=useSessionStatus(sessions.items.map(session=>session.session_id),dashboardRuntimeReady,sessionDetailQuery.display,activeSection==="sessions"&&!newConversation);
-
   useConversationEvents();
-
-  useEffect(() => {
-    const handlePopState = () => {
-      const nextRoute = routeStateFromLocation();
-      setActiveSection(nextRoute.section);
-      setCapabilityView(nextRoute.capabilityView);
-      setActivityView(nextRoute.activityView);
-      setWorkbenchView(nextRoute.workbenchView);
-    };
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
-  }, []);
-
-  useEffect(() => {
-    const debounce = window.setTimeout(() => setDebouncedQuery(query.trim()), 250);
-    return () => window.clearTimeout(debounce);
-  }, [query]);
-
-  useEffect(() => {
-    storeCapabilityView(capabilityView, browserStorage());
-  }, [capabilityView]);
 
   useEffect(() => {
     if (!dashboardRuntimeReady) setDetailTarget(null);
   }, [dashboardRuntimeReady]);
 
-  function loadMoreSessions() {
-    if (dashboardRuntimeReady && !sessionsQuery.isFetchingNextPage && sessionsQuery.hasNextPage) {
-      void sessionsQuery.fetchNextPage();
-    }
-  }
-
-  function handleSessionSearchToggle() {
-    sidebar.openForSearch();
-    setSessionSearchOpen(true);
-    setSessionSearchFocusKey((current) => current + 1);
-  }
-
-  // Keep the focused conversation populated by default.
-  useEffect(() => {
-    if (activeSection === "sessions" && !newConversation && !selectedSessionId && !creatingSession.current && sessions.items.length > 0) {
-      setSelectedSessionId(sessions.items[0].session_id);
-    }
-  }, [activeSection, newConversation, selectedSessionId, sessions.items]);
-
-  function pushDashboardRoute(
-    section: DashboardSection,
-    nextCapabilityView = capabilityView,
-    nextActivityView = activityView,
-    nextWorkbenchView = workbenchView,
-  ) {
-    const nextState = {
-      section,
-      capabilityView: nextCapabilityView,
-      activityView: nextActivityView,
-      workbenchView: nextWorkbenchView,
-    };
-    const currentState = window.history.state;
-    const stateChanged = currentState?.section !== section
-      || currentState?.capabilityView !== nextCapabilityView
-      || currentState?.activityView !== nextActivityView
-      || currentState?.workbenchView !== nextWorkbenchView;
-    if (window.location.pathname !== "/" || stateChanged) {
-      window.history.pushState(nextState, "", "/");
-    }
-  }
-
-  function openDashboardSection(section: DashboardSection) {
-    const nextActivityView = section === "activity" ? "stats" : activityView;
-    // Re-entering the workbench from the sidebar always lands on the tool index.
-    const nextWorkbenchView = section === "workbench" ? "index" : workbenchView;
-    pushDashboardRoute(section, capabilityView, nextActivityView, nextWorkbenchView);
-    setActiveSection(section);
-    setActivityView(nextActivityView);
-    setWorkbenchView(nextWorkbenchView);
-  }
-
-  function openWorkbenchView(view: WorkbenchView) {
-    pushDashboardRoute("workbench", capabilityView, activityView, view);
-    setActiveSection("workbench");
-    setWorkbenchView(view);
-  }
-
-  function openCapabilityView(view: CapabilityView) {
-    pushDashboardRoute("capabilities", view, activityView);
-    setActiveSection("capabilities");
-    setCapabilityView(view);
-  }
-
-  function openActivityView(view: ActivityView) {
-    pushDashboardRoute("activity", capabilityView, view);
-    setActiveSection("activity");
-    setActivityView(view);
-  }
-
-  function openSession(session: SessionPayload) {
-    setWorkspaceExpanded(session.workspace.directory, true);
-    pushDashboardRoute("sessions");
-    setActiveSection("sessions");
-    setSelectedSessionId(session.session_id);
-    setNewConversation(session.blank === true);
-  }
-
-  async function enterNewConversation(directory = desktopHealth.workspace_root, carry = false): Promise<SessionPayload | undefined> {
-    const revision = ++workspaceSelectionRevision.current;
-    const before = conversationDisplay.getSnapshot().viewKey;
-    creatingSession.current++;
-    let session: SessionPayload;
-    try { session = await callDashboard({ operation: "sessions.create", input: { directory } }); }
-    finally { creatingSession.current--; }
-    if (revision !== workspaceSelectionRevision.current || before !== conversationDisplay.getSnapshot().viewKey) return;
-    if (carry) {
-      const move = prepareDraftMove(before, session.session_id);
-      moveConversationAttachments(before, session.session_id);
-      move();
-    }
-    setBlankSession(session);
-    setWorkspaceExpanded(session.workspace.directory, true);
-    pushDashboardRoute("sessions"); setActiveSection("sessions");
-    setSelectedSessionId(session.session_id); setNewConversation(true);
-    return session;
-  }
-  function startNewConversation(directory = desktopHealth.workspace_root): void {
-    if (!dashboardRuntimeReady) {
-      deferredNewDirectory.current = directory;
-      pushDashboardRoute("sessions"); setActiveSection("sessions");
-      setSelectedSessionId(""); setNewConversation(true);
-      return;
-    }
-    void enterNewConversation(directory).catch(cause => setError(queryError(cause)));
-  }
-  useEffect(() => {
-    if (!dashboardRuntimeReady || activeSection !== "sessions" || !newConversation || selectedSessionId || !deferredNewDirectory.current) return;
-    const directory = deferredNewDirectory.current;
-    deferredNewDirectory.current = undefined;
-    void enterNewConversation(directory, true).catch(cause => setError(queryError(cause)));
-  }, [dashboardRuntimeReady, activeSection, newConversation, selectedSessionId]);
-
-  async function chooseWorkspace(newDraft: boolean): Promise<void> {
-    const revision = ++workspaceSelectionRevision.current;
-    const before = conversationDisplay.getSnapshot().viewKey;
-    const stillCurrent = () => revision === workspaceSelectionRevision.current && conversationDisplay.getSnapshot().viewKey === before;
-    const directory = await window.lxe!.desktop.selectWorkspace();
-    if (!directory || !stillCurrent()) return;
-    const workspace = await callDashboard({ operation: "workspaces.register", input: { directory } });
-    queryClient.setQueryData<DashboardRpcResult<"sessions.workspaces">>(
-      dashboardQueryKeys.sessions.workspaces,
-      current => ({ items: [...(current?.items ?? []).filter(item => item.directory !== workspace.directory), workspace] }),
-    );
-    if (!stillCurrent()) return;
-    await enterNewConversation(workspace.directory, !newDraft);
-  }
-
-  async function renameWorkspace(directory: string, display_name: string): Promise<void> {
-    const workspace = await callDashboard({ operation: "workspaces.rename", input: { directory, display_name } });
-    queryClient.setQueryData<DashboardRpcResult<"sessions.workspaces">>(
-      dashboardQueryKeys.sessions.workspaces,
-      current => ({ items: [...(current?.items ?? []).filter(item => item.directory !== directory), workspace] }),
-    );
-  }
-
-  async function startSkillConversation(action: SkillConversationAction, skill?: SkillPayload) {
-    const prompt = action === "create" ? t.userSkills.createPrompt : skill ? t.userSkills.usePrompt(skill.name) : "";
-    if (!prompt) return;
-    try {
-      const session = await enterNewConversation();
-      if (session) appendComposerDraftPrompt(window.sessionStorage, session.session_id, prompt);
-    } catch (cause) { setError(queryError(cause)); }
-  }
-
-  async function sendConversation(text: string, attachments: DesktopInputAttachmentPayload[]): Promise<void> {
-    const { result, ticket, selected } = await sendConversationMessage(conversationDisplay, text, attachments,
-      input => callDashboard({ operation: "sessions.send", input }));
-    queryClient.setQueryData<DesktopConversationActivityPayload>(
-      dashboardQueryKeys.sessions.activity(result.session_id),
-      current => acknowledgeConversationSend(current, result, ticket.message),
-    );
-    setBlankSession(current => current?.session_id === result.session_id ? null : current);
-    if (selected) { setSelectedSessionId(result.session_id); setNewConversation(false); }
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.sessions.lists }),
-      queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.sessions.detailSession(result.session_id) }),
-    ]);
-  }
-
-  async function stopConversation(): Promise<void> {
-    if (!selectedSessionId) return;
-    await callDashboard({ operation: "sessions.stop", input: { session_id: selectedSessionId } });
-  }
-
-  async function setSessionPinned(session: SessionPayload, pinned: boolean): Promise<void> {
-    await callDashboard({
-      operation: "sessions.pin",
-      input: { session_id: session.session_id, pinned },
-    });
-    await queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.sessions.lists });
-  }
-
-  async function deleteSession(session: SessionPayload): Promise<void> {
-    await callDashboard({
-      operation: "sessions.delete",
-      input: { session_id: session.session_id },
-    });
-    forgetPreviewSession(session.session_id); forgetComposerEditor(session.session_id);
-    forgetConversationAttachments(session.session_id);
-    queryClient.removeQueries({ queryKey: dashboardQueryKeys.sessions.detailSession(session.session_id) });
-    queryClient.removeQueries({ queryKey: dashboardQueryKeys.sessions.activity(session.session_id) });
-    if (selectedSessionId === session.session_id) startNewConversation();
-    await queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.sessions.lists });
-  }
-
-  async function openConversationFile(artifactId: string): Promise<void> {
-    if (!selectedSessionId) return;
-    const result = await callDashboard({
-      operation: "sessions.file.open",
-      input: { session_id: selectedSessionId, artifact_id: artifactId },
-    });
-    // The operating system's own message is the only useful thing to show here.
-    if (!result.opened) throw new Error(result.error);
-  }
-
-  async function revealConversationFile(artifactId: string): Promise<void> {
-    if (!selectedSessionId) return;
-    const result = await callDashboard({
-      operation: "sessions.file.reveal",
-      input: { session_id: selectedSessionId, artifact_id: artifactId },
-    });
-    // Only the filesystem's own text reaches here; a reveal past that point
-    // has nothing to report either way.
-    if (!result.revealed) throw new Error(result.error);
-  }
-
-  async function openConversationAttachment(attachmentId: string): Promise<void> {
-    if (!selectedSessionId) return;
-    const result = await callDashboard({
-      operation: "sessions.attachment.open",
-      input: { session_id: selectedSessionId, attachment_id: attachmentId },
-    });
-    if (!result.opened) throw new Error(result.error);
-  }
-
   const { setCurrentModel, setCurrentThinkingLevel, modelSaving, thinkingSaving } = useModelActions({
     current: currentModelQuery.data, models: modelsQuery.data?.items ?? [], onError: setError,
   });
   const { toggleMcpServer, savingId: mcpSavingId } = useMcpActions(setError);
-
-  const sessionDetail = sessionDetailQuery.data ?? null;
-
-  const selectedSession = sessions.items.find((session) => session.session_id === selectedSessionId)
-    || (sessionDetail?.session.session_id === selectedSessionId ? sessionDetail.session : null)
-    || (blankSession?.session_id === selectedSessionId ? blankSession : null);
-  const conversationActivity = selectedSessionId
-    ? sessionDetailQuery.display.activity ?? conversationActivityQuery.data ?? null
-    : null;
 
   const showDashboardHome = activeSection === "home";
   const hasEmbeddedPageHeader = activeSection === "capabilities"
@@ -483,7 +154,7 @@ function App({
     || activeSection === "sessions";
   const mcpToolset = toolsetsQuery.data?.items.find((toolset) => toolset.name === "mcp");
   const activeQueries = activeSection === "sessions"
-    ? [sessionDetailQuery, conversationActivityQuery, modelsQuery, currentModelQuery]
+    ? [...workspace.queryStatus, modelsQuery, currentModelQuery]
     : activeSection === "capabilities" && capabilityView === "models"
       ? [modelsQuery, currentModelQuery]
       : activeSection === "capabilities" && capabilityView === "tools"
@@ -547,17 +218,6 @@ function App({
     activeSection === "sessions" ? "sessions-focus" : "",
   ].filter(Boolean).join(" ");
 
-  const sessionIndexActions = {
-    onSearchClose: useLatestCallback(() => { setSessionSearchOpen(false); setQuery(""); }),
-    onLoadMore: useLatestCallback(loadMoreSessions),
-    onNew: useLatestCallback(startNewConversation),
-    onOpen: useLatestCallback(openSession),
-    onPin: useLatestCallback(setSessionPinned),
-    onDelete: useLatestCallback(deleteSession),
-  };
-  const selectedBusy = Boolean(conversationActivity?.active || conversationActivity?.queued.length);
-  const deleteBlockedSessionIds = useMemo(() => selectedBusy ? [selectedSessionId] : [], [selectedBusy, selectedSessionId]);
-
   return (
     <>
       <main className={shellClassName}>
@@ -609,13 +269,13 @@ function App({
             <span>{t.app.title}</span>
             <button
               aria-label={t.sessions.searchAria}
-              aria-pressed={sessionSearchOpen}
+              aria-pressed={workspace.sidebar.searchOpen}
               className={
-                sessionSearchOpen
+                workspace.sidebar.searchOpen
                   ? "sidebar-icon-button sidebar-search-button is-selected"
                   : "sidebar-icon-button sidebar-search-button"
               }
-              onClick={handleSessionSearchToggle}
+              onClick={workspace.actions.openSearch}
               title={t.sessions.searchAria}
               type="button"
             >
@@ -624,42 +284,15 @@ function App({
           </div>
           <div className="sidebar-session-section">
             <WorkspacesIndex
-              expanded={expandedWorkspaces}
-              onExpandedChange={setWorkspaceExpanded}
-              onRename={renameWorkspace}
-              display={sessionDetailQuery.display}
-              currentBlank={newConversation ? blankSession : null}
-              workspaces={workspacesQuery.data?.items ?? []}
-              defaultDirectory={desktopHealth.workspace_root}
-              activeDirectory={selectedSession?.workspace.directory ?? desktopHealth.workspace_root}
-              enabled={dashboardRuntimeReady}
-              workspaceError={dashboardRuntimeReady ? queryError(workspacesQuery.error) : ""}
-              workspacesLoading={dashboardRuntimeReady && workspacesQuery.isPending}
-              onRetryWorkspaces={() => void workspacesQuery.refetch()}
-              onChoose={() => { void chooseWorkspace(true).catch(cause => setError(queryError(cause))); }}
-              sessions={sessions.items}
-              statuses={sessionStatuses.items}
-              waitingSessionIds={waitingSessionIds}
-              statusUnavailable={!sessionStatuses.ready}
-              statusError={sessionStatuses.error}
-              query={query}
-              searchOpen={sessionSearchOpen}
-              searchFocusKey={sessionSearchFocusKey}
-              initialLoading={dashboardRuntimeReady
-                && sessionsQuery.isPending
-                && !sessions.items.length}
-              loadingMore={dashboardRuntimeReady && sessionsQuery.isFetchingNextPage}
-              error={dashboardRuntimeReady && !sessions.items.length ? queryError(sessionsQuery.error) : ""}
-              hasMore={dashboardRuntimeReady && Boolean(sessionsQuery.hasNextPage)}
-              loadMoreError={dashboardRuntimeReady && sessions.items.length && sessionsQuery.isFetchNextPageError
-                ? queryError(sessionsQuery.error)
-                : ""}
-              selectedSessionId={activeSection === "sessions" ? selectedSessionId : ""}
-              onQueryChange={setQuery}
-              {...sessionIndexActions}
+              {...workspace.sidebar}
+              onExpandedChange={workspace.actions.expandWorkspace}
+              onRename={workspace.actions.renameWorkspace}
+              onRetryWorkspaces={workspace.actions.retryWorkspaces}
+              onChoose={workspace.actions.chooseNewWorkspace}
+              onQueryChange={workspace.actions.changeSearch}
+              {...workspace.actions.sessionIndex}
               onTransientInteractionChange={sidebar.onTransientInteractionChange}
               visible={sidebarVisible}
-              deleteBlockedSessionIds={deleteBlockedSessionIds}
             />
           </div>
         </aside>
@@ -690,19 +323,15 @@ function App({
                     workspaceControl={<WorkspaceControl
                       directory={selectedSession?.workspace.directory ?? desktopHealth.workspace_root}
                       defaultDirectory={desktopHealth.workspace_root}
-                      workspaces={workspacesQuery.data?.items ?? []}
+                      workspaces={workspace.sidebar.workspaces}
                       editable={newConversation}
-                      disabled={!dashboardRuntimeReady || sessionDetailQuery.display.pending.some(item => !item.error)}
-                      onChange={directory => { void enterNewConversation(directory, true).catch(cause => setError(queryError(cause))); }}
-                      onChoose={() => chooseWorkspace(false)}
+                      disabled={!dashboardRuntimeReady || workspace.conversation.pendingMessages.some(item => !item.error)}
+                      onChange={workspace.actions.switchConversationWorkspace}
+                      onChoose={workspace.actions.chooseConversationWorkspace}
                     />}
-                    question={newConversation ? undefined : pendingQuestions.find(q => q.session_id === selectedSessionId)}
-                    onQuestionAnswered={() => { void questionsQuery.refetch(); }}
-                    approvals={pendingApprovals.filter(request => request.session_id === selectedSessionId)}
-                    onApprovalChanged={() => { void approvalsQuery.refetch(); }}
-                    fallbackSession={selectedSession}
-                    detail={sessionDetail}
-                    activity={conversationActivity}
+                    {...workspace.conversation}
+                    onQuestionAnswered={workspace.actions.questionAnswered}
+                    onApprovalChanged={workspace.actions.approvalChanged}
                     currentModel={currentModelQuery.data ?? null}
                     models={modelsQuery.data?.items ?? []}
                     modelLoading={dashboardRuntimeReady
@@ -714,36 +343,18 @@ function App({
                     runtimeUnavailableMessage={setupComplete
                       ? t.conversation.unavailable
                       : t.conversation.modelUnavailable}
-                    loading={dashboardRuntimeReady
-                      && !newConversation
-                      && sessionDetailQuery.isPending
-                      && !conversationActivity}
-                    error={dashboardRuntimeReady
-                      && !newConversation
-                      && !sessionDetail
-                      && !conversationActivity
-                      ? queryError(sessionDetailQuery.error)
-                      : ""}
-                    hasOlder={Boolean(sessionDetailQuery.hasPreviousPage)}
-                    loadingOlder={sessionDetailQuery.isFetchingPreviousPage}
-                    loadOlderError={sessionDetail && sessionDetailQuery.isFetchPreviousPageError
-                      ? queryError(sessionDetailQuery.error)
-                      : ""}
-                    onLoadOlder={sessionDetailQuery.fetchPreviousPage}
-                    hasNewer={sessionDetailQuery.hasNextPage}
-                    onLoadNewer={sessionDetailQuery.fetchNextPage}
-                    onVisibleGroups={sessionDetailQuery.setVisibleGroups}
-                    onJumpToLatest={sessionDetailQuery.jumpToLatest}
+                    onLoadOlder={workspace.actions.loadOlder}
+                    onLoadNewer={workspace.actions.loadNewer}
+                    onVisibleGroups={workspace.actions.visibleGroupsChanged}
+                    onJumpToLatest={workspace.actions.jumpToLatest}
                     onModelChange={setCurrentModel}
                     onThinkingLevelChange={setCurrentThinkingLevel}
-                    onSend={sendConversation}
-                    onStop={stopConversation}
-                    onOpenFile={openConversationFile}
-                    onRevealFile={revealConversationFile}
-                    onOpenAttachment={openConversationAttachment}
-                    pendingMessages={sessionDetailQuery.display.pending}
-                    display={sessionDetailQuery.display}
-                    onFollowingChange={sessionDetailQuery.setFollowing}
+                    onSend={workspace.actions.sendConversation}
+                    onStop={workspace.actions.stopConversation}
+                    onOpenFile={workspace.actions.openConversationFile}
+                    onRevealFile={workspace.actions.revealConversationFile}
+                    onOpenAttachment={workspace.actions.openConversationAttachment}
+                    onFollowingChange={workspace.actions.followingChanged}
                   />
                 ) : (
                   <EmptyState label={selectedSessionId ? t.sessionDetail.loading : t.sessions.selectPrompt} />

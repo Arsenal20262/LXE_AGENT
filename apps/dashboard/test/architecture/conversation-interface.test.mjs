@@ -7,6 +7,8 @@ const sourceDir = path.resolve(import.meta.dirname, "../../src");
 const view = readFileSync(path.join(sourceDir, "features/sessions/view.tsx"), "utf8");
 const fileAttachmentDisplay = readFileSync(path.join(sourceDir, "features/sessions/file-attachment-display.tsx"), "utf8");
 const events = readFileSync(path.join(sourceDir, "features/sessions/use-conversation-events.ts"), "utf8");
+const workflow = readFileSync(path.join(sourceDir, "features/sessions/use-session-workspace.ts"), "utf8");
+const actions = readFileSync(path.join(sourceDir, "api/session-actions.ts"), "utf8");
 const main = readFileSync(path.join(sourceDir, "main.tsx"), "utf8");
 const queries = readFileSync(path.join(sourceDir, "api/queries.ts"), "utf8");
 const conversation = readFileSync(path.join(sourceDir, "features/sessions/conversation.ts"), "utf8");
@@ -145,11 +147,11 @@ test("tool files reach the conversation and open through Main", () => {
   assert.match(conversation, /artifact\.turn_id/);
   assert.doesNotMatch(view, /toolGroupArtifacts\(group\.messages\)/);
   assert.match(view, /file\.artifact_id/);
-  assert.match(main, /operation: "sessions\.file\.open"/);
-  assert.match(main, /artifact_id: artifactId/);
-  assert.doesNotMatch(main, /sessions\.file\.open"[\s\S]{0,160}path/);
+  assert.match(actions, /operation: "sessions\.file\.open"/);
+  assert.match(actions, /artifact_id: artifactId/);
+  assert.doesNotMatch(actions, /sessions\.file\.open"[\s\S]{0,160}path/);
   // The OS failure text is what surfaces, not a stand-in message.
-  assert.match(main, /if \(!result\.opened\) throw new Error\(result\.error\)/);
+  assert.match(workflow, /if \(!result\.opened\) throw new Error\(result\.error\)/);
 });
 
 test("the file list spends its width on what differs between the files", () => {
@@ -182,22 +184,22 @@ test("the file list spends its width on what differs between the files", () => {
 test("input attachments expose opaque chips and open through Main", () => {
   assert.match(view, /InputAttachmentList/);
   assert.match(view, /message\.attachments/);
-  assert.match(main, /operation: "sessions\.attachment\.open"/);
-  assert.match(main, /attachment_id: attachmentId/);
-  assert.doesNotMatch(main, /sessions\.attachment\.open"[\s\S]{0,160}path/);
+  assert.match(actions, /operation: "sessions\.attachment\.open"/);
+  assert.match(actions, /attachment_id: attachmentId/);
+  assert.doesNotMatch(actions, /sessions\.attachment\.open"[\s\S]{0,160}path/);
 });
 
 test("dashboard sends through Main, restores activity, and merges cursor history", () => {
-  assert.match(main, /operation: "sessions\.send"/);
-  assert.match(main, /operation: "sessions\.stop"/);
+  assert.match(actions, /operation: "sessions\.send"/);
+  assert.match(actions, /operation: "sessions\.stop"/);
   assert.match(events, /onConversationEvent/);
   assert.match(events, /onConversationStreamEvent/);
   assert.match(events, /requestAnimationFrame\(flush\)/);
   assert.match(events, /applyDesktopStreamBatch\(activity, batch\)/);
   assert.match(events, /setQueryData\(\s*dashboardQueryKeys\.sessions\.activity\(activity\.session_id\)/s);
-  assert.match(main, /useConversationActivityQuery/);
-  assert.doesNotMatch(main, /conversationActivities|setConversationActivities/);
-  assert.doesNotMatch(main, /if \(section === "sessions"\) \{\s*setSelectedSessionId\(""\)/s);
+  assert.match(workflow, /useConversationActivityQuery/);
+  assert.doesNotMatch(workflow, /conversationActivities|setConversationActivities/);
+  assert.doesNotMatch(workflow, /if \(section === "sessions"\) \{\s*setSelectedSessionId\(""\)/s);
   assert.match(queries, /operation: "sessions\.activity"/);
   assert.match(queries, /message_before: before/);
   assert.match(controller, /mergeLatestConversationWindow/);
@@ -209,8 +211,8 @@ test("a user message is projected before the RPC settles and remains on send fai
   const enqueue = controller.indexOf("const ticket = controller.beginSend(text, attachments)");
   assert.ok(enqueue >= 0 && controller.indexOf("await send(", enqueue) > enqueue);
   assert.match(controller, /client_message_id: ticket.pendingId/);
-  assert.match(main, /sendConversationMessage/);
-  assert.match(main, /acknowledgeConversationSend/);
+  assert.match(workflow, /sendConversationMessage/);
+  assert.match(workflow, /acknowledgeConversationSend/);
   assert.match(presentation, /item.error/);
   assert.doesNotMatch(view, /pendingMessages\.map/);
 });
