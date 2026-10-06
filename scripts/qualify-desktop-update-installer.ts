@@ -10,11 +10,12 @@ const {build,Platform,Arch}=require("electron-builder");
 const libRequire=createRequire(builderRequire.resolve("app-builder-lib/package.json"));
 const asar=libRequire("@electron/asar");
 const adapter=createRequire(import.meta.url)("./windows-update-installer.cjs");
-export async function qualify(payload:string,legacyRef:string,resumeRoot?:string){
+export async function qualify(payload:string,legacyRef:string,resumeRoot?:string,firstRebuild=2){
  if(process.platform!=="win32")throw new Error("Windows qualification requires Windows");
  if(!existsSync(join(payload,"resources/app.asar")))throw new Error("Pass a built win-unpacked payload");
  const id=resumeRoot?resolve(resumeRoot).split(/[\\/]/).at(-1)!.replace("lxe-update-qualification-",""):randomUUID().slice(0,8),name="lxe-update-qualification-"+id;
  if(!/^[a-f0-9]{8}$/.test(id))throw new Error("Invalid isolated qualification directory");
+ if(![2,3].includes(firstRebuild))throw new Error("Qualification resume must rebuild version 2 or 3");
  const output=join(root,"dist",name);mkdirSync(output,{recursive:true});
  const clone=join(output,"payload"),application=join(output,"application");
  if(!resumeRoot){cpSync(payload,clone,{recursive:true});asar.extractAll(join(clone,"resources/app.asar"),application);}
@@ -32,13 +33,13 @@ export async function qualify(payload:string,legacyRef:string,resumeRoot?:string
  for(let n=1;n<=3;n++){
   const version=`0.0.${n}`;
   const artifact=join(output,version,`LXE-Update-Qualification-${version}.exe`);
-  if(n===1&&resumeRoot&&existsSync(artifact)){artifacts.push(artifact);continue;}
+  if(n<firstRebuild&&resumeRoot&&existsSync(artifact)&&(n===1||existsSync(artifact+".blockmap"))){artifacts.push(artifact);continue;}
   const metadata={...JSON.parse(readFileSync(join(application,"package.json"),"utf8")),name,productName:product,version,lxeBuildId:`qualification-${id}-${n}`,lxeDataDirectoryName:product,lxeDataAppId:"com.lxe.agent.updatequalification."+id};
   writeFileSync(join(application,"package.json"),JSON.stringify(metadata));
   writeFileSync(join(application,"qualification-version.txt"),version);
   rmSync(join(clone,"resources/app.asar"));rmSync(join(clone,"resources/app.asar.unpacked"),{recursive:true,force:true});
   await asar.createPackageWithOptions(application,join(clone,"resources/app.asar"),{unpack:"**/{pty-host.cjs,pty-runtime/**/*}"});
-  if(n===2)await adapter({packager:{projectDir:desktop}});
+  if(n>=2)await adapter({packager:{projectDir:desktop}});
   const config={...production,appId:"com.lxe.agent.updatequalification."+id,productName:product,
    win:{...production.win,artifactName:`LXE-Update-Qualification-${version}.exe`},extraMetadata:metadata,
    directories:{...production.directories,output:join(output,version)},
@@ -53,4 +54,4 @@ export async function qualify(payload:string,legacyRef:string,resumeRoot?:string
  writeFileSync(join(output,"qualification.json"),JSON.stringify(record,null,2));
  console.log("QUALIFICATION="+join(output,"qualification.json"));
 }
-if(import.meta.main)await qualify(resolve(process.argv[2]??"dist/desktop-unpacked/win-unpacked"),process.argv[3]??"ba7aacd22c1b968161de02ec19bd5d90dccac7e2",process.argv[4]);
+if(import.meta.main)await qualify(resolve(process.argv[2]??"dist/desktop-unpacked/win-unpacked"),process.argv[3]??"ba7aacd22c1b968161de02ec19bd5d90dccac7e2",process.argv[4],Number(process.argv[5]??2));
