@@ -15,7 +15,7 @@ const previousPath = process.env.PATH;
 const previousFd = process.env.LXE_FD_PATH;
 try {
   const resources = join(unpacked, "resources");
-  const desktop = resolveDesktopPaths({ packaged: true, appPath: join(resources, "app.asar"), executablePath: join(unpacked, "LXE Agent.exe"), resourcesPath: resources, environment: {} });
+  const desktop = resolveDesktopPaths({ packaged: true, appPath: join(resources, "app.asar"), executablePath: join(unpacked, "LXE Agent.exe"), resourcesPath: resources, environment: {LOCALAPPDATA: process.env.LOCALAPPDATA} });
   const paths = resolveExecRuntimePaths({ executablePath: join(resources, "runtime/agent-cli/agent-cli.exe"), moduleDirectory: scratch, environment: {} });
   if (desktop.fdPath !== paths.fdPath) throw new Error("Desktop and agent-cli disagree on packaged fd path");
   if (!existsSync(paths.fdPath)) throw new Error(`Missing packaged fd: ${paths.fdPath}`);

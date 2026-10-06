@@ -49,7 +49,7 @@ test("Office resources preserve upstream source, notices and fonts", () => {
 });
 test("desktop Office paths follow installed resources and ignore external overrides", () => {
   const paths = resolveDesktopPaths({ packaged: true, appPath: "C:\\LXE\\resources\\app.asar", executablePath: "C:\\LXE\\LXE.exe", resourcesPath: "C:\\LXE\\resources", platform: "win32", arch: "x64",
-    environment: { LXE_OFFICE_NODE: "C:\\external\\node.exe", LXE_OFFICE_CLI: "C:\\external\\cli.js" }, pathExists: () => true });
+    environment: { LOCALAPPDATA: "C:\\Users\\test\\AppData\\Local", LXE_OFFICE_NODE: "C:\\external\\node.exe", LXE_OFFICE_CLI: "C:\\external\\cli.js" }, pathExists: () => true });
   expect(paths.officeNodePath).toBe("C:\\LXE\\resources\\runtime\\node\\node.exe");
   expect(paths.officeCliPath).toBe("C:\\LXE\\resources\\runtime\\office\\node_modules\\@deepseek-ai\\libreoffice-kit\\lib\\cli.js");
 });

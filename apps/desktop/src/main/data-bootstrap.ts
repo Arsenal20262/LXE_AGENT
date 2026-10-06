@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { initializeDataRoot, legacyDataSources } from "./data-migration";
+import { dataRootInitialized, initializeDataRoot, legacyDataSources } from "./data-migration";
 import { relocateGatewayData } from "./gateway-store";
 import type { DesktopPaths } from "./paths";
 import type { SafeStoragePort } from "./config-store/repository";
@@ -10,6 +10,7 @@ import type { SafeStoragePort } from "./config-store/repository";
 const run = promisify(execFile);
 export async function bootstrapUserData(paths: DesktopPaths, appId: string, safeStorage: SafeStoragePort,
   select: (sources: string[]) => Promise<string | undefined>): Promise<boolean> {
+  if (dataRootInitialized(paths.dataRoot)) return true;
   const sources = legacyDataSources(paths.projectRoot, appId);
   const source = sources.length > 1 ? await select(sources) : sources[0];
   if (sources.length > 1 && !source) return false;

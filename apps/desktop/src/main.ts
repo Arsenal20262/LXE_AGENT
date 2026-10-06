@@ -136,7 +136,6 @@ app.once("quit", () => releaseDataLock?.());
 try {
   needsDataBootstrap = packagedRuntime && process.platform === "win32" && !process.env.LXE_DATA_ROOT?.trim()
     && !dataRootInitialized(desktopPaths.dataRoot);
-  if (needsDataBootstrap) releaseDataLock = acquireDataRootLock(desktopPaths.dataRoot);
   const runtimeState = prepareDesktopRuntimeState(needsDataBootstrap ? `${desktopPaths.dataRoot}.bootstrap` : desktopPaths.dataRoot);
   configureElectronRuntimeState(app, runtimeState, needsDataBootstrap ? {} : process.env);
   runtimeStateReady = true;
@@ -153,8 +152,16 @@ try {
   app.exit(1);
 }
 
-const hasSingleInstanceLock = runtimeStateReady && app.requestSingleInstanceLock();
+let hasSingleInstanceLock = runtimeStateReady && app.requestSingleInstanceLock();
 if (runtimeStateReady && !hasSingleInstanceLock) app.quit();
+if (hasSingleInstanceLock && needsDataBootstrap) {
+  try { releaseDataLock = acquireDataRootLock(desktopPaths.dataRoot); }
+  catch (error) {
+    hasSingleInstanceLock = false;
+    reportDesktopStartupFailure(error, {writeStderr: message => process.stderr.write(message), showError: (title, detail) => dialog.showErrorBox(title, detail)});
+    app.exit(1);
+  }
+}
 const desktopPlatform = normalizeDesktopPlatform(process.platform);
 
 let window: BrowserWindow | undefined;

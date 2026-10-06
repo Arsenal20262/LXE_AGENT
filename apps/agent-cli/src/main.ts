@@ -23,7 +23,7 @@ console.log = (...values: unknown[]): void => {
 
 if (mode === "relocate-data") {
   const roots = ["--copy", "--source", "--target"].map(optionValue);
-  if (roots.some(value => !isAbsolute(value)) || new Set(roots.map(value => resolve(value))).size !== 3) {
+  if (roots.some(value => !isAbsolute(value)) || new Set(roots.map(value => process.platform === "win32" ? resolve(value).toLowerCase() : resolve(value))).size !== 3) {
     process.stderr.write("relocate-data requires distinct absolute --copy, --source and --target paths\n");
     process.exitCode = 2;
   } else void relocateAgentData(roots[0]!, roots[1]!, roots[2]!).catch(error => {

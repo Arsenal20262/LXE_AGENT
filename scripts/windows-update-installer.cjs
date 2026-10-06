@@ -28,6 +28,7 @@ function installerHelper(source){
 }
 function assisted(source){
  let s=source.replaceAll('\r\n','\n');
+ s=replaceOnce(s,'  !include multiUserUi.nsh','  !ifndef BUILD_UNINSTALLER\n    !include multiUserUi.nsh\n  !endif');
  s=replaceOnce(s,'    !insertmacro skipPageIfUpdated\n    !insertmacro MUI_PAGE_DIRECTORY',`    !define MUI_PAGE_CUSTOMFUNCTION_PRE LxeDirectoryPagePre
     !insertmacro MUI_PAGE_DIRECTORY
     Function LxeDirectoryPagePre

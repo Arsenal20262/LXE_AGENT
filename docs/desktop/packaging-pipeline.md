@@ -320,12 +320,12 @@ dist/desktop/win-unpacked/
 
 ```text
 win-unpacked
-    → ZIP 应用载荷
+    → 7z 应用载荷
     → NSIS 安装/升级/卸载逻辑
     → LXE-Agent-<version>-windows-x64.exe
 ```
 
-安装程序允许用户选择安装目录，并创建桌面和开始菜单快捷方式。升级时会替换程序文件，但保留安装目录中的 `var` 数据目录。卸载时也默认保留数据，只有用户明确勾选并再次确认后才删除。
+安装程序允许用户选择安装目录，并创建桌面和开始菜单快捷方式。手动换目录会保留旧安装；应用内更新沿用原目录。数据独立放在 `%LOCALAPPDATA%\LXE Agent`，卸载始终保留数据和 WireGuard 配置。旧版 `var` 的迁移见[程序与用户数据](data-location.md)。
 
 WireGuard MSI 虽然已经放进安装包，但普通安装过程不会直接安装 WireGuard。只有用户配置公司云端设备时，应用才按需请求 UAC 权限并执行受控安装和隧道配置。
 
@@ -344,15 +344,17 @@ LXE Agent/
 │   ├── skills/
 │   ├── config/
 │   └── ...
-└── var/                    # 首次运行后创建
-    ├── config/
-    ├── db/
-    ├── logs/
-    ├── tmp/
-    └── workspace/
+└── var/                    # 仅旧安装可能保留的原数据
+
+%LOCALAPPDATA%/LXE Agent/   # 独立的用户数据目录
+├── config/
+├── db/
+├── logs/
+├── tmp/
+└── workspace/
 ```
 
-`resources` 是随版本发布的程序和只读资源；`var` 是这台电脑上运行后产生的配置、数据库、日志和默认工作区。升级程序时保留 `var`，就是为了避免升级后丢失用户状态。
+`resources` 是随版本发布的程序和只读资源；用户数据目录保存配置、数据库、日志和默认工作区。程序换位置后继续使用同一份用户数据。
 
 ## 用户启动应用后发生什么
 
@@ -433,7 +435,7 @@ desktop-resource-sizes.json
 - 首次配置和 Dashboard 正常。
 - Gateway、Agent CLI 和 `lxeskill` 健康状态正常。
 - 覆盖升级后 `var` 数据仍然存在。
-- 卸载保留数据和主动删除数据两种选择都符合预期。
+- 卸载及旧删除参数均保留用户数据；卸载旧副本不会移除新安装的注册信息和快捷方式。
 - 公司云端设备场景下的 WireGuard UAC 和隧道配置正常。
 - 工作台能分别处理一张图片和一个视频，输出文件带有目标标签，而且原文件没有变化。
 

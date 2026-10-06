@@ -78,6 +78,15 @@ test("startup lock excludes another launch and is released explicitly", () => {
   acquireDataRootLock(target)();
 });
 
+test("an interrupted migration can reclaim a completed dead owner's lock", async () => {
+  const {target} = fixture();
+  const child = Bun.spawn([process.execPath, "-e", "process.exit(0)"], {stdout: "ignore", stderr: "ignore"});
+  expect(await child.exited).toBe(0);
+  writeFileSync(`${target}.startup-lock`, JSON.stringify({pid: child.pid}));
+  acquireDataRootLock(target)();
+  expect(existsSync(`${target}.startup-lock`)).toBe(false);
+});
+
 test("UTF-16 installer hints discover multiple sources without mixing application identities", () => {
   const {root,source} = fixture();
   const install = join(root, "new installation"); mkdirSync(join(install,"var"), {recursive: true});

@@ -8,6 +8,7 @@ Var LxeResultCode
 Var LxePrevious
 Var LxePreviousUser
 Var LxePreviousMachine
+Var LxePriorSource
 
 !macro LxeRunTransaction ACTION
   nsExec::ExecToStack '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\lxe-update-files.ps1" -Action ${ACTION} -InstallRoot "$LxeFinal" -StageRoot "$LxeStage" -BackupRoot "$LxeBackup" -ResultPath "$LxeResult" -ProductName "${PRODUCT_NAME}" -ExecutableName "${APP_EXECUTABLE_FILENAME}"'
@@ -42,6 +43,10 @@ FunctionEnd
   ReadRegStr $LxePrevious SHELL_CONTEXT "${INSTALL_REGISTRY_KEY}" InstallLocation
   ReadRegStr $LxePreviousUser HKCU "${INSTALL_REGISTRY_KEY}" InstallLocation
   ReadRegStr $LxePreviousMachine HKLM "${INSTALL_REGISTRY_KEY}" InstallLocation
+  ReadINIStr $LxePriorSource "$LxePrevious\lxe-legacy-data.ini" "LXE" "priorSource"
+  ${If} $LxePriorSource == ""
+    ReadINIStr $LxePriorSource "$LxePrevious\lxe-legacy-data.ini" "LXE" "previous"
+  ${EndIf}
   StrCpy $LxeFinal $INSTDIR
   System::Call 'ole32::CoCreateGuid(g .r0)i.r1'
   ${If} $1 != 0
@@ -62,6 +67,7 @@ FunctionEnd
   SetOutPath $INSTDIR
   !insertmacro installApplicationFiles
   # A UTF-16 BOM makes WriteINIStr preserve Chinese paths on every system locale.
+  ClearErrors
   FileOpen $R3 "$INSTDIR\lxe-legacy-data.ini" w
   FileWriteByte $R3 255
   FileWriteByte $R3 254
@@ -71,6 +77,11 @@ FunctionEnd
   WriteINIStr "$INSTDIR\lxe-legacy-data.ini" "LXE" "previous" "$LxePrevious"
   WriteINIStr "$INSTDIR\lxe-legacy-data.ini" "LXE" "perUser" "$LxePreviousUser"
   WriteINIStr "$INSTDIR\lxe-legacy-data.ini" "LXE" "perMachine" "$LxePreviousMachine"
+  WriteINIStr "$INSTDIR\lxe-legacy-data.ini" "LXE" "priorSource" "$LxePriorSource"
+  ${If} ${Errors}
+    System::Call 'kernel32::GetLastError() i.r0'
+    Abort "Could not record legacy data locations (Win32=$0): $INSTDIR\lxe-legacy-data.ini"
+  ${EndIf}
   File /oname=7zip-installer-LICENSE.txt "${PROJECT_DIR}\resources\7zip-LICENSE.txt"
   File /oname=7zip-installer-COPYING.txt "${PROJECT_DIR}\resources\7zip-COPYING.txt"
   !ifdef UNINSTALLER_ICON

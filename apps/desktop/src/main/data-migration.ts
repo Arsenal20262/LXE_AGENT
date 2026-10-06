@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { createReadStream, existsSync, mkdirSync, readFileSync, renameSync, rmSync, rmdirSync, writeFileSync, lstatSync, readdirSync } from "node:fs";
+import { createReadStream, existsSync, linkSync, mkdirSync, readFileSync, renameSync, rmSync, rmdirSync, writeFileSync, lstatSync, readdirSync } from "node:fs";
 import { copyFile, mkdir, readdir, lstat, readFile, writeFile, rename } from "node:fs/promises";
 import { dirname, join, relative, resolve, isAbsolute } from "node:path";
 import { relocateStoredPath } from "@lxe/core";
@@ -13,27 +13,28 @@ export function assertOrdinaryPath(path: string): void {
   }
 }
 
-/** Kept outside dataRoot so taking the startup lock never initializes the destination. */
+/** Caller holds Electron's bootstrap singleton before recovering a dead owner. */
 export function acquireDataRootLock(root: string): () => void {
   assertOrdinaryPath(root);
   mkdirSync(dirname(root), {recursive: true});
   const lock = `${root}.startup-lock`;
-  try { mkdirSync(lock); } catch (error) {
+  const candidate = `${lock}.${randomUUID()}.tmp`;
+  writeFileSync(candidate, JSON.stringify({pid: process.pid}), {flag: "wx", mode: 0o600});
+  try { linkSync(candidate, lock); } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
     assertOrdinaryPath(lock);
-    const owner = JSON.parse(readFileSync(join(lock, "owner.json"), "utf8"));
+    const owner = JSON.parse(readFileSync(lock, "utf8"));
     if (!Number.isSafeInteger(owner.pid) || owner.pid <= 0) throw new Error(`Invalid startup lock: ${lock}`);
     try { process.kill(owner.pid, 0); } catch (cause) {
       if ((cause as NodeJS.ErrnoException).code !== "ESRCH") throw cause;
       const stale = `${lock}.stale-${randomUUID()}`;
       renameSync(lock, stale);
-      rmSync(stale, {recursive: true});
+      rmSync(stale);
       return acquireDataRootLock(root);
     }
     throw new Error(`LXE data is in use by PID ${owner.pid}: ${root}`);
-  }
-  writeFileSync(join(lock, "owner.json"), JSON.stringify({pid: process.pid}), {flag: "wx"});
-  return () => rmSync(lock, {recursive: true, force: true});
+  } finally { rmSync(candidate, {force: true}); }
+  return () => rmSync(lock, {force: true});
 }
 
 export function dataRootInitialized(root: string): boolean {
@@ -60,7 +61,7 @@ export function legacyDataSources(installRoot: string, appId: string): string[] 
       const split = line.indexOf("="); return [line.slice(0, split).trim(), line.slice(split + 1).trim()];
     }));
     if (fields.appId !== appId) throw new Error(`Legacy data hint belongs to another application: ${hint}`);
-    for (const key of ["previous", "perUser", "perMachine"]) if (fields[key]) {
+    for (const key of ["previous", "perUser", "perMachine", "priorSource"]) if (fields[key]) {
       if (!isAbsolute(fields[key]!)) throw new Error(`Invalid legacy installation path: ${fields[key]}`);
       roots.push(fields[key]!);
     }
