@@ -7,7 +7,7 @@ const installer = readFileSync(resolve(import.meta.dirname, "../resources/instal
 
 describe("Windows installer runtime state", () => {
   test("an application update clears only the legacy injected var override", () => {
-    const update=readFileSync(resolve(import.meta.dirname,"../resources/update-installer.nsh"),"utf8");
+    const update=readFileSync(resolve(import.meta.dirname,"../resources/update-installer.nsh"),"utf8").replaceAll("\r\n","\n");
     expect(update).toContain('${If} ${isUpdated}\n    ReadEnvStr $R0 "LXE_DATA_ROOT"');
     expect(update).toContain('${If} $R0 == "$INSTDIR\\var"');
     expect(update).toContain('SetEnvironmentVariable(t "LXE_DATA_ROOT", p 0)');
