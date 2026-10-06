@@ -3,6 +3,7 @@ import { Database } from "bun:sqlite";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { createRequire } from "node:module";
+import { createServer } from "node:net";
 import { SqliteRuntimeStore } from "../packages/agent/runtime/src/state/storage";
 import { cloneConfig } from "../apps/desktop/src/main/config-store/model";
 import { resolveMachineIdentity } from "../packages/foundation/core/src/machine-identity";
@@ -12,7 +13,48 @@ const [mode,input,submode,install] = process.argv.slice(2);
 const q = JSON.parse(readFileSync(input!,"utf8"));
 assert.match(q.appId,/^com\.lxe\.agent\.updatequalification\.[a-f0-9]{8}$/);
 const source = join(q.installRoot,"var"), target=join(process.env.LOCALAPPDATA!,q.productName);
-if (mode === "seed") {
+// Allow SQLite to recover a hot journal from a previous interrupted qualification run.
+// These are writable isolated copies, never the original var or production databases.
+function checkedDatabase(path: string): Database {
+  const db=new Database(path,{create:false});
+  assert.deepEqual(db.query("PRAGMA integrity_check").values(),[["ok"]]);
+  return db;
+}
+if (mode === "run-and-quit") {
+  const server=createServer();await new Promise<void>(done=>server.listen(0,"127.0.0.1",done));
+  const port=(server.address() as {port:number}).port;await new Promise<void>(done=>server.close(()=>done()));
+  const executable=join(install??q.installRoot,q.productName+".exe");
+  const child=Bun.spawn([executable,`--inspect=127.0.0.1:${port}`],{stdout:"ignore",stderr:"ignore",env:{...process.env,ELECTRON_RUN_AS_NODE:undefined}});
+  const evaluate=async(expression:string) => {
+    const targets=await (await fetch(`http://127.0.0.1:${port}/json/list`,{signal:AbortSignal.timeout(1500)})).json() as {webSocketDebuggerUrl:string}[];
+    assert.ok(targets[0]?.webSocketDebuggerUrl.startsWith(`ws://127.0.0.1:${port}/`));
+    const ws=new WebSocket(targets[0]!.webSocketDebuggerUrl);
+    try {return await new Promise<any>((done,fail)=>{
+      const timer=setTimeout(()=>{ws.close();fail(new Error("Inspector evaluation timed out"));},3000);
+      const finish=(error:unknown,value?:unknown)=>{clearTimeout(timer);error?fail(error):done(value);};
+      ws.onopen=()=>ws.send(JSON.stringify({id:1,method:"Runtime.evaluate",params:{expression,returnByValue:true}}));
+      ws.onerror=()=>finish(new Error("Isolated inspector connection failed"));
+      ws.onclose=()=>finish(new Error("Isolated inspector disconnected"));
+      ws.onmessage=event=>{const response=JSON.parse(String(event.data));if(response.id===1)finish(response.error??response.result?.exceptionDetails,response.result?.result?.value);};
+    });} finally {ws.close();}
+  };
+  let ready=false,lastError:unknown;
+  const deadline=Date.now()+180_000;
+  try {
+    while(Date.now()<deadline){
+      try {ready=await evaluate("(()=>{const e=process.mainModule.require('electron');const w=e.BrowserWindow.getAllWindows();return e.app.isReady()&&w.length>0&&w.every(x=>!x.webContents.isLoading());})()");if(ready)break;}catch(error){lastError=error;}
+      await Bun.sleep(500);
+    }
+    assert.ok(ready,`Isolated desktop did not finish loading: ${lastError}`);
+    await evaluate("setTimeout(()=>process.mainModule.require('electron').app.quit(),100);true");
+    // Bootstrap may have relaunched; wait for the listening main process, not just its parent.
+    const quitDeadline=Date.now()+30_000;
+    while(Date.now()<quitDeadline){try{await fetch(`http://127.0.0.1:${port}/json/list`,{signal:AbortSignal.timeout(1000)});}catch{break;}await Bun.sleep(200);}
+    const stillListening=await fetch(`http://127.0.0.1:${port}/json/list`,{signal:AbortSignal.timeout(1000)}).then(()=>true,()=>false);
+    assert.equal(stillListening,false,"Isolated desktop did not quit");
+    await child.exited;
+  } catch(error) {Bun.spawnSync(["taskkill","/PID",String(child.pid),"/T","/F"],{stdout:"ignore",stderr:"ignore"});throw error;}
+} else if (mode === "seed") {
   mkdirSync(join(source,"config"),{recursive:true});mkdirSync(join(source,"workspace"),{recursive:true});
   const workspace=join(source,"workspace"), file=join(workspace,"中文 file.txt");
   writeFileSync(file,"preserved workspace data");
@@ -50,18 +92,18 @@ if (mode === "seed") {
   const independent=join(q.output,"independent data 中文");
   assert.equal(JSON.parse(readFileSync(join(independent,"config/settings.json"),"utf8")).workspace_root,join(independent,"workspace"));
   assert.notDeepEqual(JSON.parse(readFileSync(join(independent,"db/machine_identity.json"),"utf8")),JSON.parse(readFileSync(join(q.output,"expected-machine.json"),"utf8")));
-  const db=new Database(join(independent,"db/agent.sqlite3"),{readonly:true});
+  const db=checkedDatabase(join(independent,"db/agent.sqlite3"));
   assert.equal((db.query("SELECT COUNT(*) AS n FROM agent_sessions WHERE session_id='migration'").get() as any).n,0);db.close();
   writeFileSync(join(q.output,"data-explicit-results.json"),JSON.stringify({explicit_root:true,no_automatic_import:true,independent_identity:true}));
 } else if(mode === "check") {
   assert.deepEqual(JSON.parse(readFileSync(join(target,"db/machine_identity.json"),"utf8")),JSON.parse(readFileSync(join(q.output,"expected-machine.json"),"utf8")));
   assert.equal(readFileSync(join(target,"workspace/中文 file.txt"),"utf8"),"preserved workspace data");
-  const db=new Database(join(target,"db/agent.sqlite3"),{readonly:true});
+  const db=checkedDatabase(join(target,"db/agent.sqlite3"));
   assert.equal((db.query("SELECT workspace_directory FROM agent_sessions WHERE session_id='migration'").get() as any).workspace_directory,join(target,"workspace"));
   for(const table of ["transcript_attachments","transcript_artifacts"]){assert.equal((db.query(`SELECT path FROM ${table} LIMIT 1`).get() as any).path,join(target,"workspace/中文 file.txt"));}db.close();
-  const gateway=new Database(join(target,"db/gateway.sqlite3"),{readonly:true});
+  const gateway=checkedDatabase(join(target,"db/gateway.sqlite3"));
   assert.equal((gateway.query("SELECT workspace_directory FROM gateway_sessions").get() as any).workspace_directory,join(target,"workspace"));gateway.close();
-  const python=new Database(join(target,"db/lxeskill.sqlite3"),{readonly:true});
+  const python=checkedDatabase(join(target,"db/lxeskill.sqlite3"));
   assert.equal((python.query("SELECT download_path FROM ziniao_store_sessions").get() as any).download_path,join(target,"downloads"));python.close();
   writeFileSync(join(q.output,"data-content-results.json"),JSON.stringify({machine:true,workspace:true,sessions:true,attachments:true,artifacts:true,gateway:true,python:true}));
 } else throw new Error(`Unknown qualification operation: ${mode}`);
