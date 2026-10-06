@@ -12,7 +12,7 @@
 
 ## Global constraints
 
-- Stay on `codex/trusted-lxeskill-execution`, stacked on the current PR7 head; do not alter PR1–PR7 branches or PR base/head.
+- Implement and verify on `codex/trusted-lxeskill-execution`, stacked on the current PR7 head; after scoped local commits, fast-forward only the existing PR7 source branch. Keep its PR6 base and do not alter PR1–PR6 or create a new PR.
 - Do not call production Yacang or load real business workbooks in automated tests. Use synthetic attachments and fake runners.
 - Keep `exec` Workspace Write, Read Only and Full access semantics intact. Never auto-approve or globally relax the sandbox.
 - Use `bun` and `uv --frozen`; run Python tests from the repository root. Catalog changes require Python and Bun contract tests.
@@ -42,7 +42,7 @@
 - Create: `packages/agent/runtime/src/tooling/managed-lxeskill-attachment.ts`
 - Test: `packages/agent/runtime/test/tooling/managed-lxeskill-attachment.test.ts`
 
-**Interfaces:** `resolveManagedAttachment({ messages, attachment, currentTurnId }): string` returns the host-resolved absolute path or throws `ToolExecutionError`. `messages` are persisted session messages; `attachment` is the stored record for the requested attachment ID. The selector ignores synthetic Skill-instruction messages, considers only the current real user message and its immediately preceding real user message, checks `turn_id` where present, and refuses older or ambiguous sources.
+**Interfaces:** `resolveManagedAttachment({ messages, attachment, currentTurnId }): string` returns the host-resolved absolute path or throws `ToolExecutionError`. `messages` are persisted session messages; `attachment` is the stored record for the host-selected or explicitly requested attachment ID. The selector ignores synthetic Skill-instruction messages, considers only the current real user message and its immediately preceding real user message, checks `turn_id` where present, and refuses older or ambiguous sources.
 
 - [x] Add synthetic tests for current unique XLSX; immediately preceding unique XLSX with current confirmation/continuation; older history; current or previous multi-attachment without an unambiguous selection; non-XLSX; mismatched session attachment record; missing or changed local file. Test that no lookup of earlier messages can authorize a file.
 - [x] Run `bun test packages/agent/runtime/test/tooling/managed-lxeskill-attachment.test.ts` and observe the failures.
@@ -60,7 +60,7 @@
 - Test: `apps/agent-cli/test/permissions.test.ts`
 - Test: `packages/agent/runtime/test/permissions/approvals.test.ts`
 
-**Interfaces:** The Desktop-only tool takes `{ command_id: string, attachment_id?: string }`; it looks up a catalog opt-in and maps it to fixed argv. The host injects the current session workspace through a newly constructed `OneShotCliRunner` with the existing data root and approved environment. The tool never accepts model-supplied argv, cwd, environment or source path. Generic `exec` rejects an opted-in command on Desktop with an instruction to use the managed tool before reaching approval logic.
+**Interfaces:** The Desktop-only tool takes `{ command_id: string, attachment_id?: string }`; for a sole current or eligible adjacent XLSX it selects the stored ID itself, while an explicit ID is reserved for a confirmed multi-file choice. It looks up a catalog opt-in and maps it to fixed argv. The host injects the current session workspace through a newly constructed `OneShotCliRunner` with the existing data root and approved environment. The tool never accepts model-supplied argv, cwd, environment or source path. Generic `exec` rejects an opted-in command on Desktop with an instruction to use the managed tool before reaching approval logic.
 
 - [x] Add fake-runner tests: allowed bind/get current attachment; generate with no path; Read Only denied before runner; unknown/hidden command denied; shell or extra properties denied; failure/timeout/cancellation preserve real diagnostics and do not retry; bind `files=[]`; generate reports only an existing XLSX under current workspace artifacts; `exec` cannot auto-elevate an opted-in command. Assert no fake runner call on rejected inputs.
 - [x] Run the new tests and record failures.
@@ -76,7 +76,7 @@
 - Modify: `docs/harness/runtime/permission-policy.md`
 - Create: `docs/harness/managed-lxeskill-execution/handoff.md`
 
-**Interfaces:** Skill uses the managed tool for bind and generate, passing the selected attachment ID for bind. It retains current message first, immediately preceding confirmation/continuation, multi-attachment confirmation, bind-before-generate, no fallback and only-final-XLSX rules. The runtime permission document distinguishes the host-owned business command route from the unchanged generic `exec` route.
+**Interfaces:** Skill uses the managed tool for bind and generate. For one eligible attachment, bind passes only the command ID and the host selects the stored attachment; a confirmed multi-file selection may pass its ID. It retains current message first, immediately preceding confirmation/continuation, multi-attachment confirmation, bind-before-generate, no fallback and only-final-XLSX rules. The runtime permission document distinguishes the host-owned business command route from the unchanged generic `exec` route.
 
 - [x] Update Skill contract assertions, run `bun test packages/agent/runtime/test/tooling/skills.test.ts` and observe the expected failure before editing the Skill.
 - [x] Update the Skill and docs. Describe exact validation and the one-time permission semantics accurately; do not call synthetic tests a real model or production acceptance.
@@ -92,6 +92,6 @@ The implementation is ready for user testing only if Task 1–4 contract tests a
 - Catalog：Python/Bun 双端校验已通过；本地独立提交 `efe7cd00`。
 - 附件来源：合成测试和 Runtime 类型检查已通过；本地独立提交 `54b66dc5`。复查时补充了会话压缩及无法识别的中间用户消息拒绝规则，单独修正提交。
 - 受控工具：假 CLI 与桌面宿主合成集成测试、权限回归、Runtime/Agent CLI 类型检查和 Agent CLI 构建已通过；本地独立提交 `2be5c58f`。
-- Skill 与文档：静态规则测试已通过。最终定向回归为 Bun 59 通过、Python 406 通过/2 跳过；TypeScript 生产边界检查通过。
-- 未运行真实模型、真实雅仓、真实业务文件、Windows 安装版和 Office 重算链路。旧桌面服务若仍在 PR7 worktree，不能用其结果验收本分支。
-- 本地提交之外的 push、PR、merge 均需另行批准。
+- Skill、预选与文档：2026-10-06 定向复跑 Runtime/Skill/受控工具 7 个文件 180 通过、Agent CLI 预选 15 通过、权限回归 19 通过；Python `lxeskill` 与 `infra` 432 通过、2 跳过，资产规则及 SKU store 83 通过；两项类型检查和 Agent CLI 构建通过。产物错误与附件丢失现保留实际脱敏诊断，Bun/Python 受控产物契约已收敛。新增错误处理测试先失败，修复后通过；这些自动测试不证明真实模型完整链路。
+- 最初 macOS Desktop 真实聊天曾因雅仓连接超时未生成文件。其后网络恢复，分别观察到已绑定版 `generate → send_files` 和新表 `bind → generate → send_files` 成功；用户确认可点击两选项并收到 XLSX。最近一次重启用户只选择“仅绑定”，日志为 `ask_user_question → bind` 成功，未生成符合该选择。尚无单次连续日志覆盖弹窗后“绑定并查询”到交付；两轮绑定后再查询、同轮明确查询和绑定失败即停也未逐项完成真实聊天验收。Windows 安装版由组长负责。
+- 最终代码收口提交为 `4fd8e450`，暂存范围为 29 个 PR7 代码、Skill 与测试文件，`git diff --cached --check` 通过；文档另做独立提交。代码和文档只同步现有个人 fork PR7 源分支，不创建新 PR；组长仓库的 PR 与 merge 由用户操作。远端状态以接手时的 PR 页面和 `git ls-remote` 为准。
