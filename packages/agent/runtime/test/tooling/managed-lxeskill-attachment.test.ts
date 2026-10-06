@@ -28,6 +28,16 @@ describe("managed lxeskill attachment source", () => {
     expect(select([user("message-now", [{ type: "text", text: "生成" }, block(record)])], record)).toBe(realpathSync(record.path));
   });
 
+  test("ignores Runtime environment context while identifying the current real user message", () => {
+    const record = attachment();
+    const environment = { role: "user", content: "Synthetic environment context", environmentContext: {} } as RuntimeMessage;
+    expect(select([user("message-upload", [block(record)]), environment], record)).toBe(realpathSync(record.path));
+    expect(select([
+      user("message-upload", [block(record)]), environment,
+      user("message-confirm", "确认继续处理这份表"), environment,
+    ], record, "turn-confirm")).toBe(realpathSync(record.path));
+  });
+
   test("accepts the immediately previous sole XLSX after a text-only continuation", () => {
     const record = attachment();
     expect(select([

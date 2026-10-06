@@ -39,7 +39,7 @@ export function resolveManagedAttachment(input: {
   const { messages, attachment, currentTurnId } = input;
   if (!currentTurnId || !attachment?.attachment_id) denied("current attachment context is missing");
   const userMessages = messages.filter(userMessage);
-  const visible = userMessages.filter(message => !injectedSkill(message));
+  const visible = userMessages.filter(message => !message.environmentContext && !injectedSkill(message));
   const current = visible.at(-1);
   if (!current || !realUser(current)) return denied("current message cannot be verified");
   const currentFiles = files(current);
