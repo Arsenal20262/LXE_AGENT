@@ -12,8 +12,10 @@ function Bun-Step([string[]]$arguments) {
     if ($LASTEXITCODE -ne 0) { throw "Qualification command failed: $($arguments -join ' ') ($LASTEXITCODE)" }
 }
 function Install([string]$file,[string]$root) {
+    Write-Host "Installing $file into $root"
     $p = Start-Process -FilePath $file -ArgumentList ('/S "/D=' + $root + '"') -Wait -PassThru
     Assert ($p.ExitCode -eq 0) "Installer failed: $($p.ExitCode)"
+    Write-Host "Installed into $root"
 }
 function Hashes([string]$root) {
     return ((Get-ChildItem -LiteralPath $root -File -Recurse | Sort-Object FullName | ForEach-Object { $_.FullName.Substring($root.Length) + ':' + (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash }) -join "`n")

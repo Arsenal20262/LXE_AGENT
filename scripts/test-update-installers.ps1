@@ -11,9 +11,11 @@ function Wait-Removed([string]$path) {
     Assert (-not (Test-Path -LiteralPath $path)) "Uninstaller did not remove: $path"
 }
 function Install([string]$file,[bool]$update=$false) {
+    Write-Host "Installing $file (update=$update)"
     $arguments = '/S ' + $(if ($update) { '--updated ' } else { '' }) + '"/D=' + $install + '"'
     $process = Start-Process -FilePath $file -ArgumentList $arguments -Wait -PassThru
     Assert ($process.ExitCode -eq 0) "Installer exit code: $($process.ExitCode)"
+    Write-Host "Installed $file"
 }
 # The old template's Shell CopyFiles can prompt when reinstalling over its cache.
 # This is a disposable fixture cache; each qualification starts from a fresh A.
@@ -37,6 +39,7 @@ $oldProgram = (Get-FileHash -LiteralPath $appFile -Algorithm SHA512).Hash
 $oldCache = (Get-FileHash -LiteralPath (Join-Path $cache 'installer.exe') -Algorithm SHA512).Hash
 $locked = [IO.File]::Open($appFile, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
 try {
+    Write-Host 'Testing replacement while the installed executable is locked'
     $failed = Start-Process -FilePath $q.artifacts[1] -ArgumentList ('/S --updated "/D=' + $install + '"') -Wait -PassThru
     Assert ($failed.ExitCode -eq 2) "Expected transactional replacement failure, received $($failed.ExitCode)"
 } finally { $locked.Dispose() }
