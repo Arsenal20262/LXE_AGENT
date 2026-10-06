@@ -1,6 +1,7 @@
 import { lstatSync, realpathSync, statSync } from "node:fs";
 import { extname, isAbsolute } from "node:path";
 import type { RuntimeAttachmentRecord, RuntimeConversationMessage, RuntimeMessage } from "../engine/types";
+import { isTurnAbortedMessage } from "../engine/turn-aborted";
 import { safeToolFailureObservation, ToolExecutionError } from "./registry";
 
 interface LocalFileBlock {
@@ -33,7 +34,7 @@ function files(message: RuntimeConversationMessage): LocalFileBlock[] {
 function selectedFile(messages: readonly RuntimeMessage[], currentTurnId: string, attachmentId?: string): LocalFileBlock {
   if (!currentTurnId) denied("current attachment context is missing");
   const visible = messages.filter(userMessage)
-    .filter(message => !message.environmentContext && !injectedSkill(message));
+    .filter(message => !message.environmentContext && !injectedSkill(message) && !isTurnAbortedMessage(message));
   const current = visible.at(-1);
   if (!current || !realUser(current)) return denied("current message cannot be verified");
   const currentFiles = files(current);

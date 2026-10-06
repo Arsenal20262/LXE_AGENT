@@ -10,6 +10,7 @@ import type {
   RuntimeMessage,
   RuntimeSkillSnapshot,
 } from "@lxe/runtime";
+import { turnAbortedMessage } from "../../../packages/agent/runtime/src/engine/turn-aborted";
 import { createSkillPreselector } from "../src/skill-preselection";
 
 const roots: string[] = [];
@@ -29,6 +30,7 @@ function fixture(options: {
   text?: string;
   files?: string[];
   previous?: { files: string[]; invokedSkills?: string[]; text?: string };
+  abortedAfterPrevious?: "marked" | "legacy";
   older?: boolean;
   platform?: string;
   rules?: ReturnType<typeof rule>[];
@@ -69,6 +71,11 @@ function fixture(options: {
       role: "user", message_id: "previous-message", content: options.older ? [] : previousFiles,
       ...(options.previous.invokedSkills ? { invoked_skills: options.previous.invokedSkills } : {}),
     });
+  }
+  if (options.abortedAfterPrevious) {
+    const marker = turnAbortedMessage();
+    persistedMessages.push(options.abortedAfterPrevious === "marked"
+      ? marker : { role: "user", content: marker.content });
   }
   if (options.older) persistedMessages.push({ role: "user", message_id: "intervening", content: "unrelated" });
   const job = {
@@ -138,6 +145,13 @@ test("unrelated workbook does not preselect", async () => {
 
 test.each(["仅绑定", "绑定并查询"])("immediate attachment clarification %s may reuse the verified previous file", async text => {
   const f = fixture({ text, previous: { files: ["synthetic.xlsx"], invokedSkills: ["fixture-replenishment"] } });
+  expect(await f.select(f.context)).toEqual(["fixture-replenishment"]);
+  expect(f.calls).toHaveLength(1);
+});
+
+test.each(["marked", "legacy"] as const)("an interrupted previous upload still preselects with %s Runtime marker", async kind => {
+  const f = fixture({ text: "仅绑定", previous: { files: ["synthetic.xlsx"], invokedSkills: ["fixture-replenishment"] },
+    abortedAfterPrevious: kind });
   expect(await f.select(f.context)).toEqual(["fixture-replenishment"]);
   expect(f.calls).toHaveLength(1);
 });

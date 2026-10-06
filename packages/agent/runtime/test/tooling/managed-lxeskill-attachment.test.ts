@@ -3,6 +3,7 @@ import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { RuntimeAttachmentRecord, RuntimeMessage, RuntimeMessageContent } from "../../src/engine/types";
+import { turnAbortedMessage } from "../../src/engine/turn-aborted";
 import { resolveManagedAttachment } from "../../src/tooling/managed-lxeskill-attachment";
 import { ToolExecutionError } from "../../src/tooling/registry";
 
@@ -46,6 +47,20 @@ describe("managed lxeskill attachment source", () => {
       { role: "user", content: "Skill instructions", invoked_skills: ["vietnam-stock-recommendation"] },
       user("message-confirm", "确认继续处理这份表"),
     ], record, "turn-confirm")).toBe(realpathSync(record.path));
+  });
+
+  test("an interrupted prior turn preserves the immediately previous real upload", () => {
+    const record = attachment();
+    const marker = turnAbortedMessage();
+    const messages = [user("message-upload", [block(record)]), marker,
+      user("message-confirm", "继续处理这份表")];
+    expect(select(messages, record, "turn-confirm")).toBe(realpathSync(record.path));
+    // Old transcripts have the same Runtime-owned message without metadata.
+    expect(select([messages[0]!, { role: "user", content: marker.content }, messages[2]!],
+      record, "turn-confirm")).toBe(realpathSync(record.path));
+    // A real user message with the same text is still an intervening turn.
+    expect(() => select([messages[0]!, user("message-intervening", marker.content), messages[2]!],
+      record, "turn-confirm")).toThrow(/immediately previous/);
   });
 
   test("rejects an attachment from an older message", () => {

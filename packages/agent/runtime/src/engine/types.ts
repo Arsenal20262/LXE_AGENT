@@ -56,6 +56,7 @@ export interface RuntimeEnvironmentSnapshot {
 
 export interface RuntimeConversationMessage {
   invoked_skills?: string[];
+  runtimeContextKind?: "turn_aborted";
   contextTokenAnchor?: import("./context-meter").ContextTokenAnchor;
   message_id?: string;
   client_message_id?: string;

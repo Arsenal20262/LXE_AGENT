@@ -103,8 +103,8 @@ describe("skill context", () => {
     expect(vietnamPolicy).toContain("只有用户明确要求查询或生成");
     expect(vietnamPolicy).toContain("先绑定该附件，成功后再生成");
     expect(vietnamPolicy).toContain("绑定失败时不得沿用旧 current 生成");
-    expect(vietnamPolicy).toContain("紧邻附件已成功绑定时不重复绑定");
-    expect(vietnamPolicy).toContain("本条及紧邻上一条均无待处理新附件");
+    expect(vietnamPolicy).toContain("若本轮已经收到该附件绑定成功的工具结果，直接继续生成，不重复调用绑定");
+    expect(vietnamPolicy).toContain("本轮没有合规新附件则直接用受信 current 生成一次");
     expect(vietnamPolicy).toContain("多附件未确认、非 `.xlsx` 附件或绑定失败时不进入生成");
     expect(vietnamPolicy).toContain("`ask_user_question` 弹出“仅绑定 / 绑定并查询”两个单选项");
     expect(vietnamPolicy).toContain('"id":"vietnam_sku_action"');
@@ -115,6 +115,11 @@ describe("skill context", () => {
     expect(vietnamPolicy).toContain("不跨多轮复用历史附件");
     expect(vietnamPolicy).toContain("多附件必须先确认");
     expect(vietnamPolicy).toContain("包括其中只有一份 `.xlsx` 的情况");
+    expect(vietnamPolicy).toContain("每条新上传唯一 `.xlsx` 的用户消息都是新的处理请求，即使文件内容与更早上传相同");
+    expect(vietnamPolicy).toContain("上一轮被取消或中断，不阻止本轮重新弹出选择框");
+    expect(vietnamPolicy).toContain("同一用户消息对应的当前轮最多调用一次 `ask_user_question`");
+    expect(vietnamPolicy).toContain("不从长对话历史推断这份新附件已经绑定");
+    expect(vietnamPolicy).toContain("绑定返回 `unchanged` 也视为本轮绑定成功");
     expect(vietnamPolicy).not.toContain("且你已询问用途");
     expect(vietnamPolicy).not.toContain("用户要求绑定时");
     const southeastPolicy = skills.find((skill) => skill.name === "southeast-asia-replenishment-workflow-map")?.content ?? "";
