@@ -38,6 +38,13 @@ if (mode === "seed") {
   const electron=desktop("electron") as string;
   const result=Bun.spawnSync([electron,build.outputs[0]!.path,`--qualification=${resolve(input!)}`,`--mode=${submode}`,`--install=${install??q.installRoot}`],{stdout:"pipe",stderr:"pipe",timeout:180_000,env:{...process.env,ELECTRON_RUN_AS_NODE:undefined,LXE_DATA_ROOT:undefined}});
   if(result.exitCode!==0)throw new Error(`Electron probe ${submode} exited ${result.exitCode}: ${result.stderr.toString()}`);
+} else if(mode === "check-explicit") {
+  const independent=join(q.output,"independent data 中文");
+  assert.equal(JSON.parse(readFileSync(join(independent,"config/settings.json"),"utf8")).workspace_root,join(independent,"workspace"));
+  assert.notDeepEqual(JSON.parse(readFileSync(join(independent,"db/machine_identity.json"),"utf8")),JSON.parse(readFileSync(join(q.output,"expected-machine.json"),"utf8")));
+  const db=new Database(join(independent,"db/agent.sqlite3"),{readonly:true});
+  assert.equal((db.query("SELECT COUNT(*) AS n FROM agent_sessions WHERE session_id='migration'").get() as any).n,0);db.close();
+  writeFileSync(join(q.output,"data-explicit-results.json"),JSON.stringify({explicit_root:true,no_automatic_import:true,independent_identity:true}));
 } else if(mode === "check") {
   assert.deepEqual(JSON.parse(readFileSync(join(target,"db/machine_identity.json"),"utf8")),JSON.parse(readFileSync(join(q.output,"expected-machine.json"),"utf8")));
   assert.equal(readFileSync(join(target,"workspace/中文 file.txt"),"utf8"),"preserved workspace data");

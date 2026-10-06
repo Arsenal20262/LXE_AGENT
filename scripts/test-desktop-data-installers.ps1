@@ -72,6 +72,17 @@ try {
     Bun-Step @('scripts/qualify-desktop-data.ts','check',$Qualification)
 } finally { Move-Item -LiteralPath $hidden -Destination $first }
 $dataBeforeUninstall = Hashes $data
+$previousDataRoot = $env:LXE_DATA_ROOT
+try {
+    $env:LXE_DATA_ROOT = Join-Path $q.output 'independent data 中文'
+    Start-Process -FilePath (Join-Path $second ($q.productName + '.exe')) | Out-Null
+    $deadline = [DateTime]::UtcNow.AddSeconds(90)
+    while (-not (Test-Path -LiteralPath (Join-Path $env:LXE_DATA_ROOT 'db\agent.sqlite3')) -and [DateTime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 300 }
+    Assert (Test-Path -LiteralPath (Join-Path $env:LXE_DATA_ROOT 'db\agent.sqlite3')) 'Explicit data root did not start'
+    Start-Sleep -Seconds 3
+} finally { Stop-IsolatedApplication $second; $env:LXE_DATA_ROOT = $previousDataRoot }
+Bun-Step @('scripts/qualify-desktop-data.ts','check-explicit',$Qualification)
+Assert ((Hashes $data) -eq $dataBeforeUninstall) 'Explicit data root modified the default data'
 $link = Join-Path ([Environment]::GetFolderPath('Desktop')) ($q.productName + '.lnk')
 $shell = New-Object -ComObject WScript.Shell
 Assert (Test-Path -LiteralPath $link) 'Isolated desktop shortcut is missing'
