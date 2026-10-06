@@ -79,6 +79,12 @@ describe("skill context", () => {
     expect(skills.find((skill) => skill.name === "vietnam-stock-recommendation")?.description).toContain("越南这批该补多少");
     const vietnamPolicy = skills.find((skill) => skill.name === "vietnam-stock-recommendation")?.content ?? "";
     expect(vietnamPolicy).toContain("当前消息恰好只有一个附件，且它是 `.xlsx` `local_file`");
+    expect(vietnamPolicy).toContain("managed_lxeskill");
+    expect(vietnamPolicy).toContain("vietnam_replenishment_bind_sku");
+    expect(vietnamPolicy).toContain("vietnam_replenishment_generate");
+    expect(vietnamPolicy).toContain("attachment_id");
+    expect(vietnamPolicy).not.toContain("通过 `exec`");
+    expect(vietnamPolicy).not.toContain("--source-path <");
     expect(vietnamPolicy).toContain("紧邻上一条用户消息");
     expect(vietnamPolicy).toContain("确认、澄清或继续处理该附件");
     expect(vietnamPolicy).toContain("查询或生成越南备货清单");
@@ -134,6 +140,7 @@ describe("skill context", () => {
     expect(prompt).toContain("Commands: lxeskill demo run");
     expect(prompt).toContain("## lxeskill invocation contract");
     expect(prompt).toContain("exec.cwd instead");
+    expect(prompt).toContain("managed_lxeskill");
     expect(prompt).not.toContain("blocked");
     expect(prompt).not.toContain("lxeskill hidden run");
   });
