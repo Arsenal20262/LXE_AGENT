@@ -88,11 +88,18 @@ $link = Join-Path ([Environment]::GetFolderPath('Desktop')) ($q.productName + '.
 $shell = New-Object -ComObject WScript.Shell
 Assert (Test-Path -LiteralPath $link) 'Isolated desktop shortcut is missing'
 Assert ($shell.CreateShortcut($link).TargetPath -eq (Join-Path $second ($q.productName + '.exe'))) 'Shortcut does not target the new installation'
+$registration = @(Get-ChildItem 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall' | Get-ItemProperty | Where-Object { $_.DisplayName -like ($q.productName + '*') })
+Assert ($registration.Count -eq 1) 'Expected one isolated uninstall registration'
+$installKey = 'HKCU:\Software\' + $registration[0].PSChildName
+Assert ((Get-ItemProperty -LiteralPath $installKey).InstallLocation -eq $second) 'Registration does not target the new installation'
 Uninstall $first
 Assert (Test-Path -LiteralPath $link) 'Old uninstaller removed the active shortcut'
+Assert (Test-Path -LiteralPath $registration[0].PSPath) 'Old uninstaller removed the active uninstall registration'
+Assert ((Get-ItemProperty -LiteralPath $installKey).InstallLocation -eq $second) 'Old uninstaller changed active installation registration'
 Assert ((Hashes $data) -eq $dataBeforeUninstall) 'Old uninstaller modified shared data'
 Assert ((Hashes (Join-Path $first 'var')) -eq $original) 'Old uninstaller removed legacy var'
 Uninstall $second
+Assert (-not (Test-Path -LiteralPath $installKey)) 'Active uninstaller did not remove its registration'
 Assert ((Hashes $data) -eq $dataBeforeUninstall) 'Active uninstaller modified shared data'
 # Reinstall via the old in-app update environment to cover its injected var override.
 $previousDataRoot = $env:LXE_DATA_ROOT

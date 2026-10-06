@@ -32,7 +32,7 @@ if (mode === "run-and-quit") {
     try {return await new Promise<any>((done,fail)=>{
       const timer=setTimeout(()=>{ws.close();fail(new Error("Inspector evaluation timed out"));},3000);
       const finish=(error:unknown,value?:unknown)=>{clearTimeout(timer);error?fail(error):done(value);};
-      ws.onopen=()=>ws.send(JSON.stringify({id:1,method:"Runtime.evaluate",params:{expression,returnByValue:true}}));
+      ws.onopen=()=>ws.send(JSON.stringify({id:1,method:"Runtime.evaluate",params:{expression,returnByValue:true,awaitPromise:true}}));
       ws.onerror=()=>finish(new Error("Isolated inspector connection failed"));
       ws.onclose=()=>finish(new Error("Isolated inspector disconnected"));
       ws.onmessage=event=>{const response=JSON.parse(String(event.data));if(response.id===1)finish(response.error??response.result?.exceptionDetails,response.result?.result?.value);};
@@ -46,6 +46,10 @@ if (mode === "run-and-quit") {
       await Bun.sleep(500);
     }
     assert.ok(ready,`Isolated desktop did not finish loading: ${lastError}`);
+    const workspace=await evaluate("process.mainModule.require('electron').BrowserWindow.getAllWindows()[0].webContents.executeJavaScript('window.lxe.desktop.getSetupState().then(s=>s.workspace_root)')");
+    const root=process.env.LXE_DATA_ROOT || target;
+    assert.equal(workspace,join(root,"workspace"));
+    writeFileSync(join(q.output,process.env.LXE_DATA_ROOT?"explicit-runtime-state.json":"default-runtime-state.json"),JSON.stringify({workspace_root:workspace}));
     await evaluate("setTimeout(()=>process.mainModule.require('electron').app.quit(),100);true");
     // Bootstrap may have relaunched; wait for the listening main process, not just its parent.
     const quitDeadline=Date.now()+30_000;
@@ -90,7 +94,7 @@ if (mode === "run-and-quit") {
   if(result.exitCode!==0)throw new Error(`Electron probe ${submode} exited ${result.exitCode}: ${result.stderr.toString()}`);
 } else if(mode === "check-explicit") {
   const independent=join(q.output,"independent data 中文");
-  assert.equal(JSON.parse(readFileSync(join(independent,"config/settings.json"),"utf8")).workspace_root,join(independent,"workspace"));
+  assert.equal(JSON.parse(readFileSync(join(q.output,"explicit-runtime-state.json"),"utf8")).workspace_root,join(independent,"workspace"));
   assert.notDeepEqual(JSON.parse(readFileSync(join(independent,"db/machine_identity.json"),"utf8")),JSON.parse(readFileSync(join(q.output,"expected-machine.json"),"utf8")));
   const db=checkedDatabase(join(independent,"db/agent.sqlite3"));
   assert.equal((db.query("SELECT COUNT(*) AS n FROM agent_sessions WHERE session_id='migration'").get() as any).n,0);db.close();
