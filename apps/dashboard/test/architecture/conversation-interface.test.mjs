@@ -6,6 +6,7 @@ import test from "node:test";
 const sourceDir = path.resolve(import.meta.dirname, "../../src");
 const view = readFileSync(path.join(sourceDir, "features/sessions/view.tsx"), "utf8");
 const fileAttachmentDisplay = readFileSync(path.join(sourceDir, "features/sessions/file-attachment-display.tsx"), "utf8");
+const events = readFileSync(path.join(sourceDir, "features/sessions/use-conversation-events.ts"), "utf8");
 const main = readFileSync(path.join(sourceDir, "main.tsx"), "utf8");
 const queries = readFileSync(path.join(sourceDir, "api/queries.ts"), "utf8");
 const conversation = readFileSync(path.join(sourceDir, "features/sessions/conversation.ts"), "utf8");
@@ -47,7 +48,7 @@ test("the composer edits thinking effort using the shared next-turn preference",
   assert.match(view, /event\.detail === 0/);
   assert.doesNotMatch(view, /const slideToClientX = [\s\S]*?applyLevel\(level\);[\s\S]*?const handleTrackPointerDown/);
   assert.match(view, /onThinkingLevelChange/);
-  assert.match(main, /thinkingSaving=\{thinkingMutation\.isPending\}/);
+  assert.match(main, /thinkingSaving=\{thinkingSaving\}/);
   assert.match(main, /onThinkingLevelChange=\{setCurrentThinkingLevel\}/);
   assert.match(styles, /\.conversation-thinking-menu \{[^}]*bottom:\s*calc\(100% \+ 9px\)/s);
 });
@@ -189,11 +190,11 @@ test("input attachments expose opaque chips and open through Main", () => {
 test("dashboard sends through Main, restores activity, and merges cursor history", () => {
   assert.match(main, /operation: "sessions\.send"/);
   assert.match(main, /operation: "sessions\.stop"/);
-  assert.match(main, /onConversationEvent/);
-  assert.match(main, /onConversationStreamEvent/);
-  assert.match(main, /requestAnimationFrame\(flush\)/);
-  assert.match(main, /applyDesktopStreamBatch\(activity, batch\)/);
-  assert.match(main, /setQueryData\(\s*dashboardQueryKeys\.sessions\.activity\(activity\.session_id\)/s);
+  assert.match(events, /onConversationEvent/);
+  assert.match(events, /onConversationStreamEvent/);
+  assert.match(events, /requestAnimationFrame\(flush\)/);
+  assert.match(events, /applyDesktopStreamBatch\(activity, batch\)/);
+  assert.match(events, /setQueryData\(\s*dashboardQueryKeys\.sessions\.activity\(activity\.session_id\)/s);
   assert.match(main, /useConversationActivityQuery/);
   assert.doesNotMatch(main, /conversationActivities|setConversationActivities/);
   assert.doesNotMatch(main, /if \(section === "sessions"\) \{\s*setSelectedSessionId\(""\)/s);

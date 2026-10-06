@@ -75,7 +75,7 @@ test("dashboard entry delegates feature views to dedicated modules", () => {
     });
 
   sourceFiles(sourceDir)
-    .filter((file) => !["main.tsx", "api/client.ts", "api/queries.ts"].includes(sourceRelativePath(file)))
+    .filter((file) => !["main.tsx", "api/client.ts", "api/queries.ts", "api/model-actions.ts", "api/mcp-actions.ts"].includes(sourceRelativePath(file)))
     .forEach((file) => {
       const source = readFileSync(file, "utf8");
       assert.doesNotMatch(source, /\bcallDashboard\b/, `${file} must read server state through Query hooks`);

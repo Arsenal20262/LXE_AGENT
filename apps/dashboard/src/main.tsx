@@ -1,3 +1,6 @@
+import { useModelActions } from "./api/model-actions";
+import { useMcpActions } from "./api/mcp-actions";
+import { useConversationEvents } from "./features/sessions/use-conversation-events";
 import { forgetComposerEditor } from "./features/sessions/ReferenceComposer";
 import { moveConversationAttachments, forgetConversationAttachments } from "./features/sessions/attachment-draft";
 import { forgetPreviewSession } from "./features/file-preview/reading-state";
@@ -5,7 +8,7 @@ import { FilePreviewLayout } from "./features/file-preview/Sidebar";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { createRoot } from "react-dom/client";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import type {
   DashboardRpcResult,
   DesktopCloudState,
@@ -57,12 +60,6 @@ import {
 import { EmptyState } from "./shared/components";
 import { formatDate, formatNumber } from "./shared/format";
 import {
-  modelDisabledReasonLabel,
-  modelWithOption,
-  modelWithThinkingLevel,
-  resolveModelSelection
-} from "./features/models/model";
-import {
   I18nContext,
   LANGUAGE_STORAGE_KEY,
   UI_TEXT,
@@ -77,18 +74,11 @@ import {
   initialDashboardTheme,
   resolveTheme,
 } from "./shared/appearance";
-import type {
-  ApiList,
-  ModelPayload,
-  McpServerPayload,
-  SessionPayload,
-  ToolsetPayload
-} from "./api/payloads";
+import type { SessionPayload } from "./api/payloads";
 import type { DetailTarget } from "./shared/ui/detail-target";
 import { DetailModal } from "./features/details/view";
 import { McpServicesView } from "./features/integrations/view";
 import { DashboardHome } from "./features/home/view";
-import { applyDesktopStreamBatch } from "./features/sessions/live-stream";
 import { ModelsView } from "./features/models/view";
 import { RuntimeStatusPopover } from "./features/runtime-status/view";
 import {
@@ -123,21 +113,6 @@ import type {
   DashboardSection,
 } from "./shared/navigation";
 const DOCS_HOME_PATH = "README.md";
-
-function modelsWithCurrentModel(
-  current: ApiList<ModelPayload> | undefined,
-  model: ModelPayload,
-): ApiList<ModelPayload> | undefined {
-  if (!current) return current;
-  return {
-    ...current,
-    items: current.items.map((item) =>
-      item.provider === model.provider && item.credential_source === model.credential_source
-        ? { ...item, ...model }
-        : item
-    ),
-  };
-}
 
 function browserStorage(): Storage | undefined {
   try {
@@ -245,62 +220,7 @@ function App({
   const waitingSessionIds = new Set([...pendingQuestions, ...pendingApprovals].map(q => q.session_id));
   const sessionStatuses=useSessionStatus(sessions.items.map(session=>session.session_id),dashboardRuntimeReady,sessionDetailQuery.display,activeSection==="sessions"&&!newConversation);
 
-  useEffect(() => {
-    const desktop = window.lxe?.desktop;
-    if (!desktop) return;
-    return desktop.onConversationEvent(({ activity }) => {
-      queryClient.setQueryData(
-        dashboardQueryKeys.sessions.activity(activity.session_id),
-        activity,
-      );
-      if (activity.latest) {
-        void Promise.all([
-          queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.sessions.lists }),
-          queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.sessions.detailSession(activity.session_id) }),
-        ]);
-      }
-    });
-  }, [queryClient]);
-
-  useEffect(() => {
-    const desktop = window.lxe?.desktop;
-    if (!desktop) return;
-    const pending = new Map<string, Parameters<typeof applyDesktopStreamBatch>[1][]>();
-    let frame = 0;
-    const flush = () => {
-      frame = 0;
-      const batches = [...pending.entries()];
-      pending.clear();
-      for (const [sessionId, sessionBatches] of batches) {
-        const key = dashboardQueryKeys.sessions.activity(sessionId);
-        let gap = false;
-        queryClient.setQueryData<DesktopConversationActivityPayload>(key, (current) => {
-          if (!current) return current;
-          let activity = current;
-          for (const batch of sessionBatches) {
-            const result = applyDesktopStreamBatch(activity, batch);
-            if (result.status === "gap") {
-              gap = true;
-              break;
-            }
-            activity = result.activity;
-          }
-          return gap ? current : activity;
-        });
-        if (gap) void queryClient.invalidateQueries({ queryKey: key });
-      }
-    };
-    const unsubscribe = desktop.onConversationStreamEvent(({ batch }) => {
-      const queued = pending.get(batch.session_id) ?? [];
-      queued.push(batch);
-      pending.set(batch.session_id, queued);
-      if (!frame) frame = window.requestAnimationFrame(flush);
-    });
-    return () => {
-      unsubscribe();
-      if (frame) window.cancelAnimationFrame(frame);
-    };
-  }, [queryClient]);
+  useConversationEvents();
 
   useEffect(() => {
     const handlePopState = () => {
@@ -542,161 +462,10 @@ function App({
     if (!result.opened) throw new Error(result.error);
   }
 
-  const thinkingMutation = useMutation<
-    ModelPayload,
-    unknown,
-    string,
-    { current?: ModelPayload; models?: ApiList<ModelPayload> }
-  >({
-    mutationFn: (level) => callDashboard({ operation: "models.thinking.update", input: { level } }),
-    onMutate: async (level) => {
-      setError("");
-      await queryClient.cancelQueries({ queryKey: dashboardQueryKeys.models.all });
-      const current = queryClient.getQueryData<ModelPayload>(dashboardQueryKeys.models.current);
-      const models = queryClient.getQueryData<ApiList<ModelPayload>>(dashboardQueryKeys.models.list);
-      if (current) {
-        const optimistic = modelWithThinkingLevel(current, level);
-        queryClient.setQueryData(dashboardQueryKeys.models.current, optimistic);
-        queryClient.setQueryData(dashboardQueryKeys.models.list, modelsWithCurrentModel(models, optimistic));
-      }
-      return { current, models };
-    },
-    onSuccess: (current) => {
-      queryClient.setQueryData(dashboardQueryKeys.models.current, current);
-      queryClient.setQueryData<ApiList<ModelPayload> | undefined>(
-        dashboardQueryKeys.models.list,
-        (models) => modelsWithCurrentModel(models, current),
-      );
-    },
-    onError: (cause, _level, context) => {
-      queryClient.setQueryData(dashboardQueryKeys.models.current, context?.current);
-      queryClient.setQueryData(dashboardQueryKeys.models.list, context?.models);
-      setError(queryError(cause));
-    },
-    onSettled: async () => {
-      await queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.models.all });
-    },
+  const { setCurrentModel, setCurrentThinkingLevel, modelSaving, thinkingSaving } = useModelActions({
+    current: currentModelQuery.data, models: modelsQuery.data?.items ?? [], onError: setError,
   });
-
-  const modelMutation = useMutation<
-    ModelPayload,
-    unknown,
-    {
-      provider: string;
-      model: string;
-      credentialSource: "local" | "cloud";
-      optimistic: ModelPayload;
-    },
-    { current?: ModelPayload; models?: ApiList<ModelPayload> }
-  >({
-    mutationFn: ({ provider, model, credentialSource }) => callDashboard({
-      operation: "models.update",
-      input: { provider, model, credential_source: credentialSource },
-    }),
-    onMutate: async ({ optimistic }) => {
-      setError("");
-      await queryClient.cancelQueries({ queryKey: dashboardQueryKeys.models.all });
-      const current = queryClient.getQueryData<ModelPayload>(dashboardQueryKeys.models.current);
-      const models = queryClient.getQueryData<ApiList<ModelPayload>>(dashboardQueryKeys.models.list);
-      queryClient.setQueryData(dashboardQueryKeys.models.current, optimistic);
-      queryClient.setQueryData(dashboardQueryKeys.models.list, modelsWithCurrentModel(models, optimistic));
-      return { current, models };
-    },
-    onSuccess: (current) => {
-      queryClient.setQueryData(dashboardQueryKeys.models.current, current);
-      queryClient.setQueryData<ApiList<ModelPayload> | undefined>(
-        dashboardQueryKeys.models.list,
-        (models) => modelsWithCurrentModel(models, current),
-      );
-    },
-    onError: (cause, _variables, context) => {
-      queryClient.setQueryData(dashboardQueryKeys.models.current, context?.current);
-      queryClient.setQueryData(dashboardQueryKeys.models.list, context?.models);
-      setError(modelDisabledReasonLabel(t, queryError(cause)));
-    },
-    onSettled: async () => {
-      await queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.models.all });
-    },
-  });
-
-  const mcpMutation = useMutation<
-    McpServerPayload,
-    unknown,
-    McpServerPayload,
-    { toolsets?: ApiList<ToolsetPayload> }
-  >({
-    mutationFn: (server) => callDashboard({
-      operation: "mcp.servers.update",
-      input: { name: server.name, enabled: !server.enabled },
-    }),
-    onMutate: async (server) => {
-      setError("");
-      await queryClient.cancelQueries({ queryKey: dashboardQueryKeys.tools.all });
-      const toolsets = queryClient.getQueryData<ApiList<ToolsetPayload>>(dashboardQueryKeys.tools.all);
-      const nextEnabled = !server.enabled;
-      queryClient.setQueryData<ApiList<ToolsetPayload> | undefined>(
-        dashboardQueryKeys.tools.all,
-        (current) => current ? {
-          ...current,
-          items: current.items.map((toolset) => toolset.name === "mcp" ? {
-            ...toolset,
-            servers: (toolset.servers || []).map((item) => item.name === server.name ? {
-              ...item,
-              enabled: nextEnabled,
-              status: nextEnabled ? item.status : "disabled",
-            } : item),
-          } : toolset),
-        } : current,
-      );
-      return { toolsets };
-    },
-    onError: (cause, _server, context) => {
-      queryClient.setQueryData(dashboardQueryKeys.tools.all, context?.toolsets);
-      setError(queryError(cause));
-    },
-    onSettled: async () => {
-      await queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.tools.all });
-    },
-  });
-
-  function setCurrentThinkingLevel(level: string) {
-    const current = currentModelQuery.data;
-    if (!current || thinkingMutation.isPending || !current.thinking_state?.editable) return;
-    thinkingMutation.mutate(level);
-  }
-
-  function setCurrentModel(
-    provider: string,
-    modelName: string,
-    credentialSource: "local" | "cloud",
-  ) {
-    if (modelMutation.isPending) return;
-    const selection = resolveModelSelection(
-      modelsQuery.data?.items ?? [], provider, modelName, credentialSource,
-    );
-    if (!selection) {
-      setError(t.models.modelOptionUnavailable);
-      return;
-    }
-    const { providerModel, selectedOption } = selection;
-    if (!providerModel.selectable) {
-      setError(
-        providerModel.disabled_reason ? modelDisabledReasonLabel(t, providerModel.disabled_reason) : t.models.providerNotSelectable
-      );
-      return;
-    }
-
-    const optimistic = modelWithOption(
-      providerModel,
-      selectedOption,
-      currentModelQuery.data?.thinking_state,
-    );
-    modelMutation.mutate({ provider, model: modelName, credentialSource, optimistic });
-  }
-
-  function toggleMcpServer(server: McpServerPayload) {
-    if (!mcpMutation.isPending) mcpMutation.mutate(server);
-  }
+  const { toggleMcpServer, savingId: mcpSavingId } = useMcpActions(setError);
 
   const sessionDetail = sessionDetailQuery.data ?? null;
 
@@ -938,8 +707,8 @@ function App({
                     models={modelsQuery.data?.items ?? []}
                     modelLoading={dashboardRuntimeReady
                       && (modelsQuery.isPending || currentModelQuery.isPending)}
-                    modelSaving={modelMutation.isPending}
-                    thinkingSaving={thinkingMutation.isPending}
+                    modelSaving={modelSaving}
+                    thinkingSaving={thinkingSaving}
                     newConversation={newConversation}
                     runtimeReady={dashboardRuntimeReady}
                     runtimeUnavailableMessage={setupComplete
@@ -1052,7 +821,7 @@ function App({
                     : toolsetsQuery.isPending ? <EmptyState label={t.common.loading} />
                     : <McpServicesView
                         mcpError={!toolsetsQuery.data ? queryError(toolsetsQuery.error) : ""}
-                        mcpSavingId={mcpMutation.isPending ? mcpMutation.variables?.name || "" : ""}
+                        mcpSavingId={mcpSavingId}
                         mcpToolset={mcpToolset}
                         onToggleMcpServer={toggleMcpServer}
                       />

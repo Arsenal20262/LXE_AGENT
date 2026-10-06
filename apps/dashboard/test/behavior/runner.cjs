@@ -68,7 +68,9 @@ app.whenReady().then(async () => {
   };
   try {
     await load();
-    if (suite === "updates") {
+    if (suite === "app-actions" || suite === "conversation-events") {
+      await require("./app-actions.cjs")({suite, js, step, settle, click, type, focus, key, state, waitFor});
+    } else if (suite === "updates") {
       await js("behavior.mountUpdates()");
       await step("checking discovers an update without downloading", async () => {
         await waitFor("Boolean(document.querySelector('.lxe-update-manual-button'))", "update control");

@@ -24,7 +24,7 @@ beforeAll(async () => {
 }, 60_000);
 afterAll(() => { server?.stop(true); if (output) rmSync(output, { recursive: true, force: true }); });
 
-for (const suite of ["dialog", "composer", "references", "readiness", "sidebar", "windows-titlebar", "workspaces", "mermaid", "permissions", "updates"] as const) {
+for (const suite of ["app-actions", "conversation-events", "dialog", "composer", "references", "readiness", "sidebar", "windows-titlebar", "workspaces", "mermaid", "permissions", "updates"] as const) {
   test(`Chromium renderer behavior: ${suite}`, async () => {
     const profile = mkdtempSync(resolve(tmpdir(), "lxe-renderer-test-"));
     const env = { ...process.env };
@@ -44,7 +44,7 @@ for (const suite of ["dialog", "composer", "references", "readiness", "sidebar",
       expect(line, `Renderer did not report completed scenarios\n${stdout}\n${stderr}`).toBeDefined();
       const report = JSON.parse(line!.slice("LXE_BEHAVIOR_RESULT=".length));
       expect(report.suite).toBe(suite);
-      expect(report.passed).toHaveLength({ dialog: 3, composer: 5, references: 13, readiness: 5, sidebar: 6, "windows-titlebar": 4, workspaces: 15, mermaid: 3, permissions: 10, updates: 4 }[suite]);
+      expect(report.passed).toHaveLength({ "app-actions": 5, "conversation-events": 4, dialog: 3, composer: 5, references: 13, readiness: 5, sidebar: 6, "windows-titlebar": 4, workspaces: 15, mermaid: 3, permissions: 10, updates: 4 }[suite]);
     } finally {
       clearTimeout(timer);
       if (child.exitCode === null) { child.kill(); await child.exited; }

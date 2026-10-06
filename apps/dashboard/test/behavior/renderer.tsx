@@ -1,3 +1,4 @@
+import { AppActionsFixture, actionFixture } from "./app-actions-fixture";
 import { useApprovalsQuery } from "../../src/api/queries";
 import type { PendingApproval, PendingUserQuestion, PermissionMode } from "@lxe/desktop-protocol";
 import { FilePreviewLayout } from "../../src/features/file-preview/Sidebar";
@@ -180,8 +181,8 @@ const desktop = {
     invalidateDashboard = () => listener({ revision: Date.now(), domains: ["sessions"], session_ids: [] });
     return () => { invalidateDashboard = undefined; };
   },
-  onConversationEvent: subscribe,
-  onConversationStreamEvent: subscribe,
+  onConversationEvent: actionFixture.onActivity,
+  onConversationStreamEvent: actionFixture.onStream,
   onExecUpdate: subscribe,
   onSessionStatus: subscribe,
   selectConversationFiles: async () => { calls.push({ operation: "selectFiles" }); return chosenFile ? [{ attachment_id: chosenFile, name: chosenFile, media_type: "text/plain", size_bytes: 1 }] : []; },
@@ -210,6 +211,7 @@ const dashboard = {
       return { items };
     }
     calls.push(structuredClone(call));
+    if (actionFixture.active) return actionFixture.rpc(call);
     if (call.operation === "sessions.permission.set") {
       const id = String(call.input.session_id), mode = call.input.permission_mode as PermissionMode;
       if (holdPermission) await new Promise<void>(resolve => { releasePermission = resolve; });
@@ -324,7 +326,19 @@ function reset() {
   root = createRoot(document.getElementById("root")!);
   calls.length = 0; sends.length = 0; stops = 0; releaseSend = undefined;
 }
+function renderActions(subscribed = true) {
+  flushSync(() => root!.render(<I18nContext.Provider value={UI_TEXT.en}><QueryClientProvider client={queryClient!}>
+    <AppActionsFixture subscribed={subscribed} />
+  </QueryClientProvider></I18nContext.Provider>));
+}
 const fixture = {
+  actions: actionFixture,
+  mountActions() { reset(); actionFixture.reset(); renderActions(); },
+  subscribeActions(value: boolean) { renderActions(value); },
+  invalidateActions() { void queryClient?.invalidateQueries({ queryKey: ["models"] }); },
+  seedEventCaches() { queryClient!.setQueryData(["sessions","list",""], {}); queryClient!.setQueryData(["sessions","detail","event-session","latest"], {}); },
+  eventCachesInvalidated() { return [["sessions","list",""],["sessions","detail","event-session","latest"]].map(key => queryClient!.getQueryState(key)?.isInvalidated); },
+  cachedActivity(id: string) { return queryClient?.getQueryData(["sessions", "activity", id]); },
   mountUpdates() { reset(); updateState={phase:"idle"}; flushSync(()=>root!.render(<I18nContext.Provider value={UI_TEXT.en}><UpdateControl manual /></I18nContext.Provider>)); },
   releaseUpdateDownload() { releaseUpdateDownload?.(); },
   updateError(operation: "download" | "install") { updateState={phase:"error",release:updateRelease,failedOperation:operation,message:"EACCES: fixture update failure"}; },
