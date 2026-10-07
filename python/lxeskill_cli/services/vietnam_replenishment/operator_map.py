@@ -15,7 +15,7 @@ from services.vietnam_replenishment.asset_contract import SkuParameters
 
 if TYPE_CHECKING:
     from services.vietnam_replenishment.sku_parameters import HistoricalSkuParameters
-    from services.vietnam_replenishment.yacang_sources import VietnamSources
+    from services.vietnam_replenishment.source_parser import VietnamSources
 
 
 _FIELDS = (

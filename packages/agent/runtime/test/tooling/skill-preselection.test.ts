@@ -44,11 +44,21 @@ const declaration = [
 
 describe("declarative Skill preselection", () => {
   test("the Vietnam Skill declares business actions without generic inventory or raw export phrases", () => {
-    const path = join(repositoryRoot(import.meta.dir), "skills", "vietnam-stock-recommendation", "SKILL.md");
-    const rule = parseSkillManifest(path, "repository").preselection;
+    const root = repositoryRoot(import.meta.dir);
+    const path = join(root, "skills", "vietnam-stock-recommendation", "SKILL.md");
+    const manifest = parseSkillManifest(path, "repository");
+    const rule = manifest.preselection;
     expect(rule?.textPhrases).toContain("查询越南备货");
     expect(rule?.textPhrases).toContain("查询越南的备货");
+    expect(rule?.textPhrases).toContain("用已有雅仓报表生成越南备货");
     expect(rule?.textPhrases).toContain("绑定越南 SKU 参数表");
+    const catalog = new SkillCatalog(root, join(root, "missing-user"), { sharedSkillsRoot: false });
+    catalog.forceRefresh();
+    const snapshot = catalog.snapshot();
+    expect(matchSkillPreselectionText(snapshot, "用已有雅仓报表生成越南备货")).toBe("vietnam-stock-recommendation");
+    expect(matchSkillPreselectionText(snapshot, "查询越南备货")).toBe("vietnam-stock-recommendation");
+    expect(matchSkillPreselectionText(snapshot, "绑定越南 SKU 参数表")).toBe("vietnam-stock-recommendation");
+    expect(manifest.content).toContain("例如“用已有雅仓报表生成越南备货”在满足三份报表条件时选择 `vietnam stock generate`，不得调用在线 `vietnam stock recommend`");
     expect(rule?.textPhrases).not.toContain("看看越南库存");
     expect(rule?.textPhrases).not.toContain("导出越南仓库存原表");
     expect(rule?.attachment).toEqual({

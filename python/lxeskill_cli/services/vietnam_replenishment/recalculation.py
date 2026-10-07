@@ -33,7 +33,7 @@ from .workbook import (
     _validated_rows,
     write_vietnam_workbook,
 )
-from .yacang_sources import VietnamSources
+from .source_parser import VietnamSources
 
 
 class WorkbookGenerationError(ValueError):

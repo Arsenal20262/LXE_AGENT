@@ -205,14 +205,22 @@ test("Mabang Brazil delivers original batches through a separate ERP skill", () 
 });
 
 
-test("only the two Vietnam commands opt into managed execution", () => {
+test("Vietnam online, binding and offline commands declare their managed contracts", () => {
   const path = join(process.cwd(), "python/lxeskill_cli/lxeskill/catalog.json");
   const managed = loadLxeSkillCommandCatalog(path).filter(entry => entry.managedExecution);
   expect(managed.map(entry => entry.name)).toEqual([
     "vietnam_replenishment_bind_sku", "vietnam_replenishment_generate",
+    "vietnam_replenishment_generate_offline",
   ]);
   expect(managed[0]?.managedExecution).toEqual({ attachmentArgument: "source_path" });
   expect(managed[1]?.managedExecution).toEqual({});
+  expect(managed[2]).toMatchObject({
+    command: "lxeskill vietnam stock generate",
+    module: "services.agent_cli.vietnam_replenishment.generate_offline",
+    ownerSkills: ["vietnam-stock-recommendation"],
+    managedExecution: { attachmentArgument: "source_xlsx", attachmentCount: 3 },
+    artifactPaths: [{ field: "output_xlsx", role: "deliverable" }],
+  });
 });
 
 function syntheticManagedEntry(count: unknown): Record<string, unknown> {

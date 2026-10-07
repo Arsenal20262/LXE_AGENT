@@ -19,7 +19,7 @@ from openpyxl.worksheet.formula import ArrayFormula
 from .asset_contract import REQUIRED_SHEETS, SkuParameters
 from .formula_dependencies import guarded_mapping_formula
 from .numeric_contract import WorkbookInputError, excel_number
-from .yacang_sources import VietnamSources
+from .source_parser import VietnamSources
 
 
 @dataclass(frozen=True)

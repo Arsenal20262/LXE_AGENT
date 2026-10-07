@@ -72,6 +72,7 @@ describe("skill context", () => {
     expect(skills.find((skill) => skill.name === "vietnam-stock-recommendation")?.commands).toEqual([
       "lxeskill vietnam sku bind",
       "lxeskill vietnam stock recommend",
+      "lxeskill vietnam stock generate",
     ]);
     expect(skills.find((skill) => skill.name === "vietnam-stock-recommendation")?.description).toContain("生成越南备货清单");
     expect(skills.find((skill) => skill.name === "vietnam-stock-recommendation")?.description).toContain("越南补货建议");
@@ -81,7 +82,7 @@ describe("skill context", () => {
     expect(vietnamPolicy).toContain("当前消息恰好只有一个附件，且它是 `.xlsx` `local_file`");
     expect(vietnamPolicy).toContain("managed_lxeskill");
     expect(vietnamPolicy).toContain('{"command_id":"vietnam_replenishment_bind_sku"}');
-    expect(vietnamPolicy).toContain("唯一合规 XLSX 加明确生成要求时，直接绑定再生成");
+    expect(vietnamPolicy).toContain("唯一合规 XLSX 加明确在线生成要求时，直接绑定再生成");
     expect(vietnamPolicy).toContain("不要为取得附件 ID 搜索目录、读取会话记录或读取 XLSX");
     expect(vietnamPolicy).toContain("vietnam_replenishment_bind_sku");
     expect(vietnamPolicy).toContain("vietnam_replenishment_generate");
@@ -105,7 +106,7 @@ describe("skill context", () => {
     expect(vietnamPolicy).toContain("绑定失败时不得沿用旧 current 生成");
     expect(vietnamPolicy).toContain("若本轮已经收到该附件绑定成功的工具结果，直接继续生成，不重复调用绑定");
     expect(vietnamPolicy).toContain("本轮没有合规新附件则直接用受信 current 生成一次");
-    expect(vietnamPolicy).toContain("多附件未确认、非 `.xlsx` 附件或绑定失败时不进入生成");
+    expect(vietnamPolicy).toContain("多附件未确认、非 `.xlsx` 附件或绑定失败时不进入在线生成");
     expect(vietnamPolicy).toContain("`ask_user_question` 弹出“仅绑定 / 绑定并查询”两个单选项");
     expect(vietnamPolicy).toContain('"id":"vietnam_sku_action"');
     expect(vietnamPolicy).toContain("表单答案在当前轮可继续处理当前附件");
@@ -122,6 +123,17 @@ describe("skill context", () => {
     expect(vietnamPolicy).toContain("绑定返回 `unchanged` 也视为本轮绑定成功");
     expect(vietnamPolicy).not.toContain("且你已询问用途");
     expect(vietnamPolicy).not.toContain("用户要求绑定时");
+    expect(vietnamPolicy).toContain('交给 `yacang-export`');
+    expect(vietnamPolicy).toContain('明确使用已有三份雅仓 XLSX 生成越南备货');
+    expect(vietnamPolicy).toContain('三份文件由宿主从当前消息或符合条件的紧邻上一条消息整组传入 `source_xlsx`');
+    expect(vietnamPolicy).toContain('多附件集合必须来自同一上传轮次');
+    expect(vietnamPolicy).toContain('只有三份报表用途不明时先澄清');
+    expect(vietnamPolicy).toContain('{"command_id":"vietnam_replenishment_generate_offline"}');
+    expect(vietnamPolicy).toContain('不调用 `vietnam_replenishment_bind_sku` 或在线 `vietnam_replenishment_generate`');
+    expect(vietnamPolicy).toContain('离线失败时绝不调用雅仓补救或回退在线');
+    expect(vietnamPolicy).toContain('基于用户提供的已有报表');
+    expect(vietnamPolicy).toContain('不声称这些报表来自同一次导出或代表今天的实时数据');
+    expect(vietnamPolicy).toContain('仅当生成的 `ok=true`、`data.success=true`');
     const southeastPolicy = skills.find((skill) => skill.name === "southeast-asia-replenishment-workflow-map")?.content ?? "";
     expect(skills.find((skill) => skill.name === "southeast-asia-replenishment-workflow-map")?.description).toContain("越南补货建议");
     expect(skills.find((skill) => skill.name === "southeast-asia-replenishment-workflow-map")?.description).toContain("越南这批该补多少");

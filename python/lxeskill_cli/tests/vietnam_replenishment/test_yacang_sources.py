@@ -8,7 +8,7 @@ from services.yacang.validation import (
     INVENTORY_SALES_HEADERS,
     WAREHOUSE_PRODUCTS_HEADERS,
 )
-from services.vietnam_replenishment import yacang_sources
+from services.vietnam_replenishment import source_parser, yacang_sources
 
 
 def _workbook(path: Path, headers: tuple[str, ...], rows: list[dict[str, object]]) -> None:
@@ -188,3 +188,86 @@ def test_export_calls_existing_workflow_once_and_keeps_real_failure(tmp_path, mo
     monkeypatch.setattr(yacang_sources.yacang_workflow, "run", failed)
     with pytest.raises(yacang_sources.VietnamSourceError, match="雅仓实际返回 429，已脱敏"):
         yacang_sources.export_vietnam_sources()
+
+
+def test_offline_classifies_three_reports_by_headers_not_filenames(tmp_path):
+    artifacts = _artifacts(
+        tmp_path,
+        sales=[{"SKU": "VN-A", "仓库": "VN8806"}],
+        inventory=[{"SKU": "VN-A", "仓库": "VN8806"}],
+    )
+    paths = [str(entry["path"]) for entry in reversed(artifacts)]
+    classified = source_parser.classify_vietnam_report_paths(paths)
+    assert [entry["report"] for entry in classified] == [
+        "warehouse-products", "inventory-current-snapshot", "inventory-sales",
+    ]
+    assert source_parser.load_vietnam_sources(classified).skus == ("VN-A",)
+
+
+@pytest.mark.parametrize("count", [0, 1, 2, 4])
+def test_offline_classification_requires_exactly_three_files(tmp_path, count):
+    artifacts = _artifacts(tmp_path)
+    paths = [str(entry["path"]) for entry in artifacts]
+    if count == 4:
+        paths.append(paths[0])
+    with pytest.raises(yacang_sources.VietnamSourceError, match="三份"):
+        source_parser.classify_vietnam_report_paths(paths[:count])
+
+
+def test_offline_classification_rejects_duplicate_path_and_report_type(tmp_path):
+    artifacts = _artifacts(tmp_path)
+    paths = [str(entry["path"]) for entry in artifacts]
+    with pytest.raises(yacang_sources.VietnamSourceError, match="重复"):
+        source_parser.classify_vietnam_report_paths([paths[0], paths[0], paths[2]])
+    duplicate_type = tmp_path / "different-name.xlsx"
+    _workbook(duplicate_type, INVENTORY_SALES_HEADERS, [])
+    with pytest.raises(yacang_sources.VietnamSourceError, match="重复"):
+        source_parser.classify_vietnam_report_paths([paths[0], str(duplicate_type), paths[2]])
+
+
+def test_offline_classification_rejects_symlink_and_hardlink_aliases(tmp_path):
+    paths = [str(entry["path"]) for entry in _artifacts(tmp_path)]
+    symlink = tmp_path / "same-via-symlink.xlsx"
+    symlink.symlink_to(paths[0])
+    hardlink = tmp_path / "same-via-hardlink.xlsx"
+    hardlink.hardlink_to(paths[0])
+    for alias in (symlink, hardlink):
+        with pytest.raises(source_parser.VietnamSourceError, match="重复"):
+            source_parser.classify_vietnam_report_paths([paths[0], str(alias), paths[2]])
+
+
+def test_offline_classification_rejects_non_xlsx_and_unknown_headers(tmp_path):
+    artifacts = _artifacts(tmp_path)
+    paths = [str(entry["path"]) for entry in artifacts]
+    non_xlsx = tmp_path / "source.csv"
+    non_xlsx.write_text("synthetic", encoding="utf-8")
+    with pytest.raises(yacang_sources.VietnamSourceError, match=".xlsx"):
+        source_parser.classify_vietnam_report_paths([paths[0], paths[1], str(non_xlsx)])
+    unknown = tmp_path / "unknown.xlsx"
+    _workbook(unknown, ("SKU", "unknown"), [])
+    with pytest.raises(yacang_sources.VietnamSourceError, match="表头"):
+        source_parser.classify_vietnam_report_paths([paths[0], paths[1], str(unknown)])
+
+
+def test_offline_classification_rejects_missing_and_corrupt_workbooks(tmp_path):
+    paths = [str(entry["path"]) for entry in _artifacts(tmp_path)]
+    with pytest.raises(source_parser.VietnamSourceError, match="不存在或不可读"):
+        source_parser.classify_vietnam_report_paths([paths[0], paths[1], str(tmp_path / "missing.xlsx")])
+    corrupt = tmp_path / "corrupt.xlsx"
+    corrupt.write_bytes(b"not a ZIP workbook")
+    with pytest.raises(source_parser.VietnamSourceError, match="无法读取或结构无效"):
+        source_parser.classify_vietnam_report_paths([paths[0], paths[1], str(corrupt)])
+
+
+def test_offline_full_parse_rejects_wrong_warehouse_and_invalid_sku(tmp_path):
+    artifacts = _artifacts(
+        tmp_path,
+        sales=[{"SKU": "VN-A", "仓库": "MY8801"}],
+        inventory=[{"SKU": "VN-A", "仓库": "VN8806"}],
+    )
+    paths = [str(entry["path"]) for entry in artifacts]
+    with pytest.raises(source_parser.VietnamSourceError, match="VN8806"):
+        source_parser.load_vietnam_sources(source_parser.classify_vietnam_report_paths(paths))
+    _workbook(Path(paths[0]), INVENTORY_SALES_HEADERS, [{"SKU": "=1+1", "仓库": "VN8806"}])
+    with pytest.raises(source_parser.VietnamSourceError, match="SKU"):
+        source_parser.load_vietnam_sources(source_parser.classify_vietnam_report_paths(paths))

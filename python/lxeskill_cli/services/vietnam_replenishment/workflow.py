@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 import os
 from pathlib import Path
-from typing import Literal, Mapping
+from typing import Callable, Literal, Mapping
 from uuid import uuid4
 
 from shared.datasets import dataset_dir
@@ -17,6 +17,9 @@ from .workbook import (
     RecommendationConfig,
     WorkbookInputError,
     validate_recommendation_config,
+)
+from .source_parser import (
+    VietnamSources, classify_vietnam_report_paths, load_vietnam_sources,
 )
 from .yacang_sources import export_vietnam_sources
 
@@ -83,10 +86,23 @@ def current_sku_map_snapshot():
 
 def generate_current_vietnam_recommendation() -> VietnamRecommendationRun:
     """Export VN8806 once, then publish only a validated five-sheet XLSX."""
+    return _generate_with_current_map(export_vietnam_sources)
+
+
+def generate_offline_vietnam_recommendation(raw_paths: object) -> VietnamRecommendationRun:
+    """Validate three supplied reports locally; never call the Yacang workflow."""
+    artifacts = classify_vietnam_report_paths(raw_paths)
+    sources = load_vietnam_sources(artifacts)
+    return _generate_with_current_map(lambda: sources)
+
+
+def _generate_with_current_map(
+    load_sources: Callable[[], VietnamSources],
+) -> VietnamRecommendationRun:
     try:
         snapshot = current_sku_map_snapshot()
         with snapshot as map_path:
-            return _generate_from_map(map_path)
+            return _generate_from_map(map_path, load_sources)
     except SkuMapStoreError as exc:
         code = (
             "sku_parameter_map_required" if "请先上传" in str(exc)
@@ -96,9 +112,11 @@ def generate_current_vietnam_recommendation() -> VietnamRecommendationRun:
         raise VietnamWorkflowError(code, str(exc)) from exc
 
 
-def _generate_from_map(map_path: Path) -> VietnamRecommendationRun:
+def _generate_from_map(
+    map_path: Path, load_sources: Callable[[], VietnamSources],
+) -> VietnamRecommendationRun:
     config, config_source = resolve_recommendation_config(os.environ)
-    sources = export_vietnam_sources()
+    sources = load_sources()
     if not sources.skus:
         raise VietnamWorkflowError("current_skus_empty", "本轮 VN8806 来源没有 SKU")
 
@@ -123,5 +141,6 @@ __all__ = [
     "VietnamWorkflowError",
     "current_sku_map_snapshot",
     "generate_current_vietnam_recommendation",
+    "generate_offline_vietnam_recommendation",
     "resolve_recommendation_config",
 ]

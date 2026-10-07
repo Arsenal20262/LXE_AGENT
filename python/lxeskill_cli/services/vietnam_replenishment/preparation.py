@@ -9,7 +9,8 @@ from typing import Mapping
 from .asset_contract import load_sku_parameters, validate_template
 from .operator_map import write_operator_sku_map
 from .sku_parameters import ResolvedSkuParameters, load_template_sku_parameters, resolve_sku_parameters
-from .yacang_sources import VietnamSources, export_vietnam_sources
+from .source_parser import VietnamSources
+from .yacang_sources import export_vietnam_sources
 
 
 @dataclass(frozen=True)

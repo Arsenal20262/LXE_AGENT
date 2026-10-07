@@ -6,15 +6,19 @@ from dataclasses import replace
 from decimal import Decimal
 import os
 from pathlib import Path
+import shutil
 
 from openpyxl import Workbook, load_workbook
 import pytest
 
-from services.vietnam_replenishment import workflow
+from services.vietnam_replenishment import recalculation, workflow, yacang_sources
 from services.vietnam_replenishment.asset_contract import load_sku_parameters
 from services.vietnam_replenishment.workbook import RecommendationConfig
 from services.vietnam_replenishment.yacang_sources import VietnamSourceError, VietnamSources
 from services.vietnam_replenishment import sku_map_store as store
+from services.yacang.validation import (
+    INVENTORY_LIST_HEADERS, INVENTORY_SALES_HEADERS, WAREHOUSE_PRODUCTS_HEADERS,
+)
 from shared import input_assets
 
 
@@ -75,6 +79,38 @@ def _sources() -> VietnamSources:
         in_transit={sku: Decimal("3")}, missing_in_transit=(),
         in_transit_mismatch=(sku,), artifacts={},
     )
+
+
+def _report_artifacts(tmp_path: Path) -> list[dict[str, object]]:
+    """Three synthetic exports with the same source values for both workflows."""
+    reports = (
+        ("inventory-sales", INVENTORY_SALES_HEADERS, {
+            "SKU": "VN-A", "仓库": "VN8806", "7天销量": 0,
+            "15天销量": 0, "30天销量": 0, "在途": 99,
+        }, "VN8806"),
+        ("inventory-current-snapshot", INVENTORY_LIST_HEADERS, {
+            "SKU": "VN-A", "仓库": "VN8806", "库存数量": 7,
+            "占用数量": 2, "在途数量": 3, "可用库存": 5,
+        }, "VN8806"),
+        ("warehouse-products", WAREHOUSE_PRODUCTS_HEADERS, {
+            "SKU": "VN-A", "中文标题": "合成产品 A", "创建时间": "2026-09-23 10:00",
+        }, None),
+    )
+    artifacts: list[dict[str, object]] = []
+    for report, headers, row, warehouse in reports:
+        path = tmp_path / f"{report}.xlsx"
+        book = Workbook()
+        try:
+            book.active.append(headers)
+            book.active.append([row.get(header) for header in headers])
+            book.save(path)
+        finally:
+            book.close()
+        artifacts.append({
+            "report": report, "warehouse": warehouse, "created_date": None,
+            "path": str(path),
+        })
+    return artifacts
 
 
 def test_missing_current_prompts_upload_before_export(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -367,6 +403,180 @@ def test_generator_without_final_file_is_not_success(
     with pytest.raises(workflow.VietnamWorkflowError, match="没有生成最终 XLSX") as error:
         workflow.generate_current_vietnam_recommendation()
     assert error.value.code == "output_missing"
+
+
+def test_offline_uses_three_local_reports_and_never_starts_yacang(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _current(monkeypatch, _sku_map(tmp_path / "current.xlsx"))
+    artifacts = _report_artifacts(tmp_path)
+    output_root = tmp_path / "artifacts"
+    monkeypatch.setattr(workflow, "dataset_dir", lambda *parts: output_root / parts[-1])
+    online_calls: list[object] = []
+
+    def forbidden_yacang(arguments: object) -> None:
+        online_calls.append(arguments)
+        raise AssertionError("offline workflow called Yacang")
+
+    monkeypatch.setattr(yacang_sources.yacang_workflow, "run", forbidden_yacang)
+    generated: list[str] = []
+
+    def fake_generate(map_path: Path, output_path: Path, *, sources: VietnamSources,
+                      config: RecommendationConfig) -> Path:
+        assert load_sku_parameters(map_path)["VN-A"].cost == Decimal("10")
+        assert sources.skus == ("VN-A",)
+        assert sources.in_transit["VN-A"] == Decimal("3")
+        assert config == RecommendationConfig()
+        generated.append("shared-generator")
+        output_path.parent.mkdir(parents=True)
+        output_path.write_bytes(b"synthetic final workbook")
+        return output_path
+
+    monkeypatch.setattr(workflow, "generate_vietnam_workbook", fake_generate)
+    result = workflow.generate_offline_vietnam_recommendation(
+        [entry["path"] for entry in reversed(artifacts)]
+    )
+    assert online_calls == []
+    assert generated == ["shared-generator"]
+    assert result.sku_count == 1
+    assert result.output_xlsx.read_bytes() == b"synthetic final workbook"
+
+
+def test_offline_missing_current_never_starts_yacang_or_publishes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    artifacts = _report_artifacts(tmp_path)
+    output_root = tmp_path / "artifacts"
+    monkeypatch.setattr(workflow, "dataset_dir", lambda *parts: output_root / parts[-1])
+    online_calls: list[object] = []
+
+    def forbidden_yacang(arguments: object) -> None:
+        online_calls.append(arguments)
+        raise AssertionError("offline workflow called Yacang")
+
+    monkeypatch.setattr(yacang_sources.yacang_workflow, "run", forbidden_yacang)
+    with pytest.raises(workflow.VietnamWorkflowError) as error:
+        workflow.generate_offline_vietnam_recommendation([entry["path"] for entry in artifacts])
+    assert error.value.code == "sku_parameter_map_required"
+    assert online_calls == []
+    assert not output_root.exists()
+
+
+@pytest.mark.parametrize("failed_stage", ("office", "validation"))
+def test_offline_failed_stage_never_publishes_partial_xlsx(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failed_stage: str,
+) -> None:
+    _current(monkeypatch, _sku_map(tmp_path / "current.xlsx"))
+    artifacts = _report_artifacts(tmp_path)
+    output_root = tmp_path / "artifacts"
+    monkeypatch.setattr(workflow, "dataset_dir", lambda *parts: output_root / parts[-1])
+    online_calls: list[object] = []
+
+    def forbidden_yacang(arguments: object) -> None:
+        online_calls.append(arguments)
+        raise AssertionError("offline workflow called Yacang")
+
+    monkeypatch.setattr(yacang_sources.yacang_workflow, "run", forbidden_yacang)
+
+    def fake_office(draft: Path, recalculated: Path) -> Path:
+        if failed_stage == "office":
+            recalculated.write_bytes(b"partial Office output")
+            raise recalculation.WorkbookGenerationError("Office synthetic failure")
+        shutil.copyfile(draft, recalculated)
+        return recalculated
+
+    monkeypatch.setattr(recalculation, "recalculate_with_office", fake_office)
+    if failed_stage == "validation":
+        def fail_validation(*_args: object, **_kwargs: object) -> None:
+            raise recalculation.WorkbookGenerationError("Validation synthetic failure")
+
+        monkeypatch.setattr(recalculation, "validate_recalculated_workbook", fail_validation)
+
+    with pytest.raises(recalculation.WorkbookGenerationError, match=failed_stage.title()):
+        workflow.generate_offline_vietnam_recommendation([entry["path"] for entry in artifacts])
+    assert online_calls == []
+    assert not list(output_root.rglob("*.xlsx"))
+
+
+def test_online_still_calls_yacang_once_before_shared_generator(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _current(monkeypatch, _sku_map(tmp_path / "current.xlsx"))
+    artifacts = _report_artifacts(tmp_path)
+    monkeypatch.setattr(workflow, "dataset_dir", lambda *parts: tmp_path / "artifacts" / parts[-1])
+    online_calls: list[object] = []
+    shared_calls: list[tuple[str, ...]] = []
+
+    def fake_yacang(arguments: object) -> dict[str, object]:
+        online_calls.append(arguments)
+        return {"success": True, "status": "completed", "artifacts": artifacts}
+
+    def fake_generate(_map_path: Path, output_path: Path, *, sources: VietnamSources,
+                      config: RecommendationConfig) -> Path:
+        shared_calls.append(sources.skus)
+        assert config == RecommendationConfig()
+        output_path.parent.mkdir(parents=True)
+        output_path.write_bytes(b"synthetic final workbook")
+        return output_path
+
+    monkeypatch.setattr(yacang_sources.yacang_workflow, "run", fake_yacang)
+    monkeypatch.setattr(workflow, "generate_vietnam_workbook", fake_generate)
+    result = workflow.generate_current_vietnam_recommendation()
+    assert len(online_calls) == 1
+    assert shared_calls == [("VN-A",)]
+    assert result.output_xlsx.is_file()
+
+
+@pytest.mark.skipif(
+    not (os.environ.get("LXE_OFFICE_NODE") and os.environ.get("LXE_OFFICE_CLI")),
+    reason="Host Office Kit paths are not configured",
+)
+def test_online_and_offline_real_office_results_match_for_identical_inputs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _current(monkeypatch, _sku_map(tmp_path / "current.xlsx"))
+    artifacts = _report_artifacts(tmp_path)
+    paths = [entry["path"] for entry in artifacts]
+    monkeypatch.setattr(workflow, "dataset_dir", lambda *parts: tmp_path / "artifacts" / parts[-1])
+    for name, value in {
+        "LXE_VIETNAM_WEIGHT_30D": "0.7", "LXE_VIETNAM_WEIGHT_15D": "0.6",
+        "LXE_VIETNAM_WEIGHT_7D": "0.1", "LXE_VIETNAM_EXCHANGE_RATE": "4000",
+    }.items():
+        monkeypatch.setenv(name, value)
+    online_calls: list[object] = []
+
+    def fake_yacang(arguments: object) -> dict[str, object]:
+        online_calls.append(arguments)
+        return {"success": True, "status": "completed", "artifacts": artifacts}
+
+    monkeypatch.setattr(yacang_sources.yacang_workflow, "run", fake_yacang)
+    online = workflow.generate_current_vietnam_recommendation()
+    assert len(online_calls) == 1
+
+    def forbidden_yacang(_arguments: object) -> None:
+        raise AssertionError("offline workflow called Yacang")
+
+    monkeypatch.setattr(yacang_sources.yacang_workflow, "run", forbidden_yacang)
+    offline = workflow.generate_offline_vietnam_recommendation(list(reversed(paths)))
+    assert online.config == offline.config
+    assert online.config_source == offline.config_source == "environment"
+    assert online.sku_count == offline.sku_count == 1
+    online_book = load_workbook(online.output_xlsx, read_only=True, data_only=True)
+    offline_book = load_workbook(offline.output_xlsx, read_only=True, data_only=True)
+    try:
+        assert online_book.sheetnames == offline_book.sheetnames
+        online_main = online_book["越南备货清单"]
+        offline_main = offline_book["越南备货清单"]
+        assert online_main["E2"].value == offline_main["E2"].value == "VN-A"
+        assert tuple(online_main.cell(2, index).value for index in range(1, 52)) == tuple(
+            offline_main.cell(2, index).value for index in range(1, 52)
+        )
+        assert tuple(online_book["数据更改"].cell(2, index).value for index in range(1, 5)) == tuple(
+            offline_book["数据更改"].cell(2, index).value for index in range(1, 5)
+        )
+    finally:
+        online_book.close()
+        offline_book.close()
 
 
 @pytest.mark.skipif(

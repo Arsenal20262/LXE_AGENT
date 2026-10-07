@@ -23,8 +23,8 @@ def _records(capsys) -> list[dict]:
 def test_catalog_defines_every_cli_command_and_hidden_alias() -> None:
     catalog = load_catalog()
 
-    assert len(catalog) == 50
-    assert sum(bool(entry.get("module")) for entry in catalog.values()) == 44
+    assert len(catalog) == 51
+    assert sum(bool(entry.get("module")) for entry in catalog.values()) == 45
     assert sum(entry.get("handler") == "browser" for entry in catalog.values()) == 2
     assert sum(entry.get("visibility") == "maintenance" for entry in catalog.values()) == 4
     assert len({tuple(entry["command_path"]) for entry in catalog.values()}) == len(catalog)
@@ -109,7 +109,7 @@ def test_list_and_help_write_one_terminal_jsonl_record(capsys) -> None:
     assert len(records) == 1
     assert records[0]["type"] == "result"
     assert records[0]["ok"] is True
-    assert len(records[0]["data"]["commands"]) == 45
+    assert len(records[0]["data"]["commands"]) == 46
 
     assert lxeskill.main(["fba", "customs", "preview", "--help"]) == 0
     records = _records(capsys)
@@ -162,11 +162,11 @@ def test_doctor_reports_repository_contract_without_adding_a_list_command(capsys
             "command": "doctor",
             "ok": True,
             "data": {
-                "catalog_commands": 50,
-                "business_commands": 41,
+                "catalog_commands": 51,
+                "business_commands": 42,
                 "skill_files": 37,
                 "owner_skills": 30,
-                "command_declarations": 41,
+                "command_declarations": 42,
             },
             "files": [],
         }
@@ -722,6 +722,7 @@ def test_only_vietnam_commands_opt_into_managed_execution() -> None:
     assert managed == {
         "vietnam_replenishment_bind_sku": {"attachment_argument": "source_path"},
         "vietnam_replenishment_generate": {},
+        "vietnam_replenishment_generate_offline": {"attachment_argument": "source_xlsx", "attachment_count": 3},
     }
 
 
