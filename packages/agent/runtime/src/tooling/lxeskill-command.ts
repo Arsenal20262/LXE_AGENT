@@ -14,7 +14,7 @@ export interface LxeSkillCommandDefinition {
   ownerSkills: string[];
   attributionSkill?: string;
   artifactPaths?: ArtifactPathDeclaration[];
-  managedExecution?: { attachmentArgument?: string };
+  managedExecution?: { attachmentArgument?: string; attachmentCount?: number };
   preselectionProbe?: true;
   timeoutMs?: number;
 }
@@ -103,7 +103,7 @@ const managedExecutionOf = (
     ? schema.properties as Record<string, unknown> : null;
   const required = schema?.required ?? [];
   const timeout = Number(raw.timeout_ms);
-  if (!declaration || Object.keys(declaration).some(key => key !== "attachment_argument")
+  if (!declaration || Object.keys(declaration).some(key => key !== "attachment_argument" && key !== "attachment_count")
     || raw.visibility !== "business" || raw.session_mode !== "none" || raw.exposed !== true
     || ownerSkills.length !== 1 || commandPath.length === 0 || !commandPath.every(token => MANAGED_TOKEN.test(token))
     || !Number.isSafeInteger(timeout) || timeout <= 0 || !schema || schema.type !== "object"
@@ -120,7 +120,8 @@ const managedExecutionOf = (
     throw new Error(`invalid managed execution artifact contract: ${String(raw.name ?? "")}`);
   }
   if (!Object.prototype.hasOwnProperty.call(declaration, "attachment_argument")) {
-    if (Object.keys(properties).length !== 0 || required.length !== 0)
+    if (Object.keys(properties).length !== 0 || required.length !== 0
+      || Object.prototype.hasOwnProperty.call(declaration, "attachment_count"))
       throw new Error(`invalid managed execution inputs: ${String(raw.name ?? "")}`);
     return {};
   }
@@ -131,10 +132,21 @@ const managedExecutionOf = (
     throw new Error(`invalid managed execution attachment argument: ${String(raw.name ?? "")}`);
   const field = properties[argument] as Record<string, unknown> | null;
   const fileInput = field?.["x-lxe-file-input"] as Record<string, unknown> | undefined;
-  if (!field || field.type !== "string" || !fileInput || !Array.isArray(fileInput.accepted_extensions)
+  if (!field || !fileInput || !Array.isArray(fileInput.accepted_extensions)
     || fileInput.accepted_extensions.length !== 1 || fileInput.accepted_extensions[0] !== ".xlsx")
     throw new Error(`invalid managed execution XLSX input: ${String(raw.name ?? "")}`);
-  return { attachmentArgument: argument };
+  const count = declaration.attachment_count;
+  if (!Object.prototype.hasOwnProperty.call(declaration, "attachment_count")) {
+    if (field.type !== "string") throw new Error(`invalid managed execution XLSX input: ${String(raw.name ?? "")}`);
+    return { attachmentArgument: argument };
+  }
+  const items = field.items && typeof field.items === "object" && !Array.isArray(field.items)
+    ? field.items as Record<string, unknown> : null;
+  if (!Number.isSafeInteger(count) || (count as number) < 2 || (count as number) > 8
+    || field.type !== "array" || field.minItems !== count || field.maxItems !== count || items?.type !== "string") {
+    throw new Error(`invalid managed execution XLSX array input: ${String(raw.name ?? "")}`);
+  }
+  return { attachmentArgument: argument, attachmentCount: count as number };
 };
 
 const preselectionProbeOf = (raw: Record<string, unknown>, ownerSkills: string[]): true | undefined => {

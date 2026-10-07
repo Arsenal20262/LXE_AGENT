@@ -18,10 +18,18 @@ const realUser = (message: RuntimeConversationMessage): boolean => Boolean(messa
 const injectedSkill = (message: RuntimeConversationMessage): boolean =>
   !realUser(message) && Boolean(message.invoked_skills?.length);
 
-function files(message: RuntimeConversationMessage): LocalFileBlock[] {
+function files(message: RuntimeConversationMessage, requireWellFormed = false): LocalFileBlock[] {
   if (!Array.isArray(message.content)) return [];
   return message.content.flatMap((value) => {
     if (!value || typeof value !== "object" || value.type !== "local_file") return [];
+    if (requireWellFormed && (
+      typeof value.attachment_id !== "string" || !value.attachment_id.trim()
+      || typeof value.turn_id !== "string" || !value.turn_id.trim()
+      || typeof value.path !== "string" || !value.path.trim()
+      || typeof value.name !== "string" || !value.name.trim()
+      || typeof value.size_bytes !== "number" || !Number.isSafeInteger(value.size_bytes)
+      || value.size_bytes < 0
+    )) denied("malformed chat attachment in upload set");
     const attachmentId = String(value.attachment_id ?? "").trim();
     const turnId = String(value.turn_id ?? "").trim();
     const path = String(value.path ?? "").trim();
@@ -66,6 +74,42 @@ export function selectManagedAttachmentId(messages: readonly RuntimeMessage[], c
   return selectedFile(messages, currentTurnId).attachment_id;
 }
 
+function selectedFileSet(messages: readonly RuntimeMessage[], currentTurnId: string, count: number): LocalFileBlock[] {
+  if (!currentTurnId) denied("current attachment context is missing");
+  if (!Number.isSafeInteger(count) || count < 2 || count > 8) denied("invalid managed attachment count");
+  const visible = messages.filter(userMessage)
+    .filter(message => !message.environmentContext && !injectedSkill(message) && !isTurnAbortedMessage(message));
+  const current = visible.at(-1);
+  if (!current || !realUser(current)) return denied("current message cannot be verified");
+  const currentFiles = files(current, true);
+  if (currentFiles.length > 0) {
+    if (currentFiles.length !== count) denied(`expected exactly ${count} attachments in the current message`);
+    if (currentFiles.some(file => file.turn_id !== currentTurnId)) denied("current attachment turn does not match");
+    return currentFiles;
+  }
+  const previous = visible.at(-2);
+  if (!previous || !realUser(previous)) return denied("attachments are not from the current or immediately previous message");
+  const previousIndex = messages.lastIndexOf(previous);
+  const currentIndex = messages.lastIndexOf(current);
+  if (messages.slice(previousIndex + 1, currentIndex).some(message => message.role === "compactionSummary")) {
+    return denied("attachment adjacency cannot be verified across compaction");
+  }
+  const previousFiles = files(previous, true);
+  if (previousFiles.length !== count) denied(`expected exactly ${count} attachments in the immediately previous message`);
+  if (previousFiles.some(file => file.turn_id === currentTurnId)
+    || new Set(previousFiles.map(file => file.turn_id)).size !== 1) {
+    denied("previous attachments must share one prior upload turn");
+  }
+  return previousFiles;
+}
+
+/** Select a complete nearby upload set; roles are assigned later by deterministic source validation. */
+export function selectManagedAttachmentIds(messages: readonly RuntimeMessage[], currentTurnId: string, count: number): string[] {
+  const selected = selectedFileSet(messages, currentTurnId, count);
+  if (new Set(selected.map(file => file.attachment_id)).size !== count) denied("duplicate attachment IDs are not allowed");
+  return selected.map(file => file.attachment_id);
+}
+
 /** Check objective source provenance; the Skill still decides whether text confirms a prior attachment. */
 export function resolveManagedAttachment(input: {
   messages: readonly RuntimeMessage[];
@@ -76,13 +120,40 @@ export function resolveManagedAttachment(input: {
   const { messages, attachment, currentTurnId } = input;
   if (!attachment?.attachment_id) denied("current attachment context is missing");
   const selected = selectedFile(messages, currentTurnId, attachment.attachment_id);
-  if (!selected || selected.attachment_id !== attachment.attachment_id
+  return verifiedAttachmentPath(selected, attachment, input.allowedExtensions);
+}
+
+/** Verify every file in a complete managed upload set before passing any path to the CLI. */
+export function resolveManagedAttachmentSet(input: {
+  messages: readonly RuntimeMessage[];
+  attachments: readonly RuntimeAttachmentRecord[];
+  currentTurnId: string;
+  count: number;
+  allowedExtensions?: readonly string[];
+}): string[] {
+  const selected = selectedFileSet(input.messages, input.currentTurnId, input.count);
+  if (input.attachments.length !== input.count
+    || new Set(selected.map(file => file.attachment_id)).size !== input.count) {
+    return denied("managed attachment set does not match the selected message files");
+  }
+  const paths = selected.map((file, index) => verifiedAttachmentPath(file, input.attachments[index], input.allowedExtensions));
+  if (new Set(paths).size !== input.count) denied("duplicate attachment paths are not allowed");
+  return paths;
+}
+
+function verifiedAttachmentPath(
+  selected: LocalFileBlock,
+  attachment: RuntimeAttachmentRecord | undefined,
+  allowedExtensions?: readonly string[],
+): string {
+  if (!attachment) return denied("attachment record does not match the selected message file");
+  if (!attachment.attachment_id || selected.attachment_id !== attachment.attachment_id
     || selected.turn_id !== attachment.turn_id || selected.path !== attachment.path
     || selected.name !== attachment.name || selected.size_bytes !== attachment.size_bytes) {
-    denied("attachment record does not match the selected message file");
+    return denied("attachment record does not match the selected message file");
   }
-  if (!isAbsolute(attachment.path) || !(input.allowedExtensions ?? [".xlsx"]).includes(extname(attachment.path).toLowerCase())) {
-    denied(input.allowedExtensions ? "selected attachment has an unsupported extension or path" : "selected attachment must be an absolute XLSX file");
+  if (!isAbsolute(attachment.path) || !(allowedExtensions ?? [".xlsx"]).includes(extname(attachment.path).toLowerCase())) {
+    denied(allowedExtensions ? "selected attachment has an unsupported extension or path" : "selected attachment must be an absolute XLSX file");
   }
   try {
     if (lstatSync(attachment.path).isSymbolicLink()) denied("selected attachment is a symbolic link");
