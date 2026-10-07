@@ -749,6 +749,22 @@ def _synthetic_managed_file_set(count: object = 3) -> dict:
     }
 
 
+@pytest.mark.parametrize(("literal", "accepted"), [
+    ("2", True), ("2.0", True), ("2e0", True),
+    ("0", False), ("1", False), ("9", False), ("2.5", False),
+    ("true", False), ("false", False), ("null", False), ('"2"', False),
+])
+def test_managed_file_set_uses_json_numeric_value(literal: str, accepted: bool) -> None:
+    from lxeskill.business import validate_managed_execution
+
+    entry = _synthetic_managed_file_set(json.loads(literal))
+    if accepted:
+        validate_managed_execution(entry)
+    else:
+        with pytest.raises(RuntimeError, match="managed execution"):
+            validate_managed_execution(entry)
+
+
 @pytest.mark.parametrize("count", [2, 3, 8])
 def test_managed_file_set_contract_and_repeated_cli_flags(count: int) -> None:
     from lxeskill.business import validate_managed_execution

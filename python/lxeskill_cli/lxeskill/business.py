@@ -76,13 +76,19 @@ def validate_managed_execution(entry: dict[str, Any]) -> None:
     if "attachment_count" not in declaration:
         if field.get("type") != "string":
             raise RuntimeError(f"invalid managed execution XLSX input for {name}")
-    elif (type(attachment_count) is not int or not 2 <= attachment_count <= 8
-          or field.get("type") != "array"
-          or field.get("minItems") != attachment_count
-          or field.get("maxItems") != attachment_count
-          or not isinstance(field.get("items"), dict)
-          or field["items"].get("type") != "string"):
-        raise RuntimeError(f"invalid managed execution XLSX array input for {name}")
+    else:
+        # JSON 2.0 and 2e0 are integer counts even though Python decodes them as floats.
+        if (type(attachment_count) not in (int, float)
+                or not 2 <= attachment_count <= 8
+                or attachment_count != int(attachment_count)):
+            raise RuntimeError(f"invalid managed execution XLSX array input for {name}")
+        count = int(attachment_count)
+        if (field.get("type") != "array"
+                or field.get("minItems") != count
+                or field.get("maxItems") != count
+                or not isinstance(field.get("items"), dict)
+                or field["items"].get("type") != "string"):
+            raise RuntimeError(f"invalid managed execution XLSX array input for {name}")
 
 
 def validate_preselection_probe(entry: dict[str, Any]) -> None:
