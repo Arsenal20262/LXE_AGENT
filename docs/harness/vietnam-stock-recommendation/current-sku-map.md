@@ -8,6 +8,6 @@
 
 `prepare_operator_sku_map(template_path, output_path, current_map_path=None, sources=None)` 是历史模板辅助能力：从本轮 SKU 集合生成运营可填写的映射表和参考页；显式参数可带入，历史模板值只作核对参考，不自动变成运营显式输入。传入 `sources` 可避免再次采集；未传时才调用一次雅仓采集。目标路径已存在会拒绝覆盖。
 
-`resolve_sku_parameters()` 提供历史模板参考解析。后续正式五表生成依赖受信的 SKU current 和内置骨架，不从模板历史价格兜底。运营映射表以精确 SKU 为键，空白与显式零不同，不借用相似 SKU。
+`resolve_sku_parameters()` 提供历史模板参考解析。当前五表生成由 `generate_vietnam_workbook()` 使用内置骨架和调用方提供的映射表路径；后续在线接线将从受信 SKU current 提供该路径。生成不从模板历史价格兜底。运营映射表以精确 SKU 为键，空白与显式零不同，不借用相似 SKU。
 
-测试使用合成 XLSX 与 mock；真实模板、雅仓导出和业务价格不得提交 Git。本层不提供聊天或 CLI 一键入口。
+测试使用合成 XLSX 与 mock；真实模板、雅仓导出和业务价格不得提交 Git。本层不提供聊天或 CLI 一键入口；五表生成由独立的 Workbook 服务提供。
