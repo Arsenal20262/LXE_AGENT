@@ -2,7 +2,7 @@
 
 ## 基线、目标与范围
 
-本模块在 Clean Stack 的在线 Workflow 层之后实施，分支为 `codex/vietnam-clean-pr5-desktop`，基线为新 PR4 `012f49155eb8d8a8ed5dad01fffb584608707183`。前序资产、雅仓来源、Workbook 和在线 Workflow 已按层依赖；不在 `main` 开发。
+本模块在 Clean Stack 的在线 Workflow 层之后实施，分支为 `codex/vietnam-clean-pr5-desktop`，基线为新 PR4 `96a9e5acea9b68a837437c646b51a1344292811d`。前序资产、雅仓来源、Workbook 和在线 Workflow 已按层依赖；不在 `main` 开发。
 
 本 PR 让业务人员在 Desktop 管理 `vietnam_sku_parameter_map`，并长期设置越南备货的 30 天、15 天、7 天权重和汇率。成功上传的 current 才能进入 PR4 确定性工作流；保存后的长期参数在下一次生成中生效。生成仍只交付经验证的五表 XLSX，不改变雅仓取数、SKU 精确匹配、公式骨架或 Office Kit 口径。
 
