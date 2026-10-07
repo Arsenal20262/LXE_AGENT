@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import json
+from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -10,6 +11,7 @@ import pytest
 from lxeskill import cli as lxeskill
 from lxeskill.business import load_catalog
 from services.agent_cli.vietnam_replenishment import generate
+from services.vietnam_replenishment.workbook import RecommendationConfig
 
 
 COMMAND = ["vietnam", "stock", "recommend"]
@@ -82,7 +84,14 @@ def test_success_delivers_only_final_workbook(
     monkeypatch.setattr(
         generate,
         "generate_current_vietnam_recommendation",
-        lambda: SimpleNamespace(output_xlsx=output, sku_count=2),
+        lambda: SimpleNamespace(
+            output_xlsx=output, sku_count=2,
+            config=RecommendationConfig(
+                weight_30d=Decimal("0.7"), weight_15d=Decimal("0.6"),
+                weight_7d=Decimal("0.1"), exchange_rate=Decimal("4000"),
+            ),
+            config_source="environment",
+        ),
     )
 
     assert lxeskill.main(COMMAND) == 0
@@ -95,6 +104,11 @@ def test_success_delivers_only_final_workbook(
         "warehouse": "VN8806",
         "sku_count": 2,
         "output_xlsx": str(output),
+        "config": {
+            "weight_30d": "0.7", "weight_15d": "0.6",
+            "weight_7d": "0.1", "exchange_rate": "4000",
+        },
+        "config_source": "environment",
     }
 
 
