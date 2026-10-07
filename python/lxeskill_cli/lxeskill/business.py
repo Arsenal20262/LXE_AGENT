@@ -35,7 +35,7 @@ def validate_managed_execution(entry: dict[str, Any]) -> None:
     name = str(entry.get("name") or "<unknown>")
     declaration = entry["managed_execution"]
     schema = entry.get("input_schema")
-    if not isinstance(declaration, dict) or set(declaration) - {"attachment_argument"}:
+    if not isinstance(declaration, dict) or set(declaration) - {"attachment_argument", "attachment_count"}:
         raise RuntimeError(f"invalid managed execution declaration for {name}")
     command_path = entry.get("command_path")
     owners = entry.get("owner_skills")
@@ -58,10 +58,11 @@ def validate_managed_execution(entry: dict[str, Any]) -> None:
     properties = schema.get("properties")
     required = schema.get("required", [])
     attachment_argument = declaration.get("attachment_argument")
+    attachment_count = declaration.get("attachment_count")
     if not isinstance(properties, dict) or not isinstance(required, list):
         raise RuntimeError(f"invalid managed execution input schema for {name}")
-    if attachment_argument is None:
-        if properties or required:
+    if "attachment_argument" not in declaration:
+        if properties or required or "attachment_count" in declaration:
             raise RuntimeError(f"managed execution requires empty inputs for {name}")
         return
     if (not isinstance(attachment_argument, str) or not _MANAGED_ARGUMENT.fullmatch(attachment_argument)
@@ -69,10 +70,25 @@ def validate_managed_execution(entry: dict[str, Any]) -> None:
         raise RuntimeError(f"invalid managed execution attachment argument for {name}")
     field = properties[attachment_argument]
     file_input = field.get("x-lxe-file-input") if isinstance(field, dict) else None
-    if (not isinstance(field, dict) or field.get("type") != "string"
-            or not isinstance(file_input, dict)
+    if (not isinstance(field, dict) or not isinstance(file_input, dict)
             or file_input.get("accepted_extensions") != [".xlsx"]):
         raise RuntimeError(f"invalid managed execution XLSX input for {name}")
+    if "attachment_count" not in declaration:
+        if field.get("type") != "string":
+            raise RuntimeError(f"invalid managed execution XLSX input for {name}")
+    else:
+        # JSON 2.0 and 2e0 are integer counts even though Python decodes them as floats.
+        if (type(attachment_count) not in (int, float)
+                or not 2 <= attachment_count <= 8
+                or attachment_count != int(attachment_count)):
+            raise RuntimeError(f"invalid managed execution XLSX array input for {name}")
+        count = int(attachment_count)
+        if (field.get("type") != "array"
+                or field.get("minItems") != count
+                or field.get("maxItems") != count
+                or not isinstance(field.get("items"), dict)
+                or field["items"].get("type") != "string"):
+            raise RuntimeError(f"invalid managed execution XLSX array input for {name}")
 
 
 def validate_preselection_probe(entry: dict[str, Any]) -> None:

@@ -9,7 +9,7 @@ export interface LxeSkillRecoveryCommand {
   module?: string;
   ownerSkills: readonly string[];
   attributionSkill?: string;
-  managedExecution?: { attachmentArgument?: string };
+  managedExecution?: { attachmentArgument?: string; attachmentCount?: number };
 }
 
 export type ProcessStatus = "running" | "completed" | "failed" | "killed";
