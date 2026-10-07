@@ -228,14 +228,37 @@ function syntheticManagedEntry(count: unknown): Record<string, unknown> {
   };
 }
 
-function parseSyntheticManaged(entry: Record<string, unknown>) {
+function parseSyntheticManagedCatalog(source: string) {
   const directory = mkdtempSync(join(tmpdir(), "lxe-managed-set-"));
   const path = join(directory, "catalog.json");
   try {
-    writeFileSync(path, JSON.stringify({ protocol_version: "1", entries: [entry] }));
+    writeFileSync(path, source);
     return loadLxeSkillCommandCatalog(path)[0]?.managedExecution;
   } finally { rmSync(directory, { recursive: true, force: true }); }
 }
+
+function parseSyntheticManaged(entry: Record<string, unknown>) {
+  return parseSyntheticManagedCatalog(JSON.stringify({ protocol_version: "1", entries: [entry] }));
+}
+
+test("synthetic managed counts use JSON numeric value, not numeric spelling", () => {
+  const source = JSON.stringify({ protocol_version: "1", entries: [syntheticManagedEntry(2)] });
+  const countField = '"attachment_count":2';
+  expect(source).toContain(countField);
+  for (const [literal, accepted] of [
+    ["2", true], ["2.0", true], ["2e0", true],
+    ["0", false], ["1", false], ["9", false], ["2.5", false],
+    ["true", false], ["false", false], ["null", false], ['"2"', false],
+  ] as const) {
+    const raw = source.replace(countField, '"attachment_count":' + literal);
+    const parse = () => parseSyntheticManagedCatalog(raw);
+    if (accepted) {
+      expect(parse()).toEqual({ attachmentArgument: "source_files", attachmentCount: 2 });
+    } else {
+      expect(parse).toThrow(/managed execution/);
+    }
+  }
+});
 
 test("synthetic managed contracts accept exact file sets and preserve zero or one input", () => {
   for (const count of [2, 3, 8]) {
