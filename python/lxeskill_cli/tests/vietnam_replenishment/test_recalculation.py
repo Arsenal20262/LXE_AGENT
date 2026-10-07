@@ -199,6 +199,33 @@ def test_financial_cache_text_zero_is_not_numeric(tmp_path: Path, coordinate: st
         _validate(path)
 
 
+@pytest.mark.parametrize("coordinate", ("H2", "AC2"))
+def test_replenishment_cache_text_zero_is_not_numeric(tmp_path: Path, coordinate: str) -> None:
+    path = _calculated_fixture(tmp_path / "text-replenishment.xlsx")
+    _set_formula_caches(path, {coordinate: "0"})
+    with pytest.raises(recalculation.WorkbookGenerationError, match=f"VN-A.*{coordinate}"):
+        _validate(path)
+
+
+def test_short_leading_dash_sku_can_have_blank_category(tmp_path: Path) -> None:
+    base = _sources()
+    sku = "-A"
+    sources = replace(
+        base,
+        skus=(sku,),
+        sales={sku: {**base.sales["VN-A"], "SKU": sku}},
+        inventory={sku: {**base.inventory["VN-A"], "SKU": sku}},
+        products={sku: {**base.products["VN-A"], "SKU": sku}},
+        in_transit={sku: base.in_transit["VN-A"]},
+    )
+    parameters = {sku: _parameters()["VN-A"]}
+    path = _calculated_fixture(tmp_path / "blank-category.xlsx", sources=sources, parameters=parameters)
+    _set_formula_caches(path, {"V2": None, "W2": None})
+    recalculation.validate_recalculated_workbook(
+        path, sources=sources, parameters=parameters, config=RecommendationConfig(),
+    )
+
+
 def test_packaged_writer_with_two_skus_passes_cached_result_validation(tmp_path: Path) -> None:
     path = _calculated_fixture(tmp_path / "output.xlsx")
     _validate(path)
