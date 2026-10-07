@@ -21,7 +21,11 @@ from services.yacang.errors import safe_remote_detail
 from shared.input_assets import slot_dir
 from shared.process_lock import interprocess_lock
 
-from .asset_contract import AssetContractError, validate_usable_sku_parameters
+from .asset_contract import (
+    AssetContractError,
+    has_sku_parameter_headers,
+    validate_usable_sku_parameters,
+)
 
 
 SKU_SLOT = "vietnam_sku_parameter_map"
@@ -263,6 +267,23 @@ def _validate_file(path: Path, *, label: str) -> tuple[int, str]:
     except AssetContractError as exc:
         raise SkuMapStoreError(str(exc)) from exc
     return info.st_size, _digest(path)
+
+
+def probe_sku_map(path: Path) -> bool:
+    """Check file safety and first-row SKU headers without touching managed state."""
+    path = Path(path)
+    info = _safe_regular(path, label="候选映射表")
+    if path.suffix.lower() != ".xlsx":
+        raise SkuMapStoreError("候选映射表必须是 .xlsx 文件")
+    if info.st_size == 0:
+        raise SkuMapStoreError("候选映射表为空")
+    if info.st_size > MAX_COMPRESSED:
+        raise SkuMapStoreError("候选映射表超过 20 MiB")
+    _check_zip(path)
+    try:
+        return has_sku_parameter_headers(path)
+    except AssetContractError as exc:
+        raise SkuMapStoreError(str(exc)) from exc
 
 
 def _verified_version(root: Path, record: _VersionRecord) -> SkuMapVersion:
@@ -507,5 +528,5 @@ def current_sku_map_snapshot() -> Iterator[Path]:
 __all__ = [
     "SKU_SLOT", "SkuMapMutation", "SkuMapStatus", "SkuMapStoreError", "SkuMapVersion",
     "current_sku_map_snapshot", "inspect_sku_map", "install_sku_map",
-    "rollback_sku_map", "trusted_version",
+    "probe_sku_map", "rollback_sku_map", "trusted_version",
 ]

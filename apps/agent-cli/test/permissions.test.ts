@@ -2,7 +2,7 @@ import { expect, spyOn, test } from "bun:test";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { PermissionApprovalService, PermissionPolicyService, SqliteRuntimeStore, ToolRegistry, registerCodingTools } from "@lxe/runtime";
+import { OneShotCliRunner, PermissionApprovalService, PermissionPolicyService, SqliteRuntimeStore, ToolRegistry, registerCodingTools, type ToolDefinition } from "@lxe/runtime";
 import { DashboardService } from "../src/dashboard-service";
 import { repositoryRoot } from "@lxe/core";
 import { CodingProcessManager } from "../../../packages/agent/runtime/src/tooling/coding/process-manager";
@@ -75,5 +75,49 @@ test("host shutdown still stops processes and releases resources when approval a
   } finally {
     audit.mockRestore(); processes.mockRestore(); await host.stop();
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+
+test("Desktop host runs a registered command with fixed argv and the selected workspace", async () => {
+  const root = mkdtempSync(join(tmpdir(), "lxe-managed-host-"));
+  const workspaceRoot = join(root, "workspace"), skills = join(root, "skills"), soul = join(root, "SOUL.md");
+  mkdirSync(workspaceRoot); mkdirSync(skills); writeFileSync(soul, "Synthetic test instructions");
+  const outputRoot = join(workspaceRoot, ".lxeagent", "artifacts"); mkdirSync(outputRoot, { recursive: true });
+  const output = join(outputRoot, "synthetic.xlsx"); writeFileSync(output, "synthetic");
+  let managed: ToolDefinition | undefined;
+  const original = ToolRegistry.prototype.register;
+  const registration = spyOn(ToolRegistry.prototype, "register").mockImplementation(function(this: ToolRegistry, definition) {
+    if (definition.name === "managed_lxeskill") managed = definition;
+    return original.call(this, definition);
+  });
+  let argv: string[] | undefined; let environment: Record<string, string | undefined> | undefined;
+  const runner = spyOn(OneShotCliRunner.prototype, "execute").mockImplementation(async function(this: OneShotCliRunner, args) {
+    argv = args;
+    environment = (this as unknown as { options: { env: Record<string, string | undefined> } }).options.env;
+    return { protocol_version: "1", type: "result", command: "vietnam stock recommend", ok: true,
+      data: { success: true, output_xlsx: output }, files: [output] };
+  });
+  const host = createAgentRuntimeHost({
+    dataRoot: root, legacyWorkspace: { directory: workspaceRoot, worktree: workspaceRoot },
+    agentSoulPath: soul, skillsRoot: skills, userSkillsRoot: join(root, "user"),
+    llmConfigRoot: join(repositoryRoot(import.meta.dir), "config", "llm"),
+    lxeskillCatalogPath: join(repositoryRoot(import.meta.dir), "python", "lxeskill_cli", "lxeskill", "catalog.json"),
+    environment: { LOCAL_LOGS_ENABLED: "0", LXE_DATA_SERVER_ENABLED: "0", LXE_MANAGED_PYTHON: process.execPath },
+    emitter: { emit: async () => {}, typing: async () => {} },
+  });
+  try {
+    expect(managed).toBeDefined();
+    const workspace = { directory: workspaceRoot, worktree: workspaceRoot };
+    const context = { session_id: "synthetic-session", turn_id: "synthetic-turn", platform: "desktop", workspace,
+      executionPolicy: new PermissionPolicyService().resolve({ session_id: "synthetic-session", workspace, permission_mode: "workspace-write" }),
+      handle: { signal: new AbortController().signal, cancelled: false, drainSteering: () => [], registerProcess: () => () => {} } };
+    const result = await managed!.execute({ command_id: "vietnam_replenishment_generate" }, context);
+    expect(argv).toEqual(["vietnam", "stock", "recommend"]);
+    expect(environment?.LXE_WORKSPACE_ROOT).toBe(workspaceRoot);
+    expect(environment?.LXESKILL_SKILL_SCOPE).toBe("vietnam-stock-recommendation");
+    expect(result.files).toBeUndefined();
+  } finally {
+    registration.mockRestore(); runner.mockRestore(); await host.stop(); rmSync(root, { recursive: true, force: true });
   }
 });

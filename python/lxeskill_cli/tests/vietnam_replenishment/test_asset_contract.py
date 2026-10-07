@@ -16,6 +16,7 @@ from services.vietnam_replenishment.asset_contract import (
     validate_usable_sku_parameters,
     validate_template,
 )
+from services.vietnam_replenishment import asset_contract
 
 
 REQUIRED_SHEETS = (
@@ -210,6 +211,39 @@ def _sku_map(path: Path, *rows: tuple[object, ...], headers=MAP_HEADERS) -> Path
     workbook.save(path)
     workbook.close()
     return path
+
+
+@pytest.mark.parametrize(
+    ("headers", "expected"),
+    [
+        (("SKU", "成本", "跨境价", "折扣价", "热销标记"), True),
+        (MAP_HEADERS, True),
+        (("仓库", "SKU", "库存数量"), False),
+        (("SKU", "成本", "跨境价", "折扣价"), False),
+    ],
+)
+def test_sku_header_probe_uses_only_required_first_row(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    headers: tuple[str, ...], expected: bool,
+) -> None:
+    path = _sku_map(tmp_path / "synthetic.xlsx", ("NOT-READ",), headers=headers)
+
+    def unexpected_full_load(_path: str | Path) -> dict:
+        raise AssertionError("header probe must not parse SKU rows")
+
+    monkeypatch.setattr(asset_contract, "load_sku_parameters", unexpected_full_load)
+    assert asset_contract.has_sku_parameter_headers(path) is expected
+
+
+def test_sku_header_probe_does_not_search_later_sheets(tmp_path: Path) -> None:
+    path = tmp_path / "synthetic.xlsx"
+    workbook = Workbook()
+    workbook.active.append(("仓库", "库存数量"))
+    workbook.create_sheet("later").append(MAP_HEADERS)
+    workbook.save(path)
+    workbook.close()
+
+    assert asset_contract.has_sku_parameter_headers(path) is False
 
 
 def test_sku_parameters_match_exact_text_sku_and_preserve_explicit_values(tmp_path: Path) -> None:

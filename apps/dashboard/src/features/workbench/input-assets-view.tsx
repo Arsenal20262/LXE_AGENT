@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ArrowLeft, FolderOpen, LoaderCircle, RefreshCw, RotateCcw, Upload } from "lucide-react";
+import { ArrowLeft, FolderOpen, LoaderCircle, RefreshCw, RotateCcw } from "lucide-react";
 import type { DesktopInputAssetSlot, DesktopVietnamSkuMapMutation } from "@lxe/desktop-protocol";
 import { useUiText } from "../../shared/i18n";
 
@@ -10,6 +10,9 @@ const formatBytes = (bytes: number): string => {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
+
+export const visibleInputAssetSlots = (slots: DesktopInputAssetSlot[]): DesktopInputAssetSlot[] =>
+  slots.filter(slot => slot.slot !== "vietnam_replenishment_template");
 
 export function useInputAssetSlots() {
   const [slots, setSlots] = useState<DesktopInputAssetSlot[] | null>(null);
@@ -69,26 +72,6 @@ export function InputAssetsWorkbench({
       : result.status === "unchanged" ? copy.unchanged : copy.rolledBack);
   };
 
-  const upload = async () => {
-    const desktop = window.lxe?.desktop;
-    if (!desktop || busy) return;
-    setBusy(true);
-    setActionError("");
-    setActionNotice("");
-    try {
-      const result = await desktop.uploadVietnamSkuMap();
-      if (result) {
-        showMutation(result);
-        await refresh();
-      }
-    } catch (cause) {
-      setActionError(errorText(cause));
-      setActionNotice("");
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const rollback = async (revision: string) => {
     const desktop = window.lxe?.desktop;
     if (!desktop || busy) return;
@@ -128,7 +111,7 @@ export function InputAssetsWorkbench({
       {actionNotice ? <p className="workbench-tool-status" role="status">{actionNotice}</p> : null}
 
       <div className="asset-slot-list">
-        {(slots ?? []).map((slot) => {
+        {visibleInputAssetSlots(slots ?? []).map((slot) => {
           const managed = slot.slot === "vietnam_sku_parameter_map" && slot.management === "desktop";
           const canRollback = managed && !!slot.previous && !!slot.manifest_revision
             && !slot.previous_error && !slot.manifest_error;
@@ -180,20 +163,14 @@ export function InputAssetsWorkbench({
                   <span>{managed ? copy.managedEmptyHint : copy.emptyHint}</span>
                 </p>
               ) : null}
-              {managed ? (
+              {canRollback ? (
                 <div className="asset-slot-actions">
-                  <button disabled={busy || loading || !!slot.manifest_error} onClick={() => void upload()} type="button">
-                    {busy ? <LoaderCircle className="spin" size={14} /> : <Upload size={14} />}
-                    {busy ? copy.busy : copy.upload}
+                  <button disabled={busy || loading} onClick={() => void rollback(slot.manifest_revision!)} type="button">
+                    {busy ? <LoaderCircle className="spin" size={14} /> : <RotateCcw size={14} />}
+                    {busy ? copy.busy : copy.rollback}
                   </button>
-                  {canRollback ? (
-                    <button disabled={busy || loading} onClick={() => void rollback(slot.manifest_revision!)} type="button">
-                      <RotateCcw size={14} />{copy.rollback}
-                    </button>
-                  ) : null}
                 </div>
               ) : null}
-              {slot.slot === "vietnam_replenishment_template" ? <p className="asset-slot-history">{copy.historical}</p> : null}
             </article>
           );
         })}
