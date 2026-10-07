@@ -6,10 +6,11 @@ from pathlib import Path
 import json
 from zipfile import ZipFile
 
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
 import pytest
 
 from services.vietnam_replenishment import sku_map_store as store
+from services.vietnam_replenishment.asset_contract import load_sku_parameters
 from shared import input_assets
 
 
@@ -27,6 +28,28 @@ def make_map(path: Path, price: int = 20) -> Path:
     book.save(path)
     book.close()
     return path
+
+
+def test_sparse_prices_install_inspect_and_snapshot(tmp_path: Path, map_root: Path) -> None:
+    path = make_map(tmp_path / "sparse.xlsx")
+    book = load_workbook(path)
+    try:
+        sheet = book.active
+        sheet["D2"] = None
+        sheet.append(("VN-B", None, None, None, None))
+        sheet.append(("VN-C", 0, 0, 0, None))
+        book.save(path)
+    finally:
+        book.close()
+
+    mutation = store.install_sku_map(path, None)
+    assert mutation.status == "installed"
+    assert store.inspect_sku_map().current.file_name == path.name
+    with store.current_sku_map_snapshot() as snapshot:
+        values = load_sku_parameters(snapshot)
+        assert values["VN-A"].discount_price is None
+        assert values["VN-B"].cost is None
+        assert values["VN-C"].cost == 0
 
 
 def test_install_idempotence_rollback_and_aba_conflict(

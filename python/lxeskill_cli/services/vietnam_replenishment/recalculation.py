@@ -25,8 +25,10 @@ from .asset_contract import (
     SkuParameters,
     load_sku_parameters,
 )
+from .formula_dependencies import guarded_mapping_formula, mapping_formula_blank
 from .workbook import (
     RecommendationConfig,
+    _CurrentRow,
     _load_skeleton,
     _validated_rows,
     write_vietnam_workbook,
@@ -194,7 +196,18 @@ def _normal_formula(formula: str) -> str:
     return re.sub(r"\b(TRUE|FALSE)\b(?!\s*\()", r"\1()", formula)
 
 
-def _check_main_formulas(main, skeleton, row_number: int, sku: str) -> None:
+def _mapping_literals(current: _CurrentRow) -> dict[str, object]:
+    return {
+        "B": current.hot_flag,
+        "G": current.cost,
+        "AE": current.cross_border_price,
+        "AJ": current.discount_price,
+    }
+
+
+def _check_main_formulas(
+    main, skeleton, row_number: int, sku: str, literals: Mapping[str, object],
+) -> None:
     reference = skeleton["越南备货清单"]
     for original in reference[2]:
         if original.data_type != "f":
@@ -215,6 +228,9 @@ def _check_main_formulas(main, skeleton, row_number: int, sku: str) -> None:
                 else Translator(original.value, origin=original.coordinate).translate_formula(actual.coordinate)
             )
             actual_formula = actual.value
+        expected_formula = guarded_mapping_formula(
+            expected_formula, actual.column_letter, row_number, literals,
+        )
         if not isinstance(actual_formula, str) or _normal_formula(actual_formula) != _normal_formula(expected_formula):
             raise WorkbookGenerationError(
                 f"SKU {sku} 公式与内置骨架不一致: {actual.coordinate}={actual_formula!r}"
@@ -261,6 +277,19 @@ def _expected_ascii_v(sku: str) -> str:
     if last_dash >= 0 and len(sku) - last_dash - 1 <= 3:
         return sku[:last_dash]
     return sku
+
+
+def _check_mapping_result(
+    sheet, sku: str, row_number: int, column: str, literals: Mapping[str, object],
+) -> Decimal | None:
+    cell = sheet[f"{column}{row_number}"]
+    if mapping_formula_blank(column, literals):
+        if cell.value is not None and cell.value != "":
+            raise WorkbookGenerationError(
+                f"SKU {sku} 的 {cell.coordinate} 缺少映射输入时应为空，实际为 {cell.value!r}"
+            )
+        return None
+    return _numeric_formula_result(cell, sku)
 
 
 def validate_recalculated_workbook(
@@ -323,9 +352,9 @@ def validate_recalculated_workbook(
             row_number = main_rows[sku]
             current = current_rows[sku]
             product_time = current.listed_at
-            _check_main_formulas(main, skeleton, row_number, sku)
+            literals = _mapping_literals(current)
+            _check_main_formulas(main, skeleton, row_number, sku, literals)
 
-            mapped = parameters[sku]
             direct_values = {
                 2: current.hot_flag, 5: sku, 6: current.product.get("中文标题"),
                 7: current.cost, 31: current.cross_border_price,
@@ -362,19 +391,12 @@ def validate_recalculated_workbook(
             calculated = {}
             for column in (8, 19, 20, 29):
                 cell = main_values.cell(row_number, column)
+                if column in (8, 29) and mapping_formula_blank(cell.column_letter, literals):
+                    continue
                 calculated[column] = _numeric_formula_result(cell, sku)
             status = main_values.cell(row_number, 21)
             if not isinstance(status.value, str) or not status.value.strip():
                 raise WorkbookGenerationError(f"SKU {sku} 综合判定没有有效重算结果")
-            expected_quantity = _expected_replenishment(
-                status.value, calculated[20], calculated[29],
-                current.available, current.in_transit,
-            )
-            if calculated[8] != expected_quantity:
-                raise WorkbookGenerationError(
-                    f"SKU {sku} 最终备货量与已重算输入不一致: "
-                    f"H{row_number}={calculated[8]}，应为 {expected_quantity}"
-                )
 
             for column in range(8, 40):
                 cell = main_values.cell(row_number, column)
@@ -387,7 +409,7 @@ def validate_recalculated_workbook(
                 if column in (34, 39) and cell.value == "#DIV/0!":
                     label = "跨境价" if column == 34 else "折扣价"
                     price = current.cross_border_price if column == 34 else current.discount_price
-                    if price == 0:
+                    if price == 0 and not mapping_formula_blank(cell.column_letter, literals):
                         raise WorkbookGenerationError(
                             f"SKU {sku} 的{label}为显式 0，{cell.coordinate} 利润率无法计算；"
                             "请在 SKU 映射表提供可计算的价格"
@@ -396,8 +418,8 @@ def validate_recalculated_workbook(
                     f"SKU {sku} 重算产生公式错误 {cell.coordinate}: {cell.value}"
                 )
 
-            # These outputs are required even when every SKU has a complete map.
-            for column in ("N", "O", "P", "X", "Y", "Z", "AF", "AG", "AH", "AI", "AK", "AL", "AM"):
+            # Independent outputs are required even when SKU mapping is sparse.
+            for column in ("N", "O", "P", "X", "Y", "Z"):
                 _numeric_formula_result(main_values[f"{column}{row_number}"], sku)
             ab = main_values[f"AB{row_number}"]
             if ab.data_type != "e":
@@ -432,6 +454,21 @@ def validate_recalculated_workbook(
                         f"SKU {sku} 的 {category.coordinate} 款号与本轮 SKU 不一致: "
                         f"{category.value!r}，应为 {expected_category!r}"
                     )
+
+            quantity = _check_mapping_result(main_values, sku, row_number, "H", literals)
+            days = _check_mapping_result(main_values, sku, row_number, "AC", literals)
+            if quantity is not None and days is not None:
+                expected_quantity = _expected_replenishment(
+                    status.value, calculated[20], days,
+                    current.available, current.in_transit,
+                )
+                if quantity != expected_quantity:
+                    raise WorkbookGenerationError(
+                        f"SKU {sku} 最终备货量与已重算输入不一致: "
+                        f"H{row_number}={quantity}，应为 {expected_quantity}"
+                    )
+            for column in ("AF", "AG", "AH", "AI", "AK", "AL", "AM"):
+                _check_mapping_result(main_values, sku, row_number, column, literals)
 
         for column, expected_value in enumerate(
             (config.weight_30d, config.weight_15d, config.weight_7d, config.exchange_rate), 1
