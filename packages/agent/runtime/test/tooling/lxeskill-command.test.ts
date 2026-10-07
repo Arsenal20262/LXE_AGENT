@@ -215,6 +215,75 @@ test("only the two Vietnam commands opt into managed execution", () => {
   expect(managed[1]?.managedExecution).toEqual({});
 });
 
+function syntheticManagedEntry(count: unknown): Record<string, unknown> {
+  return {
+    name: "synthetic_batch_run", module: "services.synthetic.batch", command_path: ["synthetic", "batch", "run"],
+    visibility: "business", session_mode: "none", owner_skills: ["synthetic-file-skill"],
+    exposed: true, timeout_ms: 180_000,
+    managed_execution: { attachment_argument: "source_files", attachment_count: count },
+    input_schema: { type: "object", properties: { source_files: {
+      type: "array", items: { type: "string" }, minItems: count, maxItems: count,
+      "x-lxe-file-input": { accepted_extensions: [".xlsx"] },
+    } }, required: ["source_files"], additionalProperties: false },
+  };
+}
+
+function parseSyntheticManaged(entry: Record<string, unknown>) {
+  const directory = mkdtempSync(join(tmpdir(), "lxe-managed-set-"));
+  const path = join(directory, "catalog.json");
+  try {
+    writeFileSync(path, JSON.stringify({ protocol_version: "1", entries: [entry] }));
+    return loadLxeSkillCommandCatalog(path)[0]?.managedExecution;
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+}
+
+test("synthetic managed contracts accept exact file sets and preserve zero or one input", () => {
+  for (const count of [2, 3, 8]) {
+    expect(parseSyntheticManaged(syntheticManagedEntry(count))).toEqual({ attachmentArgument: "source_files", attachmentCount: count });
+  }
+  const none = syntheticManagedEntry(3);
+  none.managed_execution = {};
+  none.input_schema = { type: "object", properties: {}, additionalProperties: false };
+  expect(parseSyntheticManaged(none)).toEqual({});
+  const one = syntheticManagedEntry(3);
+  one.managed_execution = { attachment_argument: "source_files" };
+  one.input_schema = { type: "object", properties: { source_files: {
+    type: "string", "x-lxe-file-input": { accepted_extensions: [".xlsx"] },
+  } }, required: ["source_files"], additionalProperties: false };
+  expect(parseSyntheticManaged(one)).toEqual({ attachmentArgument: "source_files" });
+});
+
+test("synthetic managed contracts reject malformed fixed counts and array schemas", () => {
+  for (const count of [null, true, 1, 9, "3", 3.5]) {
+    expect(() => parseSyntheticManaged(syntheticManagedEntry(count))).toThrow(/managed execution/);
+  }
+  for (const change of [{ type: "string" }, { items: { type: "number" } },
+    { minItems: 2 }, { maxItems: 4 }, { "x-lxe-file-input": { accepted_extensions: [".csv"] } }]) {
+    const invalid = syntheticManagedEntry(3);
+    const schema = invalid.input_schema as { properties: { source_files: Record<string, unknown> } };
+    Object.assign(schema.properties.source_files, change);
+    expect(() => parseSyntheticManaged(invalid)).toThrow(/managed execution/);
+  }
+  const withoutArgument = syntheticManagedEntry(3);
+  withoutArgument.managed_execution = { attachment_count: 3 };
+  withoutArgument.input_schema = { type: "object", properties: {}, additionalProperties: false };
+  expect(() => parseSyntheticManaged(withoutArgument)).toThrow(/managed execution/);
+  const nullArgument = syntheticManagedEntry(3);
+  nullArgument.managed_execution = { attachment_argument: null };
+  nullArgument.input_schema = { type: "object", properties: {}, additionalProperties: false };
+  expect(() => parseSyntheticManaged(nullArgument)).toThrow(/managed execution/);
+  const nullCountWithoutArgument = syntheticManagedEntry(3);
+  nullCountWithoutArgument.managed_execution = { attachment_count: null };
+  nullCountWithoutArgument.input_schema = { type: "object", properties: {}, additionalProperties: false };
+  expect(() => parseSyntheticManaged(nullCountWithoutArgument)).toThrow(/managed execution/);
+  const nullCountWithSingle = syntheticManagedEntry(3);
+  nullCountWithSingle.managed_execution = { attachment_argument: "source_files", attachment_count: null };
+  nullCountWithSingle.input_schema = { type: "object", properties: { source_files: {
+    type: "string", "x-lxe-file-input": { accepted_extensions: [".xlsx"] },
+  } }, required: ["source_files"], additionalProperties: false };
+  expect(() => parseSyntheticManaged(nullCountWithSingle)).toThrow(/managed execution/);
+});
+
 test("managed execution rejects an undeclared attachment argument", () => {
   const path = join(process.cwd(), "python/lxeskill_cli/lxeskill/catalog.json");
   const document = JSON.parse(readFileSync(path, "utf8")) as { entries: Array<Record<string, unknown>> };

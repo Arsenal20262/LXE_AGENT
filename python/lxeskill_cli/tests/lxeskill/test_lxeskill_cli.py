@@ -725,6 +725,101 @@ def test_only_vietnam_commands_opt_into_managed_execution() -> None:
     }
 
 
+def _synthetic_managed_file_set(count: object = 3) -> dict:
+    return {
+        "name": "synthetic_batch_run",
+        "module": "services.synthetic.batch",
+        "command_path": ["synthetic", "batch", "run"],
+        "visibility": "business",
+        "session_mode": "none",
+        "owner_skills": ["synthetic-file-skill"],
+        "exposed": True,
+        "timeout_ms": 180_000,
+        "managed_execution": {"attachment_argument": "source_files", "attachment_count": count},
+        "input_schema": {
+            "type": "object",
+            "properties": {"source_files": {
+                "type": "array", "items": {"type": "string"},
+                "minItems": count, "maxItems": count,
+                "x-lxe-file-input": {"accepted_extensions": [".xlsx"]},
+            }},
+            "required": ["source_files"],
+            "additionalProperties": False,
+        },
+    }
+
+
+@pytest.mark.parametrize("count", [2, 3, 8])
+def test_managed_file_set_contract_and_repeated_cli_flags(count: int) -> None:
+    from lxeskill.business import validate_managed_execution
+
+    entry = _synthetic_managed_file_set(count)
+    validate_managed_execution(entry)
+    paths = [f"synthetic-{index}.xlsx" for index in range(count)]
+    argv = [token for path in paths for token in ("--source-files", path)]
+    assert lxeskill._arguments_from_flags(entry, argv) == {"source_files": paths}
+
+
+def test_managed_zero_and_single_attachment_contracts_remain_valid() -> None:
+    from lxeskill.business import validate_managed_execution
+
+    no_input = _synthetic_managed_file_set()
+    no_input["managed_execution"] = {}
+    no_input["input_schema"] = {"type": "object", "properties": {}, "additionalProperties": False}
+    validate_managed_execution(no_input)
+
+    single = _synthetic_managed_file_set()
+    single["managed_execution"] = {"attachment_argument": "source_files"}
+    single["input_schema"]["properties"]["source_files"] = {
+        "type": "string", "x-lxe-file-input": {"accepted_extensions": [".xlsx"]},
+    }
+    validate_managed_execution(single)
+
+
+@pytest.mark.parametrize("count", [None, True, 1, 9, "3", 3.5])
+def test_managed_file_set_rejects_invalid_counts(count: object) -> None:
+    from lxeskill.business import validate_managed_execution
+
+    with pytest.raises(RuntimeError, match="managed execution"):
+        validate_managed_execution(_synthetic_managed_file_set(count))
+
+
+@pytest.mark.parametrize("change", [
+    {"type": "string"}, {"items": {"type": "number"}},
+    {"minItems": 2}, {"maxItems": 4},
+    {"x-lxe-file-input": {"accepted_extensions": [".csv"]}},
+])
+def test_managed_file_set_rejects_mismatched_array_schema(change: dict) -> None:
+    from lxeskill.business import validate_managed_execution
+
+    entry = _synthetic_managed_file_set()
+    entry["input_schema"]["properties"]["source_files"].update(change)
+    with pytest.raises(RuntimeError, match="managed execution"):
+        validate_managed_execution(entry)
+
+
+def test_managed_file_set_rejects_count_without_argument_and_explicit_nulls() -> None:
+    from lxeskill.business import validate_managed_execution
+
+    no_argument = _synthetic_managed_file_set()
+    no_argument["managed_execution"] = {"attachment_count": 3}
+    no_argument["input_schema"] = {"type": "object", "properties": {}, "additionalProperties": False}
+    null_argument = _synthetic_managed_file_set()
+    null_argument["managed_execution"] = {"attachment_argument": None}
+    null_argument["input_schema"] = {"type": "object", "properties": {}, "additionalProperties": False}
+    null_count_without_argument = _synthetic_managed_file_set()
+    null_count_without_argument["managed_execution"] = {"attachment_count": None}
+    null_count_without_argument["input_schema"] = {"type": "object", "properties": {}, "additionalProperties": False}
+    null_count_with_single = _synthetic_managed_file_set()
+    null_count_with_single["managed_execution"] = {"attachment_argument": "source_files", "attachment_count": None}
+    null_count_with_single["input_schema"]["properties"]["source_files"] = {
+        "type": "string", "x-lxe-file-input": {"accepted_extensions": [".xlsx"]},
+    }
+    for entry in (no_argument, null_argument, null_count_without_argument, null_count_with_single):
+        with pytest.raises(RuntimeError, match="managed execution"):
+            validate_managed_execution(entry)
+
+
 def test_managed_execution_rejects_undeclared_attachment_argument() -> None:
     from lxeskill.business import validate_managed_execution
 

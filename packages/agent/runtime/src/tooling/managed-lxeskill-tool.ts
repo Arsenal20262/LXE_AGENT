@@ -5,7 +5,7 @@ import { extname, isAbsolute } from "node:path";
 import type { RuntimeAttachmentRecord, RuntimeMessage } from "../engine/types";
 import type { LxeSkillCommandDefinition } from "./lxeskill-command";
 import type { CliTerminalResult } from "./one-shot-cli";
-import { resolveManagedAttachment, selectManagedAttachmentId } from "./managed-lxeskill-attachment";
+import { resolveManagedAttachment, resolveManagedAttachmentSet, selectManagedAttachmentId, selectManagedAttachmentIds } from "./managed-lxeskill-attachment";
 import { safeToolFailureObservation, ToolExecutionError, type ToolDefinition } from "./registry";
 
 export interface ManagedLxeSkillToolOptions {
@@ -73,14 +73,14 @@ export function createManagedLxeSkillTool(options: ManagedLxeSkillToolOptions): 
     .map((entry) => [entry.name, entry] as const));
   return {
     name: "managed_lxeskill",
-    description: "Run a registered business command using host-verified chat attachments. Use command_id from the lxeskill catalog; for one eligible chat XLSX, omit attachment_id and the host selects it; use attachment_id only for a confirmed selection from multiple files. The host selects fixed CLI arguments and returns the real CLI result.",
+    description: "Run a registered business command using host-verified chat attachments. Use command_id from the lxeskill catalog. The host selects an eligible single attachment or complete declared attachment set; attachment_id is only for a confirmed single selection from multiple files. The host builds fixed CLI arguments and returns the real CLI result.",
     platforms: ["desktop"],
     ownerSkills: [...new Set([...commands.values()].flatMap((entry) => entry.ownerSkills))],
     input_schema: {
       type: "object",
       properties: {
         command_id: { type: "string", enum: [...commands.keys()], description: "Registered managed lxeskill command ID." },
-        attachment_id: { type: "string", description: "Optional stored ID for a confirmed selection from multiple chat files. Omit for one eligible XLSX; the host selects it." },
+        attachment_id: { type: "string", description: "Optional stored ID only for a confirmed single-file selection from multiple chat files. Omit for an eligible sole file or declared fixed file set." },
       },
       required: ["command_id"],
       additionalProperties: false,
@@ -111,6 +111,7 @@ export function createManagedLxeSkillTool(options: ManagedLxeSkillToolOptions): 
       }
       const argv = entry.command.slice("lxeskill ".length).split(" ");
       const attachmentArgument = entry.managedExecution?.attachmentArgument;
+      const attachmentCount = entry.managedExecution?.attachmentCount;
       if (attachmentArgument) {
         if (!context.turn_id) throw new ToolExecutionError("invalid_argument", "current chat turn is required for attachment binding");
         const messages = await options.loadMessages(context.session_id);
@@ -118,13 +119,23 @@ export function createManagedLxeSkillTool(options: ManagedLxeSkillToolOptions): 
         if (requestedId !== undefined && (typeof requestedId !== "string" || !requestedId.trim())) {
           throw new ToolExecutionError("invalid_argument", "attachment_id must be a nonempty stored ID");
         }
-        const attachmentId = requestedId === undefined
-          ? selectManagedAttachmentId(messages, context.turn_id)
-          : requestedId as string;
-        const attachment = await options.resolveAttachment(context.session_id, attachmentId);
-        if (!attachment) throw new ToolExecutionError("invalid_argument", "attachment_id is not a stored attachment in this session");
-        const path = resolveManagedAttachment({ messages, attachment, currentTurnId: context.turn_id });
-        argv.push(`--${attachmentArgument.replaceAll("_", "-")}`, path);
+        if (attachmentCount !== undefined) {
+          if (requestedId !== undefined) reject("attachment_id is not accepted for a complete attachment set");
+          const attachmentIds = selectManagedAttachmentIds(messages, context.turn_id, attachmentCount);
+          const attachments = await Promise.all(attachmentIds.map(id => options.resolveAttachment(context.session_id, id)));
+          if (attachments.some(attachment => !attachment)) reject("attachment set is not stored in this session");
+          const paths = resolveManagedAttachmentSet({ messages, attachments: attachments as RuntimeAttachmentRecord[],
+            currentTurnId: context.turn_id, count: attachmentCount });
+          for (const path of paths) argv.push(`--${attachmentArgument.replaceAll("_", "-")}`, path);
+        } else {
+          const attachmentId = requestedId === undefined
+            ? selectManagedAttachmentId(messages, context.turn_id)
+            : requestedId as string;
+          const attachment = await options.resolveAttachment(context.session_id, attachmentId);
+          if (!attachment) throw new ToolExecutionError("invalid_argument", "attachment_id is not a stored attachment in this session");
+          const path = resolveManagedAttachment({ messages, attachment, currentTurnId: context.turn_id });
+          argv.push(`--${attachmentArgument.replaceAll("_", "-")}`, path);
+        }
       } else if (Object.prototype.hasOwnProperty.call(input, "attachment_id")) {
         reject("attachment_id is not accepted by this command");
       }

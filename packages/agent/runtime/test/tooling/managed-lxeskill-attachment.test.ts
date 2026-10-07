@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { RuntimeAttachmentRecord, RuntimeMessage, RuntimeMessageContent } from "../../src/engine/types";
 import { turnAbortedMessage } from "../../src/engine/turn-aborted";
-import { resolveManagedAttachment } from "../../src/tooling/managed-lxeskill-attachment";
+import { resolveManagedAttachment, resolveManagedAttachmentSet, selectManagedAttachmentIds } from "../../src/tooling/managed-lxeskill-attachment";
 import { ToolExecutionError } from "../../src/tooling/registry";
 
 const roots: string[] = [];
@@ -128,5 +128,91 @@ describe("managed lxeskill attachment source", () => {
     const wrong = { ...record, path: join(tmpdir(), "other.xlsx") };
     expect(() => select([user("message-now", [block(record)])], wrong)).toThrow(/record/);
     expect(() => select([user("message-now", [block(record)]), user("", "改做别的")], record)).toThrow(/current message/);
+  });
+
+  test("selects and verifies an exact current three-file set in upload order", () => {
+    const records = ["a", "b", "c"].map(id => ({ ...attachment(`${id}.xlsx`), attachment_id: `attachment-${id}` }));
+    const messages = [user("message-now", records.map(block))];
+    expect(selectManagedAttachmentIds(messages, "turn-upload", 3)).toEqual(records.map(record => record.attachment_id));
+    expect(resolveManagedAttachmentSet({ messages, attachments: records, currentTurnId: "turn-upload", count: 3 }))
+      .toEqual(records.map(record => realpathSync(record.path)));
+  });
+
+  test("the current upload set takes precedence over an immediately previous set", () => {
+    const previous = ["a", "b", "c"].map(id => ({ ...attachment(`previous-${id}.xlsx`),
+      attachment_id: `previous-${id}`, turn_id: "turn-previous" }));
+    const current = ["a", "b", "c"].map(id => ({ ...attachment(`current-${id}.xlsx`),
+      attachment_id: `current-${id}`, turn_id: "turn-current" }));
+    const messages = [user("message-previous", previous.map(block)), user("message-current", current.map(block))];
+    expect(selectManagedAttachmentIds(messages, "turn-current", 3)).toEqual(current.map(record => record.attachment_id));
+  });
+
+  test("three-file set permits only the immediately previous upload after continuation", () => {
+    const records = ["a", "b", "c"].map(id => ({ ...attachment(`${id}.xlsx`), attachment_id: `attachment-${id}` }));
+    const upload = user("message-upload", records.map(block));
+    const current = user("message-confirm", "继续处理这三份文件");
+    const messages = [upload, { role: "user", content: "Synthetic environment", environmentContext: {} }, current] as RuntimeMessage[];
+    expect(selectManagedAttachmentIds(messages, "turn-confirm", 3)).toEqual(records.map(record => record.attachment_id));
+    expect(resolveManagedAttachmentSet({ messages, attachments: records, currentTurnId: "turn-confirm", count: 3 })).toHaveLength(3);
+    expect(() => selectManagedAttachmentIds([upload, user("intervening", "别的事"), current], "turn-confirm", 3))
+      .toThrow(/immediately previous/);
+    expect(() => selectManagedAttachmentIds([upload, { role: "compactionSummary", summary: "Synthetic summary",
+      tokensBefore: 10, details: { readFiles: [], modifiedFiles: [] } }, current], "turn-confirm", 3))
+      .toThrow(/compaction/);
+  });
+
+  test("three-file set rejects extra, non-XLSX, duplicate, and mismatched records", () => {
+    const records = ["a", "b", "c"].map(id => ({ ...attachment(`${id}.xlsx`), attachment_id: `attachment-${id}` }));
+    const messages = [user("message-now", records.map(block))];
+    expect(() => selectManagedAttachmentIds([user("message-now", [...records.map(block), block(attachment("extra.xlsx"))])],
+      "turn-upload", 3)).toThrow(/exactly 3/);
+    const csv = { ...attachment("c.csv"), attachment_id: "attachment-c" };
+    expect(() => resolveManagedAttachmentSet({ messages: [user("message-now", [block(records[0]!), block(records[1]!), block(csv)])],
+      attachments: [records[0]!, records[1]!, csv], currentTurnId: "turn-upload", count: 3 })).toThrow(/XLSX/);
+    expect(() => selectManagedAttachmentIds([user("message-now", [block(records[0]!), block(records[1]!),
+      block({ ...records[2]!, attachment_id: "attachment-a" })])], "turn-upload", 3)).toThrow(/duplicate/);
+    expect(() => resolveManagedAttachmentSet({ messages, attachments: [records[0]!, records[2]!, records[1]!],
+      currentTurnId: "turn-upload", count: 3 })).toThrow(/record/);
+    expect(() => resolveManagedAttachmentSet({ messages, attachments: records.slice(0, 2),
+      currentTurnId: "turn-upload", count: 3 })).toThrow(/set/);
+    const duplicatePath = { ...records[1]!, path: records[0]!.path, name: records[0]!.name,
+      size_bytes: records[0]!.size_bytes };
+    const duplicateRecords = [records[0]!, duplicatePath, records[2]!];
+    expect(() => resolveManagedAttachmentSet({ messages: [user("message-now", duplicateRecords.map(block))],
+      attachments: duplicateRecords, currentTurnId: "turn-upload", count: 3 })).toThrow(/duplicate attachment paths/);
+  });
+
+  test("three-file set rejects every malformed file block and never falls back past one", () => {
+    const records = ["a", "b", "c"].map(id => ({ ...attachment(`${id}.xlsx`), attachment_id: `attachment-${id}` }));
+    const malformed = [
+      { ...block(records[0]!), attachment_id: "" },
+      { ...block(records[0]!), turn_id: "" },
+      { ...block(records[0]!), path: "" },
+      { ...block(records[0]!), name: "" },
+      { ...block(records[0]!), size_bytes: Number.NaN },
+    ];
+    for (const value of malformed) {
+      expect(() => selectManagedAttachmentIds([user("message-now", [...records.map(block), value])],
+        "turn-upload", 3)).toThrow(/malformed/);
+      expect(() => selectManagedAttachmentIds([user("message-upload", records.map(block)),
+        user("message-now", [value])], "turn-now", 3)).toThrow(/malformed/);
+    }
+  });
+
+  test("immediately previous files must share one prior upload turn", () => {
+    const records = ["a", "b", "c"].map((id, index) => ({ ...attachment(`${id}.xlsx`),
+      attachment_id: `attachment-${id}`, turn_id: `turn-upload-${index}` }));
+    expect(() => selectManagedAttachmentIds([user("message-upload", records.map(block)),
+      user("message-confirm", "继续处理这些文件")], "turn-confirm", 3)).toThrow(/one prior upload turn/);
+    expect(() => selectManagedAttachmentIds([user("message-now", records.map(block))], "turn-upload-0", 3))
+      .toThrow(/current attachment turn/);
+  });
+
+  test("only a declared fixed count from two to eight is accepted", () => {
+    const records = ["a", "b", "c"].map(id => ({ ...attachment(`${id}.xlsx`), attachment_id: `attachment-${id}` }));
+    const messages = [user("message-now", records.map(block))];
+    for (const count of [0, 1, 9, 2.5]) {
+      expect(() => selectManagedAttachmentIds(messages, "turn-upload", count)).toThrow(/invalid managed attachment count/);
+    }
   });
 });
