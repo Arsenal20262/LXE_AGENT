@@ -60,9 +60,25 @@ def _formula_caches(sources: VietnamSources, config: RecommendationConfig) -> di
             f"K{row_number}": 0,
             f"L{row_number}": 0,
             f"M{row_number}": 0,
+            f"N{row_number}": 0,
+            f"O{row_number}": 0,
+            f"P{row_number}": 0,
+            f"Q{row_number}": "无动销",
+            f"R{row_number}": None,
             f"S{row_number}": 0,
             f"T{row_number}": 0,
             f"U{row_number}": "无动销无库存",
+            f"V{row_number}": "VN",
+            f"X{row_number}": 0,
+            f"Y{row_number}": 0,
+            f"Z{row_number}": 0,
+            f"AF{row_number}": 1,
+            f"AG{row_number}": 1,
+            f"AH{row_number}": 1,
+            f"AI{row_number}": 1,
+            f"AK{row_number}": 1,
+            f"AL{row_number}": 1,
+            f"AM{row_number}": 1,
             f"AA{row_number}": canonical_product_time(sources.products[sku]["创建时间"]),
             f"AB{row_number}": "#DIV/0!",
             f"AC{row_number}": 0,
@@ -97,7 +113,7 @@ def _set_formula_caches(path: Path, caches: dict[str, object]) -> None:
                     cached = cell.find(f"{{{namespace}}}v")
                     if cached is None:
                         cached = ET.SubElement(cell, f"{{{namespace}}}v")
-                    cached.text = str(value)
+                    cached.text = None if value is None else str(value)
                     found.add(coordinate)
                 assert found == set(caches)
                 data = ET.tostring(root, encoding="utf-8", xml_declaration=True)
@@ -135,6 +151,52 @@ def _validate(path: Path, *, parameters: dict[str, SkuParameters] | None = None)
         path, sources=_sources(), parameters=parameters or _parameters(),
         config=RecommendationConfig(),
     )
+
+
+@pytest.mark.parametrize("coordinate", ("N2", "O2", "P2", "X2", "Y2", "Z2", "AF2", "AH2"))
+def test_required_numeric_cache_cannot_be_blank(tmp_path: Path, coordinate: str) -> None:
+    path = _calculated_fixture(tmp_path / "missing-cache.xlsx")
+    _set_formula_caches(path, {coordinate: None})
+    with pytest.raises(recalculation.WorkbookGenerationError, match=f"VN-A.*{coordinate}"):
+        _validate(path)
+
+
+@pytest.mark.parametrize("cached", (None, "未知状态", 0))
+def test_trend_cache_must_be_known_text(tmp_path: Path, cached: object) -> None:
+    path = _calculated_fixture(tmp_path / "bad-trend.xlsx")
+    _set_formula_caches(path, {"Q2": cached})
+    with pytest.raises(recalculation.WorkbookGenerationError, match="VN-A.*Q2"):
+        _validate(path)
+
+
+@pytest.mark.parametrize(("status", "cached"), (("无动销", 1), ("平稳", None), ("平稳", 0.9), ("平稳", "1")))
+def test_trend_multiplier_must_match_status(tmp_path: Path, status: str, cached: object) -> None:
+    path = _calculated_fixture(tmp_path / "bad-multiplier.xlsx")
+    _set_formula_caches(path, {"Q2": status, "R2": cached})
+    with pytest.raises(recalculation.WorkbookGenerationError, match="VN-A.*R2"):
+        _validate(path)
+
+
+@pytest.mark.parametrize(("status", "cached"), (("持续上升", 1.2), ("近期回升", 1.1), ("平稳", 1), ("近期回落", 0.9), ("持续下滑", 0.8)))
+def test_valid_trend_multiplier_is_accepted(tmp_path: Path, status: str, cached: object) -> None:
+    path = _calculated_fixture(tmp_path / "valid-trend.xlsx")
+    _set_formula_caches(path, {"Q2": status, "R2": cached})
+    _validate(path)
+
+
+def test_source_based_category_cache_cannot_be_lost(tmp_path: Path) -> None:
+    path = _calculated_fixture(tmp_path / "missing-category.xlsx")
+    _set_formula_caches(path, {"V2": None})
+    with pytest.raises(recalculation.WorkbookGenerationError, match="VN-A.*V2"):
+        _validate(path)
+
+
+@pytest.mark.parametrize("coordinate", ("AF2", "AH2"))
+def test_financial_cache_text_zero_is_not_numeric(tmp_path: Path, coordinate: str) -> None:
+    path = _calculated_fixture(tmp_path / "text-zero.xlsx")
+    _set_formula_caches(path, {coordinate: "0"})
+    with pytest.raises(recalculation.WorkbookGenerationError, match=f"VN-A.*{coordinate}"):
+        _validate(path)
 
 
 def test_packaged_writer_with_two_skus_passes_cached_result_validation(tmp_path: Path) -> None:

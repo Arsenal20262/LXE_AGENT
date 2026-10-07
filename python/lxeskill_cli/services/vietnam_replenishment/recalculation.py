@@ -230,6 +230,39 @@ def _expected_replenishment(status: str, daily: Decimal, days: Decimal,
     return min(Decimal(0), rounded) if status.startswith("清货") else rounded
 
 
+_TREND_MULTIPLIERS = {
+    "无动销": None,
+    "持续上升": Decimal("1.2"),
+    "近期回升": Decimal("1.1"),
+    "平稳": Decimal("1"),
+    "近期回落": Decimal("0.9"),
+    "持续下滑": Decimal("0.8"),
+}
+
+
+def _numeric_formula_result(cell, sku: str) -> Decimal:
+    if cell.data_type != "n":
+        raise WorkbookGenerationError(
+            f"SKU {sku} 的 {cell.coordinate} 重算缓存应为有限数值，"
+            f"实际类型 {cell.data_type!r}、值 {cell.value!r}"
+        )
+    try:
+        return _decimal(cell.value, coordinate=cell.coordinate)
+    except WorkbookGenerationError as exc:
+        raise WorkbookGenerationError(f"SKU {sku} 的 {exc}") from exc
+
+
+def _expected_ascii_v(sku: str) -> str:
+    # The skeleton keeps the SKU for these markers, otherwise strips a short
+    # suffix after its last dash. ASCII avoids Excel/Office Unicode LEN drift.
+    if "&" in sku or "+" in sku or "x2" in sku.lower():
+        return sku
+    last_dash = sku.rfind("-")
+    if last_dash >= 0 and len(sku) - last_dash - 1 <= 3:
+        return sku[:last_dash]
+    return sku
+
+
 def validate_recalculated_workbook(
     path: str | Path,
     *,
@@ -364,6 +397,43 @@ def validate_recalculated_workbook(
                 raise WorkbookGenerationError(
                     f"SKU {sku} 重算产生公式错误 {cell.coordinate}: {cell.value}"
                 )
+
+            # These outputs are required even when every SKU has a complete map.
+            for column in ("N", "O", "P", "X", "Y", "Z", "AF", "AG", "AH", "AI", "AK", "AL", "AM"):
+                _numeric_formula_result(main_values[f"{column}{row_number}"], sku)
+            ab = main_values[f"AB{row_number}"]
+            if ab.data_type != "e":
+                _numeric_formula_result(ab, sku)
+
+            trend = main_values[f"Q{row_number}"]
+            if not isinstance(trend.value, str) or trend.value not in _TREND_MULTIPLIERS:
+                raise WorkbookGenerationError(
+                    f"SKU {sku} 的 {trend.coordinate} 趋势判定不是有效重算文本: {trend.value!r}"
+                )
+            multiplier = main_values[f"R{row_number}"]
+            expected_multiplier = _TREND_MULTIPLIERS[trend.value]
+            if expected_multiplier is None:
+                if multiplier.value is not None and multiplier.value != "":
+                    raise WorkbookGenerationError(
+                        f"SKU {sku} 的 {multiplier.coordinate} 无动销时应为空，实际为 {multiplier.value!r}"
+                    )
+            elif _numeric_formula_result(multiplier, sku) != expected_multiplier:
+                raise WorkbookGenerationError(
+                    f"SKU {sku} 的 {multiplier.coordinate} 趋势系数与 {trend.value} 不一致"
+                )
+
+            if sku.isascii():
+                category = main_values[f"V{row_number}"]
+                expected_category = _expected_ascii_v(sku)
+                if expected_category:
+                    valid = isinstance(category.value, str) and category.value == expected_category
+                else:
+                    valid = category.value is None or category.value == ""
+                if not valid:
+                    raise WorkbookGenerationError(
+                        f"SKU {sku} 的 {category.coordinate} 款号与本轮 SKU 不一致: "
+                        f"{category.value!r}，应为 {expected_category!r}"
+                    )
 
         for column, expected_value in enumerate(
             (config.weight_30d, config.weight_15d, config.weight_7d, config.exchange_rate), 1
