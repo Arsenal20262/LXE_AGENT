@@ -23,8 +23,8 @@ def _records(capsys) -> list[dict]:
 def test_catalog_defines_every_cli_command_and_hidden_alias() -> None:
     catalog = load_catalog()
 
-    assert len(catalog) == 46
-    assert sum(bool(entry.get("module")) for entry in catalog.values()) == 40
+    assert len(catalog) == 48
+    assert sum(bool(entry.get("module")) for entry in catalog.values()) == 42
     assert sum(entry.get("handler") == "browser" for entry in catalog.values()) == 2
     assert sum(entry.get("visibility") == "maintenance" for entry in catalog.values()) == 4
     assert len({tuple(entry["command_path"]) for entry in catalog.values()}) == len(catalog)
@@ -37,7 +37,7 @@ def test_catalog_defines_every_cli_command_and_hidden_alias() -> None:
     assert all(
         entry["legacy_aliases"] == [name]
         for name, entry in catalog.items()
-        if not name.startswith(("browser_auth_", "shangman_", "yacang_", "vietnam_replenishment_", "mabang_tms_", "mabang_brazil_"))
+        if not name.startswith(("browser_auth_", "shangman_", "yacang_", "vietnam_replenishment_", "mabang_tms_", "mabang_brazil_", "assets_vietnam_sku_"))
     )
 
 
@@ -162,7 +162,7 @@ def test_doctor_reports_repository_contract_without_adding_a_list_command(capsys
             "command": "doctor",
             "ok": True,
             "data": {
-                "catalog_commands": 46,
+                "catalog_commands": 48,
                 "business_commands": 40,
                 "skill_files": 37,
                 "owner_skills": 30,
