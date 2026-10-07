@@ -17,6 +17,7 @@ from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.formula import ArrayFormula
 
 from .asset_contract import REQUIRED_SHEETS, SkuParameters
+from .formula_dependencies import guarded_mapping_formula
 from .numeric_contract import WorkbookInputError, excel_number
 from .yacang_sources import VietnamSources
 
@@ -35,17 +36,17 @@ class _CurrentRow:
     sales: Mapping[str, object]
     inventory: Mapping[str, object]
     product: Mapping[str, object]
-    parameters: SkuParameters
+    parameters: SkuParameters | None
     listed_at: str
     in_transit: Decimal
     available: Decimal
     sales_7d: Decimal
     sales_15d: Decimal
     sales_30d: Decimal
-    cost: Decimal
-    cross_border_price: Decimal
-    discount_price: Decimal
-    hot_flag: int
+    cost: Decimal | None
+    cross_border_price: Decimal | None
+    discount_price: Decimal | None
+    hot_flag: int | None
 
 
 _SOURCE_TIME = re.compile(r"^[0-9]{4}-[0-9]{1,2}-[0-9]{1,2} [0-9]{1,2}:[0-9]{1,2}$")
@@ -94,6 +95,8 @@ def _map_time_agrees(sku: str, listed_at: object, canonical: str) -> None:
 def _validated_rows(
     sources: VietnamSources, parameters: Mapping[str, SkuParameters]
 ) -> tuple[_CurrentRow, ...]:
+    if not parameters:
+        raise WorkbookInputError("当前越南 SKU 参数映射表没有 SKU，请重新上传")
     skus = tuple(sources.skus)
     if not skus:
         raise WorkbookInputError("本轮 VN8806 SKU 集合为空")
@@ -130,10 +133,12 @@ def _validated_rows(
         except WorkbookInputError as exc:
             raise WorkbookInputError(f"SKU {sku} 的{exc}") from exc
 
-        values = parameters.get(sku)
-        if values is None:
-            raise WorkbookInputError(f"SKU {sku} 缺少运营 SKU 映射行")
-        _map_time_agrees(sku, values.listed_at, listed_at)
+        has_mapping = sku in parameters
+        values = parameters[sku] if has_mapping else None
+        if has_mapping and not isinstance(values, SkuParameters):
+            raise WorkbookInputError(f"SKU {sku} 的运营 SKU 映射行无效")
+        if values is not None:
+            _map_time_agrees(sku, values.listed_at, listed_at)
 
         actual_transit = _number(inventory.get("在途数量"), sku, "当前库存在途数量")
         mapped_transit = _number(sources.in_transit.get(sku), sku, "权威在途数量")
@@ -143,10 +148,18 @@ def _validated_rows(
         sales_7d = _number(sales.get("7天销量"), sku, "7天销量")
         sales_15d = _number(sales.get("15天销量"), sku, "15天销量")
         sales_30d = _number(sales.get("30天销量"), sku, "30天销量")
-        cost = _number(values.cost, sku, "成本(cost)")
-        cross_border = _number(values.cross_border_price, sku, "跨境价(cross_border_price)")
-        discount = _number(values.discount_price, sku, "折扣价(discount_price)")
-        if values.hot_flag is None:
+        cost = _number(values.cost, sku, "成本(cost)") if values is not None and values.cost is not None else None
+        cross_border = (
+            _number(values.cross_border_price, sku, "跨境价(cross_border_price)")
+            if values is not None and values.cross_border_price is not None else None
+        )
+        discount = (
+            _number(values.discount_price, sku, "折扣价(discount_price)")
+            if values is not None and values.discount_price is not None else None
+        )
+        if values is None:
+            hot_flag = None
+        elif values.hot_flag is None:
             hot_flag = 2
         elif isinstance(values.hot_flag, bool) or values.hot_flag not in (1, 2):
             raise WorkbookInputError(f"SKU {sku} 的热销标记只能是 1 或 2")
@@ -199,6 +212,12 @@ def _project(sheet, row_number: int, source: Mapping[str, object], replacements:
 
 
 def _fill_main(main, row_number: int, current: _CurrentRow, blueprint: tuple) -> None:
+    literals = {
+        "B": current.hot_flag,
+        "G": current.cost,
+        "AE": current.cross_border_price,
+        "AJ": current.discount_price,
+    }
     for index, (value, data_type, style) in enumerate(blueprint, 1):
         cell = main.cell(row_number, index)
         cell._style = copy(style)
@@ -207,12 +226,14 @@ def _fill_main(main, row_number: int, current: _CurrentRow, blueprint: tuple) ->
             if not value.text:
                 raise WorkbookInputError(f"内置骨架 {column}2 的数组公式为空")
             translated = Translator(value.text, origin=f"{column}2").translate_formula(cell.coordinate)
-            cell.value = ArrayFormula(cell.coordinate, text=translated)
+            guarded = guarded_mapping_formula(translated, column, row_number, literals)
+            cell.value = ArrayFormula(cell.coordinate, text=guarded)
         elif data_type == "f":
-            cell.value = (
+            translated = (
                 value if column in _FIXED_PARAMETER_COLUMNS
                 else Translator(value, origin=f"{column}2").translate_formula(cell.coordinate)
             )
+            cell.value = guarded_mapping_formula(translated, column, row_number, literals)
         else:
             cell.value = None
 
