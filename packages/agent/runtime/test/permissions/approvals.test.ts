@@ -11,7 +11,7 @@ import { ToolRegistry } from "../../src/tooling/registry";
 import { workspaceFor } from "../workspace";
 const cleanup: Array<() => Promise<void>> = [];
 afterEach(async () => { for (const fn of cleanup.splice(0).reverse()) await fn(); });
-function fixture(channel = "desktop") {
+function fixture(channel = "desktop", businessCommandCatalog: readonly { command: string; ownerSkills: readonly string[]; managedExecution?: {} }[] = []) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "lxe-approval-"))), directory = join(root, "workspace");
   mkdirSync(directory);
   const workspace = workspaceFor(directory), policyService = new PermissionPolicyService();
@@ -19,7 +19,7 @@ function fixture(channel = "desktop") {
   const approvals = new PermissionApprovalService({ changed: id => { changes.push(id); }, audit: async (_id, event) => { events.push(event); } });
   const tools = new ToolRegistry();
   const paths = new ExecutionPaths(join(root, "var"), { platform: "win32", temporaryRoot: join(root, "temp") });
-  const processes = registerCodingTools(tools, { approvals, executionPaths: paths });
+  const processes = registerCodingTools(tools, { approvals, executionPaths: paths, businessCommandCatalog });
   const controller = new AbortController();
   const context = (mode: PermissionMode = "read-only", id = "s", call = "call") => ({
     executionPolicy: policyService.resolve({ session_id: id, workspace, permission_mode: mode }),
@@ -156,4 +156,12 @@ test("a failed audit write cannot release executable authority", async () => {
   await expect(service.decide({ session_id: "s", request_id: request!.request_id, decision: "allow" })).rejects.toThrow("ENOSPC");
   expect((await call).message).toContain("ENOSPC");
   expect(service.snapshot()).toEqual([]);
+});
+
+
+test("Desktop exec routes registered managed commands away before Full access approval", async () => {
+  const f = fixture("desktop", [{ command: "lxeskill vietnam stock recommend", ownerSkills: ["vietnam-stock-recommendation"], managedExecution: {} }]);
+  await expect(f.tools.execute("exec", { command: "lxeskill vietnam stock recommend", sandbox_permissions: "danger-full-access", justification: "Run report" }, f.context("workspace-write")))
+    .rejects.toThrow(/managed_lxeskill/);
+  expect(f.approvals.snapshot()).toEqual([]);
 });
