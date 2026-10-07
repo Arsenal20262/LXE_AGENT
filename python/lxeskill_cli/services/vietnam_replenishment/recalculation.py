@@ -360,11 +360,9 @@ def validate_recalculated_workbook(
                 if actual != expected_value:
                     raise WorkbookGenerationError(f"SKU {sku} 的 {label} 重算值与本轮输入不一致")
             calculated = {}
-            for column, label in ((8, "最终备货量"), (19, "日均"), (20, "调节后日均"), (29, "备货天数")):
-                calculated[column] = _decimal(
-                    main_values.cell(row_number, column).value,
-                    coordinate=f"{label} 第 {row_number} 行",
-                )
+            for column in (8, 19, 20, 29):
+                cell = main_values.cell(row_number, column)
+                calculated[column] = _numeric_formula_result(cell, sku)
             status = main_values.cell(row_number, 21)
             if not isinstance(status.value, str) or not status.value.strip():
                 raise WorkbookGenerationError(f"SKU {sku} 综合判定没有有效重算结果")
