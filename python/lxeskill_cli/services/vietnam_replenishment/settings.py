@@ -143,7 +143,7 @@ def upload_map(source: Path) -> dict:
 
 @contextmanager
 def run_inputs(sku_map: str | None = None):
-    """Validate everything before ERP access; release the lock before the long run."""
+    """Snapshot settings and map; release the lock before calculation."""
     with TemporaryDirectory(prefix="vietnam-inputs-") as temporary:
         snapshot = Path(temporary) / "sku-map.xlsx"
         with _locked() as root:

@@ -1,17 +1,19 @@
-"""Read one complete VN8806 Yacang export run without changing source files."""
+"""Read supplied VN8806 Yacang reports without fetching or changing source files."""
 
 from __future__ import annotations
 
 from contextlib import closing
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from decimal import Decimal, InvalidOperation
+import hashlib
 import os
 from pathlib import Path
+import shutil
+from tempfile import TemporaryDirectory
 from typing import Mapping
 
 from openpyxl import load_workbook
 
-from services.yacang import workflow as yacang_workflow
 from services.yacang.errors import safe_remote_detail
 from services.yacang.validation import (
     INVENTORY_LIST_HEADERS,
@@ -22,6 +24,7 @@ from services.yacang.validation import (
     validate_warehouse_products_workbook,
 )
 from shared.filesystem import filesystem_path
+from shared.workspace import resolve_workspace_input
 
 
 _REPORTS = (
@@ -53,6 +56,7 @@ class VietnamSources:
     missing_in_transit: tuple[str, ...]
     in_transit_mismatch: tuple[str, ...]
     artifacts: Mapping[str, Path]
+    file_hashes: Mapping[str, str] = field(default_factory=dict)
 
 
 def _paths(artifacts: object) -> dict[str, Path]:
@@ -204,20 +208,39 @@ def load_vietnam_sources(artifacts: object) -> VietnamSources:
     )
 
 
-def export_vietnam_sources() -> VietnamSources:
-    """Use the existing Yacang workflow for one three-report VN8806 run."""
-    result = yacang_workflow.run({
-        "params": {"reports": list(_REPORTS), "warehouses": ["VN8806"]},
-    })
-    if not isinstance(result, Mapping):
-        raise VietnamSourceError(f"雅仓导出返回非对象结果: {type(result).__name__}")
-    if result.get("success") is not True or result.get("status") != "completed":
-        error = result.get("error")
-        detail = error.get("message") if isinstance(error, Mapping) else None
-        if not detail:
-            detail = f"返回状态 {result.get('status')!r}，没有错误诊断"
-        raise VietnamSourceError(f"雅仓三类导出未完成: {detail}")
-    return load_vietnam_sources(result.get("artifacts"))
+def load_vietnam_files(*, sales: str, inventory: str, products: str) -> VietnamSources:
+    """Snapshot and validate local reports; paths do not attest export freshness.
+
+    Warehouse and report identity are checked against file contents. The caller
+    must choose complete reports without date filters; file paths alone cannot
+    prove that scope or that all three reports came from one export run.
+    """
+    paths = dict(zip(_REPORTS, (resolve_workspace_input(path) for path in (sales, inventory, products))))
+    with TemporaryDirectory(prefix="vietnam-sources-") as temporary:
+        artifacts = []
+        hashes = {}
+        for report, path in paths.items():
+            try:
+                if not path.is_file() or path.suffix.lower() != ".xlsx":
+                    raise VietnamSourceError(f"{report} 必须是存在的 XLSX 文件: {path}")
+                snapshot = Path(temporary) / f"{report}.xlsx"
+                shutil.copyfile(filesystem_path(path), snapshot)
+                with snapshot.open("rb") as stream:
+                    hashes[report] = hashlib.file_digest(stream, "sha256").hexdigest()
+                artifacts.append({
+                    "report": report, "path": snapshot,
+                    "warehouse": None if report == "warehouse-products" else "VN8806",
+                })
+            except (OSError, ValueError) as exc:
+                raise VietnamSourceError(f"读取 {report} 文件 {path} 失败: {type(exc).__name__}: {exc}") from exc
+        try:
+            sources = load_vietnam_sources(artifacts)
+        except Exception as exc:
+            detail = str(exc)
+            for entry in artifacts:
+                detail = detail.replace(str(entry["path"]), str(paths[entry["report"]]))
+            raise VietnamSourceError(f"校验输入报表失败: {type(exc).__name__}: {detail}") from exc
+        return replace(sources, artifacts=paths, file_hashes=hashes)
 
 
-__all__ = ["VietnamSourceError", "VietnamSources", "load_vietnam_sources", "export_vietnam_sources"]
+__all__ = ["VietnamSourceError", "VietnamSources", "load_vietnam_sources", "load_vietnam_files"]

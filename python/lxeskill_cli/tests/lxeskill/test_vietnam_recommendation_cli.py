@@ -15,6 +15,8 @@ from services.vietnam_replenishment.workbook import RecommendationConfig
 
 
 COMMAND = ["vietnam", "stock", "recommend"]
+INPUTS = {"sales": "sales.xlsx", "inventory": "inventory.xlsx", "products": "products.xlsx"}
+ARGS = [item for name, value in INPUTS.items() for item in (f"--{name}", value)]
 
 
 def _record(capsys) -> dict:
@@ -24,25 +26,32 @@ def _record(capsys) -> dict:
 
 
 def _no_workflow(monkeypatch: pytest.MonkeyPatch) -> None:
-    def unexpected(_sku_map=None) -> None:
+    def unexpected(**_arguments) -> None:
         raise AssertionError("workflow must not run")
 
     monkeypatch.setattr(generate, "generate_current_vietnam_recommendation", unexpected)
 
 
-def test_catalog_exposes_no_input_or_asset_override() -> None:
+def test_catalog_requires_three_reports_and_allows_one_run_map() -> None:
     entry = load_catalog()["vietnam_replenishment_generate"]
     assert entry["module"] == "services.agent_cli.vietnam_replenishment.generate"
     assert entry["command_path"] == COMMAND
     assert entry["session_mode"] == "none"
     assert entry["owner_skills"] == ["vietnam-stock-recommendation"]
-    assert entry["input_schema"] == {"type": "object", "properties": {"sku_map": {"type": "string", "minLength": 1}}, "additionalProperties": False}
+    assert entry["input_schema"] == {
+        "type": "object", "properties": {name: {"type": "string", "minLength": 1} for name in (*INPUTS, "sku_map")},
+        "required": list(INPUTS), "additionalProperties": False,
+    }
     assert entry["artifact_paths"] == [{"field": "output_xlsx", "role": "deliverable"}]
     assert entry.get("deliver_artifacts_on_failure") is not True
 
 
-@pytest.mark.parametrize("arguments", [{"map_path": "/tmp/other.xlsx"}, {"cost_rate": 0.7}])
-def test_adapter_rejects_all_arguments_before_workflow(arguments: dict, monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("arguments", [
+    {}, {"map_path": "/tmp/other.xlsx"}, {**INPUTS, "cost_rate": 0.7},
+    *[{key: value for key, value in INPUTS.items() if key != missing} for missing in INPUTS],
+    *[{**INPUTS, key: value} for key in (*INPUTS, "sku_map") for value in ("", " ", 2, None)],
+])
+def test_adapter_rejects_missing_invalid_and_unknown_arguments(arguments: dict, monkeypatch: pytest.MonkeyPatch) -> None:
     _no_workflow(monkeypatch)
     result = generate.run(arguments)
     assert result["success"] is False
@@ -51,12 +60,12 @@ def test_adapter_rejects_all_arguments_before_workflow(arguments: dict, monkeypa
 
 
 @pytest.mark.parametrize("mode", ["stdin", "file"])
-def test_json_input_cannot_override_current_map(
+def test_json_input_rejects_unknown_fields(
     mode: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
 ) -> None:
     _no_workflow(monkeypatch)
     monkeypatch.setenv("LXE_DATA_ROOT", str(tmp_path / "state"))
-    input_json = '{"map_path":"/tmp/other.xlsx"}'
+    input_json = json.dumps({**INPUTS, 'map_path': '/tmp/other.xlsx'})
     if mode == "stdin":
         monkeypatch.setattr("sys.stdin", io.StringIO(input_json))
         args = [*COMMAND, "--stdin-json"]
@@ -84,17 +93,19 @@ def test_success_delivers_only_final_workbook(
     monkeypatch.setattr(
         generate,
         "generate_current_vietnam_recommendation",
-        lambda _sku_map=None: SimpleNamespace(
+        lambda **_arguments: SimpleNamespace(
             output_xlsx=output, sku_count=2,
             config=RecommendationConfig(
                 day_adjustment_30d=Decimal("0.7"), day_adjustment_15d=Decimal("0.6"),
                 day_adjustment_7d=Decimal("0.1"), exchange_rate=Decimal("4000"),
             ),
             config_source="parameters.json", sku_map_source="sku-map.xlsx",
+            source_files=({"report": "inventory-sales", "path": "sales.xlsx", "sha256": "0" * 64},),
+            validation={"status": "passed", "sku_count": 2},
         ),
     )
 
-    assert lxeskill.main(COMMAND) == 0
+    assert lxeskill.main([*COMMAND, *ARGS]) == 0
     record = _record(capsys)
     assert record["ok"] is True
     assert record["files"] == [str(output)]
@@ -111,6 +122,8 @@ def test_success_delivers_only_final_workbook(
         },
         "config_source": "parameters.json",
         "sku_map_source": "sku-map.xlsx",
+        "source_files": [{"report": "inventory-sales", "path": "sales.xlsx", "sha256": "0" * 64}],
+        "validation": {"status": "passed", "sku_count": 2},
     }
 
 
@@ -120,14 +133,14 @@ def test_business_failure_preserves_real_redacted_diagnostic_and_delivers_nothin
     class ObservedFailure(RuntimeError):
         code = "sku_parameter_map_required"
 
-    def fail(_sku_map=None) -> None:
+    def fail(**_arguments) -> None:
         raise ObservedFailure("请先上传越南 SKU 参数映射表: password=topsecret")
 
     monkeypatch.setenv("LXE_DATA_ROOT", str(tmp_path / "state"))
     monkeypatch.setenv("LXE_YACANG_PASSWORD", "topsecret")
     monkeypatch.setattr(generate, "generate_current_vietnam_recommendation", fail)
 
-    assert lxeskill.main(COMMAND) == lxeskill.EXIT_BUSINESS
+    assert lxeskill.main([*COMMAND, *ARGS]) == lxeskill.EXIT_BUSINESS
     record = _record(capsys)
     assert record["ok"] is False
     assert record["files"] == []
@@ -146,11 +159,46 @@ def test_missing_generated_file_fails_without_deliverable(
     monkeypatch.setattr(
         generate,
         "generate_current_vietnam_recommendation",
-        lambda _sku_map=None: SimpleNamespace(output_xlsx=output, sku_count=2),
+        lambda **_arguments: SimpleNamespace(output_xlsx=output, sku_count=2),
     )
 
-    assert lxeskill.main(COMMAND) == lxeskill.EXIT_BUSINESS
+    assert lxeskill.main([*COMMAND, *ARGS]) == lxeskill.EXIT_BUSINESS
     record = _record(capsys)
     assert record["ok"] is False
     assert record["files"] == []
     assert "FileNotFoundError" in record["error"]["message"]
+
+
+@pytest.mark.parametrize("mode", ["flags", "stdin", "file"])
+def test_reports_and_explicit_map_reach_workflow(mode, tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("LXE_DATA_ROOT", str(tmp_path / "state"))
+    expected = {**INPUTS, "sku_map": "my map.xlsx"}
+    calls = []
+
+    def stop_after_arguments(**arguments):
+        calls.append(arguments)
+        raise RuntimeError("stopped after argument forwarding")
+
+    monkeypatch.setattr(generate, "generate_current_vietnam_recommendation", stop_after_arguments)
+    if mode == "flags":
+        args = [*ARGS, "--sku-map", expected["sku_map"]]
+    elif mode == "stdin":
+        monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(expected)))
+        args = ["--stdin-json"]
+    else:
+        source = tmp_path / "input.json"
+        source.write_text(json.dumps(expected))
+        args = ["--input-json", str(source)]
+    assert lxeskill.main([*COMMAND, *args]) == lxeskill.EXIT_BUSINESS
+    assert calls == [expected]
+    assert _record(capsys)["files"] == []
+
+
+def test_old_no_argument_invocation_reports_missing_paths(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("LXE_DATA_ROOT", str(tmp_path / "state"))
+    _no_workflow(monkeypatch)
+    assert lxeskill.main(COMMAND) == lxeskill.EXIT_BUSINESS
+    result = _record(capsys)
+    assert result["files"] == []
+    for name in INPUTS:
+        assert name in result["error"]["message"]

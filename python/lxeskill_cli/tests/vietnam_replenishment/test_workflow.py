@@ -1,4 +1,4 @@
-"""The Vietnam workflow uses one validated current map and one Yacang run."""
+"""The Vietnam workflow uses explicit local reports and one settings snapshot."""
 
 from __future__ import annotations
 
@@ -15,7 +15,6 @@ from services.vietnam_replenishment.asset_contract import load_sku_parameters
 from services.vietnam_replenishment.workbook import RecommendationConfig
 from services.vietnam_replenishment.yacang_sources import VietnamSourceError, VietnamSources
 from services.vietnam_replenishment import settings as store
-from shared import input_assets
 
 
 def _sku_map(
@@ -48,11 +47,11 @@ def _current(monkeypatch: pytest.MonkeyPatch, path: Path) -> Path:
     return store.data_directory() / "sku-map.xlsx"
 
 
-def _no_export(monkeypatch: pytest.MonkeyPatch) -> None:
-    def unexpected_export() -> None:
-        raise AssertionError("Yacang export must not start before map preflight")
+def _no_sources(monkeypatch: pytest.MonkeyPatch) -> None:
+    def unexpected_load(**_paths) -> None:
+        raise AssertionError("Report loading must not start before map preflight")
 
-    monkeypatch.setattr(workflow, "export_vietnam_sources", unexpected_export)
+    monkeypatch.setattr(workflow, "load_vietnam_files", unexpected_load)
 
 
 def _sources() -> VietnamSources:
@@ -76,46 +75,46 @@ def _sources() -> VietnamSources:
     )
 
 
-def test_missing_current_prompts_upload_before_export(monkeypatch: pytest.MonkeyPatch) -> None:
-    _no_export(monkeypatch)
+def test_missing_current_prompts_upload_before_loading_reports(monkeypatch: pytest.MonkeyPatch) -> None:
+    _no_sources(monkeypatch)
 
     with pytest.raises(workflow.VietnamWorkflowError, match="上传") as error:
-        workflow.generate_current_vietnam_recommendation()
+        workflow.generate_current_vietnam_recommendation(sales="sales.xlsx", inventory="inventory.xlsx", products="products.xlsx")
     assert error.value.code == "sku_parameter_map_invalid"
 
 
-def test_legacy_current_without_manifest_stops_before_export(
+def test_legacy_current_without_manifest_stops_before_loading_reports(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     legacy = tmp_path / "inputs" / "vietnam" / "sku_parameter_map" / "current"
     legacy.mkdir(parents=True)
     _sku_map(legacy / "untrusted.xlsx")
-    _no_export(monkeypatch)
+    _no_sources(monkeypatch)
     with pytest.raises(workflow.VietnamWorkflowError, match="上传") as error:
-        workflow.generate_current_vietnam_recommendation()
+        workflow.generate_current_vietnam_recommendation(sales="sales.xlsx", inventory="inventory.xlsx", products="products.xlsx")
     assert error.value.code == "sku_parameter_map_invalid"
 
 
-def test_broken_current_stops_before_export(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_broken_current_stops_before_loading_reports(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     path = tmp_path / "broken.xlsx"
     path.write_bytes(b"not an xlsx")
     version = _current(monkeypatch, _sku_map(tmp_path / "valid.xlsx"))
     version.write_bytes(path.read_bytes())
-    _no_export(monkeypatch)
+    _no_sources(monkeypatch)
 
     with pytest.raises(workflow.VietnamWorkflowError, match="ZIP") as error:
-        workflow.generate_current_vietnam_recommendation()
+        workflow.generate_current_vietnam_recommendation(sales="sales.xlsx", inventory="inventory.xlsx", products="products.xlsx")
     assert error.value.code == "sku_parameter_map_invalid"
 
 
-def test_empty_current_stops_before_export(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_empty_current_stops_before_loading_reports(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     invalid = _sku_map(tmp_path / "empty.xlsx", sku=None)
     version = _current(monkeypatch, _sku_map(tmp_path / "valid.xlsx"))
     version.write_bytes(invalid.read_bytes())
-    _no_export(monkeypatch)
+    _no_sources(monkeypatch)
 
     with pytest.raises(workflow.VietnamWorkflowError, match="没有 SKU") as error:
-        workflow.generate_current_vietnam_recommendation()
+        workflow.generate_current_vietnam_recommendation(sales="sales.xlsx", inventory="inventory.xlsx", products="products.xlsx")
     assert error.value.code == "sku_parameter_map_invalid"
 
 
@@ -127,15 +126,15 @@ def test_empty_current_stops_before_export(tmp_path: Path, monkeypatch: pytest.M
         ("discount_price", {"discount": None}),
     ],
 )
-def test_blank_sku_price_reaches_export_from_trusted_current(
+def test_blank_sku_price_reaches_report_loading_from_trusted_current(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, field: str, values: dict[str, None]
 ) -> None:
     _current(monkeypatch, _sku_map(tmp_path / "incomplete.xlsx", **values))
     monkeypatch.setattr(workflow, "dataset_dir", lambda *parts: tmp_path / "artifacts" / parts[-1])
-    export_calls: list[str] = []
+    load_calls: list[str] = []
 
-    def fake_export() -> VietnamSources:
-        export_calls.append("VN8806")
+    def fake_load(**_paths) -> VietnamSources:
+        load_calls.append("VN8806")
         return _sources()
 
     def fake_generate(map_path: Path, output_path: Path, *, sources: VietnamSources,
@@ -146,11 +145,11 @@ def test_blank_sku_price_reaches_export_from_trusted_current(
         output_path.write_bytes(b"synthetic final workbook")
         return output_path
 
-    monkeypatch.setattr(workflow, "export_vietnam_sources", fake_export)
+    monkeypatch.setattr(workflow, "load_vietnam_files", fake_load)
     monkeypatch.setattr(workflow, "generate_vietnam_workbook", fake_generate)
-    result = workflow.generate_current_vietnam_recommendation()
+    result = workflow.generate_current_vietnam_recommendation(sales="sales.xlsx", inventory="inventory.xlsx", products="products.xlsx")
     assert result.sku_count == 1
-    assert export_calls == ["VN8806"]
+    assert load_calls == ["VN8806"]
 
 
 def test_snapshot_is_private_stable_and_removed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -165,7 +164,7 @@ def test_snapshot_is_private_stable_and_removed(tmp_path: Path, monkeypatch: pyt
     assert not snapshot.exists()
 
 
-def test_one_export_uses_snapshot_and_default_config(
+def test_local_reports_uses_snapshot_and_default_config(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     current = _sku_map(tmp_path / "current.xlsx", price=20)
@@ -174,8 +173,8 @@ def test_one_export_uses_snapshot_and_default_config(
     sources = _sources()
     calls: list[str] = []
 
-    def fake_export() -> VietnamSources:
-        calls.append("export")
+    def fake_load(**_paths) -> VietnamSources:
+        calls.append("load")
         store.upload_map(_sku_map(tmp_path / "replacement.xlsx", price=40))
         return sources
 
@@ -190,11 +189,11 @@ def test_one_export_uses_snapshot_and_default_config(
         return output_path
 
     expected_sources = sources
-    monkeypatch.setattr(workflow, "export_vietnam_sources", fake_export)
+    monkeypatch.setattr(workflow, "load_vietnam_files", fake_load)
     monkeypatch.setattr(workflow, "generate_vietnam_workbook", fake_generate)
 
-    result = workflow.generate_current_vietnam_recommendation()
-    assert calls == ["export", "generate"]
+    result = workflow.generate_current_vietnam_recommendation(sales="sales.xlsx", inventory="inventory.xlsx", products="products.xlsx")
+    assert calls == ["load", "generate"]
     assert result.sku_count == 1
     assert result.config == RecommendationConfig()
     assert result.config_source == str(store.data_directory() / "parameters.json")
@@ -212,8 +211,8 @@ def test_nondefault_config_reaches_generator_and_result(
     store.save_parameters(store.config_json(RecommendationConfig(Decimal("0.7"), Decimal("0.6"), Decimal("0.1"), Decimal("4000"))))
     calls: list[str] = []
 
-    def fake_export() -> VietnamSources:
-        calls.append("export")
+    def fake_load(**_paths) -> VietnamSources:
+        calls.append("load")
         return _sources()
 
     def fake_generate(
@@ -229,51 +228,51 @@ def test_nondefault_config_reaches_generator_and_result(
         output_path.write_bytes(b"synthetic final workbook")
         return output_path
 
-    monkeypatch.setattr(workflow, "export_vietnam_sources", fake_export)
+    monkeypatch.setattr(workflow, "load_vietnam_files", fake_load)
     monkeypatch.setattr(workflow, "generate_vietnam_workbook", fake_generate)
-    result = workflow.generate_current_vietnam_recommendation()
-    assert calls == ["export", "generate"]
+    result = workflow.generate_current_vietnam_recommendation(sales="sales.xlsx", inventory="inventory.xlsx", products="products.xlsx")
+    assert calls == ["load", "generate"]
     assert result.config.exchange_rate == Decimal("4000")
     assert result.config_source == str(store.data_directory() / "parameters.json")
 
 
 
 
-def test_export_error_does_not_start_generation(
+def test_source_error_does_not_start_generation(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _current(monkeypatch, _sku_map(tmp_path / "current.xlsx"))
     output_root = tmp_path / "artifacts"
     monkeypatch.setattr(workflow, "dataset_dir", lambda *parts: output_root / parts[-1])
 
-    def fail_export() -> VietnamSources:
+    def fail_load(**_paths) -> VietnamSources:
         raise VietnamSourceError("三份来源中库存列表失败")
 
-    monkeypatch.setattr(workflow, "export_vietnam_sources", fail_export)
+    monkeypatch.setattr(workflow, "load_vietnam_files", fail_load)
     monkeypatch.setattr(
         workflow, "generate_vietnam_workbook",
         lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("generator called")),
     )
 
     with pytest.raises(VietnamSourceError, match="库存列表失败"):
-        workflow.generate_current_vietnam_recommendation()
+        workflow.generate_current_vietnam_recommendation(sales="sales.xlsx", inventory="inventory.xlsx", products="products.xlsx")
     assert not output_root.exists()
 
 
-def test_empty_export_sku_set_does_not_start_generation(
+def test_empty_source_sku_set_does_not_start_generation(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _current(monkeypatch, _sku_map(tmp_path / "current.xlsx"))
     output_root = tmp_path / "artifacts"
     monkeypatch.setattr(workflow, "dataset_dir", lambda *parts: output_root / parts[-1])
-    monkeypatch.setattr(workflow, "export_vietnam_sources", lambda: replace(_sources(), skus=()))
+    monkeypatch.setattr(workflow, "load_vietnam_files", lambda **_paths: replace(_sources(), skus=()))
     monkeypatch.setattr(
         workflow, "generate_vietnam_workbook",
         lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("generator called")),
     )
 
     with pytest.raises(workflow.VietnamWorkflowError, match="没有 SKU") as error:
-        workflow.generate_current_vietnam_recommendation()
+        workflow.generate_current_vietnam_recommendation(sales="sales.xlsx", inventory="inventory.xlsx", products="products.xlsx")
     assert error.value.code == "current_skus_empty"
     assert not output_root.exists()
 
@@ -284,7 +283,7 @@ def test_failed_generation_removes_partial_final_output(
     _current(monkeypatch, _sku_map(tmp_path / "current.xlsx"))
     output_root = tmp_path / "artifacts"
     monkeypatch.setattr(workflow, "dataset_dir", lambda *parts: output_root / parts[-1])
-    monkeypatch.setattr(workflow, "export_vietnam_sources", _sources)
+    monkeypatch.setattr(workflow, "load_vietnam_files", lambda **_paths: _sources())
 
     def fail_generate(_map_path: Path, output_path: Path, *, sources: VietnamSources, config: RecommendationConfig) -> Path:
         output_path.parent.mkdir(parents=True)
@@ -293,7 +292,7 @@ def test_failed_generation_removes_partial_final_output(
 
     monkeypatch.setattr(workflow, "generate_vietnam_workbook", fail_generate)
     with pytest.raises(RuntimeError, match="Office actual failure"):
-        workflow.generate_current_vietnam_recommendation()
+        workflow.generate_current_vietnam_recommendation(sales="sales.xlsx", inventory="inventory.xlsx", products="products.xlsx")
     assert not list(output_root.rglob("*.xlsx"))
 
 
@@ -302,11 +301,11 @@ def test_generator_without_final_file_is_not_success(
 ) -> None:
     _current(monkeypatch, _sku_map(tmp_path / "current.xlsx"))
     monkeypatch.setattr(workflow, "dataset_dir", lambda *parts: tmp_path / "artifacts" / parts[-1])
-    monkeypatch.setattr(workflow, "export_vietnam_sources", _sources)
+    monkeypatch.setattr(workflow, "load_vietnam_files", lambda **_paths: _sources())
     monkeypatch.setattr(workflow, "generate_vietnam_workbook", lambda _map, output, **_kw: output)
 
     with pytest.raises(workflow.VietnamWorkflowError, match="没有生成最终 XLSX") as error:
-        workflow.generate_current_vietnam_recommendation()
+        workflow.generate_current_vietnam_recommendation(sales="sales.xlsx", inventory="inventory.xlsx", products="products.xlsx")
     assert error.value.code == "output_missing"
 
 
@@ -319,9 +318,9 @@ def test_real_generator_uses_product_creation_time_and_current_transit(
 ) -> None:
     _current(monkeypatch, _sku_map(tmp_path / "current.xlsx"))
     monkeypatch.setattr(workflow, "dataset_dir", lambda *parts: tmp_path / "artifacts" / parts[-1])
-    monkeypatch.setattr(workflow, "export_vietnam_sources", _sources)
+    monkeypatch.setattr(workflow, "load_vietnam_files", lambda **_paths: _sources())
 
-    result = workflow.generate_current_vietnam_recommendation()
+    result = workflow.generate_current_vietnam_recommendation(sales="sales.xlsx", inventory="inventory.xlsx", products="products.xlsx")
     book = load_workbook(result.output_xlsx, read_only=True, data_only=True)
     try:
         assert book.sheetnames == [
@@ -342,15 +341,15 @@ def test_real_generator_uses_product_creation_time_and_current_transit(
     not (os.environ.get("LXE_OFFICE_NODE") and os.environ.get("LXE_OFFICE_CLI")),
     reason="Host Office Kit paths are not configured",
 )
-def test_nondefault_environment_reaches_recalculated_five_sheet_workbook(
+def test_nondefault_settings_reaches_recalculated_five_sheet_workbook(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _current(monkeypatch, _sku_map(tmp_path / "current.xlsx"))
     monkeypatch.setattr(workflow, "dataset_dir", lambda *parts: tmp_path / "artifacts" / parts[-1])
-    monkeypatch.setattr(workflow, "export_vietnam_sources", _sources)
+    monkeypatch.setattr(workflow, "load_vietnam_files", lambda **_paths: _sources())
     store.save_parameters(store.config_json(RecommendationConfig(Decimal("0.7"), Decimal("0.6"), Decimal("0.1"), Decimal("4000"))))
 
-    result = workflow.generate_current_vietnam_recommendation()
+    result = workflow.generate_current_vietnam_recommendation(sales="sales.xlsx", inventory="inventory.xlsx", products="products.xlsx")
     assert result.config_source == str(store.data_directory() / "parameters.json")
     assert result.config == RecommendationConfig(
         day_adjustment_30d=Decimal("0.7"), day_adjustment_15d=Decimal("0.6"),

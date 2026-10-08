@@ -1,4 +1,4 @@
-> 已由 PR #80 的越南备货设置简化方案取代：AI 使用普通 `exec` 调用 `lxeskill vietnam stock recommend [--sku-map 文件]`，不足权限走本次审批。SKU 上传和参数维护位于桌面「越南备货设置」。以下保留原实现交接记录。
+> 已由 PR #80 的越南备货设置简化方案取代：AI 使用普通 `exec` 调用 `lxeskill vietnam stock recommend --sales 文件 --inventory 文件 --products 文件 [--sku-map 文件]`，不足权限走本次审批。SKU 上传和参数维护位于桌面「越南备货设置」。以下保留原实现交接记录。
 
 # 受控 lxeskill 执行入口交接（新 PR7）
 

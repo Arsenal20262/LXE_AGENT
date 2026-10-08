@@ -151,13 +151,18 @@ test("Vietnam recommendation and delivers only the final workbook", () => {
     .toBe("vietnam/recommendations");
 });
 
-test("Vietnam uses one ordinary command with an optional map and no binding lifecycle", () => {
+test("Vietnam calculation requires three local reports and an optional map", () => {
   const path = join(process.cwd(), "python/lxeskill_cli/lxeskill/catalog.json");
   const document = JSON.parse(readFileSync(path, "utf8"));
   expect(document.entries.filter((entry: any) => entry.managed_execution !== undefined)).toEqual([]);
   expect(document.entries.filter((entry: any) => entry.name.startsWith("vietnam_replenishment_")).map((entry: any) => entry.name)).toEqual(["vietnam_replenishment_generate"]);
   expect(document.entries.find((entry: any) => entry.name === "vietnam_replenishment_generate").input_schema).toEqual({
-    type: "object", properties: { sku_map: { type: "string", minLength: 1 } }, additionalProperties: false,
+    type: "object",
+    properties: {
+      sales: { type: "string", minLength: 1 }, inventory: { type: "string", minLength: 1 },
+      products: { type: "string", minLength: 1 }, sku_map: { type: "string", minLength: 1 },
+    },
+    required: ["sales", "inventory", "products"], additionalProperties: false,
   });
 });
 

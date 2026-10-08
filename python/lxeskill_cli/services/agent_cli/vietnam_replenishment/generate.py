@@ -21,12 +21,18 @@ def _failure(code: str, message: str) -> dict[str, Any]:
 
 
 def run(arguments: dict[str, Any]) -> dict[str, Any]:
-    """Run once with an optional explicit SKU map and the saved global parameters."""
-    if set(arguments) - {"sku_map"} or ("sku_map" in arguments and (not isinstance(arguments["sku_map"], str) or not arguments["sku_map"].strip())):
-        return _failure("invalid_arguments", "仅接受非空的 sku_map 文件路径")
+    """Calculate supplied reports with an optional map and saved parameters."""
+    required = {"sales", "inventory", "products"}
+    if set(arguments) - (required | {"sku_map"}):
+        return _failure("invalid_arguments", "仅接受 sales、inventory、products 和可选 sku_map 文件路径")
+    if required - set(arguments):
+        return _failure("invalid_arguments", f"缺少必填报表路径: {', '.join(sorted(required - set(arguments)))}")
+    for name, value in arguments.items():
+        if not isinstance(value, str) or not value.strip():
+            return _failure("invalid_arguments", f"{name} 必须是非空文件路径")
 
     try:
-        result = generate_current_vietnam_recommendation(arguments.get("sku_map"))
+        result = generate_current_vietnam_recommendation(**arguments)
         output = Path(result.output_xlsx).resolve(strict=True)
         if not output.is_file() or output.suffix.lower() != ".xlsx" or output.stat().st_size == 0:
             raise ValueError(f"最终 XLSX 无效: {output}")
@@ -47,4 +53,6 @@ def run(arguments: dict[str, Any]) -> dict[str, Any]:
         "config": config_json(result.config),
         "config_source": result.config_source,
         "sku_map_source": result.sku_map_source,
+        "source_files": list(result.source_files),
+        "validation": result.validation,
     }

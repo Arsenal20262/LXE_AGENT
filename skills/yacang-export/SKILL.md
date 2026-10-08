@@ -21,6 +21,8 @@ commands:
 
 ## 执行
 
+作为越南备货的数据获取步骤时，复用本 Skill 导出 `inventory-sales`、`inventory-current-snapshot`（仅 `VN8806`）及全局 `warehouse-products`，不传 `created_date`。这一范围由已确认的越南计算输入决定，无需再次询问报表选择。返回三份报表的 `artifacts` 给 `vietnam-stock-recommendation`，由 AI 再调用独立计算命令；本导出命令不在内部启动计算。
+
 账号手机号及密码在桌面“雅仓”设置中配置，不读取密码文件、不把凭据放进命令。通过 `exec` 调用唯一 CLI：
 
 ```text

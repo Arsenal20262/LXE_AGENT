@@ -104,18 +104,18 @@ def test_explicit_file_overrides_saved_without_changing_it_and_snapshot_is_stabl
 
 def test_bad_explicit_path_does_not_fall_back_or_start_erp(tmp_path, monkeypatch):
     settings.upload_map(sku_map(tmp_path / "valid.xlsx"))
-    monkeypatch.setattr(workflow, "export_vietnam_sources", lambda: pytest.fail("ERP must not run"))
+    monkeypatch.setattr(workflow, "load_vietnam_files", lambda **_paths: pytest.fail("Source loading must not run"))
     with pytest.raises(workflow.VietnamWorkflowError, match="missing.xlsx"):
-        workflow.generate_current_vietnam_recommendation(str(tmp_path / "missing.xlsx"))
+        workflow.generate_current_vietnam_recommendation(sales="sales.xlsx", inventory="inventory.xlsx", products="products.xlsx", sku_map=str(tmp_path / "missing.xlsx"))
 
 
 def test_invalid_configuration_stops_before_erp(tmp_path, monkeypatch):
     settings.upload_map(sku_map(tmp_path / "valid.xlsx"))
     path = settings.data_directory() / "parameters.json"
     path.write_text('{"exchange_rate":"0"}')
-    monkeypatch.setattr(workflow, "export_vietnam_sources", lambda: pytest.fail("ERP must not run"))
+    monkeypatch.setattr(workflow, "load_vietnam_files", lambda **_paths: pytest.fail("Source loading must not run"))
     with pytest.raises(ValueError):
-        workflow.generate_current_vietnam_recommendation()
+        workflow.generate_current_vietnam_recommendation(sales="sales.xlsx", inventory="inventory.xlsx", products="products.xlsx")
 
 
 

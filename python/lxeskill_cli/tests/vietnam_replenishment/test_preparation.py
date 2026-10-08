@@ -1,4 +1,4 @@
-"""A current export, explicit map, and template history form one operator map."""
+"""Validated local reports, explicit map, and template history form one operator map."""
 
 from __future__ import annotations
 
@@ -72,18 +72,13 @@ def test_preparation_keeps_upload_explicit_and_resolution_separate(tmp_path: Pat
     from services.vietnam_replenishment import preparation
 
     sources = _sources()
-    export_calls = []
-    monkeypatch.setattr(
-        preparation, "export_vietnam_sources", lambda: export_calls.append(True) or sources
-    )
     output = tmp_path / "operator-upload.xlsx"
 
     result = preparation.prepare_operator_sku_map(
         _template(tmp_path / "template.xlsx"), output,
-        _explicit_map(tmp_path / "current-map.xlsx"),
+        _explicit_map(tmp_path / "current-map.xlsx"), sources=sources,
     )
 
-    assert export_calls == [True]
     assert result.path == output
     assert result.sources is sources
     assert result.resolved["VN-A"].values == SkuParameters(cost=Decimal("0"), hot_flag=2)
@@ -104,13 +99,9 @@ def test_preparation_keeps_upload_explicit_and_resolution_separate(tmp_path: Pat
     assert "GLOBAL-OLD" not in tuple(row[0] for row in reference)
 
 
-def test_injected_current_sources_do_not_start_another_export(tmp_path: Path, monkeypatch) -> None:
+def test_preparation_consumes_supplied_sources(tmp_path: Path, monkeypatch) -> None:
     from services.vietnam_replenishment import preparation
 
-    def unexpected_export():
-        raise AssertionError("extra 雅仓 export")
-
-    monkeypatch.setattr(preparation, "export_vietnam_sources", unexpected_export)
     result = preparation.prepare_operator_sku_map(
         _template(tmp_path / "template.xlsx"), tmp_path / "operator-upload.xlsx", sources=_sources(),
     )
@@ -118,13 +109,9 @@ def test_injected_current_sources_do_not_start_another_export(tmp_path: Path, mo
     assert result.resolved["VN-A"].sources["cost"] == "template"
 
 
-def test_invalid_local_input_stops_before_live_export(tmp_path: Path, monkeypatch) -> None:
+def test_preparation_rejects_invalid_template(tmp_path: Path, monkeypatch) -> None:
     from services.vietnam_replenishment import preparation
 
-    def unexpected_export():
-        raise AssertionError("invalid local input triggered a live 雅仓 export")
-
-    monkeypatch.setattr(preparation, "export_vietnam_sources", unexpected_export)
     template = _template(tmp_path / "template.xlsx")
     workbook = load_workbook(template)
     del workbook["雅仓库存"]
@@ -132,4 +119,4 @@ def test_invalid_local_input_stops_before_live_export(tmp_path: Path, monkeypatc
     workbook.close()
 
     with pytest.raises(AssetContractError, match="缺少工作表: 雅仓库存"):
-        preparation.prepare_operator_sku_map(template, tmp_path / "output.xlsx")
+        preparation.prepare_operator_sku_map(template, tmp_path / "output.xlsx", sources=_sources())

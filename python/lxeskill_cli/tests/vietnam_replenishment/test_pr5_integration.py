@@ -1,4 +1,4 @@
-"""Synthetic managed-map and chat-bind runs through the Office Kit."""
+"""Synthetic local report files through the CLI and real Office Kit."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ import pytest
 from lxeskill import cli as lxeskill
 from services.vietnam_replenishment import settings
 from services.vietnam_replenishment.workbook import RecommendationConfig
-from services.vietnam_replenishment import workflow
+from services.yacang.validation import INVENTORY_SALES_HEADERS, INVENTORY_LIST_HEADERS, WAREHOUSE_PRODUCTS_HEADERS
 from services.vietnam_replenishment.yacang_sources import VietnamSources
 from shared import workspace
 
@@ -94,6 +94,24 @@ def _sparse_map(path: Path) -> Path:
 
 
 
+def _report_arguments(directory: Path, sources: VietnamSources) -> list[str]:
+    args = []
+    for flag, headers, rows in (
+        ("sales", INVENTORY_SALES_HEADERS, sources.sales),
+        ("inventory", INVENTORY_LIST_HEADERS, sources.inventory),
+        ("products", WAREHOUSE_PRODUCTS_HEADERS, sources.products),
+    ):
+        path = directory / f"{flag}.xlsx"
+        book = Workbook()
+        book.active.append(headers)
+        for row in rows.values():
+            book.active.append([row.get(header) for header in headers])
+        book.save(path)
+        book.close()
+        args.extend((f"--{flag}", str(path)))
+    return args
+
+
 @pytest.fixture()
 def isolated_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     state = tmp_path / "state"
@@ -119,13 +137,7 @@ def test_upload_replace_then_generate_one_final_workbook(
 ) -> None:
     monkeypatch.delenv("LXESKILL_SKILL_SCOPE", raising=False)
     settings.save_parameters(settings.config_json(RecommendationConfig(Decimal("0.7"), Decimal("0.6"), Decimal("0.1"), Decimal("4000"))))
-    export_calls: list[str] = []
-
-    def fake_export() -> VietnamSources:
-        export_calls.append("VN8806")
-        return _sources()
-
-    monkeypatch.setattr(workflow, "export_vietnam_sources", fake_export)
+    report_args = _report_arguments(tmp_path, _sources())
     a = _map(tmp_path / "map-a.xlsx", cost=10, cross_border=20, discount=15)
     b = _map(tmp_path / "map-b.xlsx", cost=11, cross_border=33, discount=25)
 
@@ -133,7 +145,7 @@ def test_upload_replace_then_generate_one_final_workbook(
     settings.upload_map(a)
     assert settings.read_state()["sku_map"]["file_name"] == "sku-map.xlsx"
 
-    assert lxeskill.main(["vietnam", "stock", "recommend"]) == 0
+    assert lxeskill.main(["vietnam", "stock", "recommend", *report_args]) == 0
     records = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.strip()]
     assert len(records) == 1
     result = records[0]
@@ -148,7 +160,9 @@ def test_upload_replace_then_generate_one_final_workbook(
     output = Path(result["data"]["output_xlsx"])
     assert output.is_relative_to(tmp_path / "workspace" / ".lxeagent" / "artifacts")
     assert result["files"] == [str(output)]
-    assert export_calls == ["VN8806"]
+    assert result["data"]["validation"]["status"] == "passed"
+    assert len(result["data"]["source_files"]) == 3
+    assert all(len(source["sha256"]) == 64 for source in result["data"]["source_files"])
     assert output.is_file() and output.stat().st_size > 0
 
     book = load_workbook(output, read_only=True, data_only=True)
@@ -179,24 +193,21 @@ def test_explicit_sparse_map_keeps_all_yacang_skus(
 ) -> None:
     monkeypatch.delenv("LXESKILL_SKILL_SCOPE", raising=False)
     settings.save_parameters(settings.config_json(RecommendationConfig(Decimal("0.7"), Decimal("0.6"), Decimal("0.1"), Decimal("4000"))))
-    export_calls: list[str] = []
-
-    def fake_export() -> VietnamSources:
-        export_calls.append("VN8806")
-        return _three_sources()
-
-    monkeypatch.setattr(workflow, "export_vietnam_sources", fake_export)
+    report_args = _report_arguments(tmp_path, _three_sources())
     sparse_path = _sparse_map(tmp_path / "sparse.xlsx")
-    assert lxeskill.main(["vietnam", "stock", "recommend", "--sku-map", str(sparse_path)]) == 0
+    assert lxeskill.main(["vietnam", "stock", "recommend", *report_args, "--sku-map", str(sparse_path)]) == 0
     records = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.strip()]
     assert len(records) == 1
     result = records[0]
     assert result["type"] == "result" and result["ok"] is True
+    assert result["data"]["validation"]["missing_mapping_count"] == 1
     assert result["data"]["sku_count"] == 3
     output = Path(result["data"]["output_xlsx"])
     assert output.is_relative_to(tmp_path / "workspace" / ".lxeagent" / "artifacts")
     assert result["files"] == [str(output)]
-    assert export_calls == ["VN8806"]
+    assert result["data"]["validation"]["status"] == "passed"
+    assert len(result["data"]["source_files"]) == 3
+    assert all(len(source["sha256"]) == 64 for source in result["data"]["source_files"])
     assert output.is_file() and output.stat().st_size > 0
     assert not list(output.parent.glob(".vietnam-workbook-*"))
 

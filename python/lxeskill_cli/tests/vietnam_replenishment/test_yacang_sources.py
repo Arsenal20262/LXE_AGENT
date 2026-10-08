@@ -162,29 +162,77 @@ def test_empty_current_vietnam_reports_do_not_produce_an_operator_sku_set(tmp_pa
         yacang_sources.load_vietnam_sources(artifacts)
 
 
-def test_export_calls_existing_workflow_once_and_keeps_real_failure(tmp_path, monkeypatch):
+
+def _valid_file_arguments(tmp_path):
     artifacts = _artifacts(
         tmp_path,
-        sales=[{"SKU": "VN-A", "仓库": "VN8806"}],
-        inventory=[{"SKU": "VN-A", "仓库": "VN8806"}],
-        products=[{"SKU": "VN-A", "创建时间": "2026-09-23 10:00"}],
+        sales=[{"SKU": "VN-A", "仓库": "VN8806", "7天销量": 7, "15天销量": 15, "30天销量": 30, "在途": 5}],
+        inventory=[{"SKU": "VN-A", "仓库": "VN8806", "可用库存": 10, "在途数量": 3}],
+        products=[{"SKU": "VN-A", "中文标题": "测试产品", "创建时间": "2026-09-23 10:00"}],
     )
-    calls = []
+    return dict(zip(("sales", "inventory", "products"), (entry["path"] for entry in artifacts)))
 
-    def export(arguments):
-        calls.append(arguments)
-        return {"success": True, "status": "completed", "artifacts": artifacts}
 
-    monkeypatch.setattr(yacang_sources.yacang_workflow, "run", export)
-    assert yacang_sources.export_vietnam_sources().skus == ("VN-A",)
-    assert calls == [{"params": {"reports": [
-        "inventory-sales", "inventory-current-snapshot", "warehouse-products",
-    ], "warehouses": ["VN8806"]}}]
+def test_local_files_resolve_workspace_paths_and_record_snapshot_hashes(tmp_path, monkeypatch):
+    import hashlib
+    from shared import workspace
 
-    def failed(arguments):
-        return {"success": False, "status": "partial_success", "artifacts": artifacts[:1],
-                "error": {"code": "rate_limited", "message": "雅仓实际返回 429，已脱敏"}}
+    paths = _valid_file_arguments(tmp_path)
+    original = {name: Path(path).read_bytes() for name, path in paths.items()}
+    monkeypatch.setattr(workspace, "_workspace_root", tmp_path)
+    sources = yacang_sources.load_vietnam_files(**{name: Path(path).name for name, path in paths.items()})
+    assert sources.skus == ("VN-A",)
+    assert sources.in_transit["VN-A"] == 3
+    assert sources.in_transit_mismatch == ("VN-A",)
+    for report, name in zip(("inventory-sales", "inventory-current-snapshot", "warehouse-products"), paths):
+        assert sources.artifacts[report] == Path(paths[name])
+        assert sources.file_hashes[report] == hashlib.sha256(original[name]).hexdigest()
+        assert Path(paths[name]).read_bytes() == original[name]
 
-    monkeypatch.setattr(yacang_sources.yacang_workflow, "run", failed)
-    with pytest.raises(yacang_sources.VietnamSourceError, match="雅仓实际返回 429，已脱敏"):
-        yacang_sources.export_vietnam_sources()
+
+def test_local_reports_are_frozen_before_validation_and_temp_files_removed(tmp_path, monkeypatch):
+    paths = _valid_file_arguments(tmp_path)
+    original_reader = yacang_sources._read_rows
+    seen = []
+
+    def read_snapshot(path, report, **kwargs):
+        seen.append(path)
+        if len(seen) == 1:
+            for original in paths.values():
+                Path(original).write_bytes(b"changed during calculation")
+        return original_reader(path, report, **kwargs)
+
+    monkeypatch.setattr(yacang_sources, "_read_rows", read_snapshot)
+    sources = yacang_sources.load_vietnam_files(**paths)
+    assert sources.sales["VN-A"]["7天销量"] == 7
+    assert sources.inventory["VN-A"]["可用库存"] == 10
+    assert len(seen) == 3
+    assert all(not path.exists() for path in seen)
+
+
+@pytest.mark.parametrize("problem", ["missing", "directory", "corrupt", "wrong_report", "wrong_warehouse"])
+def test_invalid_local_report_stops_with_observed_diagnostic(tmp_path, problem):
+    from openpyxl import load_workbook
+
+    paths = _valid_file_arguments(tmp_path)
+    sales_path = Path(paths["sales"])
+    if problem == "missing":
+        sales_path.unlink()
+    elif problem == "directory":
+        sales_path.unlink()
+        sales_path.mkdir()
+    elif problem == "corrupt":
+        sales_path.write_bytes(b"not a zip")
+    elif problem == "wrong_report":
+        sales_path.write_bytes(Path(paths["inventory"]).read_bytes())
+    else:
+        book = load_workbook(sales_path)
+        book.active["C2"] = "MY8801"
+        book.save(sales_path)
+        book.close()
+    expected = {
+        "missing": "必须是存在的 XLSX", "directory": "必须是存在的 XLSX",
+        "corrupt": "BadZipFile", "wrong_report": "表头不匹配", "wrong_warehouse": "MY8801",
+    }[problem]
+    with pytest.raises(yacang_sources.VietnamSourceError, match=expected):
+        yacang_sources.load_vietnam_files(**paths)
