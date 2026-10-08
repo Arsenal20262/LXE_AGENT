@@ -1403,7 +1403,7 @@ export function DesktopShell({
     }
   };
   const openCloudDestination = async (destination: DesktopCloudDestination): Promise<void> => {
-    if (cloud.connection !== "connected") return;
+    if (cloud.native_access?.status !== "connected") return;
     setError("");
     try {
       await desktop.openCloudDestination(destination);
