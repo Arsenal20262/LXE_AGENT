@@ -69,6 +69,7 @@ def _formula_caches(sources: VietnamSources, config: RecommendationConfig) -> di
             f"T{row_number}": 0,
             f"U{row_number}": "无动销无库存",
             f"V{row_number}": "VN",
+            f"W{row_number}": "VN",
             f"X{row_number}": 0,
             f"Y{row_number}": 0,
             f"Z{row_number}": 0,
@@ -189,6 +190,52 @@ def test_source_based_category_cache_cannot_be_lost(tmp_path: Path) -> None:
     _set_formula_caches(path, {"V2": None})
     with pytest.raises(recalculation.WorkbookGenerationError, match="VN-A.*V2"):
         _validate(path)
+
+
+def test_unrecognized_stock_status_cache_is_rejected(tmp_path: Path) -> None:
+    path = _calculated_fixture(tmp_path / "unknown-status.xlsx")
+    _set_formula_caches(path, {"U2": "未知状态", "H2": -10})
+    with pytest.raises(recalculation.WorkbookGenerationError, match="VN-A.*U2"):
+        _validate(path)
+
+
+def test_missing_unambiguous_model_cache_is_rejected(tmp_path: Path) -> None:
+    path = _calculated_fixture(tmp_path / "missing-model.xlsx")
+    _set_formula_caches(path, {"W2": None})
+    with pytest.raises(recalculation.WorkbookGenerationError, match="VN-A.*W2"):
+        _validate(path)
+
+
+@pytest.mark.parametrize("cached", ("OTHER", 1, "#VALUE!"))
+def test_unambiguous_model_cache_must_match_preprocessed_sku(tmp_path: Path, cached: object) -> None:
+    path = _calculated_fixture(tmp_path / "wrong-model.xlsx")
+    _set_formula_caches(path, {"W2": cached})
+    with pytest.raises(recalculation.WorkbookGenerationError, match="VN-A.*W2"):
+        _validate(path)
+
+
+def test_alphanumeric_model_cache_cannot_be_blank(tmp_path: Path) -> None:
+    base = _sources()
+    sku = "VN1234"
+    sources = replace(
+        base,
+        skus=(sku,),
+        sales={sku: {**base.sales["VN-A"], "SKU": sku}},
+        inventory={sku: {**base.inventory["VN-A"], "SKU": sku}},
+        products={sku: {**base.products["VN-A"], "SKU": sku}},
+        in_transit={sku: base.in_transit["VN-A"]},
+    )
+    parameters = {sku: _parameters()["VN-A"]}
+    path = _calculated_fixture(tmp_path / "blank-alphanumeric-model.xlsx", sources=sources, parameters=parameters)
+    _set_formula_caches(path, {"V2": sku, "W2": None})
+    with pytest.raises(recalculation.WorkbookGenerationError, match="VN1234.*W2"):
+        recalculation.validate_recalculated_workbook(
+            path, sources=sources, parameters=parameters, config=RecommendationConfig(),
+        )
+    _set_formula_caches(path, {"W2": "VN12"})
+    recalculation.validate_recalculated_workbook(
+        path, sources=sources, parameters=parameters, config=RecommendationConfig(),
+    )
 
 
 @pytest.mark.parametrize("coordinate", ("AF2", "AH2"))

@@ -239,6 +239,11 @@ _TREND_MULTIPLIERS = {
     "持续下滑": Decimal("0.8"),
 }
 
+_STOCK_STATUSES = frozenset((
+    "无动销无库存", "清货-自身/整款弱销", "清货-无动销有库存",
+    "新品观察-继续备货", "正常备货",
+))
+
 
 def _numeric_formula_result(cell, sku: str) -> Decimal:
     if cell.data_type != "n":
@@ -364,8 +369,10 @@ def validate_recalculated_workbook(
                 cell = main_values.cell(row_number, column)
                 calculated[column] = _numeric_formula_result(cell, sku)
             status = main_values.cell(row_number, 21)
-            if not isinstance(status.value, str) or not status.value.strip():
-                raise WorkbookGenerationError(f"SKU {sku} 综合判定没有有效重算结果")
+            if not isinstance(status.value, str) or status.value not in _STOCK_STATUSES:
+                raise WorkbookGenerationError(
+                    f"SKU {sku} 的 {status.coordinate} 综合判定不是有效重算文本: {status.value!r}"
+                )
             expected_quantity = _expected_replenishment(
                 status.value, calculated[20], calculated[29],
                 current.available, current.in_transit,
@@ -431,6 +438,28 @@ def validate_recalculated_workbook(
                     raise WorkbookGenerationError(
                         f"SKU {sku} 的 {category.coordinate} 款号与本轮 SKU 不一致: "
                         f"{category.value!r}，应为 {expected_category!r}"
+                    )
+
+            model = main_values[f"W{row_number}"]
+            if model.value is not None and not isinstance(model.value, str):
+                raise WorkbookGenerationError(
+                    f"SKU {sku} 的 {model.coordinate} 款号不是有效重算文本: {model.value!r}"
+                )
+            preprocessed = main_values[f"V{row_number}"].value
+            # Without size markers, W's numeric branch removes at most four
+            # ASCII characters. Plain letters must be preserved exactly.
+            if (
+                isinstance(preprocessed, str) and preprocessed.isascii()
+                and "S" not in preprocessed and "L" not in preprocessed
+            ):
+                if preprocessed.isalpha() and model.value != preprocessed:
+                    raise WorkbookGenerationError(
+                        f"SKU {sku} 的 {model.coordinate} 款号与去波段结果不一致: "
+                        f"{model.value!r}，应为 {preprocessed!r}"
+                    )
+                if len(preprocessed) > 4 and not model.value:
+                    raise WorkbookGenerationError(
+                        f"SKU {sku} 的 {model.coordinate} 款号重算结果不应为空"
                     )
 
         for column, expected_value in enumerate(
