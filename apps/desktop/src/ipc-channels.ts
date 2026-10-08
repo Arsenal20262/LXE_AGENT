@@ -48,6 +48,7 @@ export const IPC_CHANNELS = {
   listInputAssets: "lxe:desktop:input-assets:list",
   revealInputAssetSlot: "lxe:desktop:input-assets:reveal",
   uploadVietnamSkuMap: "lxe:desktop:input-assets:vietnam:upload",
+  exportVietnamSkuMap: "lxe:desktop:vietnam:export-map",
   getVietnamSettings: "lxe:desktop:vietnam:read",
   saveVietnamParameters: "lxe:desktop:vietnam:save",
   syntheticPerformerTaskChanged: "lxe:desktop:synthetic-performer:task-changed",

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { ArrowLeft, ChevronRight, FileSpreadsheet, Upload, Save, LoaderCircle } from "lucide-react";
-import type { DesktopVietnamParameters, DesktopVietnamSettingsState } from "@lxe/desktop-protocol";
+import { ArrowLeft, ChevronRight, Download, FileSpreadsheet, Upload, Save, LoaderCircle } from "lucide-react";
+import type { DesktopVietnamMapExportKind, DesktopVietnamParameters, DesktopVietnamSettingsState } from "@lxe/desktop-protocol";
 import { useUiText } from "../../shared/i18n";
 import "./vietnam-settings.css";
 
@@ -87,6 +87,17 @@ export function VietnamSettingsWorkbench({ onBack }: { onBack: () => void }) {
     } catch (cause) { setError(errorText(cause)); }
     finally { setBusy(false); }
   };
+  const exportMap = async (kind: DesktopVietnamMapExportKind) => {
+    if (busy) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const desktop = window.lxe?.desktop;
+      if (!desktop) throw new Error(copy.unavailable);
+      const result = await desktop.exportVietnamSkuMap(kind);
+      if (result) setNotice(copy.exported(result.path));
+    } catch (cause) { setError(errorText(cause)); }
+    finally { setBusy(false); }
+  };
 
   return <section className="workbench-tool-view vietnam-settings-view">
     <header className="workbench-tool-header">
@@ -97,17 +108,21 @@ export function VietnamSettingsWorkbench({ onBack }: { onBack: () => void }) {
     {notice ? <p className="workbench-tool-status" role="status">{notice}</p> : null}
     {loading ? <p role="status"><LoaderCircle className="spin" size={16} />{copy.loading}</p> : null}
     {!loading && !state ? <button className="workbench-refresh" type="button" onClick={() => void load()}>{copy.retry}</button> : null}
+    <article className="vietnam-settings-card vietnam-map-card">
+      <header className="asset-slot-header"><h3>{copy.skuMap}</h3>
+        <div className="vietnam-map-actions">
+          <button className="vietnam-template-download" type="button" disabled={busy} onClick={() => void exportMap("template")}><Download size={14} />{copy.downloadTemplate}</button>
+          <button className="vietnam-map-export" type="button" disabled={busy || !state?.sku_map || !!state.sku_map_error} onClick={() => void exportMap("current")}><Download size={14} />{copy.exportCurrent}</button>
+          <button className="vietnam-map-upload" type="button" disabled={busy} onClick={() => void upload()}><Upload size={14} />{state?.sku_map ? copy.replace : copy.upload}</button>
+        </div>
+      </header>
+      <p>{copy.skuHint}</p>
+      {state?.sku_map_error ? <p className="workbench-error" role="alert">{state.sku_map_error}</p> : null}
+      {state?.sku_map ? <div className="vietnam-file-status"><FileSpreadsheet size={16} aria-hidden />
+        <span>{state.sku_map.file_name}</span><span className="vietnam-file-updated">{copy.updated} {new Date(state.sku_map.updated_at).toLocaleString()}</span>
+      </div> : state && !state.sku_map_error ? <p className="vietnam-file-status">{copy.noMap}</p> : null}
+    </article>
     {state ? <>
-      <article className="vietnam-settings-card vietnam-map-card">
-        <header className="asset-slot-header"><h3>{copy.skuMap}</h3>
-          <button type="button" disabled={busy} onClick={() => void upload()}><Upload size={14} />{state.sku_map ? copy.replace : copy.upload}</button>
-        </header>
-        <p>{copy.skuHint}</p>
-        {state.sku_map_error ? <p className="workbench-error" role="alert">{state.sku_map_error}</p> : null}
-        {state.sku_map ? <div className="vietnam-file-status"><FileSpreadsheet size={16} aria-hidden />
-          <span>{state.sku_map.file_name}</span><span className="vietnam-file-updated">{copy.updated} {new Date(state.sku_map.updated_at).toLocaleString()}</span>
-        </div> : <p className="vietnam-file-status">{copy.noMap}</p>}
-      </article>
       {state.parameters_error ? <p className="workbench-error" role="alert">{state.parameters_error}</p> : null}
       {form ? <form onSubmit={event => { event.preventDefault(); void save(); }}>
         <fieldset disabled={busy}>

@@ -141,6 +141,65 @@ def upload_map(source: Path) -> dict:
     return read_state()
 
 
+def _export_destination(destination: Path) -> None:
+    if not destination.is_absolute() or destination.suffix.lower() != ".xlsx":
+        raise ValueError("导出路径必须是绝对路径且以 .xlsx 结尾")
+    root = data_directory().resolve()
+    source = root / "sku-map.xlsx"
+    if (destination.resolve().is_relative_to(root)
+            or destination.exists() and source.exists() and destination.samefile(source)):
+        raise ValueError("导出不能覆盖应用内部保存的 SKU 映射表，请选择其他位置")
+
+
+def _write_map_template(destination: Path) -> None:
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill
+
+    book = Workbook()
+    try:
+        sheet = book.active
+        sheet.title = "SKU参数映射"
+        sheet.append(["SKU", "热销标记", "成本", "跨境价", "折扣价"])
+        sheet.freeze_panes = "A2"
+        sheet.auto_filter.ref = "A1:E1"
+        sheet.row_dimensions[1].height = 26
+        for column, width in zip("ABCDE", (28, 16, 18, 18, 18)):
+            sheet.column_dimensions[column].width = width
+            sheet[f"{column}1"].font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+            sheet[f"{column}1"].fill = PatternFill("solid", fgColor="1F4E78")
+        sheet.column_dimensions["A"].number_format = "@"
+        sheet["A2"].number_format = "@"
+        with destination.open("xb") as stream:
+            book.save(stream)
+            stream.flush()
+            os.fsync(stream.fileno())
+    finally:
+        book.close()
+
+
+def export_map(kind: str, destination: Path) -> dict:
+    """Export without loading parameters or altering the saved map.
+
+    The native save dialog owns overwrite confirmation. Only replace the selected
+    destination after the complete template or validated snapshot is ready.
+    """
+    if kind not in ("template", "current"):
+        raise ValueError("无效的 SKU 映射表导出类型")
+    _export_destination(destination)
+    temporary = destination.parent / f".vietnam-export-{uuid4().hex}.xlsx"
+    try:
+        if kind == "template":
+            _write_map_template(temporary)
+        else:
+            with _locked() as root:
+                _copy_validated(root / "sku-map.xlsx", temporary)
+        _export_destination(destination)
+        os.replace(temporary, destination)
+    finally:
+        temporary.unlink(missing_ok=True)
+    return {"path": str(destination)}
+
+
 @contextmanager
 def run_inputs(sku_map: str | None = None):
     """Snapshot settings and map; release the lock before calculation."""
@@ -168,6 +227,8 @@ def main() -> int:
             if not source.is_absolute():
                 raise ValueError("上传文件必须是绝对路径")
             result = upload_map(source)
+        elif action == "export" and len(sys.argv) == 4:
+            result = export_map(sys.argv[2], Path(sys.argv[3]))
         else:
             raise ValueError("无效的桌面设置操作")
         print(json.dumps({"success": True, "data": result}, ensure_ascii=False))

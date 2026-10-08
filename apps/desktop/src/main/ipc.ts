@@ -1,4 +1,5 @@
 import { validateTitlebarMenu } from "./titlebar-menu";
+import { exportVietnamMapWithDialog } from "./vietnam-map-export";
 import { fileResult } from "./file-preview/errors";
 import { mkdirSync } from "node:fs";
 import { app, dialog, ipcMain, shell } from "electron";
@@ -13,6 +14,8 @@ import type {
   DesktopHealth,
   DesktopInputAssetSlot,
   DesktopVietnamSettingsState,
+  DesktopVietnamMapExportKind,
+  DesktopVietnamMapExportResult,
   DesktopInputAttachmentPayload,
   DesktopDraftAttachmentPayload,
   DesktopLocalModelCredentialInput,
@@ -87,6 +90,7 @@ export interface DesktopIpcApplication {
   getVietnamSettings(): Promise<DesktopVietnamSettingsState>;
   saveVietnamParameters(input: unknown): Promise<DesktopVietnamSettingsState>;
   installVietnamSkuMap(sourcePath: string): Promise<DesktopVietnamSettingsState>;
+  exportVietnamSkuMap(kind: DesktopVietnamMapExportKind, path: string): Promise<DesktopVietnamMapExportResult>;
   registerConversationFiles(paths: string[]): DesktopInputAttachmentPayload[];
   registerPastedConversationFiles(input: unknown): DesktopDraftAttachmentPayload[];
   previewDraftConversationFile(attachmentId: string, variant?: "thumbnail" | "expanded"): Promise<{ data_url: string }>;
@@ -278,6 +282,11 @@ export function registerDesktopIpc(application: DesktopIpcApplication): () => vo
     });
     if (selection.canceled || !selection.filePaths[0]) return null;
     return application.installVietnamSkuMap(selection.filePaths[0]);
+  });
+  ipcMain.handle(IPC_CHANNELS.exportVietnamSkuMap, (event, kind: unknown) => {
+    trustedWorkspaceSender(event);
+    return exportVietnamMapWithDialog(kind, options => dialog.showSaveDialog(options),
+      (selectedKind, path) => application.exportVietnamSkuMap(selectedKind, path));
   });
   ipcMain.handle(IPC_CHANNELS.revealInputAssetSlot, async (_event, slot: unknown) => {
     const directory = await application.inputAssetSlotDirectory(inputAssetSlotId(slot));

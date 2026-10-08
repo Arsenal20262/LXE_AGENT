@@ -55,6 +55,7 @@ describe("preload bridge", () => {
       "retryCloudConnection",
       "revealInputAssetSlot",
       "uploadVietnamSkuMap",
+      "exportVietnamSkuMap",
       "getVietnamSettings",
       "saveVietnamParameters",
       "saveLocalModelCredential",
@@ -291,9 +292,13 @@ test("Vietnam map bridge sends no renderer source path or slot", async () => {
     on: () => {}, removeListener: () => {},
   }, "darwin");
   await bridge.desktop.uploadVietnamSkuMap();
+  await bridge.desktop.exportVietnamSkuMap("template");
+  await bridge.desktop.exportVietnamSkuMap("current");
   await bridge.desktop.getVietnamSettings();
   expect(calls).toEqual([
     [IPC_CHANNELS.uploadVietnamSkuMap],
+    [IPC_CHANNELS.exportVietnamSkuMap, "template"],
+    [IPC_CHANNELS.exportVietnamSkuMap, "current"],
     [IPC_CHANNELS.getVietnamSettings],
   ]);
 });

@@ -11,7 +11,7 @@
 .vietnam-settings-view h3 { margin: 0; color: var(--text-strong); font-size: 14px; font-weight: 600; }
 .vietnam-settings-view p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.65; }
 .vietnam-settings-view p.workbench-error { color: var(--danger, #b4362f); overflow-wrap: anywhere; }
-.vietnam-settings-view .workbench-tool-status { color: var(--accent-strong); }
+.vietnam-settings-view .workbench-tool-status { color: var(--accent-strong); overflow-wrap: anywhere; }
 .vietnam-settings-view fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 
 .vietnam-settings-card {
@@ -22,13 +22,17 @@
   padding: 18px 20px;
 }
 .vietnam-map-card { display: grid; gap: 10px; }
-.vietnam-map-card .asset-slot-header { gap: 12px; }
+.vietnam-map-card .asset-slot-header { gap: 12px; flex-wrap: wrap; }
+.vietnam-map-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .vietnam-map-card .asset-slot-header button {
   flex-shrink: 0;
   min-height: 32px;
   padding: 5px 10px;
   border-radius: 7px;
   font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 .vietnam-file-status {
   display: flex;

@@ -639,6 +639,7 @@ async function bootstrap(): Promise<void> {
     getVietnamSettings: () => vietnamSettings.read(),
     saveVietnamParameters: input => vietnamSettings.save(input),
     installVietnamSkuMap: sourcePath => vietnamSettings.upload(sourcePath),
+    exportVietnamSkuMap: (kind, path) => vietnamSettings.exportMap(kind, path),
     registerConversationFiles: (selectedPaths) => conversationAttachments.register(selectedPaths),
     registerPastedConversationFiles: (input) => conversationAttachments.registerPaste(input),
     isTrustedFileSender: event => !!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame,

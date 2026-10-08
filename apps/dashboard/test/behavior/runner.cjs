@@ -94,6 +94,19 @@ app.whenReady().then(async () => {
         assert.deepEqual(await js("[...document.querySelectorAll('.vietnam-settings-view input')].map(el => el.value)"), ["60", "30", "10", "3900", "0", "0.8", "0.8"]);
         assert.equal(await js("document.querySelector('.vietnam-settings-view details').open"), false);
       });
+      await step("blank export works without a map and pending or cancelled saves do not report success", async () => {
+        assert.equal(await js("document.querySelector('.vietnam-map-export').disabled"), true);
+        await js("behavior.vietnamExportMode('hold')"); await click(".vietnam-template-download");
+        assert.equal(await js("document.querySelector('.vietnam-template-download').disabled"), true);
+        assert.equal(await js("document.querySelector('.vietnam-map-upload').disabled"), true);
+        assert.equal(await js("document.body.innerText.includes('File saved to:')"), false);
+        await js("behavior.releaseVietnamExport()");
+        await waitFor("document.body.innerText.includes('File saved to: /fixture/导出 文件/template.xlsx')", "template exported");
+        await js("behavior.vietnamExportMode('cancel')"); await click(".vietnam-template-download");
+        assert.equal(await js("document.body.innerText.includes('File saved to:')"), false);
+        assert.equal(await js("document.querySelector('.vietnam-template-download').disabled"), false);
+        await js("behavior.vietnamExportMode('success')");
+      });
       await step("invalid totals stay local, valid percentages save proportions without restart", async () => {
         await input(0, "70"); await click(".vietnam-save button");
         assert.match(await js("document.querySelector('[role=alert]').textContent"), /100%/);
@@ -107,10 +120,10 @@ app.whenReady().then(async () => {
       });
       await step("upload preserves parameter drafts and displays actual failures", async () => {
         await input(3, "4200"); await js("behavior.vietnamUploadFailure(true)");
-        await click(".vietnam-settings-view .asset-slot-header button");
+        await click(".vietnam-map-upload");
         assert.match(await js("document.querySelector('[role=alert]').textContent"), /BadZipFile/);
         assert.equal(await js("document.querySelectorAll('.vietnam-settings-view input')[3].value"), "4200");
-        await js("behavior.vietnamUploadFailure(false)"); await click(".vietnam-settings-view .asset-slot-header button");
+        await js("behavior.vietnamUploadFailure(false)"); await click(".vietnam-map-upload");
         await waitFor("document.body.innerText.includes('sku-map.xlsx')", "uploaded map shown");
         assert.equal(await js("document.querySelectorAll('.vietnam-settings-view input')[3].value"), "4200");
       });
@@ -120,6 +133,47 @@ app.whenReady().then(async () => {
         assert.match(await js("document.body.innerText"), /sku-map.xlsx/);
         await settle(); await delay(300);
         if (process.env.LXE_VIETNAM_SCREENSHOT) require('node:fs').writeFileSync(process.env.LXE_VIETNAM_SCREENSHOT, (await win.webContents.capturePage()).toPNG());
+      });
+      await step("current export preserves parameter drafts, file status and actual errors", async () => {
+        await input(3, "4300");
+        const status = await js("document.querySelector('.vietnam-file-status').textContent");
+        assert.equal(await js("document.querySelector('.vietnam-map-export').disabled"), false);
+        await click(".vietnam-map-export");
+        await waitFor("document.body.innerText.includes('/fixture/导出 文件/current.xlsx')", "current map exported");
+        assert.equal((await state()).calls.filter(call => call.operation === "vietnam.export").at(-1).input, "current");
+        await js("behavior.vietnamExportMode('error')"); await click(".vietnam-map-export");
+        assert.match(await js("document.querySelector('[role=alert]').textContent"), /PermissionError: fixture export denied/);
+        assert.equal(await js("document.body.innerText.includes('File saved to:')"), false);
+        assert.equal(await js("document.querySelectorAll('.vietnam-settings-view input')[3].value"), "4300");
+        assert.equal(await js("document.querySelector('.vietnam-file-status').textContent"), status);
+        await js("behavior.vietnamExportMode('success')");
+      });
+      await step("export actions localize and wrap inside narrow cards", async () => {
+        await load();
+        await js("window.lxe.desktop.uploadVietnamSkuMap()");
+        win.setSize(500, 900);
+        for (const language of ['zh', 'en']) {
+          await js(`behavior.mountVietnam('${language}')`);
+          await waitFor("document.querySelectorAll('.vietnam-settings-view input').length === 7", "localized settings loaded");
+          await settle();
+          const labels = await js("[...document.querySelectorAll('.vietnam-map-actions button')].map(el => el.textContent)");
+          assert.deepEqual(labels, language === 'zh' ? ['下载空白模板', '导出当前映射表', '替换映射表'] : ['Download blank template', 'Export current map', 'Replace map']);
+          assert.equal(await js("(() => { const card=document.querySelector('.vietnam-map-card').getBoundingClientRect(); return [...document.querySelectorAll('.vietnam-map-actions button')].every(el => {const box=el.getBoundingClientRect(); return box.left >= card.left && box.right <= card.right;}); })()"), true);
+          await click(".vietnam-template-download");
+          assert.equal(await js(`document.body.innerText.includes('${language === 'zh' ? '文件已保存至：' : 'File saved to:'}')`), true);
+          if (process.env.LXE_VIETNAM_SCREENSHOT) require('node:fs').writeFileSync(process.env.LXE_VIETNAM_SCREENSHOT.replace(/\.png$/, `-${language}-narrow.png`), (await win.webContents.capturePage()).toPNG());
+        }
+      });
+      await step("template remains available with broken settings or a failed settings read", async () => {
+        await js("behavior.vietnamCorruptSettings(); behavior.mountVietnam('en')");
+        await waitFor("document.body.innerText.includes('JSONDecodeError')", "invalid parameters reported");
+        assert.equal(await js("document.querySelector('.vietnam-map-export').disabled"), true);
+        await click(".vietnam-template-download");
+        await waitFor("document.body.innerText.includes('File saved to:')", "template independent of broken config");
+        await js("behavior.vietnamReadFailure(true); behavior.mountVietnam('en')");
+        await waitFor("document.body.innerText.includes('fixture settings denied')", "settings failure reported");
+        await click(".vietnam-template-download");
+        await waitFor("document.body.innerText.includes('File saved to:')", "template independent of read failure");
       });
     } else if (suite === "updates") {
       await js("behavior.mountUpdates()");

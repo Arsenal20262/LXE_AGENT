@@ -5,6 +5,7 @@ import { AppActionsFixture, actionFixture } from "./app-actions-fixture";
 import { MarkdownFixture, type MarkdownSurface } from "./markdown-fixture";
 import { createDashboardContractFixture } from "./dashboard-contract-fixture";
 import type { DesktopVietnamSettingsState } from "@lxe/desktop-protocol";
+import { VietnamSettingsWorkbench } from "../../src/features/workbench/vietnam-settings-view";
 import { useApprovalsQuery } from "../../src/api/queries";
 import type { PendingApproval, PendingUserQuestion, PermissionMode } from "@lxe/desktop-protocol";
 import { FilePreviewLayout } from "../../src/features/file-preview/Sidebar";
@@ -40,6 +41,9 @@ let candidateOverride: { path: string; kind: "file" | "directory" }[] | undefine
 const pendingCandidates: (() => void)[] = [];
 const referenceSkills = ["office-xlsx", "office-docx", "office-pptx"].map(name => ({ name, description: "Office fixture skill", type: "default", commands: [], references: [], location: "/skills/" + name + "/SKILL.md" }));
 let vietnamUploadError = false;
+let vietnamReadError = false;
+let vietnamExportMode: "success" | "cancel" | "error" | "hold" = "success";
+let releaseVietnamExport: (() => void) | undefined;
 let vietnamState: DesktopVietnamSettingsState = { directory: "/fixture/app/skill-data/vietnam-stock-recommendation",
   parameters: { sales_weight_7d: "0.6", sales_weight_15d: "0.3", sales_weight_30d: "0.1",
     day_adjustment_7d: "0", day_adjustment_15d: "0.8", day_adjustment_30d: "0.8", exchange_rate: "3900" },
@@ -186,7 +190,17 @@ const desktop = {
   installUpdate: async target => { calls.push({operation:"update.install",input:target}); return updateState={phase:"ready",release:updateRelease}; },
   applyAppearance: async () => {},
   listInputAssets: async () => [],
-  getVietnamSettings: async () => structuredClone(vietnamState),
+  getVietnamSettings: async () => {
+    if (vietnamReadError) throw new Error("PermissionError: fixture settings denied");
+    return structuredClone(vietnamState);
+  },
+  exportVietnamSkuMap: async kind => {
+    calls.push({ operation: "vietnam.export", input: kind });
+    if (vietnamExportMode === "hold") await new Promise<void>(resolve => { releaseVietnamExport = resolve; });
+    if (vietnamExportMode === "cancel") return null;
+    if (vietnamExportMode === "error") throw new Error("PermissionError: fixture export denied");
+    return { path: `/fixture/导出 文件/${kind}.xlsx` };
+  },
   saveVietnamParameters: async input => {
     calls.push({ operation: "vietnam.save", input });
     vietnamState.parameters = structuredClone(input);
@@ -412,6 +426,21 @@ const fixture = {
     </div>));
   },
   vietnamUploadFailure(value: boolean) { vietnamUploadError = value; },
+  vietnamExportMode(value: typeof vietnamExportMode) { vietnamExportMode = value; },
+  releaseVietnamExport() { releaseVietnamExport?.(); },
+  vietnamReadFailure(value: boolean) { vietnamReadError = value; },
+  vietnamCorruptSettings() {
+    vietnamState.parameters = null;
+    vietnamState.parameters_error = "JSONDecodeError: fixture broken parameters";
+    vietnamState.sku_map = null;
+    vietnamState.sku_map_error = "BadZipFile: fixture broken map";
+  },
+  mountVietnam(language: "en" | "zh") {
+    reset();
+    flushSync(() => root!.render(<I18nContext.Provider value={UI_TEXT[language]}>
+      <div style={{ padding: 24, maxWidth: 900, margin: "auto" }}><VietnamSettingsWorkbench onBack={() => {}} /></div>
+    </I18nContext.Provider>));
+  },
   chooseFile(value: string) { chosenFile = value; },
   failCreation(value: boolean) { creationFailure = value; },
   holdCreation(value: boolean) { holdCreation = value; },

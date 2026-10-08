@@ -1,17 +1,17 @@
 import { execFile } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
-import type { DesktopVietnamSettingsState } from "@lxe/desktop-protocol";
+import type { DesktopVietnamMapExportKind, DesktopVietnamMapExportResult, DesktopVietnamSettingsState } from "@lxe/desktop-protocol";
 import { redactAndBound, type DesktopInputAssetsOptions } from "./input-assets";
 
 /** Native settings bridge. Python owns validation and atomic storage. */
 export class DesktopVietnamSettingsService {
   constructor(private readonly options: DesktopInputAssetsOptions) {}
 
-  private async call(action: "read" | "save" | "upload", value?: string): Promise<DesktopVietnamSettingsState> {
+  private async call<T = DesktopVietnamSettingsState>(action: "read" | "save" | "upload" | "export", ...values: string[]): Promise<T> {
     const temporaryRoot = join(this.options.dataRoot, "tmp");
     mkdirSync(temporaryRoot, { recursive: true });
-    const args = ["-I", "-B", "-m", "services.vietnam_replenishment.settings", action, ...(value === undefined ? [] : [value])];
+    const args = ["-I", "-B", "-m", "services.vietnam_replenishment.settings", action, ...values];
     const options = {
       cwd: this.options.dataRoot, timeout: 180_000, maxBuffer: 1024 * 1024, windowsHide: true,
       env: { ...process.env, LXE_DATA_ROOT: this.options.dataRoot, TMP: temporaryRoot, TEMP: temporaryRoot,
@@ -21,7 +21,7 @@ export class DesktopVietnamSettingsService {
       : await new Promise<{ stdout: string; stderr: string; error: Error | null }>(resolve => {
         execFile(this.options.pythonPath, args, options, (error, stdout, stderr) => resolve({ error, stdout, stderr }));
       });
-    let result: { success?: boolean; data?: DesktopVietnamSettingsState; error?: string } | undefined;
+    let result: { success?: boolean; data?: T; error?: string } | undefined;
     try { result = JSON.parse(execution.stdout.trim()); } catch { /* Preserve actual process diagnostics below. */ }
     if (execution.error || result?.success !== true || !result.data) {
       throw new Error(redactAndBound(result?.error || execution.stderr || execution.error?.message
@@ -38,4 +38,7 @@ export class DesktopVietnamSettingsService {
     return this.call("save", serialized);
   }
   upload(path: string): Promise<DesktopVietnamSettingsState> { return this.call("upload", path); }
+  exportMap(kind: DesktopVietnamMapExportKind, path: string): Promise<DesktopVietnamMapExportResult> {
+    return this.call<DesktopVietnamMapExportResult>("export", kind, path);
+  }
 }

@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DesktopVietnamSettingsService } from "../src/main/vietnam-settings";
@@ -16,14 +16,27 @@ test("native settings use a private fixed Python module and pass the selection a
   const store = service(async (args, options) => {
     calls.push(args);
     expect(options.env?.LXE_DATA_ROOT).toContain("vietnam-settings-");
-    return { stdout: JSON.stringify({ success: true, data: state }), stderr: "", error: null };
+    return { stdout: JSON.stringify({ success: true, data: args[4] === "export" ? { path: args[6] } : state }), stderr: "", error: null };
   });
   await store.read();
   await store.upload("/selected/中文 map.xlsx");
+  expect(await store.exportMap("current", "D:\\中文 map\\导出.xlsx")).toEqual({ path: "D:\\中文 map\\导出.xlsx" });
   expect(calls).toEqual([
     ["-I", "-B", "-m", "services.vietnam_replenishment.settings", "read"],
     ["-I", "-B", "-m", "services.vietnam_replenishment.settings", "upload", "/selected/中文 map.xlsx"],
+    ["-I", "-B", "-m", "services.vietnam_replenishment.settings", "export", "current", "D:\\中文 map\\导出.xlsx"],
   ]);
+});
+test("actual Python template export needs no saved settings and empty templates cannot be uploaded", async () => {
+  const root = mkdtempSync(join(tmpdir(), "vietnam-export-")); roots.push(root);
+  const options = { dataRoot: join(root, "app"), pythonPath: join(process.cwd(), process.platform === "win32" ? ".venv/Scripts/python.exe" : ".venv/bin/python"), managedPath: "", platform: process.platform };
+  const store = new DesktopVietnamSettingsService(options);
+  const path = join(root, "中文 空白模板.xlsx");
+  expect(await store.exportMap("template", path)).toEqual({ path });
+  expect(statSync(path).size).toBeGreaterThan(0);
+  expect(existsSync(join(options.dataRoot, "skill-data"))).toBe(false);
+  await expect(store.upload(path)).rejects.toThrow("没有 SKU");
+  await expect(store.exportMap("current", join(root, "missing.xlsx"))).rejects.toThrow("缺失");
 });
 test("actual Python settings survive new service instances without changing ERP configuration", async () => {
   const root = mkdtempSync(join(tmpdir(), "vietnam-settings-")); roots.push(root);
