@@ -90,6 +90,7 @@ def test_success_delivers_only_final_workbook(
     output = workspace / ".lxeagent" / "artifacts" / "vietnam" / "recommendations" / "run" / "越南备货清单.xlsx"
     output.parent.mkdir(parents=True)
     output.write_bytes(b"synthetic workbook")
+    output = output.resolve()  # Windows may restore the directory's on-disk casing.
     monkeypatch.setattr(
         generate,
         "generate_current_vietnam_recommendation",

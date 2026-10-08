@@ -88,7 +88,7 @@ def test_explicit_file_overrides_saved_without_changing_it_and_snapshot_is_stabl
     settings.upload_map(sku_map(tmp_path / "saved.xlsx", cost=10))
     explicit = sku_map(tmp_path / "explicit.xlsx", cost=20)
     with settings.run_inputs("explicit.xlsx") as (snapshot, config, _, source):
-        assert source == str(explicit)
+        assert source == str(explicit.resolve())
         assert load_sku_parameters(snapshot)["VN-A"].cost == Decimal(20)
         settings.save_parameters(settings.config_json(replace(config, exchange_rate=Decimal(4200))))
         settings.upload_map(sku_map(tmp_path / "replacement.xlsx", cost=30))
