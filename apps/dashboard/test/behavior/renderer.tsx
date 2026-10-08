@@ -1,5 +1,6 @@
 import { SessionWorkspaceFixture, sessionFixture } from "./session-workspace-fixture";
 import { AppActionsFixture, actionFixture } from "./app-actions-fixture";
+import { MarkdownFixture, type MarkdownSurface } from "./markdown-fixture";
 import { useApprovalsQuery } from "../../src/api/queries";
 import type { PendingApproval, PendingUserQuestion, PermissionMode } from "@lxe/desktop-protocol";
 import { FilePreviewLayout } from "../../src/features/file-preview/Sidebar";
@@ -334,6 +335,12 @@ function renderActions(subscribed = true) {
   </QueryClientProvider></I18nContext.Provider>));
 }
 const fixture = {
+  mountMarkdown(surface: MarkdownSurface, content: string) {
+    reset();
+    flushSync(() => root!.render(<I18nContext.Provider value={UI_TEXT.en}>
+      <MarkdownFixture surface={surface} content={content} />
+    </I18nContext.Provider>));
+  },
   session: sessionFixture,
   mountSessionWorkspace() {
     reset(); history.replaceState({ section: "sessions" }, "");
