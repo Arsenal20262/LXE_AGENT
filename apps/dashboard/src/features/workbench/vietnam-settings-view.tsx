@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ArrowLeft, Upload, Save, LoaderCircle } from "lucide-react";
+import { ArrowLeft, ChevronRight, FileSpreadsheet, Upload, Save, LoaderCircle } from "lucide-react";
 import type { DesktopVietnamParameters, DesktopVietnamSettingsState } from "@lxe/desktop-protocol";
 import { useUiText } from "../../shared/i18n";
 import "./vietnam-settings.css";
@@ -90,7 +90,6 @@ export function VietnamSettingsWorkbench({ onBack }: { onBack: () => void }) {
   return <section className="workbench-tool-view vietnam-settings-view">
     <header className="workbench-tool-header">
       <button className="workbench-back" onClick={onBack} type="button"><ArrowLeft size={14} />{t.workbenchIndex.back}</button>
-      <p className="workbench-eyebrow">{t.workbenchIndex.eyebrow}</p>
       <h2>{copy.title}</h2><p className="workbench-index-subtitle">{copy.subtitle}</p>
     </header>
     {error ? <p className="workbench-error" role="alert">{error}</p> : null}
@@ -98,30 +97,40 @@ export function VietnamSettingsWorkbench({ onBack }: { onBack: () => void }) {
     {loading ? <p role="status"><LoaderCircle className="spin" size={16} />{copy.loading}</p> : null}
     {!loading && !state ? <button className="workbench-refresh" type="button" onClick={() => void load()}>{copy.retry}</button> : null}
     {state ? <>
-      <article className="asset-slot">
+      <article className="vietnam-settings-card vietnam-map-card">
         <header className="asset-slot-header"><h3>{copy.skuMap}</h3>
           <button type="button" disabled={busy} onClick={() => void upload()}><Upload size={14} />{state.sku_map ? copy.replace : copy.upload}</button>
         </header>
         <p>{copy.skuHint}</p>
         {state.sku_map_error ? <p className="workbench-error" role="alert">{state.sku_map_error}</p> : null}
-        {state.sku_map ? <p className="asset-file-meta">{state.sku_map.file_name} · {copy.updated} {new Date(state.sku_map.updated_at).toLocaleString()}</p> : <p>{copy.noMap}</p>}
+        {state.sku_map ? <div className="vietnam-file-status"><FileSpreadsheet size={16} aria-hidden />
+          <span>{state.sku_map.file_name}</span><span className="vietnam-file-updated">{copy.updated} {new Date(state.sku_map.updated_at).toLocaleString()}</span>
+        </div> : <p className="vietnam-file-status">{copy.noMap}</p>}
       </article>
       {state.parameters_error ? <p className="workbench-error" role="alert">{state.parameters_error}</p> : null}
       {form ? <form onSubmit={event => { event.preventDefault(); void save(); }}>
         <fieldset disabled={busy}>
-          <article className="asset-slot"><h3>{copy.weights}</h3><p>{copy.weightsHint}</p>
-            <div className="vietnam-parameter-grid">{days.map(day => <label key={day}>{copy.days(day)} (%)
-              <input required inputMode="decimal" value={form[`sales_weight_${day}d`]} onChange={event => update(`sales_weight_${day}d`, event.target.value)} />
-            </label>)}</div>
-          </article>
-          <article className="asset-slot"><h3>{copy.exchange}</h3>
-            <label className="vietnam-exchange">{copy.cny}<input required inputMode="decimal" aria-label={copy.exchange} value={form.exchange_rate} onChange={event => update("exchange_rate", event.target.value)} />{copy.vnd}</label>
-          </article>
-          <details className="asset-slot" open={state.parameters_error ? true : undefined}><summary>{copy.advanced}</summary><p>{copy.adjustmentHint}</p>
-            <div className="vietnam-parameter-grid">{days.map(day => <label key={day}>{copy.adjustment(day)}
-              <input required inputMode="decimal" value={form[`day_adjustment_${day}d`]} onChange={event => update(`day_adjustment_${day}d`, event.target.value)} />
-            </label>)}</div>
-          </details>
+          <div className="vietnam-settings-card vietnam-parameters-card">
+            <section className="vietnam-setting-row">
+              <div className="vietnam-setting-copy"><h3>{copy.weights}</h3><p>{copy.weightsHint}</p></div>
+              <div className="vietnam-parameter-grid">{days.map(day => <label key={day}>{copy.days(day)} (%)
+                <input required inputMode="decimal" value={form[`sales_weight_${day}d`]} onChange={event => update(`sales_weight_${day}d`, event.target.value)} />
+              </label>)}</div>
+            </section>
+            <section className="vietnam-setting-row">
+              <div className="vietnam-setting-copy"><h3>{copy.exchange}</h3></div>
+              <label className="vietnam-exchange">{copy.cny}<input required inputMode="decimal" aria-label={copy.exchange} value={form.exchange_rate} onChange={event => update("exchange_rate", event.target.value)} />{copy.vnd}</label>
+            </section>
+            <details className="vietnam-advanced" open={state.parameters_error ? true : undefined}>
+              <summary><ChevronRight size={14} aria-hidden />{copy.advanced}</summary>
+              <div className="vietnam-setting-row">
+                <p>{copy.adjustmentHint}</p>
+                <div className="vietnam-parameter-grid">{days.map(day => <label key={day}>{copy.adjustment(day)}
+                  <input required inputMode="decimal" value={form[`day_adjustment_${day}d`]} onChange={event => update(`day_adjustment_${day}d`, event.target.value)} />
+                </label>)}</div>
+              </div>
+            </details>
+          </div>
           <div className="vietnam-save"><button className="desktop-primary-button" type="submit">{busy ? <LoaderCircle className="spin" size={14} /> : <Save size={14} />}{busy ? copy.saving : copy.save}</button><span>{copy.appliesNextRun}</span></div>
         </fieldset>
       </form> : null}

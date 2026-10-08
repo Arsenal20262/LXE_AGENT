@@ -1,4 +1,3 @@
-import { openVietnamSettingsPage } from "../shared/navigation";
 import { NativeCloudPanel } from "./native-cloud-panel";
 import { WindowsTitlebar } from "./windows-titlebar";
 import { UsagePanel } from "./usage-panel";
@@ -11,7 +10,6 @@ import {
   Activity,
   AlertTriangle,
   ChevronDown,
-  ChevronRight,
   Cloud,
   ExternalLink,
   Feather,
@@ -595,7 +593,6 @@ function DesktopSettingsForm({
   onSelectZiniaoWebDriverDirectory,
   onOpenLogsDirectory,
   onClearIntegration,
-  onOpenVietnamSettings,
 }: {
   activeSection: DesktopSettingsFormSection;
   credentialBusy: boolean;
@@ -613,7 +610,6 @@ function DesktopSettingsForm({
   onSelectZiniaoWebDriverDirectory: () => void;
   onOpenLogsDirectory: () => void;
   onClearIntegration: (name: IntegrationName) => void;
-  onOpenVietnamSettings: () => void;
 }) {
   const t = useUiText();
   if (activeSection === "base") {
@@ -835,7 +831,6 @@ function DesktopSettingsForm({
                 onChange={event => onChange({ yacangPassword: event.target.value })} /></label>
           </div>
           {setup.yacang.managed ? <button className="desktop-clear-integration" onClick={() => onClearIntegration("yacang")} type="button"><Trash2 size={14} />{t.desktop.clearIntegration}</button> : null}
-          <button className="workbench-refresh" onClick={onOpenVietnamSettings} type="button">{t.vietnamSettings.title}<ChevronRight size={14} /></button>
         </div>
       </section>
     );
@@ -1622,7 +1617,6 @@ export function DesktopShell({
       onSelectZiniaoApp={() => { void selectZiniaoApp(); }}
       onSelectZiniaoWebDriverDirectory={() => { void selectZiniaoWebDriverDirectory(); }}
       onSaveLocalCredential={() => { void saveLocalCredential(); }}
-      onOpenVietnamSettings={() => { closeSettings(); openVietnamSettingsPage(); }}
       platform={desktop.platform}
       setup={setup}
     />

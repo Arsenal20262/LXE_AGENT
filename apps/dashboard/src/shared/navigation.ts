@@ -126,10 +126,3 @@ export function dashboardRouteFromHistory(
       return { section: "home", capabilityView: storedCapabilityView, activityView: "stats", workbenchView: "index" };
   }
 }
-
-/** Open the shared tool page from the native settings dialog. */
-export function openVietnamSettingsPage(): void {
-  const state = { ...window.history.state, section: "workbench", workbenchView: "vietnam-settings" };
-  window.history.pushState(state, "", "/");
-  window.dispatchEvent(new PopStateEvent("popstate", { state }));
-}
