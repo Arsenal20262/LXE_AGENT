@@ -7,6 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from openpyxl import Workbook
 
 from lxeskill import cli as lxeskill
 from lxeskill.business import load_catalog
@@ -194,3 +195,41 @@ def test_old_no_argument_invocation_reports_missing_paths(tmp_path, monkeypatch,
     assert result["files"] == []
     for name in INPUTS:
         assert name in result["error"]["message"]
+
+
+@pytest.mark.parametrize("explicit", [True, False])
+@pytest.mark.parametrize("row_count", [2, 80])
+def test_cli_aggregates_map_errors_before_reading_reports(
+    tmp_path, monkeypatch, capsys, explicit, row_count,
+):
+    from services.vietnam_replenishment import workflow, settings
+
+    monkeypatch.setenv("LXE_DATA_ROOT", str(tmp_path / "app"))
+    monkeypatch.setattr(workflow, "load_vietnam_files", lambda **_: pytest.fail("Invalid maps must stop calculation"))
+    settings.read_state()
+    parameters = settings.data_directory() / "parameters.json"
+    source = tmp_path / "中文 输入表.xlsx" if explicit else settings.data_directory() / "sku-map.xlsx"
+    book = Workbook()
+    book.active.append(["SKU", "热销标记", "成本", "跨境价", "折扣价"])
+    for index in range(row_count):
+        book.active.append([f"VN-{index}", None, 0, 2, 3])
+    book.save(source)
+    book.close()
+    before = {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in (source, parameters)}
+    args = [*COMMAND, *ARGS, *(["--sku-map-file", str(source)] if explicit else [])]
+    assert lxeskill.main(args) == lxeskill.EXIT_BUSINESS
+    result = _record(capsys)
+    assert result["ok"] is False and result["files"] == []
+    assert result["data"]["error"]["code"] == "sku_parameter_map_invalid"
+    message = result["error"]["message"]
+    assert f"{2 * row_count} 个错误，涉及 {row_count} 行" in message
+    assert "Sheet!B2" in message and "Sheet!C2" in message
+    if row_count == 2:
+        assert "Sheet!B3" in message and "Sheet!C3" in message
+    else:
+        [report] = (tmp_path / "app" / "tmp" / "sku-map-validation").glob("*.txt")
+        assert str(report) in message
+        detail = report.read_text(encoding="utf-8")
+        assert "Sheet!C81" in detail and detail.count("Sheet!") == 160
+    assert "output_xlsx" not in result["data"]
+    assert {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in before} == before

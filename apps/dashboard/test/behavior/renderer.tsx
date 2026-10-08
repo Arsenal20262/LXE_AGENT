@@ -40,7 +40,7 @@ let slowCandidates = false;
 let candidateOverride: { path: string; kind: "file" | "directory" }[] | undefined;
 const pendingCandidates: (() => void)[] = [];
 const referenceSkills = ["office-xlsx", "office-docx", "office-pptx"].map(name => ({ name, description: "Office fixture skill", type: "default", commands: [], references: [], location: "/skills/" + name + "/SKILL.md" }));
-let vietnamUploadError = false;
+let vietnamUploadError: boolean | string = false;
 let vietnamReadError = false;
 let vietnamExportMode: "success" | "cancel" | "error" | "hold" = "success";
 let releaseVietnamExport: (() => void) | undefined;
@@ -207,7 +207,7 @@ const desktop = {
     return structuredClone(vietnamState);
   },
   uploadVietnamSkuMap: async () => {
-    if (vietnamUploadError) throw new Error("BadZipFile: synthetic selected workbook");
+    if (vietnamUploadError) throw new Error(typeof vietnamUploadError === "string" ? vietnamUploadError : "BadZipFile: synthetic selected workbook");
     vietnamState.sku_map = { file_name: "sku-map.xlsx", path: "/fixture/app/sku-map.xlsx", size_bytes: 5000, updated_at: "2026-10-08T08:00:00Z" };
     return structuredClone(vietnamState);
   },
@@ -425,7 +425,7 @@ const fixture = {
       </div>)}
     </div>));
   },
-  vietnamUploadFailure(value: boolean) { vietnamUploadError = value; },
+  vietnamUploadFailure(value: boolean | string) { vietnamUploadError = value; },
   vietnamExportMode(value: typeof vietnamExportMode) { vietnamExportMode = value; },
   releaseVietnamExport() { releaseVietnamExport?.(); },
   vietnamReadFailure(value: boolean) { vietnamReadError = value; },

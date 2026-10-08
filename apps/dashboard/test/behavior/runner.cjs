@@ -126,6 +126,16 @@ app.whenReady().then(async () => {
         await js("behavior.vietnamUploadFailure(false)"); await click(".vietnam-map-upload");
         await waitFor("document.body.innerText.includes('sku-map.xlsx')", "uploaded map shown");
         assert.equal(await js("document.querySelectorAll('.vietnam-settings-view input')[3].value"), "4200");
+        const status = await js("document.querySelector('.vietnam-file-status').textContent");
+        const findings = "SKU 映射表共发现 3 个错误，涉及 2 行；整表校验未通过。\nSKU参数映射!C2 · SKU VN-A · 成本: 必须是有限正数\nSKU参数映射!B3 · SKU VN-B · 热销标记: 必填，且只能是 1 或 2\nSKU参数映射!E3 · SKU VN-B · 折扣价: 缺失";
+        await js(`behavior.vietnamUploadFailure(${JSON.stringify(findings)})`);
+        await click(".vietnam-map-upload");
+        assert.equal(await js("document.querySelector('[role=alert]').innerText"), findings);
+        assert.equal(await js("getComputedStyle(document.querySelector('[role=alert]')).whiteSpace"), "pre-wrap");
+        assert.equal(await js("document.querySelector('.vietnam-file-status').textContent"), status);
+        assert.equal(await js("document.body.innerText.includes('Map uploaded')"), false);
+        if (process.env.LXE_VIETNAM_SCREENSHOT) require('node:fs').writeFileSync(process.env.LXE_VIETNAM_SCREENSHOT.replace(/\.png$/, '-errors.png'), (await win.webContents.capturePage()).toPNG());
+        await js("behavior.vietnamUploadFailure(false)");
       });
       await step("reopening shows saved settings and the uploaded map", async () => {
         await click(".vietnam-save button"); await click(".workbench-back"); await openSettings();

@@ -190,3 +190,37 @@ def test_saved_map_corruption_is_reported_and_upload_can_repair(tmp_path):
     state = settings.upload_map(sku_map(tmp_path / "replacement.xlsx"))
     assert state["sku_map_error"] is None
     assert load_sku_parameters(target)["VN-A"].cost == Decimal(10)
+
+
+def test_desktop_upload_and_saved_map_read_return_all_errors_without_replacing_data(tmp_path):
+    state = settings.upload_map(sku_map(tmp_path / "good.xlsx"))
+    target = Path(state["sku_map"]["path"])
+    parameters = settings.data_directory() / "parameters.json"
+    before = {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in (target, parameters)}
+    invalid = sku_map(tmp_path / "中文 不完整.xlsx")
+    book = load_workbook(invalid)
+    book.active["B2"] = 0
+    book.active["E2"] = None
+    book.active.append(["VN-B", 12, "bad", 0, 1])
+    book.save(invalid)
+    book.close()
+    child = subprocess.run(
+        [sys.executable, "-I", "-B", "-m", "services.vietnam_replenishment.settings", "upload", str(invalid)],
+        capture_output=True, text=True, encoding="utf-8",
+    )
+    assert child.returncode == 1, child.stderr
+    result = json.loads(child.stdout)
+    assert result["success"] is False
+    assert "4 个错误，涉及 2 行" in result["error"]
+    for cell in ("B2", "E2", "C3", "D3"):
+        assert f"Sheet!{cell}" in result["error"]
+    assert {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in before} == before
+    assert not list(target.parent.glob(".sku-map-*.xlsx"))
+
+    # A map edited outside the app uses exactly the same validation on read.
+    target.write_bytes(invalid.read_bytes())
+    state = settings.read_state()
+    assert state["sku_map"] is None
+    assert state["sku_map_error"] == result["error"]
+    assert target.read_bytes() == invalid.read_bytes()
+    assert (parameters.read_bytes(), parameters.stat().st_mtime_ns) == before[parameters]

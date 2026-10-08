@@ -12,6 +12,7 @@ import pytest
 from services.vietnam_replenishment.asset_contract import (
     AssetContractError,
     SkuParameters,
+    SkuMapValidationError,
     load_sku_parameters,
     validate_usable_sku_parameters,
 )
@@ -239,3 +240,71 @@ def test_usable_sku_map_rejects_empty_first_sheet(tmp_path: Path) -> None:
     path = _sku_map(tmp_path / "empty.xlsx")
     with pytest.raises(AssetContractError, match="没有 SKU"):
         validate_usable_sku_parameters(path)
+
+
+def test_collects_every_independent_cell_error_in_sheet_order(tmp_path: Path) -> None:
+    path = _sku_map(
+        tmp_path / "多处 错误.xlsx",
+        (0, None, " VN-A ", None, "bad", "2026-02-30"),
+        ("=1+1", 3, "VN-A", "NaN", True, "tomorrow"),
+        (1, 1, 123, "1234567890123456", 2, None),
+        (None, None, None, None, None, None),
+        (1, 1, "VN-late", 1, "1e-400", None),
+    )
+    with pytest.raises(SkuMapValidationError) as caught:
+        validate_usable_sku_parameters(path)
+    error = caught.value
+    assert "14 个错误，涉及 4 行" in error.summary
+    assert [(issue.row, issue.column) for issue in error.issues] == [
+        (2, 1), (2, 2), (2, 4), (2, 5), (2, 6),
+        (3, 1), (3, 2), (3, 3), (3, 4), (3, 5), (3, 6),
+        (4, 3), (4, 4), (6, 5),
+    ]
+    assert all(issue.sheet == "SKU参数" for issue in error.issues)
+    assert error.issues[0].sku == "VN-A"
+    assert error.issues[-1].sku == "VN-late"
+    assert "SKU参数!C2" in error.issues[7].reason  # First row is itself invalid.
+    assert "InvalidOperation" in error.issues[3].reason
+    assert "ValueError" in error.issues[4].reason
+    assert "=1+1" in error.issues[5].reason
+
+
+def test_invalid_sku_does_not_hide_other_fields_or_optional_date(tmp_path: Path) -> None:
+    path = _sku_map(tmp_path / "formula sku.xlsx", (0, "no", "=1+1", None, -1, 123))
+    with pytest.raises(SkuMapValidationError) as caught:
+        validate_usable_sku_parameters(path)
+    assert len(caught.value.issues) == 6
+    assert {issue.column for issue in caught.value.issues} == set(range(1, 7))
+    assert all(issue.sku is None for issue in caught.value.issues)
+
+
+def test_reports_all_header_errors_without_misinterpreting_data_rows(tmp_path: Path) -> None:
+    path = _sku_map(tmp_path / "headers.xlsx", ("bad", "bad", "bad", "bad"),
+                    headers=("SKU", "SKU", "成本", "成本"))
+    with pytest.raises(SkuMapValidationError) as caught:
+        validate_usable_sku_parameters(path)
+    assert caught.value.headers is True
+    assert len(caught.value.issues) == 5
+    assert {issue.row for issue in caught.value.issues} == {1}
+    assert "未检查数据行" in str(caught.value)
+
+
+def test_corrected_rows_return_exact_values_without_defaults(tmp_path: Path) -> None:
+    path = _sku_map(tmp_path / "corrected.xlsx", (0, None, "001", None, 2))
+    with pytest.raises(SkuMapValidationError) as caught:
+        validate_usable_sku_parameters(path)
+    assert len(caught.value.issues) == 3
+    _sku_map(path, ("1.25", 2, "001", "12.34", "5.67"))
+    assert validate_usable_sku_parameters(path) == {"001": SkuParameters(
+        cost=Decimal("12.34"), cross_border_price=Decimal("5.67"),
+        discount_price=Decimal("1.25"), hot_flag=2,
+    )}
+
+
+def test_numeric_overflow_does_not_hide_later_cell_errors(tmp_path: Path) -> None:
+    path = _sku_map(tmp_path / "extreme.xlsx", (0, 1, "VN-A", "1e999999999", 2))
+    with pytest.raises(SkuMapValidationError) as caught:
+        validate_usable_sku_parameters(path)
+    assert len(caught.value.issues) == 2
+    assert caught.value.issues[1].field == "成本"
+    assert "Overflow" in caught.value.issues[1].reason

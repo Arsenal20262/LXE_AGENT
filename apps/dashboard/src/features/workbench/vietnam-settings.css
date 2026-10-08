@@ -10,7 +10,11 @@
 .vietnam-settings-view .workbench-tool-header h2 { font-size: 24px; line-height: 1.35; }
 .vietnam-settings-view h3 { margin: 0; color: var(--text-strong); font-size: 14px; font-weight: 600; }
 .vietnam-settings-view p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.65; }
-.vietnam-settings-view p.workbench-error { color: var(--danger, #b4362f); overflow-wrap: anywhere; }
+.vietnam-settings-view p.workbench-error {
+  color: var(--danger, #b4362f);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
 .vietnam-settings-view .workbench-tool-status { color: var(--accent-strong); overflow-wrap: anywhere; }
 .vietnam-settings-view fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 

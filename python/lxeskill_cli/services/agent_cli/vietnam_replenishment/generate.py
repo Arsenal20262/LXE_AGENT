@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import Any
 
 from services.vietnam_replenishment.workflow import generate_current_vietnam_recommendation
-from services.yacang.errors import safe_remote_detail
+from services.vietnam_replenishment.validation_diagnostics import validation_diagnostic
 from services.vietnam_replenishment.settings import config_json
 from shared.filesystem import display_path
 from services.agent_cli._shared.report_names import YACANG_REPORTS, public_reports
@@ -38,11 +37,7 @@ def run(arguments: dict[str, Any]) -> dict[str, Any]:
         if not output.is_file() or output.suffix.lower() != ".xlsx" or output.stat().st_size == 0:
             raise ValueError(f"最终 XLSX 无效: {output}")
     except Exception as exc:  # noqa: BLE001 — report the observed, redacted failure
-        secrets = tuple(
-            os.getenv(name, "")
-            for name in ("LXE_YACANG_MOBILE", "LXE_YACANG_PASSWORD")
-        )
-        detail = safe_remote_detail(f"{type(exc).__name__}: {exc}", secrets=secrets)
+        detail = validation_diagnostic(exc)
         return _failure(str(getattr(exc, "code", type(exc).__name__)), detail)
 
     return {

@@ -21,6 +21,7 @@ from shared.repository import state_root
 from shared.workspace import resolve_workspace_input
 from services.yacang.errors import safe_remote_detail
 from .sku_map_store import SkuMapStoreError, validate_sku_map
+from .validation_diagnostics import validation_diagnostic
 from .workbook import RecommendationConfig, validate_recommendation_config
 
 _FIELDS = tuple(asdict(RecommendationConfig()))
@@ -124,7 +125,7 @@ def read_state() -> dict:
                 result["sku_map"] = {"path": str(target), "file_name": target.name, "size_bytes": size,
                     "updated_at": datetime.fromtimestamp(target.stat().st_mtime, timezone.utc).isoformat()}
         except Exception as exc:
-            result["sku_map_error"] = safe_remote_detail(f"{type(exc).__name__}: {exc}")
+            result["sku_map_error"] = validation_diagnostic(exc)
     return result
 
 
@@ -239,7 +240,7 @@ def main() -> int:
         print(json.dumps({"success": True, "data": result}, ensure_ascii=False))
         return 0
     except Exception as exc:
-        print(json.dumps({"success": False, "error": safe_remote_detail(f"{type(exc).__name__}: {exc}")}, ensure_ascii=False))
+        print(json.dumps({"success": False, "error": validation_diagnostic(exc)}, ensure_ascii=False))
         return 1
 
 

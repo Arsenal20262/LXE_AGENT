@@ -1,5 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DesktopVietnamSettingsService } from "../src/main/vietnam-settings";
@@ -52,4 +53,34 @@ test("actual Python settings survive new service instances without changing ERP 
 test("native settings preserve real structured errors and observed process failures", async () => {
   await expect(service(async () => ({ stdout: JSON.stringify({ success: false, error: "BadZipFile: synthetic map failure" }), stderr: "", error: new Error("exit 1") })).read()).rejects.toThrow("BadZipFile: synthetic map failure");
   await expect(service(async () => ({ stdout: "", stderr: "PermissionError: /app/parameters.json", error: new Error("exit 1") })).read()).rejects.toThrow("PermissionError: /app/parameters.json");
+});
+
+test("native upload preserves aggregate findings and the complete report beyond message limits", async () => {
+  const root = mkdtempSync(join(tmpdir(), "vietnam-map-errors-")); roots.push(root);
+  const pythonPath = join(process.cwd(), process.platform === "win32" ? ".venv/Scripts/python.exe" : ".venv/bin/python");
+  const source = join(root, "中文 错误表.xlsx");
+  execFileSync(pythonPath, ["-I", "-B", "-c", `
+import sys
+from openpyxl import Workbook
+book = Workbook()
+book.active.append(["SKU", "热销标记", "成本", "跨境价", "折扣价"])
+for index in range(80):
+    book.active.append([f"VN-{index}", None, 0, 2, 3])
+book.save(sys.argv[1])
+book.close()
+`, source]);
+  const dataRoot = join(root, "app");
+  const store = new DesktopVietnamSettingsService({ dataRoot, pythonPath, managedPath: "", platform: process.platform });
+  let message = "";
+  try { await store.upload(source); } catch (error) { message = (error as Error).message; }
+  expect(message).toContain("160 个错误，涉及 80 行");
+  expect(message).toContain("Sheet!B2");
+  expect(message).toContain("Sheet!C2");
+  const directory = join(dataRoot, "tmp", "sku-map-validation");
+  const reports = readdirSync(directory);
+  expect(reports).toHaveLength(1);
+  const report = join(directory, reports[0]!);
+  expect(message).toContain(report);
+  expect(readFileSync(report, "utf8")).toContain("Sheet!C81");
+  expect(existsSync(join(dataRoot, "skill-data", "vietnam-stock-recommendation", "sku-map.xlsx"))).toBe(false);
 });
