@@ -5,7 +5,7 @@ from __future__ import annotations
 from copy import copy
 from dataclasses import dataclass
 from datetime import date, datetime
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, localcontext
 from importlib.resources import files
 from math import isfinite
 from pathlib import Path
@@ -27,10 +27,13 @@ class WorkbookInputError(ValueError):
 
 @dataclass(frozen=True)
 class RecommendationConfig:
-    weight_30d: Decimal = Decimal("0.8")
-    weight_15d: Decimal = Decimal("0.8")
-    weight_7d: Decimal = Decimal("0")
+    day_adjustment_30d: Decimal = Decimal("0.8")
+    day_adjustment_15d: Decimal = Decimal("0.8")
+    day_adjustment_7d: Decimal = Decimal("0")
     exchange_rate: Decimal = Decimal("3900")
+    sales_weight_30d: Decimal = Decimal("0.1")
+    sales_weight_15d: Decimal = Decimal("0.3")
+    sales_weight_7d: Decimal = Decimal("0.6")
 
 
 @dataclass(frozen=True)
@@ -186,14 +189,29 @@ def _validated_rows(
     return tuple(result)
 
 
-def _validated_config(config: RecommendationConfig) -> tuple[Decimal, Decimal, Decimal, Decimal]:
+def validate_recommendation_config(config: RecommendationConfig) -> tuple[Decimal, ...]:
+    """Return seven exact Excel numbers in 数据更改 A:G order."""
     if not isinstance(config, RecommendationConfig):
         raise WorkbookInputError("推荐参数必须是 RecommendationConfig")
+    weights = (
+        _number(config.sales_weight_30d, "运行参数", "30天销量权重"),
+        _number(config.sales_weight_15d, "运行参数", "15天销量权重"),
+        _number(config.sales_weight_7d, "运行参数", "7天销量权重"),
+    )
+    # Align significant digits so a tiny extra weight cannot round away when
+    # checking the total against one under the default Decimal context.
+    nonzero = tuple(value.normalize() for value in weights if value)
+    with localcontext() as context:
+        if nonzero:
+            context.prec = max(value.adjusted() for value in nonzero) - min(value.as_tuple().exponent for value in nonzero) + 2
+        if sum(weights, Decimal("0")) != Decimal("1"):
+            raise WorkbookInputError("30天、15天、7天销量权重合计必须为 1")
     return (
-        _number(config.weight_30d, "运行参数", "30天"),
-        _number(config.weight_15d, "运行参数", "15天"),
-        _number(config.weight_7d, "运行参数", "7天"),
+        _number(config.day_adjustment_30d, "运行参数", "30天天数修正"),
+        _number(config.day_adjustment_15d, "运行参数", "15天天数修正"),
+        _number(config.day_adjustment_7d, "运行参数", "7天天数修正"),
         _number(config.exchange_rate, "运行参数", "汇率", positive=True),
+        *weights,
     )
 
 
@@ -262,7 +280,7 @@ def write_vietnam_workbook(
     if output.exists():
         raise FileExistsError(output)
     rows = _validated_rows(sources, parameters)
-    input_config = _validated_config(config)
+    input_config = validate_recommendation_config(config)
     book = _load_skeleton()
     try:
         if tuple(book.sheetnames) != REQUIRED_SHEETS:
@@ -315,5 +333,5 @@ def write_vietnam_workbook(
 
 __all__ = [
     "RecommendationConfig", "WorkbookInputError", "canonical_product_time",
-    "write_vietnam_workbook",
+    "validate_recommendation_config", "write_vietnam_workbook",
 ]

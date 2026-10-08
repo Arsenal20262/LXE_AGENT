@@ -83,9 +83,9 @@ def _formula_caches(sources: VietnamSources, config: RecommendationConfig) -> di
             f"AA{row_number}": canonical_product_time(sources.products[sku]["创建时间"]),
             f"AB{row_number}": "#DIV/0!",
             f"AC{row_number}": 0,
-            f"AV{row_number}": config.weight_30d,
-            f"AW{row_number}": config.weight_15d,
-            f"AX{row_number}": config.weight_7d,
+            f"AV{row_number}": config.day_adjustment_30d,
+            f"AW{row_number}": config.day_adjustment_15d,
+            f"AX{row_number}": config.day_adjustment_7d,
             f"AY{row_number}": config.exchange_rate,
         })
     return caches
@@ -276,6 +276,55 @@ def test_short_leading_dash_sku_can_have_blank_category(tmp_path: Path) -> None:
 def test_packaged_writer_with_two_skus_passes_cached_result_validation(tmp_path: Path) -> None:
     path = _calculated_fixture(tmp_path / "output.xlsx")
     _validate(path)
+
+
+def test_recalculated_custom_seven_parameters_match_input(tmp_path: Path) -> None:
+    config = RecommendationConfig(
+        day_adjustment_30d=Decimal("1.5"), day_adjustment_15d=Decimal("2.5"),
+        day_adjustment_7d=Decimal("3.5"), exchange_rate=Decimal("4000"),
+        sales_weight_30d=Decimal("0.2"), sales_weight_15d=Decimal("0.5"),
+        sales_weight_7d=Decimal("0.3"),
+    )
+    path = _calculated_fixture(tmp_path / "custom-config.xlsx", config=config)
+    recalculation.validate_recalculated_workbook(
+        path, sources=_sources(), parameters=_parameters(), config=config,
+    )
+    with pytest.raises(recalculation.WorkbookGenerationError, match="参数.*输入"):
+        _validate(path)
+
+
+@pytest.mark.parametrize("coordinate", ("A2", "B2", "C2", "D2", "E2", "F2", "G2"))
+def test_recalculated_configuration_cannot_change(tmp_path: Path, coordinate: str) -> None:
+    path = _calculated_fixture(tmp_path / "changed-config.xlsx")
+    _edit_formula_workbook(path, lambda book: setattr(book["数据更改"][coordinate], "value", 999))
+    with pytest.raises(recalculation.WorkbookGenerationError, match="参数.*配置"):
+        _validate(path)
+
+
+@pytest.mark.parametrize("value", ("0.1", "=0.1"))
+def test_recalculated_configuration_must_remain_numeric_literal(tmp_path: Path, value: object) -> None:
+    path = _calculated_fixture(tmp_path / "nonnumeric-config.xlsx")
+    _edit_formula_workbook(path, lambda book: setattr(book["数据更改"]["E2"], "value", value))
+    with pytest.raises(recalculation.WorkbookGenerationError, match="E2.*有限数值"):
+        _validate(path)
+
+
+def test_parameter_formula_cache_cannot_be_numeric_text(tmp_path: Path) -> None:
+    path = _calculated_fixture(tmp_path / "text-config-cache.xlsx")
+    _set_formula_caches(path, {"AV2": "0.8"})
+    with pytest.raises(recalculation.WorkbookGenerationError, match="VN-A.*AV2.*有限数值"):
+        _validate(path)
+
+
+@pytest.mark.parametrize("formula", (
+    "=K3*0.1/(30+AV3)+L3*0.3/(15+AW3)+M3*0.6/(7+AX3)",
+    "=K3*数据更改!E3/(30+AV3)+L3*数据更改!F3/(15+AW3)+M3*数据更改!G3/(7+AX3)",
+))
+def test_sales_weights_require_fixed_config_references(tmp_path: Path, formula: str) -> None:
+    path = _calculated_fixture(tmp_path / "wrong-weights.xlsx")
+    _edit_formula_workbook(path, lambda book: setattr(book["越南备货清单"]["S3"], "value", formula))
+    with pytest.raises(recalculation.WorkbookGenerationError, match="VN-B.*S3"):
+        _validate(path)
 
 
 def test_known_zero_sales_available_days_error_is_narrowly_allowed(tmp_path: Path) -> None:

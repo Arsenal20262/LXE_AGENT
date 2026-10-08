@@ -43,6 +43,7 @@ def _skeleton() -> Workbook:
     main["H2"] = "=ROUNDUP(T2*AC2-J2-AN2,-1)"
     main["J2"] = "=VLOOKUP(E2,雅仓库存!B:J,9,0)"
     main["K2"] = "=VLOOKUP(E2,雅仓动销!A:G,7,0)"
+    main["S2"] = "=K2*数据更改!$E$2/(30+AV2)+L2*数据更改!$F$2/(15+AW2)+M2*数据更改!$G$2/(7+AX2)"
     main["Q2"] = '=IF(K2>0,"有动销","无动销")'
     main["AA2"] = '=IFERROR(VLOOKUP(E2,库存商品信息!B:K,10,0),"未收录")'
     main["AC2"] = ArrayFormula("AC2", text="=IF(B2=1,80,40)")
@@ -55,7 +56,7 @@ def _skeleton() -> Workbook:
         book["雅仓动销"].cell(1, index, value)
     for index, value in enumerate(WAREHOUSE_PRODUCTS_HEADERS, 1):
         book["库存商品信息"].cell(1, index, value)
-    for index, value in enumerate(("30天", "15天", "7天", "汇率"), 1):
+    for index, value in enumerate(("30天", "15天", "7天", "汇率", "30天销量权重", "15天销量权重", "7天销量权重"), 1):
         book["数据更改"].cell(1, index, value)
     return book
 
@@ -119,6 +120,7 @@ def test_writer_projects_only_current_skus_and_translates_formulas(tmp_path: Pat
         assert main["AN3"].value == 0
         assert main["H3"].value == "=ROUNDUP(T3*AC3-J3-AN3,-1)"
         assert main["Q3"].value == '=IF(K3>0,"有动销","无动销")'
+        assert main["S3"].value == "=K3*数据更改!$E$2/(30+AV3)+L3*数据更改!$F$2/(15+AW3)+M3*数据更改!$G$2/(7+AX3)"
         assert main["AA3"].value == '=IFERROR(VLOOKUP(E3,库存商品信息!B:K,10,0),"未收录")'
         assert isinstance(main["AC3"].value, ArrayFormula)
         assert main["AC3"].value.ref == "AC3"
@@ -149,18 +151,64 @@ def test_writer_projects_only_current_skus_and_translates_formulas(tmp_path: Pat
         book.close()
 
 
-def test_config_overrides_four_inputs(tmp_path: Path) -> None:
+def test_config_overrides_seven_inputs(tmp_path: Path) -> None:
     config = writer.RecommendationConfig(
-        weight_30d=Decimal("1.5"), weight_15d=Decimal("2.5"),
-        weight_7d=Decimal("3.5"), exchange_rate=Decimal("4000"),
+        day_adjustment_30d=Decimal("1.5"), day_adjustment_15d=Decimal("2.5"),
+        day_adjustment_7d=Decimal("3.5"), exchange_rate=Decimal("4000"),
+        sales_weight_30d=Decimal("0.2"), sales_weight_15d=Decimal("0.5"),
+        sales_weight_7d=Decimal("0.3"),
     )
     output = tmp_path / "configured.xlsx"
     writer.write_vietnam_workbook(output, _sources(), _parameters(), config)
     book = load_workbook(output, read_only=True, data_only=False)
     try:
-        assert [book["数据更改"].cell(2, i).value for i in range(1, 5)] == [1.5, 2.5, 3.5, 4000]
+        assert [book["数据更改"].cell(2, i).value for i in range(1, 8)] == [1.5, 2.5, 3.5, 4000, 0.2, 0.5, 0.3]
+        assert all(book["数据更改"].cell(2, i).data_type == "n" for i in range(1, 8))
     finally:
         book.close()
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "error"),
+    [
+        ("day_adjustment_30d", Decimal("-1"), "有限非负数"),
+        ("day_adjustment_15d", Decimal("NaN"), "有限非负数"),
+        ("day_adjustment_7d", True, "布尔值"),
+        ("exchange_rate", Decimal("0"), "有限正数"),
+        ("exchange_rate", Decimal("Infinity"), "有限正数"),
+        ("sales_weight_30d", Decimal("-0.1"), "有限非负数"),
+        ("sales_weight_15d", Decimal("Infinity"), "有限非负数"),
+        ("sales_weight_7d", Decimal("0.1234567890123456"), "Excel 精度"),
+        ("sales_weight_7d", Decimal("1E-1000"), "Excel"),
+        ("sales_weight_7d", Decimal("0.5"), "合计.*1"),
+    ],
+)
+def test_invalid_configuration_stops_without_file(tmp_path: Path, field: str, value: object, error: str) -> None:
+    output = tmp_path / "invalid-config.xlsx"
+    config = replace(writer.RecommendationConfig(), **{field: value})
+    with pytest.raises(writer.WorkbookInputError, match=error):
+        writer.write_vietnam_workbook(output, _sources(), _parameters(), config)
+    assert not output.exists()
+
+
+def test_sales_weight_total_cannot_round_to_one() -> None:
+    config = writer.RecommendationConfig(
+        sales_weight_30d=Decimal("1"), sales_weight_15d=Decimal("1E-100"),
+        sales_weight_7d=Decimal("0"),
+    )
+    with pytest.raises(writer.WorkbookInputError, match="合计.*1"):
+        writer.validate_recommendation_config(config)
+
+
+def test_configuration_accepts_decimal_boundary_and_signed_zero() -> None:
+    config = writer.RecommendationConfig(
+        day_adjustment_30d=Decimal("-0"), sales_weight_30d=Decimal("0.123456789012345"),
+        sales_weight_15d=Decimal("0.376543210987655"), sales_weight_7d=Decimal("0.5"),
+    )
+    assert writer.validate_recommendation_config(config) == (
+        Decimal("-0"), Decimal("0.8"), Decimal("0"), Decimal("3900"),
+        Decimal("0.123456789012345"), Decimal("0.376543210987655"), Decimal("0.5"),
+    )
 
 
 @pytest.mark.parametrize(
@@ -257,6 +305,7 @@ def test_packaged_skeleton_supports_real_formula_set(tmp_path: Path, monkeypatch
         assert "B3=1" in main["AC3"].value.text
         assert main["AV3"].value == "=数据更改!A2"
         assert main["AY3"].value == "=数据更改!D2"
+        assert main["S3"].value == "=K3*数据更改!$E$2/(30+AV3)+L3*数据更改!$F$2/(15+AW3)+M3*数据更改!$G$2/(7+AX3)"
     finally:
         book.close()
 

@@ -39,7 +39,7 @@ HEADERS = {
     ),
     "雅仓库存": ("条码", "SKU", "映射条码", "仓库", "规格", "库存数量", "占用数量", "在途数量", "冻结库存", "可用库存", "中文标题", "英文标题", "图片链接"),
     "雅仓动销": ("SKU", "商品名", "仓库", "3天销量", "7天销量", "15天销量", "30天销量", "60天销量", "90天销量", "库存", "占用", "在途", "冻结", "可用", "缺货数量", "创建日期"),
-    "数据更改": ("30天", "15天", "7天", "汇率"),
+    "数据更改": ("30天", "15天", "7天", "汇率", "30天销量权重", "15天销量权重", "7天销量权重"),
     "库存商品信息": ("条码", "SKU", "规格", "中文标题", "英文标题", "长", "宽", "高", "重量", "图片链接", "创建时间"),
 }
 
@@ -69,6 +69,7 @@ def test_skeleton_has_only_audited_five_sheet_layout() -> None:
         assert isinstance(main["AC2"].value, ArrayFormula)
         assert main["AC2"].value.ref == "AC2"
         assert "库存商品信息!B:K" in main["AA2"].value
+        assert main["S2"].value == "=K2*数据更改!$E$2/(30+AV2)+L2*数据更改!$F$2/(15+AW2)+M2*数据更改!$G$2/(7+AX2)"
         for column in MAIN_INPUTS:
             assert main[f"{column}2"].value is None, column
         for column, source in zip(("AV", "AW", "AX", "AY"), ("A", "B", "C", "D")):
@@ -76,7 +77,7 @@ def test_skeleton_has_only_audited_five_sheet_layout() -> None:
 
         for name in ("雅仓库存", "雅仓动销", "库存商品信息"):
             assert all(cell.value is None for cell in workbook[name][2])
-        assert [workbook["数据更改"].cell(2, column).value for column in range(1, 5)] == [0.8, 0.8, 0, 3900]
+        assert [workbook["数据更改"].cell(2, column).value for column in range(1, 8)] == [0.8, 0.8, 0, 3900, 0.1, 0.3, 0.6]
     finally:
         workbook.close()
 
@@ -111,6 +112,9 @@ def test_builder_drops_synthetic_history_and_objects(tmp_path: Path) -> None:
     with RESOURCE.open("rb") as packaged:
         source = load_workbook(packaged)
     main = source["越南备货清单"]
+    # The builder audits the original supplied template, then applies the
+    # reviewed configurable-weights formula to its data-free output.
+    main["S2"] = "=K2*0.1/(30+AV2)+L2*0.3/(15+AW2)+M2*0.6/(7+AX2)"
     main["E2"] = "CANARY-PRIVATE-SKU"
     main["G2"] = 987654321
     main["D2"].comment = Comment("CANARY-PRIVATE-COMMENT", "Synthetic")
@@ -124,6 +128,13 @@ def test_builder_drops_synthetic_history_and_objects(tmp_path: Path) -> None:
     root = Path(__file__).resolve().parents[4]
     build = runpy.run_path(str(root / "scripts/build-vietnam-skeleton.py"))["build_skeleton"]
     output = build(template, tmp_path / "rebuilt.xlsx")
+    rebuilt = load_workbook(output)
+    try:
+        assert rebuilt["越南备货清单"]["S2"].value == "=K2*数据更改!$E$2/(30+AV2)+L2*数据更改!$F$2/(15+AW2)+M2*数据更改!$G$2/(7+AX2)"
+        assert [rebuilt["数据更改"].cell(1, i).value for i in range(1, 8)] == list(HEADERS["数据更改"])
+        assert [rebuilt["数据更改"].cell(2, i).value for i in range(1, 8)] == [0.8, 0.8, 0, 3900, 0.1, 0.3, 0.6]
+    finally:
+        rebuilt.close()
     with ZipFile(output) as archive:
         for member in archive.namelist():
             contents = archive.read(member)

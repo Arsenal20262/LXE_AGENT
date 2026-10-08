@@ -29,6 +29,7 @@ from .workbook import (
     RecommendationConfig,
     _load_skeleton,
     _validated_rows,
+    validate_recommendation_config,
     write_vietnam_workbook,
 )
 from .yacang_sources import VietnamSources
@@ -276,6 +277,7 @@ def validate_recalculated_workbook(
     config: RecommendationConfig,
 ) -> None:
     """Check formulas, current data, and saved results of the Kit output."""
+    input_config = validate_recommendation_config(config)
     formulas = None
     values = None
     skeleton = None
@@ -356,12 +358,12 @@ def validate_recalculated_workbook(
                 (11, current.sales_30d, "30天销量"),
                 (12, current.sales_15d, "15天销量"),
                 (13, current.sales_7d, "7天销量"),
-                (48, config.weight_30d, "30天参数"),
-                (49, config.weight_15d, "15天参数"),
-                (50, config.weight_7d, "7天参数"),
-                (51, config.exchange_rate, "汇率"),
+                (48, input_config[0], "30天参数"),
+                (49, input_config[1], "15天参数"),
+                (50, input_config[2], "7天参数"),
+                (51, input_config[3], "汇率"),
             ):
-                actual = _decimal(main_values.cell(row_number, column).value, coordinate=f"{label} 第 {row_number} 行")
+                actual = _numeric_formula_result(main_values.cell(row_number, column), sku)
                 if actual != expected_value:
                     raise WorkbookGenerationError(f"SKU {sku} 的 {label} 重算值与本轮输入不一致")
             calculated = {}
@@ -462,13 +464,8 @@ def validate_recalculated_workbook(
                         f"SKU {sku} 的 {model.coordinate} 款号重算结果不应为空"
                     )
 
-        for column, expected_value in enumerate(
-            (config.weight_30d, config.weight_15d, config.weight_7d, config.exchange_rate), 1
-        ):
-            actual = _decimal(
-                formulas["数据更改"].cell(2, column).value,
-                coordinate=f"数据更改!{chr(64 + column)}2",
-            )
+        for column, expected_value in enumerate(input_config, 1):
+            actual = _numeric_formula_result(formulas["数据更改"].cell(2, column), "运行参数")
             if actual != expected_value:
                 raise WorkbookGenerationError(f"数据更改第 {column} 个参数与本次配置不一致")
     finally:

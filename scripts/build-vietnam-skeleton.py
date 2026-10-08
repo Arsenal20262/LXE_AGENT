@@ -37,7 +37,7 @@ FORMULA_COLUMNS = (
     "AK", "AL", "AM",
     "AV", "AW", "AX", "AY",
 )
-DEFAULT_PARAMETERS = (0.8, 0.8, 0, 3900)
+DEFAULT_PARAMETERS = (0.8, 0.8, 0, 3900, 0.1, 0.3, 0.6)
 
 # SHA-256 of JSON [(sheet, row-1 values)] and [(column, row-2 formula text)].
 # These were audited against the supplied 9-sheet template. Updating either
@@ -136,6 +136,11 @@ def build_skeleton(source_path: Path, output_path: Path) -> Path:
                 target_main[f"{column}2"] = text
 
         change = result["数据更改"]
+        # The audited template used fixed sales weights. Keep its input
+        # fingerprint, then apply this reviewed configurable-weights rule.
+        target_main["S2"] = "=K2*数据更改!$E$2/(30+AV2)+L2*数据更改!$F$2/(15+AW2)+M2*数据更改!$G$2/(7+AX2)"
+        for column, label in enumerate(("30天销量权重", "15天销量权重", "7天销量权重"), 5):
+            change.cell(1, column).value = label
         for column, value in enumerate(DEFAULT_PARAMETERS, 1):
             change.cell(2, column).value = value
 
