@@ -24,11 +24,11 @@ the installed CLI. Separately installed user/shared skills are not included in t
 
 - `fba-workflow-map`
 - `fba-shipment-create`
-- `fba-shipment-delivery-csv-download`
-- `fba-shipment-wms-box-download`
+- `mabang-delivery-export`
+- `mabang-delivery-packing-list-export`
 - `fba-erp-packing-upload`
-- `fba-msku-detail-download`
-- `fba-stock-sku-download`
+- `mabang-delivery-msku-export`
+- `mabang-delivery-inventory-sku-export`
 - `fba-customs-declaration-fill`
 - `fba-invoice-template-fill`
 - `fba-purchase-summary-create`
@@ -43,10 +43,10 @@ Start with `fba-workflow-map` for routing. The individual skills own exact input
 
 - `replenishment-workflow-map`
 - `replenishment-store-resolve`
-- `replenishment-msku-download`
-- `replenishment-unlinked-shipment-download`
+- `mabang-store-msku-export`
+- `mabang-store-unlinked-shipments-export`
 - `replenishment-amazon-restock-inventory-snapshot`
-- `replenishment-real-inventory-report`
+- `mabang-store-shenzhen-inventory-export`
 - `replenishment-sales-analyze`
 - `replenishment-algorithm-config-manage`
 - `replenishment-calculate`
@@ -55,10 +55,10 @@ Start with `replenishment-workflow-map`. Snapshot and analysis skills prepare ex
 
 ## 东南亚备货
 
-- `mabang-tms-export`（马帮 TMS 数据导出）：当前账号全部仓库、正常商品、全部库存状态；按内部 ID 分批导出，校验接口总数并合并交付，不按 SKU 去重或汇总销量。单任务登录，原始分批文件保留，失败可交付已校验部分。
+- `mabang-tms-products-export`（马帮 TMS 数据导出）：当前账号全部仓库、正常商品、全部库存状态；按内部 ID 分批导出，校验接口总数并合并交付，不按 SKU 去重或汇总销量。单任务登录，原始分批文件保留，失败可交付已校验部分。
 
-- `yacang-export`（雅仓数据导出）：三类原始报表，默认四仓、库存动销不限制源表创建日期；多仓不合并。动销“创建日期”与全局产品资料“创建时间”口径不同。独立导出只交付原始报表，登录态仅单次任务复用，账号密码由桌面加密配置；部分成功保留成功文件。
-- `vietnam-stock-recommendation`（越南备货清单生成）：业务人员说“查越南备货”“出越南备货单”“做越南补货建议/计划”或“算越南补货量”，均按请求本轮最终结果处理。聊天中有合规新 `.xlsx` 时先绑定，成功后生成，失败时不沿用旧版；没有待处理新附件，或紧邻附件已成功绑定时才沿用受信 `current`。多附件先确认，单独上传但用途不明先询问；只问流程、历史文件或绑定状态不生成，绑定状态在工作台 SKU 卡查看。生成同轮读取雅仓 VN8806 数据并生成五表 XLSX，成功只交付最终工作簿。工作台展示 SKU 当前版、上一版和回滚，不再提供上传；旧完整模板不参与生成。缺映射表或坏表时在雅仓调用前报错；本轮 SKU 缺映射行或已有行的个别价格为空时，保留 SKU 与雅仓数据，只留空对应输入及依赖结果。仓库产品“创建时间”是真实上架时间，总在途取当前库存列表；四参数使用 Desktop 长期设置，四项均未提供时才使用系统默认值，聊天单次覆盖尚未开放。
+- `yacang-reports-export`（雅仓数据导出）：三类原始报表，默认四仓、库存动销不限制源表创建日期；多仓不合并。动销“创建日期”与全局产品资料“创建时间”口径不同。独立导出只交付原始报表，登录态仅单次任务复用，账号密码由桌面加密配置；部分成功保留成功文件。
+- `vietnam-replenishment`（越南备货清单生成）：通过 `lxeskill vietnam replenishment calculate` 接收三份雅仓本地报表，独立计算并校验五表 XLSX；缺数据时由 AI 另行使用 `yacang-reports-export`。全局参数和默认 SKU 映射表读取桌面「越南备货设置」，可用 `--sku-map-file` 指定仅本轮生效的映射表。输入在计算开始时固定，失败保留实际诊断；成功只交付最终工作簿。没有聊天绑定、版本回滚或内部自动导出。
 - `southeast-asia-replenishment-workflow-map`：东南亚备货流程入口；越南最终备货清单、补货建议和补货量请求转专用 Skill，上马 ERP、雅仓独立导出与马帮 TMS 的其他请求按数据采集与交付处理。其他来源尚未接入备货计算，不使用 Amazon 备货计算代替。
 - 上马 ERP、雅仓与马帮 TMS 是当前数据来源，按用户选择独立采集；上马登录负责上马认证，雅仓在单次任务内登录。新增数据源的用途、产出和后续消费者在流程入口维护，平台操作规则保留在对应业务 Skill 中。
 - Amazon 与东南亚拥有各自流程入口，当前共同使用 `replenishment` 权限域，没有新增权限类型。
@@ -66,7 +66,7 @@ Start with `replenishment-workflow-map`. Snapshot and analysis skills prepare ex
 - `shangman-login`（`replenishment` 权限）：通过真实验证码登录上马 ERP，保存本地登录态，并支持状态查询与清除。由普通 Agent Loop 使用 `exec`、`read` 和已有问答工具编排，不执行商品导出。
 - 在桌面“上马”设置填写 ID、账号和密码。密码加密保存；Token 按马帮方式保存在应用状态目录，过期或凭据变更后重新登录。
 - `status` 只检查本地状态，`clear` 只清除本地状态；两者都不代表平台在线验证或远程注销。
-- `shangman-goods-export`（`replenishment` 权限）：调用 `lxeskill shangman export run`，复用现有登录态下载一份上马 ERP 当前配置账号可见的商品全量原始 XLSX；没有登录态时先完成登录再继续。库存和销量共用同一份原始商品报表，不新增筛选、历史数据或补货计算。
+- `shangman-products-export`（`replenishment` 权限）：调用 `lxeskill shangman products export`，复用现有登录态下载一份上马 ERP 当前配置账号可见的商品全量原始 XLSX；没有登录态时先完成登录再继续。库存和销量共用同一份原始商品报表，不新增筛选、历史数据或补货计算。
 - 成功结果只交付校验后的原始文件；失败保留实际脱敏诊断，不自动重复提交导出。文件保存在注册的 `shangman/indonesia` 产物目录下，每次执行独立子目录。
 
 ## Amazon Operations
@@ -89,6 +89,8 @@ Office uses `exec` → `shared.office`, plus existing `read` and `send_files`. I
 ## Ziniao Browser
 
 - `ziniao-browser`: controlled store lifecycle, snapshots, navigation, and page interaction.
+
+命令名称与选项规范见 [ERP 导出与越南计算命令](erp-command-names.md)。
 
 ## Runtime Visibility
 
@@ -119,4 +121,4 @@ FBA、备货、亚马逊运营和紫鸟 26 个技能。只用于 UI 展示，不
 
 Update this page when a repository skill is added, removed, renamed, or changes type. Do not copy operational instructions, CLI schemas, selectors, or workbook column contracts here; link readers to the corresponding `skills/<name>/SKILL.md` instead.
 
-- `mabang-brazil-export`（马帮巴西海外仓导出）：复用现有马帮 ERP 登录态，导出当前库存动销、三个月内待签收、三个月前已签收调拨；完整分页并保留平台原始 XLSX／分批 XLS，不执行备货计算。
+- `mabang-brazil-reports-export`（马帮巴西海外仓导出）：复用现有马帮 ERP 登录态，导出当前库存动销、三个月内待签收、三个月前已签收调拨；完整分页并保留平台原始 XLSX／分批 XLS，不执行备货计算。

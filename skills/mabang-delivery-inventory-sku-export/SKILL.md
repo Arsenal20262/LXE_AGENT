@@ -1,9 +1,9 @@
 ---
-name: fba-stock-sku-download
+name: mabang-delivery-inventory-sku-export
 description: 根据本地 FBA 发货单 CSV 的 SKU发货量 列下载马帮库存 SKU Excel。用户要求按 SP 单号获取库存 SKU 表、库存 SKU Excel、库存数据表时使用。
 type: amazon_fba
 commands:
-  - lxeskill fba stock-sku download
+  - lxeskill mabang delivery inventory-sku export
 ---
 
 # FBA Stock SKU Download
@@ -11,7 +11,7 @@ commands:
 ## Hard Rules
 
 - 必须通过 exec 调用 frontmatter commands 中声明的 lxeskill 命令；禁止直接执行对应 Python 业务模块。
-- 下方均为真实 shell 命令；简单参数使用 flags，复杂对象写入 JSON 文件后使用 --input-json。
+- 使用命令行选项传参，不接受 --input-json、--stdin-json 或旧命令别名。
 - 先检查 terminal 的 `ok`；成功时读取 `data` 和 `files`，失败时读取 `error.message` 及可选的 `data.context`。
 
 - 只使用固定 CLI。
@@ -29,7 +29,7 @@ commands:
 ## Command
 
 ```text
-lxeskill fba stock-sku download --delivery-no <SP单号>
+lxeskill mabang delivery inventory-sku export --delivery-no <SP单号>
 ```
 
 只把最后一条 `type="result"` 记录作为 terminal；业务字段位于 `data`，附件位于 `files`。

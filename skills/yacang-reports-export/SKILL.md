@@ -1,9 +1,9 @@
 ---
-name: yacang-export
+name: yacang-reports-export
 description: 导出雅仓（Yacang）库存动销、当前库存列表或仓库产品资料，按仓交付平台原始 XLSX。用于独立雅仓导出及东南亚备货的数据采集步骤，不计算备货量，不处理其他平台或历史库存。
 type: replenishment
 commands:
-  - lxeskill yacang export run
+  - lxeskill yacang reports export
 ---
 
 # 雅仓数据导出
@@ -11,30 +11,30 @@ commands:
 ## 选择报表与范围
 
 - 用户只说“导出雅仓数据”时，用已有 `ask_user_question` 询问需要哪类报表，可选一类、多类或全部。用户取消、跳过时停止，不默认全选。
-- “销量”“库存动销”“库存和销量”选择 `inventory-sales`，一份报表已含库存及 3/7/15/30/60/90 天累计销量；“库存”“当前库存”“库存列表”选择 `inventory-current-snapshot`。用户明确要求两类报表时才分别选择。
-- “仓库产品资料”选择 `warehouse-products`。按平台默认产品状态导出，实际范围见结果 `filters`。原表包含创建时间，没有独立的入库时间列。越南备货业务已确认仓库产品的创建时间是真实上架时间；要求生成越南备货清单时使用 `vietnam-stock-recommendation`。独立导出只交付原始字段，不推断入库时间。
+- “销量”“库存动销”“库存和销量”选择 `inventory-sales`，一份报表已含库存及 3/7/15/30/60/90 天累计销量；“库存”“当前库存”“库存列表”选择 `inventory`。用户明确要求两类报表时才分别选择。
+- “仓库产品资料”选择 `products`。按平台默认产品状态导出，实际范围见结果 `filters`。原表包含创建时间，没有独立的入库时间列。越南备货业务已确认仓库产品的创建时间是真实上架时间；要求生成越南备货清单时使用 `vietnam-replenishment`。独立导出只交付原始字段，不推断入库时间。
 - 未指定仓库默认全部四仓：`MY8801` 马来西亚、`PH8805` 菲律宾、`TH8802` 泰国、`VN8806` 越南。指定时仅选择对应仓库；不确定或范围矛盾时先问，不自行扩大。
 - 仓库产品资料是一次全局导出，不能按仓筛选；用户明确限制它的仓库时，先确认是否接受全局文件。混合请求中的仓库范围只约束库存动销和当前库存。
-- 库存动销未指定源表“创建日期”范围时省略 `created_date`，表示不限制；“7天销量”不是创建日期筛选，也不裁剪源表的其他累计字段。
-- 库存动销的“创建日期”与仓库产品资料的“创建时间”是不同口径，同一 SKU 的值可不同。`created_date` 只筛选前者。越南备货的上架时间使用已确认的仓库产品创建时间；其他商品建档、入库等业务时间不能据此推断，不将两个字段混用。
+- 库存动销未指定源表“创建日期”范围时省略 `--created-from` / `--created-to`，表示不限制；“7天销量”不是创建日期筛选，也不裁剪源表的其他累计字段。
+- 库存动销的“创建日期”与仓库产品资料的“创建时间”是不同口径，同一 SKU 的值可不同。`--created-from` / `--created-to` 只筛选前者。越南备货的上架时间使用已确认的仓库产品创建时间；其他商品建档、入库等业务时间不能据此推断，不将两个字段混用。
 - 历史库存、逐日销量、报表没有的销量窗口和不支持的筛选，先说明实际能力并询问可接受的替代范围，不静默替换。
 
 ## 执行
 
-作为越南备货的数据获取步骤时，复用本 Skill 导出 `inventory-sales`、`inventory-current-snapshot`（仅 `VN8806`）及全局 `warehouse-products`，不传 `created_date`。这一范围由已确认的越南计算输入决定，无需再次询问报表选择。返回三份报表的 `artifacts` 给 `vietnam-stock-recommendation`，由 AI 再调用独立计算命令；本导出命令不在内部启动计算。
+作为越南备货的数据获取步骤时，复用本 Skill 导出 `inventory-sales`、`inventory`（仅 `VN8806`）及全局 `products`，不传 `--created-from` / `--created-to`。这一范围由已确认的越南计算输入决定，无需再次询问报表选择。返回三份报表的 `artifacts` 给 `vietnam-replenishment`，由 AI 再调用独立计算命令；本导出命令不在内部启动计算。
 
 账号手机号及密码在桌面“雅仓”设置中配置，不读取密码文件、不把凭据放进命令。通过 `exec` 调用唯一 CLI：
 
 ```text
-lxeskill yacang export run --params '{"reports":["inventory-sales"],"warehouses":["MY8801"]}'
+lxeskill yacang reports export --report inventory-sales --warehouse MY8801
 ```
 
 参数仅包含：
-- `reports`：必需的非空数组，从 `inventory-sales`、`inventory-current-snapshot`、`warehouse-products` 中选择。
-- `warehouses`：可选非空仓库编码数组，省略为四仓。单独导出全局产品资料时省略此字段。
-- `created_date`：仅在包含库存动销且用户明确筛选该表“创建日期”时传 `{"start_date":"YYYY-MM-DD","end_date":"YYYY-MM-DD"}`，不得只传一端；它不筛选仓库产品资料的“创建时间”。
+- `--report`：必填，可重复；从 `inventory-sales`、`inventory`、`products` 中选择。
+- `--warehouse`：可重复的仓库编码，省略为四仓。单独导出全局产品资料时省略。
+- `--created-from`、`--created-to`：仅在包含库存动销且用户明确筛选该表“创建日期”时同时提供 `YYYY-MM-DD`；不筛选仓库产品的“创建时间”。
 
-明确的三类全部请求：`{"reports":["inventory-sales","inventory-current-snapshot","warehouse-products"]}`，最多九份文件。每仓每类一份原始文件；全局资料仅一份。脚本本次登录一次，Token 仅在该进程内存中复用，不要求先运行独立登录或预览命令。
+三类全部请求使用 `--report inventory-sales --report inventory --report products`，最多九份文件。每仓每类一份原始文件，全局资料仅一份。脚本本次登录一次，Token 仅在进程内存中复用。只接受命令行选项，不使用 `--params`、`--input-json` 或 `--stdin-json`。
 
 命令仍在运行时等待同一执行，不再次启动。平台提交后需要等待生成并下载文件，不能在开始轮询时就声称导出完成。
 

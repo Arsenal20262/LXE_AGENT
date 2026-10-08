@@ -1,9 +1,9 @@
 ---
-name: replenishment-msku-download
+name: mabang-store-msku-export
 description: 按已解析的马帮 Amazon FBA 店铺 ID 下载该店铺 MSKU 数据 Excel。用户要求获取某个单店或欧洲子站点的 MSKU 数据、店铺 MSKU 表、补货用 MSKU 数据时使用；如果用户只给店铺名，先使用 replenishment-store-resolve 解析 store_name、store_id 和 id_type。
 type: replenishment
 commands:
-  - lxeskill replenish msku download
+  - lxeskill mabang store msku export
 ---
 
 # 下载并核验 Amazon 店铺 MSKU 源表
@@ -25,7 +25,7 @@ commands:
 用户需要单店、单站点 MSKU 数据时使用。缺少名称、ID 或类型时先读 `replenishment-store-resolve` 取得结果，不猜 ID。
 
 ```text
-lxeskill replenish msku download --store-id "<ID>" --id-type "<fbaWarehouseIds[]|shopId>" --store-name "<规范店铺名>"
+lxeskill mabang store msku export --store-id "<ID>" --id-type "<fbaWarehouseIds[]|shopId>" --store-name "<规范店铺名>"
 ```
 
 ## 结果与下一步

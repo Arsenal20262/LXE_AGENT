@@ -14,9 +14,9 @@ from services.agent_cli.vietnam_replenishment import generate
 from services.vietnam_replenishment.workbook import RecommendationConfig
 
 
-COMMAND = ["vietnam", "stock", "recommend"]
-INPUTS = {"sales": "sales.xlsx", "inventory": "inventory.xlsx", "products": "products.xlsx"}
-ARGS = [item for name, value in INPUTS.items() for item in (f"--{name}", value)]
+COMMAND = ["vietnam", "replenishment", "calculate"]
+INPUTS = {"sales_file": "sales.xlsx", "inventory_file": "inventory.xlsx", "products_file": "products.xlsx"}
+ARGS = [item for name, value in INPUTS.items() for item in (f"--{name.replace('_', '-')}", value)]
 
 
 def _record(capsys) -> dict:
@@ -37,9 +37,9 @@ def test_catalog_requires_three_reports_and_allows_one_run_map() -> None:
     assert entry["module"] == "services.agent_cli.vietnam_replenishment.generate"
     assert entry["command_path"] == COMMAND
     assert entry["session_mode"] == "none"
-    assert entry["owner_skills"] == ["vietnam-stock-recommendation"]
+    assert entry["owner_skills"] == ["vietnam-replenishment"]
     assert entry["input_schema"] == {
-        "type": "object", "properties": {name: {"type": "string", "minLength": 1} for name in (*INPUTS, "sku_map")},
+        "type": "object", "properties": {name: {"type": "string", "minLength": 1} for name in (*INPUTS, "sku_map_file")},
         "required": list(INPUTS), "additionalProperties": False,
     }
     assert entry["artifact_paths"] == [{"field": "output_xlsx", "role": "deliverable"}]
@@ -49,7 +49,7 @@ def test_catalog_requires_three_reports_and_allows_one_run_map() -> None:
 @pytest.mark.parametrize("arguments", [
     {}, {"map_path": "/tmp/other.xlsx"}, {**INPUTS, "cost_rate": 0.7},
     *[{key: value for key, value in INPUTS.items() if key != missing} for missing in INPUTS],
-    *[{**INPUTS, key: value} for key in (*INPUTS, "sku_map") for value in ("", " ", 2, None)],
+    *[{**INPUTS, key: value} for key in (*INPUTS, "sku_map_file") for value in ("", " ", 2, None)],
 ])
 def test_adapter_rejects_missing_invalid_and_unknown_arguments(arguments: dict, monkeypatch: pytest.MonkeyPatch) -> None:
     _no_workflow(monkeypatch)
@@ -74,10 +74,10 @@ def test_json_input_rejects_unknown_fields(
         source.write_text(input_json, encoding="utf-8")
         args = [*COMMAND, "--input-json", str(source)]
 
-    assert lxeskill.main(args) == lxeskill.EXIT_BUSINESS
+    assert lxeskill.main(args) == lxeskill.EXIT_USAGE
     record = _record(capsys)
     assert record["ok"] is False
-    assert record["data"]["error"]["code"] == "invalid_arguments"
+    assert record["error"]["code"] == "invalid_arguments"
     assert record["files"] == []
 
 
@@ -169,10 +169,9 @@ def test_missing_generated_file_fails_without_deliverable(
     assert "FileNotFoundError" in record["error"]["message"]
 
 
-@pytest.mark.parametrize("mode", ["flags", "stdin", "file"])
-def test_reports_and_explicit_map_reach_workflow(mode, tmp_path, monkeypatch, capsys):
+def test_reports_and_explicit_map_reach_workflow(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("LXE_DATA_ROOT", str(tmp_path / "state"))
-    expected = {**INPUTS, "sku_map": "my map.xlsx"}
+    expected = {**INPUTS, "sku_map_file": "my map.xlsx"}
     calls = []
 
     def stop_after_arguments(**arguments):
@@ -180,17 +179,9 @@ def test_reports_and_explicit_map_reach_workflow(mode, tmp_path, monkeypatch, ca
         raise RuntimeError("stopped after argument forwarding")
 
     monkeypatch.setattr(generate, "generate_current_vietnam_recommendation", stop_after_arguments)
-    if mode == "flags":
-        args = [*ARGS, "--sku-map", expected["sku_map"]]
-    elif mode == "stdin":
-        monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(expected)))
-        args = ["--stdin-json"]
-    else:
-        source = tmp_path / "input.json"
-        source.write_text(json.dumps(expected))
-        args = ["--input-json", str(source)]
+    args = [*ARGS, "--sku-map-file", expected["sku_map_file"]]
     assert lxeskill.main([*COMMAND, *args]) == lxeskill.EXIT_BUSINESS
-    assert calls == [expected]
+    assert calls == [{name.removesuffix("_file"): value for name, value in expected.items()}]
     assert _record(capsys)["files"] == []
 
 

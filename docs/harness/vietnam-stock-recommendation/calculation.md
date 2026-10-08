@@ -1,19 +1,19 @@
 # 越南备货：独立计算接口
 
-数据获取复用已有 `yacang-export`，计算复用 `vietnam-stock-recommendation`。AI 按任务决定调用哪一步；已有适用报表可以直接计算，计算失败后也能复用输入，不必重新导出。`recommend` 已改为本地计算，原无参数的一键导出流程不再保留。
+数据获取复用已有 `yacang-reports-export`，计算复用 `vietnam-replenishment`。AI 按任务决定调用哪一步；已有适用报表可以直接计算，计算失败后也能复用输入，不必重新导出。`calculate` 只执行本地计算，原无参数的一键导出流程不再保留。
 
 ## 输入和输出
 
 ```sh
-lxeskill vietnam stock recommend --sales "/实际路径/库存动销.xlsx" --inventory "/实际路径/当前库存.xlsx" --products "/实际路径/商品资料.xlsx"
+lxeskill vietnam replenishment calculate --sales-file "/实际路径/库存动销.xlsx" --inventory-file "/实际路径/当前库存.xlsx" --products-file "/实际路径/商品资料.xlsx"
 ```
 
 | 参数 | 来源 | 使用字段 |
 |---|---|---|
-| `--sales` | VN8806 库存动销 | SKU、7/15/30 天销量 |
-| `--inventory` | VN8806 当前库存 | SKU、可用库存、在途数量 |
-| `--products` | 全局仓库产品资料 | SKU、中文标题、创建时间（上架时间） |
-| `--sku-map`（可选） | 用户指定的本轮映射表 | SKU、热销标记、成本、跨境价、折扣价 |
+| `--sales-file` | VN8806 库存动销 | SKU、7/15/30 天销量 |
+| `--inventory-file` | VN8806 当前库存 | SKU、可用库存、在途数量 |
+| `--products-file` | 全局仓库产品资料 | SKU、中文标题、创建时间（上架时间） |
+| `--sku-map-file`（可选） | 用户指定的本轮映射表 | SKU、热销标记、成本、跨境价、折扣价 |
 
 未指定映射表时读取应用数据目录的 `skill-data/vietnam-stock-recommendation/sku-map.xlsx`；全局参数始终读取同目录 `parameters.json`。命令不接受参数数值覆盖，不改变桌面保存的文件。
 
@@ -34,7 +34,7 @@ lxeskill vietnam stock recommend --sales "/实际路径/库存动销.xlsx" --inv
 需要采集时调用现有命令：
 
 ```sh
-lxeskill yacang export run --params '{"reports":["inventory-sales","inventory-current-snapshot","warehouse-products"],"warehouses":["VN8806"]}'
+lxeskill yacang reports export --report inventory-sales --report inventory --report products --warehouse VN8806
 ```
 
 取 `data.artifacts` 中对应类型和仓库的文件，不使用创建日期筛选。导出失败遵守雅仓 Skill 的恢复约定；只要求导出就交付原始报表。完整备货任务中，AI 再调用独立计算，校验成功后通过 `send_files` 发送最终文件。计算失败只报告真实错误并保留来源；发送失败只重试发送。

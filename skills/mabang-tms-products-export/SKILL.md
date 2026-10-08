@@ -1,9 +1,9 @@
 ---
-name: mabang-tms-export
+name: mabang-tms-products-export
 description: 导出马帮 TMS（旧称智汇 TMS）当前账号可见仓库的正常商品、库存和销量数据，分批采集并交付一份合并 Excel。支持独立导出及东南亚备货数据采集。不用于马帮 ERP、雅仓或上马 ERP。
 type: replenishment
 commands:
-  - lxeskill mabang-tms export run
+  - lxeskill mabang-tms products export
 ---
 
 # 马帮 TMS 数据导出
@@ -20,7 +20,7 @@ commands:
 通过 `exec` 调用，不传凭据，不自行拼 API，也不先预览：
 
 ```text
-lxeskill mabang-tms export run
+lxeskill mabang-tms products export
 ```
 
 - 账号密码在桌面“马帮 TMS”配置。每次任务登录一次，各批复用内存登录态。命令运行中等待同一执行，不重启导出。

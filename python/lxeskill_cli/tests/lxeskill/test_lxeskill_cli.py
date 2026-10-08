@@ -37,7 +37,7 @@ def test_catalog_defines_every_cli_command_and_hidden_alias() -> None:
     assert all(
         entry["legacy_aliases"] == [name]
         for name, entry in catalog.items()
-        if not name.startswith(("browser_auth_", "shangman_", "yacang_", "vietnam_replenishment_", "mabang_tms_", "mabang_brazil_", "assets_vietnam_sku_"))
+        if entry.get("input_modes") != ["flags"] and not name.startswith(("browser_auth_", "shangman_", "yacang_", "vietnam_replenishment_", "mabang_tms_", "mabang_brazil_", "assets_vietnam_sku_"))
     )
 
 
@@ -501,7 +501,7 @@ def test_business_failure_preserves_payload_in_the_only_terminal(monkeypatch, ca
 
     monkeypatch.setattr(lxeskill, "execute_module_json", fake_execute)
 
-    assert lxeskill.main(["fba", "shipment", "delivery-csv-download", "--delivery-no", "SP1"]) == lxeskill.EXIT_BUSINESS
+    assert lxeskill.main(["mabang", "delivery", "export", "--delivery-no", "SP1"]) == lxeskill.EXIT_BUSINESS
     records = _records(capsys)
     assert len(records) == 1
     assert records[0]["ok"] is False
@@ -517,7 +517,7 @@ def test_structured_auth_recovery_overrides_error_text(monkeypatch, capsys, requ
         payload = {'success': False, 'auth_refresh_required': required}
         return False, [{'type': 'text', 'text': json.dumps(payload)}], [], {'code': 'business_cli_failed', 'message': '店铺匹配失败 profile_id=1403401 Cookie字段存在'}
     monkeypatch.setattr(lxeskill, 'execute_module_json', fake_execute)
-    assert lxeskill.main(['replenish', 'inventory', 'actual-export', '--store-name', 'shop']) == lxeskill.EXIT_BUSINESS
+    assert lxeskill.main(["mabang", "store", "shenzhen-inventory", "export", '--store-name', 'shop']) == lxeskill.EXIT_BUSINESS
     record = _records(capsys)[0]
     assert ('recovery' in record) is required
     assert '1403401' in record['error']['message']

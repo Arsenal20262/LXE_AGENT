@@ -44,7 +44,7 @@ const declaration = [
 
 describe("declarative Skill preselection", () => {
   test("the Vietnam Skill declares business actions without generic inventory or raw export phrases", () => {
-    const path = join(repositoryRoot(import.meta.dir), "skills", "vietnam-stock-recommendation", "SKILL.md");
+    const path = join(repositoryRoot(import.meta.dir), "skills", "vietnam-replenishment", "SKILL.md");
     const rule = parseSkillManifest(path, "repository").preselection;
     expect(rule?.textPhrases).toContain("查询越南备货");
     expect(rule?.textPhrases).toContain("查询越南的备货");

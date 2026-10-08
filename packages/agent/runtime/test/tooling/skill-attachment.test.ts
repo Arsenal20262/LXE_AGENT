@@ -44,7 +44,7 @@ describe("managed lxeskill attachment source", () => {
     const record = attachment();
     expect(select([
       user("message-upload", [block(record)]),
-      { role: "user", content: "Skill instructions", invoked_skills: ["vietnam-stock-recommendation"] },
+      { role: "user", content: "Skill instructions", invoked_skills: ["vietnam-replenishment"] },
       user("message-confirm", "确认继续处理这份表"),
     ], record, "turn-confirm")).toBe(realpathSync(record.path));
   });

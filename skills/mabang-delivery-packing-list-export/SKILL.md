@@ -1,9 +1,9 @@
 ---
-name: fba-shipment-wms-box-download
+name: mabang-delivery-packing-list-export
 description: 下载马帮 WMS 托运单装箱数据 Excel。用户明确要求装箱数据、托运单 Excel、WMS 下载、原始装箱数据、不要拆分装箱数据，或为 Amazon FBA 创建货件准备装箱 Excel 时使用；不要用于 FBA 发货单、发货单 SKU 数据、发货单表格下载。
 type: amazon_fba
 commands:
-  - lxeskill fba shipment wms-box-download
+  - lxeskill mabang delivery packing-list export
 ---
 
 # WMS Box Download
@@ -11,7 +11,7 @@ commands:
 ## Hard Rules
 
 - 必须通过 exec 调用 frontmatter commands 中声明的 lxeskill 命令；禁止直接执行对应 Python 业务模块。
-- 下方均为真实 shell 命令；简单参数使用 flags，复杂对象写入 JSON 文件后使用 --input-json。
+- 使用命令行选项传参，不接受 --input-json、--stdin-json 或旧命令别名。
 - 先检查 terminal 的 `ok`；成功时读取 `data` 和 `files`，失败时读取 `error.message` 及可选的 `data.context`。
 
 - 只执行固定 CLI；不要调用 Python 内部函数。
@@ -22,7 +22,7 @@ commands:
 
 ## Required Input
 
-- `ship_no` 或 `consignment_no`，必须是 `SP` 开头。
+- `delivery_no`：必须是 `SP` 开头的发货单号。
 - `split-mode`：
   - `auto`: 用户说“自动拆分”“按系统默认”“超过 5 箱拆分”。
   - `original`: 用户说“使用原始装箱数据”“原始文件”“不要拆分”“不拆”。
@@ -30,11 +30,11 @@ commands:
 ## Command
 
 ```text
-lxeskill fba shipment wms-box-download --ship-no <ship_no> --split-mode auto
+lxeskill mabang delivery packing-list export --delivery-no <SP单号> --split-mode auto
 ```
 
 ```text
-lxeskill fba shipment wms-box-download --ship-no <ship_no> --split-mode original
+lxeskill mabang delivery packing-list export --delivery-no <SP单号> --split-mode original
 ```
 
 只把最后一条 `type="result"` 记录作为 terminal；业务字段位于 `data`，附件位于 `files`。

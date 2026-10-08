@@ -146,9 +146,9 @@ const lxeSkillInvocationError = (details: JsonObject = {
   violations: ["shell_composition"],
   required_command_shape: "lxeskill <command> [options]",
   use_exec_cwd: true,
-  canonical_command_path: "lxeskill fba shipment delivery-csv-download",
-  owner_skills: ["fba-shipment-delivery-csv-download"],
-  describe_command: "lxeskill describe fba shipment delivery-csv-download",
+  canonical_command_path: "lxeskill mabang delivery export",
+  owner_skills: ["mabang-delivery-export"],
+  describe_command: "lxeskill describe mabang delivery export",
 }): ToolExecutionError => new ToolExecutionError(
   "unsupported_invocation",
   "Invalid lxeskill invocation: use one standalone lxeskill command.",
@@ -740,7 +740,7 @@ describe("TypeScriptAgentRuntime", () => {
       execute: async (input) => {
         const command = String(input.command ?? "");
         commands.push(command);
-        if (command !== "lxeskill fba shipment delivery-csv-download --delivery-no SP260703001") {
+        if (command !== "lxeskill mabang delivery export --delivery-no SP260703001") {
           throw lxeSkillInvocationError({
             type: "lxeskill_invocation_error",
             violations: ["direct_business_module", "shell_composition"],
@@ -784,7 +784,7 @@ describe("TypeScriptAgentRuntime", () => {
           return messageFixture({
             content: [{
               type: "tool_call", id: "good", name: "exec",
-              arguments: { command: "lxeskill fba shipment delivery-csv-download --delivery-no SP260703001" },
+              arguments: { command: "lxeskill mabang delivery export --delivery-no SP260703001" },
             }],
             stopReason: "toolUse",
             usage: { input_tokens: 1, output_tokens: 1 },
@@ -809,7 +809,7 @@ describe("TypeScriptAgentRuntime", () => {
 
     expect(commands).toEqual([
       "cd /Users/llxx/Projects/github/LXE_AGENT_LOCAL_FBA && uv run --frozen python -m services.agent_cli.mabang.download_shipment_delivery --delivery-no SP260703001",
-      "lxeskill fba shipment delivery-csv-download --delivery-no SP260703001",
+      "lxeskill mabang delivery export --delivery-no SP260703001",
     ]);
     const display = JSON.stringify(emitted);
     expect(display).toContain("Invalid lxeskill invocation");
@@ -884,10 +884,10 @@ describe("TypeScriptAgentRuntime", () => {
         commandId: "replenish store resolve",
         ownerSkills: [
           "replenishment-store-resolve",
-          "replenishment-unlinked-shipment-download",
+          "mabang-store-unlinked-shipments-export",
           "replenishment-sales-analyze",
-          "replenishment-real-inventory-report",
-          "replenishment-msku-download",
+          "mabang-store-shenzhen-inventory-export",
+          "mabang-store-msku-export",
           "replenishment-calculate",
           "replenishment-amazon-restock-inventory-snapshot",
         ],

@@ -108,7 +108,7 @@ def _report_arguments(directory: Path, sources: VietnamSources) -> list[str]:
             book.active.append([row.get(header) for header in headers])
         book.save(path)
         book.close()
-        args.extend((f"--{flag}", str(path)))
+        args.extend((f"--{flag}-file", str(path)))
     return args
 
 
@@ -145,7 +145,7 @@ def test_upload_replace_then_generate_one_final_workbook(
     settings.upload_map(a)
     assert settings.read_state()["sku_map"]["file_name"] == "sku-map.xlsx"
 
-    assert lxeskill.main(["vietnam", "stock", "recommend", *report_args]) == 0
+    assert lxeskill.main(["vietnam", "replenishment", "calculate", *report_args]) == 0
     records = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.strip()]
     assert len(records) == 1
     result = records[0]
@@ -195,7 +195,7 @@ def test_explicit_sparse_map_keeps_all_yacang_skus(
     settings.save_parameters(settings.config_json(RecommendationConfig(Decimal("0.7"), Decimal("0.6"), Decimal("0.1"), Decimal("4000"))))
     report_args = _report_arguments(tmp_path, _three_sources())
     sparse_path = _sparse_map(tmp_path / "sparse.xlsx")
-    assert lxeskill.main(["vietnam", "stock", "recommend", *report_args, "--sku-map", str(sparse_path)]) == 0
+    assert lxeskill.main(["vietnam", "replenishment", "calculate", *report_args, "--sku-map-file", str(sparse_path)]) == 0
     records = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.strip()]
     assert len(records) == 1
     result = records[0]

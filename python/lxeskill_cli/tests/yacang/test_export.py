@@ -197,7 +197,7 @@ def test_unknown_submit_resumes_queue_without_resubmitting(platform):
 def test_local_download_failure_preserves_partial_cli_files(platform, capsys):
     from lxeskill import cli
     platform['reject']['/file1.xlsx'] = (500, 'actual download failure')
-    assert cli.main(['yacang', 'export', 'run', '--params', json.dumps(request(warehouses=['MY8801', 'PH8805'])['params'])]) != 0
+    assert cli.main(["yacang", "reports", "export", '--report', 'inventory-sales', '--warehouse', 'MY8801', '--warehouse', 'PH8805']) != 0
     result = json.loads(capsys.readouterr().out.splitlines()[-1])
     assert not result['ok'] and result['data']['status'] == 'partial_success'
     assert len(result['files']) == 1 and filesystem_path(result['files'][0]).is_file()
@@ -355,7 +355,7 @@ def test_long_chinese_path_delivered_by_cli(platform, env, monkeypatch, capsys):
         return result
     monkeypatch.setattr(cli, 'activate_project_workspace', activate)
     params = request(warehouses=['MY8801'])['params']
-    assert cli.main(['yacang', 'export', 'run', '--params', json.dumps(params)]) == 0
+    assert cli.main(["yacang", "reports", "export", *cli_options(params)]) == 0
     result = json.loads(capsys.readouterr().out.splitlines()[-1])
     assert result['ok'], result
     artifact = result['data']['artifacts'][0]
@@ -377,7 +377,7 @@ def test_cleanup_failure_retains_original_error_and_partial_files(platform, monk
         return original_unlink(path, *args, **kwargs)
     monkeypatch.setattr(Path, 'unlink', fail_cleanup)
     params = request(warehouses=['MY8801', 'PH8805'])['params']
-    assert cli.main(['yacang', 'export', 'run', '--params', json.dumps(params)]) != 0
+    assert cli.main(["yacang", "reports", "export", *cli_options(params)]) != 0
     result = json.loads(capsys.readouterr().out.splitlines()[-1])
     assert result['data']['status'] == 'partial_success'
     error = result['data']['error']
@@ -433,3 +433,12 @@ def test_concurrent_same_account_stops_before_second_login(platform):
         result = workflow.run(request())
     assert not result['success'] and not platform['calls']
     assert 'InterProcessLockTimeout' in result['error']['message']
+
+
+def cli_options(params):
+    names = {"inventory-sales": "inventory-sales", "inventory-current-snapshot": "inventory", "warehouse-products": "products"}
+    args = [arg for report in params["reports"] for arg in ("--report", names[report])]
+    args += [arg for warehouse in params.get("warehouses", []) for arg in ("--warehouse", warehouse)]
+    if "created_date" in params:
+        args += ["--created-from", params["created_date"]["start_date"], "--created-to", params["created_date"]["end_date"]]
+    return args

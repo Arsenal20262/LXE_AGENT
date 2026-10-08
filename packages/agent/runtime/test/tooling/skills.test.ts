@@ -51,8 +51,8 @@ describe("skill context", () => {
     const root = mkdtempSync(join(tmpdir(), "lxe-replenishment-skills-"));
     roots.push(root);
     const source = join(repositoryRoot(import.meta.dir), "skills");
-    const names = readdirSync(source).filter((name) => name.startsWith("replenishment-")
-      || name === "mabang-brazil-export" || name === "mabang-tms-export" || name === "yacang-export" || name.startsWith("shangman-") || name === "southeast-asia-replenishment-workflow-map" || name === "vietnam-stock-recommendation");
+    const names = readdirSync(source).filter((name) => name.startsWith("replenishment-") || name.startsWith("mabang-store-")
+      || name === "mabang-brazil-reports-export" || name === "mabang-tms-products-export" || name === "yacang-reports-export" || name.startsWith("shangman-") || name === "southeast-asia-replenishment-workflow-map" || name === "vietnam-replenishment");
     expect(names).toHaveLength(16);
     for (const name of names) cpSync(join(source, name), join(root, "skills", name), { recursive: true });
     const catalog = new SkillCatalog(root, join(root, "missing-user"), { sharedSkillsRoot: false });
@@ -69,11 +69,11 @@ describe("skill context", () => {
     expect(references).toHaveLength(5);
     expect(skills.find((skill) => skill.name === "replenishment-workflow-map")?.commands).toEqual([]);
     expect(skills.find((skill) => skill.name === "southeast-asia-replenishment-workflow-map")?.commands).toEqual([]);
-    expect(skills.find((skill) => skill.name === "vietnam-stock-recommendation")?.commands).toEqual([
-      "lxeskill vietnam stock recommend",
+    expect(skills.find((skill) => skill.name === "vietnam-replenishment")?.commands).toEqual([
+      "lxeskill vietnam replenishment calculate",
     ]);
-    expect(skills.find((skill) => skill.name === "vietnam-stock-recommendation")?.description).toContain("生成越南备货清单");
-    const vietnamPolicy = skills.find((skill) => skill.name === "vietnam-stock-recommendation")?.content ?? "";
+    expect(skills.find((skill) => skill.name === "vietnam-replenishment")?.description).toContain("生成越南备货清单");
+    const vietnamPolicy = skills.find((skill) => skill.name === "vietnam-replenishment")?.content ?? "";
     expect(vietnamPolicy).toContain("--sku-map");
     expect(vietnamPolicy).toContain("parameters.json");
     expect(vietnamPolicy).toContain("sandbox_permissions");
@@ -86,7 +86,7 @@ describe("skill context", () => {
     expect(southeastPolicy).toContain("看看越南库存");
     expect(southeastPolicy).toContain("--sku-map");
     expect(southeastPolicy).toContain("越南备货设置");
-    expect(skills.find((skill) => skill.name === "shangman-goods-export")?.commands).toEqual(["lxeskill shangman export run"]);
+    expect(skills.find((skill) => skill.name === "shangman-products-export")?.commands).toEqual(["lxeskill shangman products export"]);
     expect(skills.find((skill) => skill.name === "shangman-login")?.commands).toHaveLength(4);
   });
 

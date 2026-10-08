@@ -1,9 +1,9 @@
 ---
-name: replenishment-real-inventory-report
+name: mabang-store-shenzhen-inventory-export
 description: 基于本地已下载的马帮 Amazon 店铺 MSKU 数据查询并生成真实库存（深圳仓库）报告。用户要求查看某个店铺 MSKU、本地SKU、组合SKU 或备货分析所需的真实库存（深圳仓库）数量时使用；如果用户只给模糊店铺名，先使用 replenishment-store-resolve 获取规范 store_name。
 type: replenishment
 commands:
-  - lxeskill replenish inventory actual-export
+  - lxeskill mabang store shenzhen-inventory export
 references:
   - references/report.md
 ---
@@ -26,7 +26,7 @@ references:
 基于本地 MSKU 源表查询深圳库存；单步请求不自行扩展成全流程，完整任务自动补齐前置数据。
 
 ```text
-lxeskill replenish inventory actual-export --store-name "<规范店铺名>"
+lxeskill mabang store shenzhen-inventory export --store-name "<规范店铺名>"
 ```
 
 模糊名称先读 `replenishment-store-resolve`。最长 30 分钟，等待最终 terminal。

@@ -1,9 +1,9 @@
 ---
-name: vietnam-stock-recommendation
-description: 根据三份已有雅仓报表生成越南备货清单，独立计算并校验五张工作表。用户要求查询本轮备货结果、出越南备货单、做补货建议或计算补货量时使用；缺少来源时复用 yacang-export 获取数据，也可解释输入和查询当前计算参数。
+name: vietnam-replenishment
+description: 根据三份已有雅仓报表生成越南备货清单，独立计算并校验五张工作表。用户要求查询本轮备货结果、出越南备货单、做补货建议或计算补货量时使用；缺少来源时复用 yacang-reports-export 获取数据，也可解释输入和查询当前计算参数。
 type: replenishment
 commands:
-  - lxeskill vietnam stock recommend
+  - lxeskill vietnam replenishment calculate
 preselect:
   text_phrases:
     - 查询越南备货
@@ -29,19 +29,19 @@ preselect:
 
 | 命令参数 | 原始报表 | 主要字段 |
 |---|---|---|
-| `--sales` | VN8806 库存动销（`inventory-sales`） | SKU、7/15/30 天销量 |
-| `--inventory` | VN8806 当前库存（`inventory-current-snapshot`） | SKU、可用库存、在途数量 |
-| `--products` | 全局仓库产品资料（`warehouse-products`） | SKU、中文标题、创建时间 |
+| `--sales-file` | VN8806 库存动销（`inventory-sales`） | SKU、7/15/30 天销量 |
+| `--inventory-file` | VN8806 当前库存（`inventory`） | SKU、可用库存、在途数量 |
+| `--products-file` | 全局仓库产品资料（`products`） | SKU、中文标题、创建时间 |
 
 三份报表均为必填路径。计算只读取本地文件，不登录 ERP、不下载数据，也不会在输入缺失或无效时自动导出。报表在读取前复制为本轮快照，SKU 映射表和全局参数也固定为本轮输入。
 
 ## 获取数据（独立步骤）
 
 - 已有用户指定或本轮导出的三份有效报表时直接计算，不重复导出，不按文件名猜报表类型或替用户选择历史数据。
-- 需要获取越南备货数据时，读取并复用 `yacang-export`，使用其现有命令：
+- 需要获取越南备货数据时，读取并复用 `yacang-reports-export`，使用其现有命令：
 
 ```sh
-lxeskill yacang export run --params '{"reports":["inventory-sales","inventory-current-snapshot","warehouse-products"],"warehouses":["VN8806"]}'
+lxeskill yacang reports export --report inventory-sales --report inventory --report products --warehouse VN8806
 ```
 
 - 按导出结果 `data.artifacts` 中的 `report`、`warehouse` 选择三份真实路径。两份库存报表必须来自 VN8806，产品资料为全局；不带 `created_date` 筛选。沿用导出 Skill 的认证、权限、等待与失败处理。
@@ -50,23 +50,23 @@ lxeskill yacang export run --params '{"reports":["inventory-sales","inventory-cu
 
 ## 执行
 
-只有用户明确要求本轮备货结果时才生成。只问流程、参数或文件内容时回答问题；裸上传文件但目的不明确时先澄清。只要原始库存报表时使用 `yacang-export`。
+只有用户明确要求本轮备货结果时才生成。只问流程、参数或文件内容时回答问题；裸上传文件但目的不明确时先澄清。只要原始库存报表时使用 `yacang-reports-export`。
 
 通过已有 `exec` 工具执行计算命令，三份路径来自用户提供的文件或导出结果：
 
 ```sh
-lxeskill vietnam stock recommend --sales "/实际路径/库存动销.xlsx" --inventory "/实际路径/当前库存.xlsx" --products "/实际路径/商品资料.xlsx"
+lxeskill vietnam replenishment calculate --sales-file "/实际路径/库存动销.xlsx" --inventory-file "/实际路径/当前库存.xlsx" --products-file "/实际路径/商品资料.xlsx"
 ```
 
 用户为本轮指定或上传 SKU 映射表时，使用用户提供或附件信息中的真实文件路径：
 
 ```sh
-lxeskill vietnam stock recommend --sales "/实际路径/库存动销.xlsx" --inventory "/实际路径/当前库存.xlsx" --products "/实际路径/商品资料.xlsx" --sku-map "/实际路径/映射表.xlsx"
+lxeskill vietnam replenishment calculate --sales-file "/实际路径/库存动销.xlsx" --inventory-file "/实际路径/当前库存.xlsx" --products-file "/实际路径/商品资料.xlsx" --sku-map-file "/实际路径/映射表.xlsx"
 ```
 
 - 多个候选文件无法确定时先请用户选择；不要猜路径、搜索会话数据库或把以前生成的备货单当成映射表。显式指定的文件无效时停止，不改用保存的旧表。
-- `--sku-map` 只影响本轮，不替换桌面保存的文件；不传时读取桌面保存的映射表。用户只想长期保存或替换时，引导到「越南备货设置」上传。
-- 命令接受必填 `--sales`、`--inventory`、`--products` 和可选 `--sku-map`。不使用 `uv`、`python -m`、shell 拼接或环境变量覆盖包装它。用 `exec.cwd` 设置工作目录，文件路径优先使用绝对路径。
+- `--sku-map-file` 只影响本轮，不替换桌面保存的文件；不传时读取桌面保存的映射表。用户只想长期保存或替换时，引导到「越南备货设置」上传。
+- 命令接受必填 `--sales-file`、`--inventory-file`、`--products-file` 和可选 `--sku-map-file`。不使用 `uv`、`python -m`、shell 拼接或环境变量覆盖包装它。用 `exec.cwd` 设置工作目录，文件路径优先使用绝对路径。
 - 遵守现有执行权限模式。若真实错误表明需要访问工作目录之外的输入文件或应用数据（例如参数、锁、日志），通过 `exec` 的 `sandbox_permissions` 与 `justification` 申请本次所需权限。向用户解释实际原因；不自动改整个会话权限。审批拒绝后停止。
 - 若 `exec` 返回运行中的任务，使用同一任务的 `wait` 等待完成，不重复启动生成。收到普通业务失败时报告实际脱敏错误，不自动重跑整轮。
 

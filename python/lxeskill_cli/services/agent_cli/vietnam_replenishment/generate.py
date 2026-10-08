@@ -10,6 +10,7 @@ from services.vietnam_replenishment.workflow import generate_current_vietnam_rec
 from services.yacang.errors import safe_remote_detail
 from services.vietnam_replenishment.settings import config_json
 from shared.filesystem import display_path
+from services.agent_cli._shared.report_names import YACANG_REPORTS, public_reports
 
 
 def _failure(code: str, message: str) -> dict[str, Any]:
@@ -22,9 +23,9 @@ def _failure(code: str, message: str) -> dict[str, Any]:
 
 def run(arguments: dict[str, Any]) -> dict[str, Any]:
     """Calculate supplied reports with an optional map and saved parameters."""
-    required = {"sales", "inventory", "products"}
-    if set(arguments) - (required | {"sku_map"}):
-        return _failure("invalid_arguments", "仅接受 sales、inventory、products 和可选 sku_map 文件路径")
+    required = {"sales_file", "inventory_file", "products_file"}
+    if set(arguments) - (required | {"sku_map_file"}):
+        return _failure("invalid_arguments", "仅接受 sales_file、inventory_file、products_file 和可选 sku_map_file 文件路径")
     if required - set(arguments):
         return _failure("invalid_arguments", f"缺少必填报表路径: {', '.join(sorted(required - set(arguments)))}")
     for name, value in arguments.items():
@@ -32,7 +33,7 @@ def run(arguments: dict[str, Any]) -> dict[str, Any]:
             return _failure("invalid_arguments", f"{name} 必须是非空文件路径")
 
     try:
-        result = generate_current_vietnam_recommendation(**arguments)
+        result = generate_current_vietnam_recommendation(**{name.removesuffix("_file"): value for name, value in arguments.items()})
         output = Path(result.output_xlsx).resolve(strict=True)
         if not output.is_file() or output.suffix.lower() != ".xlsx" or output.stat().st_size == 0:
             raise ValueError(f"最终 XLSX 无效: {output}")
@@ -53,6 +54,6 @@ def run(arguments: dict[str, Any]) -> dict[str, Any]:
         "config": config_json(result.config),
         "config_source": result.config_source,
         "sku_map_source": result.sku_map_source,
-        "source_files": list(result.source_files),
+        "source_files": public_reports(list(result.source_files), YACANG_REPORTS),
         "validation": result.validation,
     }

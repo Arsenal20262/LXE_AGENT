@@ -166,9 +166,9 @@ test("a failed audit write cannot release executable authority", async () => {
 
 
 test("Vietnam exec requests ordinary one-shot approval and respects denial", async () => {
-  const f = fixture("desktop", [{ command: "lxeskill vietnam stock recommend", ownerSkills: ["vietnam-stock-recommendation"] }]);
+  const f = fixture("desktop", [{ command: "lxeskill vietnam replenishment calculate", ownerSkills: ["vietnam-replenishment"] }]);
   const context = f.context("workspace-write");
-  const execution = f.tools.execute("exec", { command: "lxeskill vietnam stock recommend", sandbox_permissions: "danger-full-access", justification: "Write the app-owned ERP task records" }, context).catch(error => error);
+  const execution = f.tools.execute("exec", { command: "lxeskill vietnam replenishment calculate", sandbox_permissions: "danger-full-access", justification: "Write the app-owned ERP task records" }, context).catch(error => error);
   const [request] = await pending(f.approvals);
   expect(request!.tool).toBe("exec");
   await f.approvals.decide({ session_id: "s", request_id: request!.request_id, decision: "deny" });
@@ -177,9 +177,9 @@ test("Vietnam exec requests ordinary one-shot approval and respects denial", asy
 });
 
 test("approved Vietnam exec uses the ordinary CLI and leaves the session permission unchanged", async () => {
-  const f = fixture("desktop", [{ command: "lxeskill vietnam stock recommend", ownerSkills: ["vietnam-stock-recommendation"] }]);
+  const f = fixture("desktop", [{ command: "lxeskill vietnam replenishment calculate", ownerSkills: ["vietnam-replenishment"] }]);
   const context = f.context("workspace-write");
-  const execution = f.tools.execute("exec", { command: "lxeskill vietnam stock recommend --help", sandbox_permissions: "danger-full-access", justification: "Read the command contract" }, context);
+  const execution = f.tools.execute("exec", { command: "lxeskill vietnam replenishment calculate --help", sandbox_permissions: "danger-full-access", justification: "Read the command contract" }, context);
   const [request] = await pending(f.approvals);
   await f.approvals.decide({ session_id: "s", request_id: request!.request_id, decision: "allow" });
   const result = await execution;

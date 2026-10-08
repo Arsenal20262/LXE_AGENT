@@ -1,9 +1,9 @@
 ---
-name: replenishment-unlinked-shipment-download
-description: 按 Amazon 店铺下载 WMS待配货、WMS待装箱、待关联货件的马帮原生文件，并生成备货扣减快照。用于店铺未关联货件查询、下载及完整备货的数据采集；指定 SP 单号下载单张发货单时使用 fba-shipment-delivery-csv-download。
+name: mabang-store-unlinked-shipments-export
+description: 按 Amazon 店铺下载 WMS待配货、WMS待装箱、待关联货件的马帮原生文件，并生成备货扣减快照。用于店铺未关联货件查询、下载及完整备货的数据采集；指定 SP 单号下载单张发货单时使用 mabang-delivery-export。
 type: replenishment
 commands:
-  - lxeskill replenish shipments unlinked-download
+  - lxeskill mabang store unlinked-shipments export
 references:
   - references/results.md
 ---
@@ -23,7 +23,7 @@ references:
 通过 `exec` 调用：
 
 ```text
-lxeskill replenish shipments unlinked-download --store-name "<规范店铺名>"
+lxeskill mabang store unlinked-shipments export --store-name "<规范店铺名>"
 ```
 
 一次调用已包含三个状态的分页计数、有数据状态的批量导出、任务轮询、原生文件下载和 XLSX 快照生成。原生文件可能是 CSV，保留其格式；无需自行转换、逐张 SP 下载或另算商品明细。不要手工拼 API、猜 ID/凭据或直接执行 Python 业务模块。

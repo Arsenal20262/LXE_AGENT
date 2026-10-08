@@ -30,10 +30,10 @@ type: replenishment
 | 顺序 | 业务 Skill | 本轮应保留的结果 |
 |---|---|---|
 | 1 | `replenishment-store-resolve` | 规范店铺名、网页 ID 和 id_type；候选需用户选择 |
-| 2 | `replenishment-msku-download` | 新 MSKU XLSX、源时间、原始/核验通过/未通过行数 |
+| 2 | `mabang-store-msku-export` | 新 MSKU XLSX、源时间、原始/核验通过/未通过行数 |
 | 3 | `replenishment-sales-analyze` | 基于本轮源表的销量报告及源时间 |
-| 4 | `replenishment-real-inventory-report` | 基于同一源表的深圳库存报告及源时间 |
-| 5 | `replenishment-unlinked-shipment-download` | 本轮完整查询成功的快照路径、confirmed_empty |
+| 4 | `mabang-store-shenzhen-inventory-export` | 基于同一源表的深圳库存报告及源时间 |
+| 5 | `mabang-store-unlinked-shipments-export` | 本轮完整查询成功的快照路径、confirmed_empty |
 | 6 | `replenishment-calculate` | 显式传本轮快照，生成最终报表 |
 | 7 | 交付 | 发送最后计算 terminal 的 files，并确认发送成功 |
 
