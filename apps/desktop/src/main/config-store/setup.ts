@@ -106,7 +106,6 @@ export class DesktopSetupService {
       local_auth_path: this.auth.path,
       local_auth_error: localAuth.error,
       workspace_root: workspaceRoot,
-      vietnam_recommendation: { ...config.vietnam_recommendation },
       ziniao: {
         managed: ziniao.managed,
         configured: ziniaoConfigured,

@@ -1037,67 +1037,6 @@ button {
   background: var(--surface-subtle);
 }
 
-.desktop-vietnam-settings {
-  display: block;
-  margin-bottom: 0;
-}
-
-.desktop-vietnam-settings-summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  cursor: pointer;
-  list-style: none;
-}
-
-.desktop-vietnam-settings-summary::-webkit-details-marker {
-  display: none;
-}
-
-.desktop-vietnam-settings-summary:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 4px;
-}
-
-.desktop-vietnam-settings-heading {
-  display: grid;
-  min-width: 0;
-  gap: 4px;
-}
-
-.desktop-vietnam-settings-heading strong {
-  color: var(--text-strong);
-  font-size: 0.8125rem;
-}
-
-.desktop-vietnam-settings-heading > span {
-  color: var(--muted);
-  font-size: 0.6875rem;
-  line-height: 1.5;
-}
-
-.desktop-vietnam-settings-summary > svg {
-  flex: 0 0 auto;
-  color: var(--muted);
-  transform: rotate(-90deg);
-  transition: transform 0.15s ease;
-}
-
-.desktop-vietnam-settings[open] > summary > svg {
-  transform: rotate(0);
-}
-
-.desktop-vietnam-settings-body {
-  display: grid;
-  gap: 14px;
-  margin-top: 14px;
-}
-
-.desktop-vietnam-settings:not([open]) > .desktop-vietnam-settings-body {
-  display: none;
-}
-
 .desktop-local-model-heading {
   display: flex;
   align-items: flex-start;

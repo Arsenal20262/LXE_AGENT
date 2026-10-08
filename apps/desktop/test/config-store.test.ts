@@ -180,10 +180,10 @@ describe("DesktopConfigStore", () => {
     expect(persistedSecrets).not.toContain("source-saihu-secret");
   });
 
-  test("keeps legacy Vietnam settings readable but does not inject them into command environments", () => {
+  test("keeps Vietnam parameters out of desktop setup and command environments", () => {
     const root = createRoot();
     const store = new DesktopConfigStore(root, join(root, "workspace"), safeStorage, { platform: "win32" });
-    expect(store.state().vietnam_recommendation).toEqual({ weight_30d: "0.8", weight_15d: "0.8", weight_7d: "0", exchange_rate: "3900" });
+    expect(Object.hasOwn(store.state(), "vietnam_recommendation")).toBe(false);
     expect(Object.keys(store.environment()).filter(key => key.startsWith("LXE_VIETNAM_"))).toEqual([]);
   });
 
@@ -411,7 +411,7 @@ describe("DesktopConfigStore", () => {
     });
     expect(existsSync(join(root, ".env.local"))).toBeFalse();
     expect(JSON.parse(readFileSync(join(root, "config", "settings.json"), "utf8"))).toMatchObject({
-      schema_version: 12,
+      schema_version: 11,
       llm: {
         provider: "kimi_coding",
         profiles: { kimi_coding: { model: "k3", thinking_level: "max" } },
@@ -885,7 +885,7 @@ test("schema 8 migration retains dynamic model profiles and leaves Shangman unco
   const store = new DesktopConfigStore(root, join(root, "workspace"), safeStorage);
   expect(store.state().shangman).toMatchObject({ managed: false, configured: false });
   const migrated = JSON.parse(readFileSync(join(root, "config", "settings.json"), "utf8"));
-  expect(migrated.schema_version).toBe(12);
+  expect(migrated.schema_version).toBe(11);
   expect(migrated.llm.profiles.openrouter).toEqual(old.llm.profiles.openrouter);
 });
 

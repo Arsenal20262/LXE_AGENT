@@ -20,7 +20,7 @@ from shared.process_lock import interprocess_lock
 from shared.repository import state_root
 from shared.workspace import resolve_workspace_input
 from services.yacang.errors import safe_remote_detail
-from .sku_map_store import SkuMapStoreError, legacy_current_path, validate_sku_map
+from .sku_map_store import SkuMapStoreError, validate_sku_map
 from .workbook import RecommendationConfig, validate_recommendation_config
 
 _FIELDS = tuple(asdict(RecommendationConfig()))
@@ -73,20 +73,6 @@ def _initialize_parameters(root: Path) -> RecommendationConfig:
     if path.exists():
         return parse_parameters(_json(path))
     config = RecommendationConfig()
-    legacy = state_root() / "config" / "settings.json"
-    if legacy.exists():
-        document = _json(legacy)
-        if not isinstance(document, dict):
-            raise ValueError(f"旧设置不是 JSON 对象: {legacy}")
-        previous = document.get("vietnam_recommendation")
-        if previous is not None:
-            if not isinstance(previous, dict):
-                raise ValueError("旧越南备货参数不是 JSON 对象")
-            raw = config_json(config)
-            for days in (7, 15, 30):
-                raw[f"day_adjustment_{days}d"] = previous.get(f"weight_{days}d")
-            raw["exchange_rate"] = previous.get("exchange_rate")
-            config = parse_parameters(raw)
     _write_parameters(root, config)
     return config
 
@@ -115,15 +101,6 @@ def _replace_map(root: Path, source: Path) -> None:
         temporary.unlink(missing_ok=True)
 
 
-def _initialize_map(root: Path) -> Path:
-    target = root / "sku-map.xlsx"
-    if not target.exists():
-        legacy = legacy_current_path(state_root() / "inputs" / "vietnam" / "sku_parameter_map")
-        if legacy is not None:
-            _replace_map(root, legacy)
-    return target
-
-
 @contextmanager
 def _locked():
     root = data_directory()
@@ -141,7 +118,7 @@ def read_state() -> dict:
         except Exception as exc:
             result["parameters_error"] = safe_remote_detail(f"{type(exc).__name__}: {exc}")
         try:
-            target = _initialize_map(root)
+            target = root / "sku-map.xlsx"
             if target.exists():
                 size, _ = validate_sku_map(target, label="已保存的 SKU 映射表")
                 result["sku_map"] = {"path": str(target), "file_name": target.name, "size_bytes": size,
@@ -171,7 +148,7 @@ def run_inputs(sku_map: str | None = None):
         snapshot = Path(temporary) / "sku-map.xlsx"
         with _locked() as root:
             config = _initialize_parameters(root)
-            source = resolve_workspace_input(sku_map) if sku_map is not None else _initialize_map(root)
+            source = resolve_workspace_input(sku_map) if sku_map is not None else root / "sku-map.xlsx"
             if sku_map is None and not source.exists():
                 raise SkuMapStoreError("请在越南备货设置上传 SKU 映射表，或用 --sku-map 指定文件")
             _copy_validated(source, snapshot)

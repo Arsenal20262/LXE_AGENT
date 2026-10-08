@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import replace
 from decimal import Decimal
-import hashlib
 import json
 from pathlib import Path
 import subprocess
@@ -119,42 +118,35 @@ def test_invalid_configuration_stops_before_erp(tmp_path, monkeypatch):
         workflow.generate_current_vietnam_recommendation()
 
 
-def legacy_state(tmp_path):
+
+@pytest.mark.parametrize("old_parameters", ["{broken", json.dumps({"vietnam_recommendation": {"exchange_rate": "4200"}})])
+def test_initialization_uses_only_skill_data_directory(tmp_path, old_parameters):
     app = tmp_path / "app"
     (app / "config").mkdir(parents=True)
-    (app / "config" / "settings.json").write_text(json.dumps({"vietnam_recommendation": {
-        "weight_7d": "0.1", "weight_15d": "0.6", "weight_30d": "0.7", "exchange_rate": "4000"}}))
-    root = app / "inputs" / "vietnam" / "sku_parameter_map"
-    (root / "versions").mkdir(parents=True)
-    source = sku_map(root / "versions" / ("a" * 32 + ".xlsx"))
-    record = {"id": "a" * 32, "file_name": "old.xlsx", "size_bytes": source.stat().st_size,
-              "sha256": hashlib.sha256(source.read_bytes()).hexdigest(), "uploaded_at": "2026-10-01T00:00:00+00:00"}
-    (root / "manifest.json").write_text(json.dumps({"schema_version": 1, "revision": "b" * 32, "current": record, "previous": None}))
-    return source
-
-
-def test_migration_preserves_legacy_and_never_overwrites_new_state(tmp_path):
-    source = legacy_state(tmp_path)
+    (app / "config" / "settings.json").write_text(old_parameters)
+    legacy_maps = app / "inputs" / "vietnam" / "sku_parameter_map"
+    legacy_maps.mkdir(parents=True)
+    (legacy_maps / "manifest.json").write_text("{broken")
+    sku_map(legacy_maps / "old.xlsx")
     state = settings.read_state()
-    assert state["parameters"]["day_adjustment_7d"] == "0.1"
-    assert state["parameters"]["sales_weight_7d"] == "0.6"
-    assert state["parameters"]["exchange_rate"] == "4000"
-    assert Path(state["sku_map"]["path"]).read_bytes() == source.read_bytes()
-    settings.save_parameters(settings.config_json(RecommendationConfig()))
-    settings.upload_map(sku_map(tmp_path / "new.xlsx", cost=30))
-    source.write_bytes(b"legacy corrupted after migration")
-    state = settings.read_state()
-    assert state["parameters"]["exchange_rate"] == "3900"
-    assert load_sku_parameters(Path(state["sku_map"]["path"]))["VN-A"].cost == Decimal(30)
-    assert source.exists()
+    assert state["parameters"] == settings.config_json(RecommendationConfig())
+    assert state["parameters_error"] is None
+    assert state["sku_map"] is None
+    assert state["sku_map_error"] is None
+    with pytest.raises(RuntimeError, match="请在越南备货设置上传"):
+        with settings.run_inputs():
+            pytest.fail("Old map must not be imported")
+    assert (app / "config" / "settings.json").read_text() == old_parameters
 
 
-def test_broken_legacy_current_is_reported_and_upload_can_repair(tmp_path):
-    source = legacy_state(tmp_path)
-    source.write_bytes(b"broken")
+def test_saved_map_corruption_is_reported_and_upload_can_repair(tmp_path):
+    state = settings.upload_map(sku_map(tmp_path / "initial.xlsx"))
+    target = Path(state["sku_map"]["path"])
+    target.write_bytes(b"broken")
     state = settings.read_state()
     assert "ZIP" in state["sku_map_error"]
     assert state["sku_map"] is None
+    assert target.read_bytes() == b"broken"
     state = settings.upload_map(sku_map(tmp_path / "replacement.xlsx"))
     assert state["sku_map_error"] is None
-    assert source.read_bytes() == b"broken"
+    assert load_sku_parameters(target)["VN-A"].cost == Decimal(10)

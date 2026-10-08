@@ -4,7 +4,7 @@ import { join } from "node:path";
 import type { DesktopVietnamSettingsState } from "@lxe/desktop-protocol";
 import { redactAndBound, type DesktopInputAssetsOptions } from "./input-assets";
 
-/** Native settings bridge. Python owns validation, migration and atomic storage. */
+/** Native settings bridge. Python owns validation and atomic storage. */
 export class DesktopVietnamSettingsService {
   constructor(private readonly options: DesktopInputAssetsOptions) {}
 

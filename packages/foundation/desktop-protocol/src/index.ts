@@ -473,13 +473,6 @@ export interface DesktopHealth {
   };
 }
 
-export interface DesktopVietnamRecommendationSettings {
-  weight_30d: string;
-  weight_15d: string;
-  weight_7d: string;
-  exchange_rate: string;
-}
-
 export interface DesktopSetupState {
   complete: boolean;
   provider: DesktopModelProvider;
@@ -503,7 +496,6 @@ export interface DesktopSetupState {
   };
   mabangTms: { managed: boolean; configured: boolean; issues: string[]; account: string; password_configured: boolean };
   yacang: { managed: boolean; configured: boolean; issues: string[]; mobile: string; password_configured: boolean };
-  vietnam_recommendation: DesktopVietnamRecommendationSettings;
   shangman: {
     managed: boolean; configured: boolean; issues: string[];
     tenant_id: string; username: string;
