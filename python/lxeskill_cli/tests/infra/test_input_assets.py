@@ -10,7 +10,6 @@ import json
 from pathlib import Path
 
 import pytest
-from openpyxl import Workbook
 
 from shared import input_assets
 from services.assets.inspect import run as inspect_assets
@@ -106,24 +105,24 @@ def test_registered_slots_describe_business_name_and_usage() -> None:
     assert all(asset.display_name and asset.used_by for asset in ASSETS.values())
 
 
-def test_vietnam_slots_are_desktop_managed_and_readable(slot_root: Path) -> None:
-    slots = ("vietnam_replenishment_template",)
-    directories = {ASSETS[slot].dir for slot in slots}
-    assert len(directories) == len(slots)
-    assert all(directory.startswith("vietnam/") for directory in directories)
-    assert all(ASSETS[slot].management == "desktop" for slot in slots)
-    assert all(current_asset(slot) is None for slot in slots)
-
+def test_retired_vietnam_slots_are_not_registered_or_inspected(slot_root: Path) -> None:
+    retired = {"vietnam_replenishment_template", "vietnam_sku_parameter_map"}
+    assert ASSETS and retired.isdisjoint(ASSETS)
     inspected = inspect_assets({})
     assert inspected["success"] is True
-    reported = {item["slot"]: item for item in inspected["slots"]}
-    assert all(reported[slot]["management"] == "desktop" for slot in slots)
+    assert {item["slot"] for item in inspected["slots"]} == set(ASSETS)
+    for slot in retired:
+        with pytest.raises(InputAssetError, match="unknown input asset slot"):
+            current_asset(slot)
+    assert not slot_root.exists()
 
 
-@pytest.mark.parametrize("slot", ["vietnam_replenishment_template"])
 def test_generic_promotion_rejects_desktop_slots_before_file_access(
-    slot_root: Path, tmp_path: Path, slot: str
+    slot_root: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    slot = "desktop_fixture"
+    desktop = input_assets.InputAsset(slot, "Desktop fixture", ("Test",), "test/desktop", "Test data", "desktop")
+    monkeypatch.setattr(input_assets, "load_input_assets", lambda: {slot: desktop})
     with pytest.raises(InputAssetError, match="desktop-managed"):
         promote_asset(slot, tmp_path / "not-read.xlsx")
     assert current_asset(slot) is None
@@ -179,13 +178,3 @@ def test_input_slots_never_collide_with_artifact_dirs() -> None:
     artifact_dirs = {entry.dir for entry in load_datasets().values()}
     slot_dirs = {entry.dir for entry in ASSETS.values()}
     assert not (artifact_dirs & slot_dirs)
-
-
-
-def _vietnam_map(path: Path, price: int) -> Path:
-    book = Workbook()
-    book.active.append(("SKU", "成本", "跨境价", "折扣价", "热销标记"))
-    book.active.append(("VN-A", 0, price, 15, None))
-    book.save(path)
-    book.close()
-    return path

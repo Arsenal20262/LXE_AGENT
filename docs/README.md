@@ -32,7 +32,7 @@
 
 [平台参考资料](harness/skill/reference/README.md) 保存供应商 API、真实响应和紫鸟自动化约束；[Codex 工具载荷研究](study/codex-code-mode-tool-payload.md) 是外部项目资料。它们不定义 LXE 的当前实现，也不能替代运行时 Skill。
 
-[越南备货输入资产契约](harness/vietnam-stock-recommendation/asset-contract.md)说明历史模板槽、SKU 参数表的只读校验和受信版本管理，也区分 PR7 新增的聊天绑定入口。
+[越南备货流程](harness/vietnam-stock-recommendation/calculation.md)说明 ERP 报表获取、独立计算和工作台设置；[SKU 映射表契约](harness/vietnam-stock-recommendation/asset-contract.md)说明填写要求、校验、保存和导出。
 
 ## 维护规则
 

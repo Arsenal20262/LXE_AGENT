@@ -11,9 +11,6 @@ const formatBytes = (bytes: number): string => {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 
-export const visibleInputAssetSlots = (slots: DesktopInputAssetSlot[]): DesktopInputAssetSlot[] =>
-  slots.filter(slot => slot.slot !== "vietnam_replenishment_template" && slot.slot !== "vietnam_sku_parameter_map");
-
 export function useInputAssetSlots() {
   const [slots, setSlots] = useState<DesktopInputAssetSlot[] | null>(null);
   const [error, setError] = useState("");
@@ -86,7 +83,7 @@ export function InputAssetsWorkbench({
 
       <button className="workbench-refresh" onClick={onOpenVietnamSettings} type="button">{t.vietnamSettings.title}</button>
       <div className="asset-slot-list">
-        {visibleInputAssetSlots(slots ?? []).map((slot) => {
+        {(slots ?? []).map((slot) => {
           return (
             <article className="asset-slot" key={slot.slot}>
               <header className="asset-slot-header">

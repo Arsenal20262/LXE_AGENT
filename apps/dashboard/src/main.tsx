@@ -58,7 +58,7 @@ import { RuntimeStatusPopover } from "./features/runtime-status/view";
 import { StatsView } from "./features/stats/view";
 import { SyntheticPerformerWorkbench } from "./features/workbench/view";
 import { WorkbenchIndex } from "./features/workbench/index-view";
-import { InputAssetsWorkbench, useInputAssetSlots, visibleInputAssetSlots } from "./features/workbench/input-assets-view";
+import { InputAssetsWorkbench, useInputAssetSlots } from "./features/workbench/input-assets-view";
 import { DesktopShell } from "./desktop/shell";
 import type { DesktopSettingsSection } from "./desktop/settings-model";
 import { DashboardRootErrorBoundary } from "./root-error-boundary";
@@ -88,11 +88,10 @@ function App({
   const t = UI_TEXT[language];
   const { activeSection, capabilityView, activityView, workbenchView, openDashboardSection, openWorkbenchView, openCapabilityView, openActivityView } = useDashboardNavigation();
   const assetSlots = useInputAssetSlots();
-  const visibleAssetSlots = assetSlots.slots ? visibleInputAssetSlots(assetSlots.slots) : null;
-  const assetSlotStatus = visibleAssetSlots
+  const assetSlotStatus = assetSlots.slots
     ? t.inputAssets.slotSummary(
-        visibleAssetSlots.filter((slot) => slot.current !== null).length,
-        visibleAssetSlots.length,
+        assetSlots.slots.filter((slot) => slot.current !== null).length,
+        assetSlots.slots.length,
       )
     : "";
   const [error, setError] = useState("");
@@ -271,7 +270,7 @@ function App({
                 loading={assetSlots.loading}
                 onBack={() => openWorkbenchView("index")}
                 refresh={assetSlots.refresh}
-                slots={visibleAssetSlots}
+                slots={assetSlots.slots}
               />
             ) : null}
             {activeSection === "capabilities" ? (

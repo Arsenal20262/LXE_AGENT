@@ -29,17 +29,17 @@ const terminal = (data: Record<string, unknown>) => JSON.stringify({
 const executed = (stdout: string, error: Error | null = null, stderr = ""): AssetCommandExecution => ({ stdout, stderr, error });
 
 const managedSlot = {
-  slot: "vietnam_sku_parameter_map",
-  display_name: "越南 SKU 参数表",
+  slot: "desktop_fixture",
+  display_name: "Desktop fixture",
   management: "desktop",
   manifest_revision: "a".repeat(32),
   current_error: "当前版本 SHA-256 不一致",
-  used_by: ["越南备货清单生成"],
-  holds: "按 SKU 填写价格",
-  directory: "/state/inputs/vietnam/sku_parameter_map",
+  used_by: ["Fixture workflow"],
+  holds: "Fixture data",
+  directory: "/state/inputs/test/desktop_fixture",
   current: null,
   previous: {
-    file_name: "previous.xlsx", path: "/state/inputs/vietnam/sku_parameter_map/versions/old.xlsx",
+    file_name: "previous.xlsx", path: "/state/inputs/test/desktop_fixture/versions/old.xlsx",
     size_bytes: 128, updated_at: "2026-10-03",
   },
 };

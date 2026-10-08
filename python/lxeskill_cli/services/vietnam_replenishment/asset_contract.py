@@ -1,4 +1,4 @@
-"""Read-only validation of the full Vietnam business template."""
+"""SKU map input contracts and the generated Vietnam workbook layout."""
 
 from __future__ import annotations
 
@@ -45,17 +45,9 @@ AUXILIARY_HEADERS = {
     "库存商品信息": {"B1": "SKU", "K1": "创建时间"},
 }
 
-MAIN_PARAMETER_REFERENCES = {"AV2": "A2", "AW2": "B2", "AX2": "C2", "AY2": "D2"}
-
 
 class AssetContractError(ValueError):
-    """A supplied workbook cannot serve as the Vietnam business template."""
-
-
-@dataclass(frozen=True)
-class TemplateContract:
-    sheet_names: tuple[str, ...]
-    main_rows: int
+    """A supplied workbook does not meet the SKU map input contract."""
 
 
 @dataclass(frozen=True)
@@ -67,91 +59,7 @@ class SkuParameters:
     listed_at: str | None = None
 
 
-def validate_template(path: str | Path) -> TemplateContract:
-    """Check structural prerequisites without modifying the supplied workbook."""
-    try:
-        workbook = load_workbook(path, read_only=True, data_only=False)
-    except Exception as exc:
-        raise AssetContractError(f"读取模板失败: {type(exc).__name__}: {exc}") from exc
-
-    try:
-        sheet_names = tuple(workbook.sheetnames)
-        for name in REQUIRED_SHEETS:
-            if name not in sheet_names:
-                raise AssetContractError(f"缺少工作表: {name}")
-
-        for sheet_name, headers in {
-            REQUIRED_SHEETS[0]: MAIN_HEADERS,
-            **AUXILIARY_HEADERS,
-        }.items():
-            sheet = workbook[sheet_name]
-            for coordinate, expected in headers.items():
-                actual = sheet[coordinate].value
-                if actual != expected:
-                    raise AssetContractError(
-                        f"{sheet_name}!{coordinate}: "
-                        f"期望表头 {expected!r}，实际为 {actual!r}"
-                    )
-
-        main = workbook[REQUIRED_SHEETS[0]]
-        change = workbook["数据更改"]
-        for main_coordinate, source_coordinate in MAIN_PARAMETER_REFERENCES.items():
-            input_cell = change[source_coordinate]
-            if input_cell.data_type == "f":
-                raise AssetContractError(
-                    f"数据更改!{source_coordinate}: 参数输入格不能是公式，"
-                    f"实际为 {input_cell.value!r}"
-                )
-
-            formula_cell = main[main_coordinate]
-            source_column = source_coordinate[0]
-            source_row = source_coordinate[1:]
-            reference = (
-                rf"(?:'数据更改'|数据更改)!\$?{source_column}\$?{source_row}(?![0-9])"
-            )
-            formula = formula_cell.value
-            if formula_cell.data_type != "f" or not re.search(reference, str(formula)):
-                raise AssetContractError(
-                    f"越南备货清单!{main_coordinate}: 公式必须引用 "
-                    f"数据更改!{source_coordinate}，实际为 {formula!r}"
-                )
-
-        main_rows = sum(
-            1
-            for (sku,) in main.iter_rows(min_row=2, min_col=5, max_col=5, values_only=True)
-            if sku is not None and str(sku).strip()
-        )
-        return TemplateContract(sheet_names=sheet_names, main_rows=main_rows)
-    except AssetContractError:
-        raise
-    except Exception as exc:
-        raise AssetContractError(f"读取模板失败: {type(exc).__name__}: {exc}") from exc
-    finally:
-        workbook.close()
-
-
 _PARAMETER_HEADERS = ("SKU", "成本", "跨境价", "折扣价", "热销标记")
-
-
-def has_sku_parameter_headers(path: str | Path) -> bool:
-    """Recognize the first sheet's header row without inspecting SKU records."""
-    try:
-        workbook = load_workbook(path, read_only=True, data_only=False)
-    except Exception as exc:
-        raise AssetContractError(f"读取 SKU 参数表失败: {type(exc).__name__}: {exc}") from exc
-
-    try:
-        first_row = next(workbook.worksheets[0].iter_rows(min_row=1, max_row=1, values_only=True), ())
-        columns = {
-            value.strip()
-            for value in first_row
-            if isinstance(value, str) and value.strip()
-        }
-        return all(header in columns for header in _PARAMETER_HEADERS)
-    except Exception as exc:
-        raise AssetContractError(f"读取 SKU 参数表失败: {type(exc).__name__}: {exc}") from exc
-    finally:
-        workbook.close()
 
 
 def _blank(value: object) -> bool:
@@ -159,7 +67,7 @@ def _blank(value: object) -> bool:
 
 
 def load_sku_parameters(path: str | Path) -> dict[str, SkuParameters]:
-    """Parse first-sheet inputs without filling gaps, including for preparation.
+    """Parse first-sheet inputs without filling gaps.
 
     Runtime callers must use validate_usable_sku_parameters for completeness.
     """
@@ -308,10 +216,7 @@ def validate_usable_sku_parameters(path: str | Path) -> dict[str, SkuParameters]
 __all__ = [
     "AssetContractError",
     "SkuParameters",
-    "TemplateContract",
-    "has_sku_parameter_headers",
     "load_sku_parameters",
-    "validate_template",
     "validate_usable_sku_parameters",
     "validate_sku_parameter_values",
 ]
