@@ -6,33 +6,34 @@ import "./vietnam-settings.css";
 
 const days = [7, 15, 30] as const;
 const errorText = (error: unknown) => error instanceof Error ? error.message : String(error);
+type ValidationText = Pick<ReturnType<typeof useUiText>["vietnamSettings"], "weightNonNegative" | "weightOutOfRange" | "weightTotal">;
 
 // Shift decimal text without rounding valid stored weights through a JS number.
-function shiftDecimal(value: string, places: number): string {
+function shiftDecimal(value: string, places: number, copy: ValidationText): string {
   const match = /^\+?(\d+(?:\.\d*)?|\.\d+)(?:[eE]([+-]?\d+))?$/.exec(value.trim());
-  if (!match) throw new Error("销量权重必须是非负数字 / Sales weights must be non-negative numbers");
+  if (!match) throw new Error(copy.weightNonNegative);
   const [integer = "", fraction = ""] = match[1]!.split(".");
   const digits = integer + fraction;
   const position = integer.length + Number(match[2] || 0) + places;
-  if (!Number.isSafeInteger(position) || Math.abs(position) > 400) throw new Error("销量权重超出数值范围 / Sales weight is out of range");
+  if (!Number.isSafeInteger(position) || Math.abs(position) > 400) throw new Error(copy.weightOutOfRange);
   const shifted = position <= 0 ? "0." + "0".repeat(-position) + digits
     : position >= digits.length ? digits + "0".repeat(position - digits.length)
       : digits.slice(0, position) + "." + digits.slice(position);
   return shifted.replace(/^0+(?=\d)/, "").replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "");
 }
 
-export function vietnamParameterForm(parameters: DesktopVietnamParameters): DesktopVietnamParameters {
+export function vietnamParameterForm(parameters: DesktopVietnamParameters, copy: ValidationText): DesktopVietnamParameters {
   const form = { ...parameters };
-  for (const day of days) form[`sales_weight_${day}d`] = shiftDecimal(parameters[`sales_weight_${day}d`], 2);
+  for (const day of days) form[`sales_weight_${day}d`] = shiftDecimal(parameters[`sales_weight_${day}d`], 2, copy);
   return form;
 }
 
-export function vietnamParameterInput(form: DesktopVietnamParameters): DesktopVietnamParameters {
+export function vietnamParameterInput(form: DesktopVietnamParameters, copy: ValidationText): DesktopVietnamParameters {
   const result = { ...form };
-  for (const day of days) result[`sales_weight_${day}d`] = shiftDecimal(form[`sales_weight_${day}d`], -2);
+  for (const day of days) result[`sales_weight_${day}d`] = shiftDecimal(form[`sales_weight_${day}d`], -2, copy);
   const total = days.reduce((sum, day) => sum + Number(result[`sales_weight_${day}d`]), 0);
   if (!Number.isFinite(total) || Math.abs(total - 1) > 1e-12) {
-    throw new Error("销量权重合计必须为 100% / Sales weights must total 100%");
+    throw new Error(copy.weightTotal);
   }
   return result;
 }
@@ -54,13 +55,13 @@ export function VietnamSettingsWorkbench({ onBack }: { onBack: () => void }) {
       if (!desktop) throw new Error(copy.unavailable);
       const next = await desktop.getVietnamSettings();
       setState(next);
-      setForm(next.parameters ? vietnamParameterForm(next.parameters) : {
+      setForm(next.parameters ? vietnamParameterForm(next.parameters, copy) : {
         sales_weight_7d: "", sales_weight_15d: "", sales_weight_30d: "",
         day_adjustment_7d: "", day_adjustment_15d: "", day_adjustment_30d: "", exchange_rate: "",
       });
     } catch (cause) { setError(errorText(cause)); }
     finally { setLoading(false); }
-  }, [copy.unavailable]);
+  }, [copy]);
   useEffect(() => { void load(); }, [load]);
 
   const update = (key: keyof DesktopVietnamParameters, value: string) => setForm(current => current ? { ...current, [key]: value } : null);
@@ -79,9 +80,9 @@ export function VietnamSettingsWorkbench({ onBack }: { onBack: () => void }) {
     if (!desktop || !form || busy) return;
     setBusy(true); setError(""); setNotice("");
     try {
-      const next = await desktop.saveVietnamParameters(vietnamParameterInput(form));
+      const next = await desktop.saveVietnamParameters(vietnamParameterInput(form, copy));
       setState(next);
-      if (next.parameters) setForm(vietnamParameterForm(next.parameters));
+      if (next.parameters) setForm(vietnamParameterForm(next.parameters, copy));
       setNotice(copy.saved);
     } catch (cause) { setError(errorText(cause)); }
     finally { setBusy(false); }
