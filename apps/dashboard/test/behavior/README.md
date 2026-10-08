@@ -34,7 +34,7 @@ bun run --cwd apps/dashboard typecheck
 - **双层侧栏（6）**：常驻图标导航与独立会话列表；折叠后导航与设置可用；悬停展开与搜索；
   原生拖宽、键盘调宽及刷新恢复；窄窗口抽屉；深浅主题下 macOS/Windows 标题栏的 CSS 布局避让。
   可设置 `LXE_SIDEBAR_SCREENSHOT` 保存预览。标题栏布局模拟不替代 Windows 原生窗口验收。
-- **Windows 标题栏（4）**：各列统一从 40px 以下开始，深浅主题与侧栏折叠，菜单的键盘／鼠标焦点和选区恢复，设置及更新入口（不自动安装、不重复检查），中英文及扩展预览。此组使用可聚焦的真实窗口，因为离屏模式不会发送真实焦点事件。可设置 `LXE_TITLEBAR_SCREENSHOT` 保存预览；原生 Windows 窗口按钮仍需实机验证。
+- **Windows 标题栏（2）与菜单（2）**：各列统一从实际标题栏下边界开始，深浅主题与侧栏折叠，菜单的键盘／鼠标焦点和选区恢复，设置及更新入口（不自动安装、不重复检查），中英文及扩展预览。布局组使用离屏窗口；菜单组使用可聚焦的真实窗口，因为离屏模式不会发送真实焦点事件。全选走原生键盘，保持编辑器与 DOM 选区一致。可设置 `LXE_TITLEBAR_SCREENSHOT` 保存预览；原生 Windows 窗口按钮仍需实机验证。
 - **Mermaid（3）**：深浅主题下流程图和时序图的节点、文字、箭头及备注对比度；已挂载图表跟随主题与字号变化；保留图表明确指定的颜色。可用 `--test-name-pattern mermaid` 定向运行，设置 `LXE_MERMAID_SCREENSHOT=/tmp/mermaid.png` 保存深浅色预览。
 - **工作区（15）**：全量目录分组与分页；从目录创建或复用空会话；取消、打开目录及发送失败；发送期间锁定目录与晚到响应；跨目录搜索与已有会话目录只读；空目录登记及刷新保留；改名失败、重试与所有名称显示位置；默认名称、重名及默认目录切换；折叠偏好跨刷新、搜索、数据更新保留，主动进入时展开；登记失败与重试保留草稿；登记期间切换草稿或页面；文字与附件在工作区间合并，侧栏新建不搬运草稿；创建失败保留输入；创建响应晚到及重复点击；损坏或禁用本机存储时仍可切换折叠。支持设置 `LXE_WORKSPACE_SCREENSHOT` 保存界面验收截图。工作区 fixture 用 sessionStorage 模拟外部数据在页面刷新后仍存在，数据库跨进程持久性由 Runtime 存储测试验证。桥接平台按 Electron 实际平台报告。
 
@@ -50,3 +50,5 @@ CompositionEvent 和带 `isComposing` 的 KeyboardEvent，覆盖 React 事件处
 重写时已验证五个反例会失败：恢复隐藏按钮首次聚焦、去掉最上层弹窗限制、去掉
 `isComposing`、绕过当前模型查询的运行时开关、去掉欢迎页的 `enabled` 传递。
 这些临时变更已还原。
+
+新增 `dashboard-pages`（9）、`conversation-content`（4）、`conversation-window`（3）和 Markdown（6）场景，分别覆盖页面组装、会话内容、虚拟滚动和 Markdown 两个消费入口。源码断言的逐项迁移说明见 [architecture/README.md](../architecture/README.md)。

@@ -1,6 +1,9 @@
+import { ConversationContentFixture } from "./conversation-content-fixture";
+import { RendererFailureView } from "../../src/root-error-boundary";
 import { SessionWorkspaceFixture, sessionFixture } from "./session-workspace-fixture";
 import { AppActionsFixture, actionFixture } from "./app-actions-fixture";
 import { MarkdownFixture, type MarkdownSurface } from "./markdown-fixture";
+import { createDashboardContractFixture } from "./dashboard-contract-fixture";
 import { useApprovalsQuery } from "../../src/api/queries";
 import type { PendingApproval, PendingUserQuestion, PermissionMode } from "@lxe/desktop-protocol";
 import { FilePreviewLayout } from "../../src/features/file-preview/Sidebar";
@@ -24,6 +27,8 @@ import "../../src/styles.css";
 // Only external boundaries are substituted. App, Query hooks, composer and
 // dialog focus management are production code, running in Chromium.
 const calls: { operation: string; input?: unknown }[] = [];
+const contractMode = new URLSearchParams(location.search).has("contracts");
+const contractFixture = createDashboardContractFixture(calls);
 const updateRelease: DesktopUpdateRelease = {version:"0.2.0",build_id:"renderer-build",file_name:"fixture.exe",size:100,sha512:"fixture",notes:"Renderer update"};
 let updateState: DesktopUpdateState = {phase:"unsupported"};
 let releaseUpdateDownload: (()=>void) | undefined;
@@ -194,6 +199,7 @@ const desktop = {
   },
   stagePastedConversationFiles: async () => { calls.push({ operation: "pasteFiles" }); return []; },
   discardConversationFiles: async () => {},
+  ...(contractMode ? contractFixture.desktop : {}),
 } satisfies Partial<LxeDesktopBridge["desktop"]>;
 const permissionModes = new Map<string, PermissionMode>();
 let approvalRequests: PendingApproval[] = [];
@@ -205,6 +211,11 @@ let releaseApproval: (() => void) | undefined;
 let composerLanguage: "en" | "zh" = "en";
 const dashboard = {
   async call(call: { operation: string; input: Record<string, unknown> }) {
+    calls.push(structuredClone(call));
+    if (contractMode) {
+      const result = contractFixture.rpc(call);
+      if (result !== undefined) return result;
+    }
     if (call.operation === "skills.list") return { items: referenceMode ? referenceSkills : [], total: referenceMode ? 3 : 0 };
     if (call.operation === "sessions.files.candidates" && referenceMode) {
       if (slowCandidates) await new Promise<void>(resolve => pendingCandidates.push(resolve));
@@ -213,7 +224,6 @@ const dashboard = {
       const items = query.startsWith("报表/") ? [{ path: "报表/销售 统计.md", kind: "file" }] : [{ path: "报表", kind: "directory" }, { path: "销售.md", kind: "file" }, { path: "missing.txt", kind: "file" }].filter(f => !query || f.path.includes(query));
       return { items };
     }
-    calls.push(structuredClone(call));
     if (actionFixture.active) return actionFixture.rpc(call);
     if (call.operation === "sessions.permission.set") {
       const id = String(call.input.session_id), mode = call.input.permission_mode as PermissionMode;
@@ -335,6 +345,9 @@ function renderActions(subscribed = true) {
   </QueryClientProvider></I18nContext.Provider>));
 }
 const fixture = {
+  ui: contractFixture.controls,
+  mountContent() { reset(); flushSync(() => root!.render(<I18nContext.Provider value={UI_TEXT.en}><ConversationContentFixture /></I18nContext.Provider>)); },
+  mountFailure() { reset(); flushSync(() => root!.render(<RendererFailureView />)); },
   mountMarkdown(surface: MarkdownSurface, content: string) {
     reset();
     flushSync(() => root!.render(<I18nContext.Provider value={UI_TEXT.en}>
