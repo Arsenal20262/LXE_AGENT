@@ -7,7 +7,7 @@ from pathlib import Path
 import subprocess
 import sys
 
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
 import pytest
 
 from services.vietnam_replenishment import settings, workflow
@@ -26,7 +26,7 @@ def isolated(tmp_path, monkeypatch):
 def sku_map(path: Path, cost=10):
     book = Workbook()
     book.active.append(["SKU", "成本", "跨境价", "折扣价", "热销标记"])
-    book.active.append(["VN-A", cost, 30, None, 1])
+    book.active.append(["VN-A", cost, 30, 25, 1])
     book.save(path)
     book.close()
     return path
@@ -82,6 +82,46 @@ def test_upload_is_atomic_and_failed_replacement_keeps_file(tmp_path):
     assert load_sku_parameters(target)["VN-A"].cost == Decimal(12)
     assert state["sku_map"]["updated_at"]
     assert sorted(path.name for path in target.parent.glob("*.xlsx")) == ["sku-map.xlsx"]
+
+
+@pytest.mark.parametrize(
+    ("column", "label", "invalid"),
+    [(column, label, invalid) for column, label in ((2, "成本"), (3, "跨境价"), (4, "折扣价"))
+     for invalid in (None, 0)] + [(5, "热销标记", invalid) for invalid in (None, 0, 3)],
+)
+def test_incomplete_replacement_preserves_saved_data_and_reports_invalid_saved_map(
+    tmp_path, column, label, invalid,
+):
+    state = settings.upload_map(sku_map(tmp_path / "valid.xlsx"))
+    target = Path(state["sku_map"]["path"])
+    parameters = settings.data_directory() / "parameters.json"
+    before = {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in (target, parameters)}
+    replacement = sku_map(tmp_path / "不完整 映射.xlsx")
+    book = load_workbook(replacement)
+    book.active.cell(2, column).value = invalid
+    book.save(replacement)
+    book.close()
+    location = "Sheet!E2" if column == 5 and invalid in (0, 3) else "VN-A"
+
+    with pytest.raises(RuntimeError, match=f"{location}.*{label}"):
+        settings.upload_map(replacement)
+    assert {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in before} == before
+    assert settings.read_state()["sku_map"]["updated_at"] == state["sku_map"]["updated_at"]
+
+    # Files edited manually or saved by an earlier development build are checked,
+    # never silently completed or given a default flag.
+    target.write_bytes(replacement.read_bytes())
+    invalid_bytes = target.read_bytes()
+    state = settings.read_state()
+    assert state["sku_map"] is None
+    assert location in state["sku_map_error"] and label in state["sku_map_error"]
+    export = tmp_path / "existing.xlsx"
+    export.write_bytes(b"preserve destination")
+    with pytest.raises(RuntimeError, match=f"{location}.*{label}"):
+        settings.export_map("current", export)
+    assert export.read_bytes() == b"preserve destination"
+    assert target.read_bytes() == invalid_bytes
+    assert (parameters.read_bytes(), parameters.stat().st_mtime_ns) == before[parameters]
 
 
 def test_explicit_file_overrides_saved_without_changing_it_and_snapshot_is_stable(tmp_path):

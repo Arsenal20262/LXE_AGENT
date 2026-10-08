@@ -23,7 +23,7 @@ from .asset_contract import (
     MAIN_HEADERS,
     REQUIRED_SHEETS,
     SkuParameters,
-    load_sku_parameters,
+    validate_usable_sku_parameters,
 )
 from .formula_dependencies import guarded_mapping_formula, mapping_formula_blank
 from .workbook import (
@@ -406,14 +406,6 @@ def validate_recalculated_workbook(
                     daily = _decimal(main_values.cell(row_number, 19).value, coordinate=f"S{row_number}")
                     if daily == 0:
                         continue
-                if column in (34, 39) and cell.value == "#DIV/0!":
-                    label = "跨境价" if column == 34 else "折扣价"
-                    price = current.cross_border_price if column == 34 else current.discount_price
-                    if price == 0 and not mapping_formula_blank(cell.column_letter, literals):
-                        raise WorkbookGenerationError(
-                            f"SKU {sku} 的{label}为显式 0，{cell.coordinate} 利润率无法计算；"
-                            "请在 SKU 映射表提供可计算的价格"
-                        )
                 raise WorkbookGenerationError(
                     f"SKU {sku} 重算产生公式错误 {cell.coordinate}: {cell.value}"
                 )
@@ -498,7 +490,7 @@ def generate_vietnam_workbook(
     if os.path.lexists(output):
         raise FileExistsError(output)
     current_config = config if config is not None else RecommendationConfig()
-    parameters = load_sku_parameters(map_path)
+    parameters = validate_usable_sku_parameters(map_path)
     output.parent.mkdir(parents=True, exist_ok=True)
     with TemporaryDirectory(prefix=".vietnam-workbook-", dir=output.parent) as directory:
         stage = Path(directory)

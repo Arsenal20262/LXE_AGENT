@@ -16,7 +16,7 @@ from openpyxl.formula.translate import Translator
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.formula import ArrayFormula
 
-from .asset_contract import REQUIRED_SHEETS, SkuParameters
+from .asset_contract import REQUIRED_SHEETS, SkuParameters, validate_sku_parameter_values
 from .formula_dependencies import guarded_mapping_formula
 from .numeric_contract import WorkbookInputError, excel_number
 from .yacang_sources import VietnamSources
@@ -98,8 +98,7 @@ def _map_time_agrees(sku: str, listed_at: object, canonical: str) -> None:
 def _validated_rows(
     sources: VietnamSources, parameters: Mapping[str, SkuParameters]
 ) -> tuple[_CurrentRow, ...]:
-    if not parameters:
-        raise WorkbookInputError("当前越南 SKU 参数映射表没有 SKU，请重新上传")
+    validate_sku_parameter_values(parameters)
     skus = tuple(sources.skus)
     if not skus:
         raise WorkbookInputError("本轮 VN8806 SKU 集合为空")
@@ -151,21 +150,17 @@ def _validated_rows(
         sales_7d = _number(sales.get("7天销量"), sku, "7天销量")
         sales_15d = _number(sales.get("15天销量"), sku, "15天销量")
         sales_30d = _number(sales.get("30天销量"), sku, "30天销量")
-        cost = _number(values.cost, sku, "成本(cost)") if values is not None and values.cost is not None else None
+        cost = _number(values.cost, sku, "成本(cost)", positive=True) if values is not None else None
         cross_border = (
-            _number(values.cross_border_price, sku, "跨境价(cross_border_price)")
-            if values is not None and values.cross_border_price is not None else None
+            _number(values.cross_border_price, sku, "跨境价(cross_border_price)", positive=True)
+            if values is not None else None
         )
         discount = (
-            _number(values.discount_price, sku, "折扣价(discount_price)")
-            if values is not None and values.discount_price is not None else None
+            _number(values.discount_price, sku, "折扣价(discount_price)", positive=True)
+            if values is not None else None
         )
         if values is None:
             hot_flag = None
-        elif values.hot_flag is None:
-            hot_flag = 2
-        elif isinstance(values.hot_flag, bool) or values.hot_flag not in (1, 2):
-            raise WorkbookInputError(f"SKU {sku} 的热销标记只能是 1 或 2")
         else:
             hot_flag = values.hot_flag
         result.append(_CurrentRow(

@@ -153,6 +153,7 @@ def _export_destination(destination: Path) -> None:
 
 def _write_map_template(destination: Path) -> None:
     from openpyxl import Workbook
+    from openpyxl.comments import Comment
     from openpyxl.styles import Font, PatternFill
 
     book = Workbook()
@@ -169,6 +170,10 @@ def _write_map_template(destination: Path) -> None:
             sheet[f"{column}1"].fill = PatternFill("solid", fgColor="1F4E78")
         sheet.column_dimensions["A"].number_format = "@"
         sheet["A2"].number_format = "@"
+        sheet["A1"].comment = Comment("必填文本，保留前导零。每个已填写的 SKU 都须填写其余四项；完全空白的行会跳过。", "LXE Agent")
+        sheet["B1"].comment = Comment("必填，只能填写 1 或 2，不设默认值。", "LXE Agent")
+        for column in "CDE":
+            sheet[f"{column}1"].comment = Comment("必填真实数值，必须大于 0，不接受空白、零或公式。", "LXE Agent")
         with destination.open("xb") as stream:
             book.save(stream)
             stream.flush()

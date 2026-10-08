@@ -25,7 +25,7 @@ def isolated(tmp_path, monkeypatch):
 def map_file(path: Path, cost=10):
     book = Workbook()
     book.active.append(["SKU", "热销标记", "成本", "跨境价", "折扣价"])
-    book.active.append(["00123", 1, cost, 30000, None])
+    book.active.append(["00123", 1, cost, 30000, 25000])
     book.active["A2"].number_format = "@"
     book.active["C2"].font = Font(bold=True, color="123456")
     book.create_sheet("用户备注").append(["保留说明", "=1+1"])
@@ -45,12 +45,14 @@ def test_template_is_blank_and_fillable_without_initializing_settings(tmp_path):
         assert [cell.value for cell in sheet[1]] == ["SKU", "热销标记", "成本", "跨境价", "折扣价"]
         assert all(cell.value is None for row in sheet.iter_rows(min_row=2) for cell in row)
         assert sheet.freeze_panes == "A2"
+        assert "1 或 2" in sheet["B1"].comment.text
+        assert all("大于 0" in sheet[f"{column}1"].comment.text for column in "CDE")
         assert sheet.column_dimensions["A"].number_format == sheet["A2"].number_format == "@"
         assert all(sheet.column_dimensions[column].width >= 16 for column in "ABCDE")
         assert not any(cell.data_type == "f" for row in sheet for cell in row)
         with pytest.raises(SkuMapStoreError, match="没有 SKU"):
             settings.upload_map(output)
-        for column, value in enumerate(["00123", 1, 10, 30000, None], 1):
+        for column, value in enumerate(["00123", 1, 10, 30000, 25000], 1):
             sheet.cell(2, column, value)
         book.save(output)
     finally:

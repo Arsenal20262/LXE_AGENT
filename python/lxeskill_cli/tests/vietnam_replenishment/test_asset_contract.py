@@ -401,26 +401,44 @@ def test_sku_parameters_keep_actual_workbook_read_error(tmp_path: Path) -> None:
 
 
 
-def test_sku_map_accepts_blank_prices_and_preserves_explicit_zero(tmp_path: Path) -> None:
+def test_usable_sku_map_accepts_complete_rows_and_skips_empty_rows(tmp_path: Path) -> None:
     path = _sku_map(
-        tmp_path / "sparse.xlsx",
-        (None, None, "VN-A", 1, 2),
-        (None, None, "VN-B", None, None),
-        (0, None, "VN-C", 0, 0),
+        tmp_path / "valid.xlsx",
+        (3, 1, "VN-A", 1, 2),
+        (None, None, None, None, None),
+        (6, 2, "VN-B", 4, 5),
     )
     values = validate_usable_sku_parameters(path)
-    assert values["VN-A"].discount_price is None
-    assert values["VN-B"] == SkuParameters()
-    assert values["VN-C"].cost == Decimal("0")
-    assert values["VN-C"].cross_border_price == Decimal("0")
-    assert values["VN-C"].discount_price == Decimal("0")
+    assert set(values) == {"VN-A", "VN-B"}
+    assert values["VN-A"] == SkuParameters(
+        cost=Decimal(1), cross_border_price=Decimal(2), discount_price=Decimal(3), hot_flag=1,
+    )
+    assert values["VN-B"].hot_flag == 2
+
+
+@pytest.mark.parametrize(
+    ("column", "label", "invalid"),
+    [
+        (column, label, invalid)
+        for column, label in ((0, "折扣价"), (3, "成本"), (4, "跨境价"))
+        for invalid in (None, " ", 0, "0", -1, "NaN", "Infinity", True, "=1+1")
+    ] + [(1, "热销标记", invalid) for invalid in (None, " ", 0, 3, 1.5, True)],
+)
+def test_usable_sku_map_rejects_incomplete_or_invalid_row(
+    tmp_path: Path, column: int, label: str, invalid: object,
+) -> None:
+    row = [3, 1, "VN-A", 1, 2]
+    row[column] = invalid
+    path = _sku_map(tmp_path / "invalid.xlsx", row)
+    with pytest.raises(AssetContractError, match=label):
+        validate_usable_sku_parameters(path)
 
 
 @pytest.mark.parametrize(
     ("row", "message"),
     [
-        ((1, None, "VN-A", "1234567890123456", 2), "Excel 精度"),
-        ((1, None, "VN-A", "1e-400", 2), "精确写入"),
+        ((1, 1, "VN-A", "1234567890123456", 2), "Excel 精度"),
+        ((1, 1, "VN-A", "1e-400", 2), "精确写入"),
     ],
 )
 def test_sku_map_rejects_inexact_nonblank_prices(

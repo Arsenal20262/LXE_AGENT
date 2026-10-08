@@ -7,6 +7,7 @@ from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 import re
+from typing import Mapping
 
 from openpyxl import load_workbook
 from openpyxl.utils import get_column_letter
@@ -158,7 +159,10 @@ def _blank(value: object) -> bool:
 
 
 def load_sku_parameters(path: str | Path) -> dict[str, SkuParameters]:
-    """Read explicit SKU inputs from the first sheet; never infer missing values."""
+    """Parse first-sheet inputs without filling gaps, including for preparation.
+
+    Runtime callers must use validate_usable_sku_parameters for completeness.
+    """
     try:
         workbook = load_workbook(path, read_only=True, data_only=False)
     except Exception as exc:
@@ -274,24 +278,30 @@ def load_sku_parameters(path: str | Path) -> dict[str, SkuParameters]:
         workbook.close()
 
 
-def validate_usable_sku_parameters(path: str | Path) -> dict[str, SkuParameters]:
-    """Require mapped SKUs and Excel-exact nonblank prices."""
-    values = load_sku_parameters(path)
+def validate_sku_parameter_values(values: Mapping[str, SkuParameters]) -> None:
+    """Every supplied SKU must be complete; ERP coverage is not required."""
     if not values:
-        raise AssetContractError("当前越南 SKU 参数映射表没有 SKU，请重新上传")
+        raise WorkbookInputError("当前越南 SKU 参数映射表没有 SKU，请重新上传")
     for sku, row in values.items():
+        if not isinstance(row, SkuParameters):
+            raise WorkbookInputError(f"SKU {sku} 的运营 SKU 映射行无效")
         for field, label in (
             ("cost", "成本"),
             ("cross_border_price", "跨境价"),
             ("discount_price", "折扣价"),
         ):
-            value = getattr(row, field)
-            if value is None:
-                continue
-            try:
-                excel_number(value, sku, label)
-            except WorkbookInputError as exc:
-                raise AssetContractError(str(exc)) from exc
+            excel_number(getattr(row, field), sku, label, positive=True)
+        if isinstance(row.hot_flag, bool) or row.hot_flag not in (1, 2):
+            raise WorkbookInputError(f"SKU {sku} 的热销标记必填，且只能是 1 或 2")
+
+
+def validate_usable_sku_parameters(path: str | Path) -> dict[str, SkuParameters]:
+    """Require complete mapped SKUs with positive Excel-exact prices."""
+    values = load_sku_parameters(path)
+    try:
+        validate_sku_parameter_values(values)
+    except WorkbookInputError as exc:
+        raise AssetContractError(str(exc)) from exc
     return values
 
 
@@ -303,4 +313,5 @@ __all__ = [
     "load_sku_parameters",
     "validate_template",
     "validate_usable_sku_parameters",
+    "validate_sku_parameter_values",
 ]

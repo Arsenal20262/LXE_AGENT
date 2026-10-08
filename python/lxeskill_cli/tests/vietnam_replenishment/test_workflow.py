@@ -19,13 +19,13 @@ from services.vietnam_replenishment import settings as store
 
 def _sku_map(
     path: Path, *, sku: str | None = "VN-A", cost: int | None = 10,
-    price: int | None = 20, discount: int | None = 15,
+    price: int | None = 20, discount: int | None = 15, hot_flag: int | None = 2,
 ) -> Path:
     book = Workbook()
     try:
         book.active.append(("SKU", "成本", "跨境价", "折扣价", "热销标记"))
         if sku is not None:
-            book.active.append((sku, cost, price, discount, None))
+            book.active.append((sku, cost, price, discount, hot_flag))
         book.save(path)
     finally:
         book.close()
@@ -119,37 +119,28 @@ def test_empty_current_stops_before_loading_reports(tmp_path: Path, monkeypatch:
 
 
 @pytest.mark.parametrize(
-    ("field", "values"),
-    [
-        ("cost", {"cost": None}),
-        ("cross_border_price", {"price": None}),
-        ("discount_price", {"discount": None}),
-    ],
+    ("label", "values"),
+    [(label, {field: invalid})
+     for field, label in (("cost", "成本"), ("price", "跨境价"), ("discount", "折扣价"))
+     for invalid in (None, 0)] + [("热销标记", {"hot_flag": None})],
 )
-def test_blank_sku_price_reaches_report_loading_from_trusted_current(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, field: str, values: dict[str, None]
+@pytest.mark.parametrize("explicit", (False, True))
+def test_invalid_map_stops_before_loading_reports_without_fallback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, label: str, values: dict, explicit: bool,
 ) -> None:
-    _current(monkeypatch, _sku_map(tmp_path / "incomplete.xlsx", **values))
-    monkeypatch.setattr(workflow, "dataset_dir", lambda *parts: tmp_path / "artifacts" / parts[-1])
-    load_calls: list[str] = []
-
-    def fake_load(**_paths) -> VietnamSources:
-        load_calls.append("VN8806")
-        return _sources()
-
-    def fake_generate(map_path: Path, output_path: Path, *, sources: VietnamSources,
-                      config: RecommendationConfig) -> Path:
-        assert getattr(load_sku_parameters(map_path)["VN-A"], field) is None
-        assert sources.skus == ("VN-A",)
-        output_path.parent.mkdir(parents=True)
-        output_path.write_bytes(b"synthetic final workbook")
-        return output_path
-
-    monkeypatch.setattr(workflow, "load_vietnam_files", fake_load)
-    monkeypatch.setattr(workflow, "generate_vietnam_workbook", fake_generate)
-    result = workflow.generate_current_vietnam_recommendation(sales="sales.xlsx", inventory="inventory.xlsx", products="products.xlsx")
-    assert result.sku_count == 1
-    assert load_calls == ["VN8806"]
+    saved = _current(monkeypatch, _sku_map(tmp_path / "valid.xlsx"))
+    invalid = _sku_map(tmp_path / "不完整 映射.xlsx", **values)
+    if not explicit:
+        saved.write_bytes(invalid.read_bytes())
+    before = saved.read_bytes()
+    _no_sources(monkeypatch)
+    with pytest.raises(workflow.VietnamWorkflowError, match=f"VN-A.*{label}") as error:
+        workflow.generate_current_vietnam_recommendation(
+            sales="sales.xlsx", inventory="inventory.xlsx", products="products.xlsx",
+            sku_map=str(invalid) if explicit else None,
+        )
+    assert error.value.code == "sku_parameter_map_invalid"
+    assert saved.read_bytes() == before
 
 
 def test_snapshot_is_private_stable_and_removed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

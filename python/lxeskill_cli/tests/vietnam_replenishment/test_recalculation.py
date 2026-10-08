@@ -10,11 +10,11 @@ from types import SimpleNamespace
 from xml.etree import ElementTree as ET
 from zipfile import ZipFile
 
-from openpyxl import load_workbook
+from openpyxl import Workbook, load_workbook
 from openpyxl.formula.translate import Translator
 import pytest
 
-from services.vietnam_replenishment.asset_contract import SkuParameters
+from services.vietnam_replenishment.asset_contract import AssetContractError, SkuParameters
 from services.vietnam_replenishment.formula_dependencies import mapping_formula_blank
 from services.vietnam_replenishment.workbook import (
     RecommendationConfig,
@@ -48,8 +48,8 @@ def _sources() -> VietnamSources:
 
 def _parameters() -> dict[str, SkuParameters]:
     return {
-        "VN-A": SkuParameters(cost=Decimal("10"), cross_border_price=Decimal("20"), discount_price=Decimal("15")),
-        "VN-B": SkuParameters(cost=Decimal("5"), cross_border_price=Decimal("25"), discount_price=Decimal("18")),
+        "VN-A": SkuParameters(cost=Decimal("10"), cross_border_price=Decimal("20"), discount_price=Decimal("15"), hot_flag=2),
+        "VN-B": SkuParameters(cost=Decimal("5"), cross_border_price=Decimal("25"), discount_price=Decimal("18"), hot_flag=2),
     }
 
 
@@ -62,7 +62,7 @@ def _formula_caches(
     for row_number, sku in enumerate(sources.skus, 2):
         mapped = parameters.get(sku)
         literals = {
-            "B": (2 if mapped.hot_flag is None else mapped.hot_flag) if mapped is not None else None,
+            "B": mapped.hot_flag if mapped is not None else None,
             "G": mapped.cost if mapped is not None else None,
             "AE": mapped.cross_border_price if mapped is not None else None,
             "AJ": mapped.discount_price if mapped is not None else None,
@@ -291,57 +291,27 @@ def test_unmapped_guarded_formula_cannot_be_removed(tmp_path: Path, coordinate: 
     assert coordinate in str(error.value)
 
 
-def test_partial_discount_keeps_other_financial_results_numeric(tmp_path: Path) -> None:
-    parameters = _parameters()
-    parameters["VN-B"] = replace(parameters["VN-B"], discount_price=None)
-    path = _calculated_fixture(tmp_path / "partial-discount.xlsx", parameters=parameters)
-    _validate(path, parameters=parameters)
-    _set_formula_caches(path, {"AK3": 0})
-    with pytest.raises(recalculation.WorkbookGenerationError, match="VN-B.*AK3"):
-        _validate(path, parameters=parameters)
-
-
 @pytest.mark.parametrize(
-    ("missing_field", "blank_columns", "numeric_columns"),
-    (
-        ("cost", ("AG", "AH", "AL", "AM"), ("AF", "AI", "AK")),
-        ("cross_border_price", ("AF", "AG", "AH", "AI"), ("AK", "AL", "AM")),
-        ("discount_price", ("AK", "AL", "AM"), ("AF", "AG", "AH", "AI")),
-    ),
+    ("column", "invalid", "label"),
+    [(column, invalid, label) for column, label in ((3, "成本"), (4, "跨境价"), (5, "折扣价"))
+     for invalid in (None, 0)] + [(2, None, "热销标记")],
 )
-def test_partial_price_dependency_matrix(
-    tmp_path: Path, missing_field: str,
-    blank_columns: tuple[str, ...], numeric_columns: tuple[str, ...],
+def test_generator_rejects_invalid_map_before_writing_or_office(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, column: int, invalid: object, label: str,
 ) -> None:
-    parameters = _parameters()
-    parameters["VN-B"] = replace(parameters["VN-B"], **{missing_field: None})
-    path = _calculated_fixture(tmp_path / "partial-price.xlsx", parameters=parameters)
-    _validate(path, parameters=parameters)
-    workbook = load_workbook(path, data_only=True)
-    try:
-        main = workbook["越南备货清单"]
-        assert all(main[f"{column}3"].value is None for column in blank_columns)
-        assert all(main[f"{column}3"].value == 1 for column in numeric_columns)
-    finally:
-        workbook.close()
-
-def test_zero_price_with_missing_cost_still_has_blank_margin(tmp_path: Path) -> None:
-    parameters = _parameters()
-    parameters["VN-B"] = replace(
-        parameters["VN-B"], cost=None,
-        cross_border_price=Decimal("0"), discount_price=Decimal("0"),
-    )
-    path = _calculated_fixture(tmp_path / "zero-with-missing-cost.xlsx", parameters=parameters)
-    _validate(path, parameters=parameters)
-    workbook = load_workbook(path, data_only=True)
-    try:
-        main = workbook["越南备货清单"]
-        assert main["AE3"].value == 0
-        assert main["AJ3"].value == 0
-        assert main["AH3"].value is None
-        assert main["AM3"].value is None
-    finally:
-        workbook.close()
+    mapping = tmp_path / "不完整 映射.xlsx"
+    book = Workbook()
+    book.active.append(["SKU", "热销标记", "成本", "跨境价", "折扣价"])
+    book.active.append(["VN-A", 1, 10, 20, 15])
+    book.active.cell(2, column).value = invalid
+    book.save(mapping)
+    book.close()
+    monkeypatch.setattr(recalculation, "write_vietnam_workbook", lambda *a, **kw: pytest.fail("Writer must not run"))
+    monkeypatch.setattr(recalculation, "recalculate_with_office", lambda *a, **kw: pytest.fail("Office must not run"))
+    output = tmp_path / "output.xlsx"
+    with pytest.raises(AssetContractError, match=f"VN-A.*{label}"):
+        recalculation.generate_vietnam_workbook(mapping, output, sources=_sources(), config=RecommendationConfig())
+    assert not output.exists()
 
 
 def test_packaged_writer_with_two_skus_passes_cached_result_validation(tmp_path: Path) -> None:
@@ -413,22 +383,15 @@ def test_finite_cached_replenishment_must_match_formula_inputs(tmp_path: Path) -
     assert "H3" in str(error.value)
 
 
-@pytest.mark.parametrize(
-    ("field", "coordinate", "label"),
-    (("cross_border_price", "AH2", "跨境价"), ("discount_price", "AM2", "折扣价")),
-)
-def test_zero_price_margin_error_names_sku_and_field(
-    tmp_path: Path, field: str, coordinate: str, label: str
-) -> None:
-    parameters = _parameters()
-    parameters["VN-A"] = replace(parameters["VN-A"], **{field: Decimal("0")})
-    path = _calculated_fixture(tmp_path / "zero-price.xlsx", parameters=parameters)
+@pytest.mark.parametrize("coordinate", ("AH2", "AM2"))
+def test_financial_formula_error_keeps_actual_diagnostic(tmp_path: Path, coordinate: str) -> None:
+    path = _calculated_fixture(tmp_path / "bad-margin-cache.xlsx")
     _set_formula_caches(path, {coordinate: "#DIV/0!"})
     with pytest.raises(recalculation.WorkbookGenerationError) as error:
-        _validate(path, parameters=parameters)
+        _validate(path)
     assert "VN-A" in str(error.value)
-    assert label in str(error.value)
     assert coordinate in str(error.value)
+    assert "#DIV/0!" in str(error.value)
 
 
 def test_office_failure_preserves_actual_redacted_diagnostic(tmp_path: Path, monkeypatch) -> None:
@@ -451,7 +414,7 @@ def test_office_failure_preserves_actual_redacted_diagnostic(tmp_path: Path, mon
 
 def test_failed_generation_leaves_no_final_file(tmp_path: Path, monkeypatch) -> None:
     output = tmp_path / "result.xlsx"
-    monkeypatch.setattr(recalculation, "load_sku_parameters", lambda path: _parameters())
+    monkeypatch.setattr(recalculation, "validate_usable_sku_parameters", lambda path: _parameters())
     monkeypatch.setattr(
         recalculation,
         "write_vietnam_workbook",
@@ -473,7 +436,7 @@ def test_failed_generation_leaves_no_final_file(tmp_path: Path, monkeypatch) -> 
 def test_success_publishes_after_validation_without_overwriting(tmp_path: Path, monkeypatch) -> None:
     output = tmp_path / "result.xlsx"
     events: list[str] = []
-    monkeypatch.setattr(recalculation, "load_sku_parameters", lambda path: _parameters())
+    monkeypatch.setattr(recalculation, "validate_usable_sku_parameters", lambda path: _parameters())
 
     def write(path, sources, parameters, config):
         events.append("write")

@@ -23,7 +23,7 @@ def _map(path: Path, *, cost: int, cross_border: int, discount: int) -> Path:
     book = Workbook()
     try:
         book.active.append(("SKU", "成本", "跨境价", "折扣价", "热销标记"))
-        book.active.append(("VN-A", cost, cross_border, discount, None))
+        book.active.append(("VN-A", cost, cross_border, discount, 2))
         book.save(path)
     finally:
         book.close()
@@ -84,8 +84,8 @@ def _sparse_map(path: Path) -> Path:
     book = Workbook()
     try:
         book.active.append(("SKU", "成本", "跨境价", "折扣价", "热销标记"))
-        book.active.append(("VN-A", 10, 20, 15, None))
-        book.active.append(("VN-B", 5, 25, None, None))
+        book.active.append(("VN-A", 10, 20, 15, 2))
+        book.active.append(("VN-B", 5, 25, 18, 2))
         book.save(path)
     finally:
         book.close()
@@ -222,9 +222,9 @@ def test_explicit_sparse_map_keeps_all_yacang_skus(
             assert [book[name][f"{column}{row}"].value for row in (2, 3, 4)] == ["VN-A", "VN-B", "VN-C"]
 
         assert main["B3"].value == 2
-        assert main["AJ3"].value is None
+        assert main["AJ3"].value == 18
         assert all(main[f"{column}3"].value is not None for column in ("H", "AC", "AF", "AG", "AH", "AI"))
-        assert all(main[f"{column}3"].value in (None, "") for column in ("AK", "AL", "AM"))
+        assert all(main[f"{column}3"].value is not None for column in ("AK", "AL", "AM"))
 
         assert all(main[f"{column}4"].value in (None, "") for column in (
             "B", "G", "AE", "AJ", "H", "AC", "AF", "AG", "AH", "AI", "AK", "AL", "AM",

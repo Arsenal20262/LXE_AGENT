@@ -93,9 +93,9 @@ def _sources() -> VietnamSources:
 
 def _parameters() -> dict[str, SkuParameters]:
     return {
-        "VN-A": SkuParameters(cost=Decimal("0"), cross_border_price=Decimal("120.25"), discount_price=Decimal("99.5"), hot_flag=1),
-        "VN-B": SkuParameters(cost=Decimal("3.5"), cross_border_price=Decimal("50"), discount_price=Decimal("40")),
-        "GLOBAL-OTHER": SkuParameters(cost=Decimal("999")),
+        "VN-A": SkuParameters(cost=Decimal("1"), cross_border_price=Decimal("120.25"), discount_price=Decimal("99.5"), hot_flag=1),
+        "VN-B": SkuParameters(cost=Decimal("3.5"), cross_border_price=Decimal("50"), discount_price=Decimal("40"), hot_flag=2),
+        "GLOBAL-OTHER": SkuParameters(cost=Decimal("999"), cross_border_price=Decimal("1200"), discount_price=Decimal("1100"), hot_flag=2),
     }
 
 
@@ -112,7 +112,7 @@ def test_writer_projects_only_current_skus_and_translates_formulas(tmp_path: Pat
         assert main["F2"].value == "产品名称 A"
         assert main["B2"].value == 1
         assert main["B3"].value == 2
-        assert main["G2"].value == 0
+        assert main["G2"].value == 1
         assert main["AE2"].value == 120.25
         assert main["AJ2"].value == 99.5
         assert main["AN2"].value == 3
@@ -227,56 +227,23 @@ def test_unmapped_current_sku_keeps_source_rows_and_guards_dependent_formulas(
 
 
 @pytest.mark.parametrize(
-    ("missing_fields", "guarded_columns"),
+    ("field", "label", "invalid"),
     [
-        (("cost",), {"AG", "AH", "AL", "AM"}),
-        (("cross_border_price",), {"AF", "AG", "AH", "AI"}),
-        (("discount_price",), {"AK", "AL", "AM"}),
-        (("cost", "cross_border_price", "discount_price"), {"AF", "AG", "AH", "AI", "AK", "AL", "AM"}),
-    ],
+        (field, label, invalid)
+        for field, label in (("cost", "成本"), ("cross_border_price", "跨境价"), ("discount_price", "折扣价"))
+        for invalid in (None, Decimal("0"), Decimal("-1"))
+    ] + [("hot_flag", "热销标记", invalid) for invalid in (None, 0, 3, True)],
 )
-def test_mapped_blank_prices_guard_only_dependent_finance(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
-    missing_fields: tuple[str, ...], guarded_columns: set[str],
+@pytest.mark.parametrize("sku", ("VN-B", "GLOBAL-OTHER"))
+def test_every_mapped_sku_requires_complete_valid_values(
+    tmp_path: Path, field: str, label: str, invalid: object, sku: str,
 ) -> None:
-    monkeypatch.setattr(writer, "_load_skeleton", _LOAD_REAL_SKELETON)
     values = _parameters()
-    values["VN-B"] = replace(values["VN-B"], **{field: None for field in missing_fields})
-    output = tmp_path / "partial.xlsx"
-    writer.write_vietnam_workbook(output, _sources(), values, writer.RecommendationConfig())
-    book = load_workbook(output, data_only=False)
-    try:
-        main = book["越南备货清单"]
-        assert main["B3"].value == 2
-        assert main["H3"].value.startswith("=IF(")
-        assert "ISBLANK" not in main["H3"].value
-        assert isinstance(main["AC3"].value, ArrayFormula)
-        assert "ISBLANK" not in main["AC3"].value.text
-        for field, column in (("cost", "G"), ("cross_border_price", "AE"), ("discount_price", "AJ")):
-            assert (main[f"{column}3"].value is None) == (field in missing_fields)
-        for column in ("AF", "AG", "AH", "AI", "AK", "AL", "AM"):
-            formula = main[f"{column}3"].value
-            assert ("ISBLANK" in formula) == (column in guarded_columns)
-    finally:
-        book.close()
-
-
-def test_explicit_zero_price_is_not_guarded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(writer, "_load_skeleton", _LOAD_REAL_SKELETON)
-    values = _parameters()
-    values["VN-B"] = replace(values["VN-B"], cross_border_price=Decimal("0"), discount_price=Decimal("0"))
-    output = tmp_path / "zero.xlsx"
-    writer.write_vietnam_workbook(output, _sources(), values, writer.RecommendationConfig())
-    book = load_workbook(output, data_only=False)
-    try:
-        main = book["越南备货清单"]
-        assert main["AE3"].value == 0
-        assert main["AJ3"].value == 0
-        assert all("ISBLANK" not in main[f"{column}3"].value for column in (
-            "AF", "AG", "AH", "AI", "AK", "AL", "AM",
-        ))
-    finally:
-        book.close()
+    values[sku] = replace(values[sku], **{field: invalid})
+    output = tmp_path / "invalid.xlsx"
+    with pytest.raises(writer.WorkbookInputError, match=f"{sku}.*{label}"):
+        writer.write_vietnam_workbook(output, _sources(), values, writer.RecommendationConfig())
+    assert not output.exists()
 
 
 def test_empty_parameter_table_and_bad_hot_flag_fail(tmp_path: Path) -> None:
