@@ -111,6 +111,8 @@ def test_builder_drops_synthetic_history_and_objects(tmp_path: Path) -> None:
     with RESOURCE.open("rb") as packaged:
         source = load_workbook(packaged)
     main = source["越南备货清单"]
+    # The maintainer input still uses the audited original weights. The builder parameterizes them.
+    main["S2"] = "=K2*0.1/(30+AV2)+L2*0.3/(15+AW2)+M2*0.6/(7+AX2)"
     main["E2"] = "CANARY-PRIVATE-SKU"
     main["G2"] = 987654321
     main["D2"].comment = Comment("CANARY-PRIVATE-COMMENT", "Synthetic")

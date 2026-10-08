@@ -26,7 +26,6 @@ import type { DesktopLocalAuthStore } from "./auth-store";
 import { effectiveDesktopSecrets } from "./secrets";
 import type { DesktopConfigValidation } from "./validation";
 import { managedLlmTargetSupported } from "../managed-llm";
-import { validateVietnamRecommendationSettings } from "./vietnam-recommendation";
 
 const sameManagedTarget = (
   left: ManagedLlmTarget,
@@ -159,9 +158,6 @@ export class DesktopSetupService {
     const secrets = this.repository.readSecrets();
     const effectiveSecrets = this.effectiveSecrets(secrets, config.integrations.shangman.managed, config.integrations.yacang.managed && !config.integrations.yacang.mobile, config.integrations.mabangTms.managed && !config.integrations.mabangTms.account);
     config.workspace_root = workspaceRoot;
-    if (input.vietnam_recommendation !== undefined) {
-      config.vietnam_recommendation = validateVietnamRecommendationSettings(input.vietnam_recommendation);
-    }
 
     if (input.ziniao?.action === "clear") {
       config.integrations.ziniao = { ...cloneConfig(this.catalog).integrations.ziniao, managed: true };
@@ -607,10 +603,6 @@ export class DesktopSetupService {
       LXE_YACANG_MOBILE: yacangConfigured ? yacang.mobile : "",
       LXE_MABANG_TMS_PASSWORD: mabangTmsConfigured ? secrets.mabang_tms_password : "",
       LXE_YACANG_PASSWORD: yacangConfigured ? secrets.yacang_password : "",
-      LXE_VIETNAM_WEIGHT_30D: config.vietnam_recommendation.weight_30d,
-      LXE_VIETNAM_WEIGHT_15D: config.vietnam_recommendation.weight_15d,
-      LXE_VIETNAM_WEIGHT_7D: config.vietnam_recommendation.weight_7d,
-      LXE_VIETNAM_EXCHANGE_RATE: config.vietnam_recommendation.exchange_rate,
       LXE_SHANGMAN_TENANT_ID: shangmanConfigured ? shangman.tenant_id : "",
       LXE_SHANGMAN_USERNAME: shangmanConfigured ? shangman.username : "",
       LXE_SHANGMAN_PROCESSED_PASSWORD: shangmanConfigured ? secrets.shangman_processed_password : "",

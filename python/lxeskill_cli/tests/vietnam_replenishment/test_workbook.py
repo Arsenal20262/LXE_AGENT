@@ -151,8 +151,8 @@ def test_writer_projects_only_current_skus_and_translates_formulas(tmp_path: Pat
 
 def test_config_overrides_four_inputs(tmp_path: Path) -> None:
     config = writer.RecommendationConfig(
-        weight_30d=Decimal("1.5"), weight_15d=Decimal("2.5"),
-        weight_7d=Decimal("3.5"), exchange_rate=Decimal("4000"),
+        day_adjustment_30d=Decimal("1.5"), day_adjustment_15d=Decimal("2.5"),
+        day_adjustment_7d=Decimal("3.5"), exchange_rate=Decimal("4000"),
     )
     output = tmp_path / "configured.xlsx"
     writer.write_vietnam_workbook(output, _sources(), _parameters(), config)

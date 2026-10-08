@@ -567,7 +567,6 @@ export interface DesktopSetupInput {
   ziniao?: DesktopZiniaoSetupInput;
   mabangTms?: DesktopMabangTmsSetupInput;
   yacang?: DesktopYacangSetupInput;
-  vietnam_recommendation?: DesktopVietnamRecommendationSettings;
   shangman?: DesktopShangmanSetupInput;
   mabang?: DesktopMabangSetupInput;
   feishu?: DesktopFeishuSetupInput;
@@ -666,9 +665,22 @@ export interface DesktopInputAssetSlot {
   previous: DesktopInputAssetVersion | null;
 }
 
-export interface DesktopVietnamSkuMapMutation {
-  status: "installed" | "unchanged" | "rolled_back";
-  manifest_revision: string;
+export interface DesktopVietnamParameters {
+  day_adjustment_7d: string;
+  day_adjustment_15d: string;
+  day_adjustment_30d: string;
+  sales_weight_7d: string;
+  sales_weight_15d: string;
+  sales_weight_30d: string;
+  exchange_rate: string;
+}
+
+export interface DesktopVietnamSettingsState {
+  directory: string;
+  parameters: DesktopVietnamParameters | null;
+  parameters_error: string | null;
+  sku_map: DesktopInputAssetVersion | null;
+  sku_map_error: string | null;
 }
 
 export interface DesktopUsageBalance {
@@ -735,8 +747,9 @@ export interface LxeDesktopBridge {
     openSyntheticPerformerOutput(taskId: string): Promise<void>;
     listInputAssets(): Promise<DesktopInputAssetSlot[]>;
     revealInputAssetSlot(slot: string): Promise<void>;
-    uploadVietnamSkuMap(): Promise<DesktopVietnamSkuMapMutation | null>;
-    rollbackVietnamSkuMap(expectedRevision: string): Promise<DesktopVietnamSkuMapMutation>;
+    getVietnamSettings(): Promise<DesktopVietnamSettingsState>;
+    saveVietnamParameters(input: DesktopVietnamParameters): Promise<DesktopVietnamSettingsState>;
+    uploadVietnamSkuMap(): Promise<DesktopVietnamSettingsState | null>;
     onSyntheticPerformerTaskChanged(
       listener: (task: DesktopSyntheticPerformerTask) => void,
     ): () => void;

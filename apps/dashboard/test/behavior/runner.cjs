@@ -80,6 +80,47 @@ app.whenReady().then(async () => {
       await require("./session-workspace.cjs")({js, step, settle, load, state, waitFor});
     } else if (suite === "app-actions" || suite === "conversation-events") {
       await require("./app-actions.cjs")({suite, js, step, settle, click, type, focus, key, state, waitFor});
+    } else if (suite === "vietnam-settings") {
+      const openSettings = async () => {
+        await js("[...document.querySelectorAll('.workbench-tool-card')].find(el => el.textContent.includes('Vietnam replenishment settings')).click()");
+        await waitFor("document.querySelectorAll('.vietnam-settings-view input').length === 7", "Vietnam parameters loaded");
+      };
+      const input = async (index, value) => {
+        await js(`(() => { const element = document.querySelectorAll('.vietnam-settings-view input')[${index}]; Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(element, ${JSON.stringify(value)}); element.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+        await settle();
+      };
+      await step("tool page loads saved defaults and collapsed day adjustments", async () => {
+        await load("?app&section=workbench&complete=true"); await openSettings();
+        assert.deepEqual(await js("[...document.querySelectorAll('.vietnam-settings-view input')].map(el => el.value)"), ["60", "30", "10", "3900", "0", "0.8", "0.8"]);
+        assert.equal(await js("document.querySelector('.vietnam-settings-view details').open"), false);
+      });
+      await step("invalid totals stay local, valid percentages save proportions without restart", async () => {
+        await input(0, "70"); await click(".vietnam-save button");
+        assert.match(await js("document.querySelector('[role=alert]').textContent"), /100%/);
+        assert.equal((await state()).calls.filter(call => call.operation === "vietnam.save").length, 0);
+        await input(1, "20"); await click(".vietnam-save button");
+        await waitFor("document.body.innerText.includes('Parameters saved')", "parameter save completed");
+        const saves = (await state()).calls.filter(call => call.operation === "vietnam.save");
+        assert.equal(Number(saves[0].input.sales_weight_7d), 0.7);
+        assert.equal(Number(saves[0].input.sales_weight_15d), 0.2);
+        assert.equal((await state()).calls.filter(call => /restart|saveSetup/.test(call.operation)).length, 0);
+      });
+      await step("upload preserves parameter drafts and displays actual failures", async () => {
+        await input(3, "4200"); await js("behavior.vietnamUploadFailure(true)");
+        await click(".vietnam-settings-view .asset-slot-header button");
+        assert.match(await js("document.querySelector('[role=alert]').textContent"), /BadZipFile/);
+        assert.equal(await js("document.querySelectorAll('.vietnam-settings-view input')[3].value"), "4200");
+        await js("behavior.vietnamUploadFailure(false)"); await click(".vietnam-settings-view .asset-slot-header button");
+        await waitFor("document.body.innerText.includes('sku-map.xlsx')", "uploaded map shown");
+        assert.equal(await js("document.querySelectorAll('.vietnam-settings-view input')[3].value"), "4200");
+      });
+      await step("reopening shows saved settings and the uploaded map", async () => {
+        await click(".vietnam-save button"); await click(".workbench-back"); await openSettings();
+        assert.equal(await js("document.querySelectorAll('.vietnam-settings-view input')[3].value"), "4200");
+        assert.match(await js("document.body.innerText"), /sku-map.xlsx/);
+        await settle(); await delay(300);
+        if (process.env.LXE_VIETNAM_SCREENSHOT) require('node:fs').writeFileSync(process.env.LXE_VIETNAM_SCREENSHOT, (await win.webContents.capturePage()).toPNG());
+      });
     } else if (suite === "updates") {
       await js("behavior.mountUpdates()");
       await step("checking discovers an update without downloading", async () => {

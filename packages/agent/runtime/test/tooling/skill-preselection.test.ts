@@ -48,14 +48,10 @@ describe("declarative Skill preselection", () => {
     const rule = parseSkillManifest(path, "repository").preselection;
     expect(rule?.textPhrases).toContain("查询越南备货");
     expect(rule?.textPhrases).toContain("查询越南的备货");
-    expect(rule?.textPhrases).toContain("绑定越南 SKU 参数表");
+    expect(rule?.textPhrases).not.toContain("绑定越南 SKU 参数表");
     expect(rule?.textPhrases).not.toContain("看看越南库存");
     expect(rule?.textPhrases).not.toContain("导出越南仓库存原表");
-    expect(rule?.attachment).toEqual({
-      extensions: [".xlsx"],
-      probeCommandId: "vietnam_replenishment_probe_sku",
-      followupPhrases: ["仅绑定", "绑定并查询"],
-    });
+    expect(rule?.attachment).toBeUndefined();
   });
 
   test("matches literal text and exact adjacent replies only for one enabled repository Skill", () => {

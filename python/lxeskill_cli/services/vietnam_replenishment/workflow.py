@@ -3,21 +3,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal, InvalidOperation
-import os
 from pathlib import Path
-from typing import Literal, Mapping
 from uuid import uuid4
 
 from shared.datasets import dataset_dir
 
-from .sku_map_store import SkuMapStoreError, current_sku_map_snapshot as trusted_map_snapshot
+from .settings import run_inputs
+from .sku_map_store import SkuMapStoreError
 from .recalculation import generate_vietnam_workbook
-from .workbook import (
-    RecommendationConfig,
-    WorkbookInputError,
-    validate_recommendation_config,
-)
+from .workbook import RecommendationConfig
 from .yacang_sources import export_vietnam_sources
 
 
@@ -29,75 +23,25 @@ class VietnamWorkflowError(RuntimeError):
         self.code = code
 
 
-ConfigSource = Literal["environment", "default"]
-ENV_NAMES = (
-    "LXE_VIETNAM_WEIGHT_30D",
-    "LXE_VIETNAM_WEIGHT_15D",
-    "LXE_VIETNAM_WEIGHT_7D",
-    "LXE_VIETNAM_EXCHANGE_RATE",
-)
-
-
 @dataclass(frozen=True)
 class VietnamRecommendationRun:
     output_xlsx: Path
     sku_count: int
     config: RecommendationConfig
-    config_source: ConfigSource
+    config_source: str
+    sku_map_source: str
 
 
-def resolve_recommendation_config(
-    environ: Mapping[str, str],
-) -> tuple[RecommendationConfig, ConfigSource]:
-    """Use defaults only when the four variables are all absent."""
-    if all(name not in environ for name in ENV_NAMES):
-        return RecommendationConfig(), "default"
-
-    values: list[Decimal] = []
-    for name in ENV_NAMES:
-        raw = environ.get(name)
-        if raw is None or not isinstance(raw, str) or not raw.strip():
-            raise VietnamWorkflowError("recommendation_config_invalid", f"{name} 缺失或为空")
-        try:
-            values.append(Decimal(raw.strip()))
-        except (InvalidOperation, TypeError, ValueError) as exc:
-            raise VietnamWorkflowError(
-                "recommendation_config_invalid",
-                f"{name} 不是十进制数: {type(exc).__name__}: {exc}",
-            ) from exc
-
-    config = RecommendationConfig(*values)
+def generate_current_vietnam_recommendation(sku_map: str | None = None) -> VietnamRecommendationRun:
+    """Use the explicit map or saved app map, then publish one validated XLSX."""
     try:
-        validate_recommendation_config(config)
-    except (WorkbookInputError, ArithmeticError, ValueError) as exc:
-        raise VietnamWorkflowError(
-            "recommendation_config_invalid", f"{type(exc).__name__}: {exc}"
-        ) from exc
-    return config, "environment"
-
-
-def current_sku_map_snapshot():
-    """Provide a trusted private map snapshot before any Yacang export."""
-    return trusted_map_snapshot()
-
-
-def generate_current_vietnam_recommendation() -> VietnamRecommendationRun:
-    """Export VN8806 once, then publish only a validated five-sheet XLSX."""
-    try:
-        snapshot = current_sku_map_snapshot()
-        with snapshot as map_path:
-            return _generate_from_map(map_path)
+        with run_inputs(sku_map) as (map_path, config, config_source, sku_map_source):
+            return _generate_from_map(map_path, config, config_source, sku_map_source)
     except SkuMapStoreError as exc:
-        code = (
-            "sku_parameter_map_required" if "请先上传" in str(exc)
-            else "sku_parameter_map_empty" if "没有 SKU" in str(exc)
-            else "sku_parameter_map_invalid"
-        )
-        raise VietnamWorkflowError(code, str(exc)) from exc
+        raise VietnamWorkflowError("sku_parameter_map_invalid", str(exc)) from exc
 
 
-def _generate_from_map(map_path: Path) -> VietnamRecommendationRun:
-    config, config_source = resolve_recommendation_config(os.environ)
+def _generate_from_map(map_path: Path, config: RecommendationConfig, config_source: str, sku_map_source: str) -> VietnamRecommendationRun:
     sources = export_vietnam_sources()
     if not sources.skus:
         raise VietnamWorkflowError("current_skus_empty", "本轮 VN8806 来源没有 SKU")
@@ -114,14 +58,12 @@ def _generate_from_map(map_path: Path) -> VietnamRecommendationRun:
         raise
     return VietnamRecommendationRun(
         output_xlsx=output, sku_count=len(sources.skus),
-        config=config, config_source=config_source,
+        config=config, config_source=config_source, sku_map_source=sku_map_source,
     )
 
 
 __all__ = [
     "VietnamRecommendationRun",
     "VietnamWorkflowError",
-    "current_sku_map_snapshot",
     "generate_current_vietnam_recommendation",
-    "resolve_recommendation_config",
 ]

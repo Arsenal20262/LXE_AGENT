@@ -224,16 +224,7 @@ export function createExecTools(dependencies: ExecToolDependencies): ToolDefinit
         const recoveryCatalog = commandCatalog.filter((entry) => ownerIsVisible(entry.ownerSkills));
         const invocationError = lxeSkillInvocationError(rawCommand, recoveryCommands, recoveryCatalog);
         if (invocationError) throw invocationError;
-        if (context.platform === "desktop") {
-          const invocation = classifyLxeSkillInput(input, businessCommands, businessAttributions);
-          if (invocation && commandCatalog.some((entry) => entry.managedExecution !== undefined
-            && entry.command.toLowerCase() === invocation.command.toLowerCase())) {
-            throw new ToolExecutionError(
-              "unsupported_invocation",
-              "This registered business command must use managed_lxeskill with its catalog command_id; do not retry through exec or request Full access.",
-            );
-          }
-        }
+
         if (/^lxeskill(?:\.cmd)?(?:\s|$)/iu.test(rawCommand.trim())) {
           const status = options.lxeSkillStatus?.();
           if (status && !status.available) {

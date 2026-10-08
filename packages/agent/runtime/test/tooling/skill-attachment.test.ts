@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { RuntimeAttachmentRecord, RuntimeMessage, RuntimeMessageContent } from "../../src/engine/types";
 import { turnAbortedMessage } from "../../src/engine/turn-aborted";
-import { resolveManagedAttachment } from "../../src/tooling/managed-lxeskill-attachment";
+import { resolveManagedAttachment } from "../../src/tooling/skill-attachment";
 import { ToolExecutionError } from "../../src/tooling/registry";
 
 const roots: string[] = [];

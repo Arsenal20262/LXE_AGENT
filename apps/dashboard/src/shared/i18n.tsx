@@ -171,6 +171,16 @@ export const ZH_TEXT = {
     openOutput: "打开输出目录",
     disclaimer: "这个工具只负责添加并验证元数据，不会判断媒体是否真的包含 AI 生成人物，也不会检查视频分辨率、时长等其他亚马逊上传要求。"
   },
+  vietnamSettings: {
+    title: "越南备货设置", subtitle: "管理 SKU 映射表、销量权重和人民币兑越南盾汇率。所有工作目录共用。",
+    skuMap: "SKU 映射表", skuHint: "包含 SKU、热销标记、成本、跨境价和折扣价。聊天中指定的文件仅用于当次计算。",
+    upload: "上传映射表", replace: "替换映射表", uploaded: "SKU 映射表已保存。", noMap: "尚未上传映射表", updated: "更新于",
+    weights: "销量权重", weightsHint: "将各周期日均销量合并，三个权重合计为 100%。", days: (day: number) => `${day} 天`,
+    exchange: "人民币 → 越南盾汇率", cny: "1 元人民币 =", vnd: "越南盾", advanced: "高级设置 · 天数修正",
+    adjustment: (day: number) => `${day} 天天数修正`, adjustmentHint: "日均销量 = 该周期销量 ÷（周期天数 + 修正值）。默认 7、15、30 天分别为 0、0.8、0.8。",
+    save: "保存参数", saving: "正在保存…", saved: "参数已保存，下一次计算生效。", appliesNextRun: "保存后下一次计算生效，正在进行的计算不受影响。",
+    loading: "正在读取设置…", retry: "重试", unavailable: "请在桌面应用中打开越南备货设置。",
+  },
   workbenchIndex: {
     eyebrow: "工作台",
     title: "工具",
@@ -1067,6 +1077,16 @@ export const UI_TEXT: Record<Language, UiText> = {
       completeWithFailuresHint: "Successful files are ready. Review the errors above before retrying the remaining files.",
       openOutput: "Open output folder",
       disclaimer: "This tool only adds and verifies metadata. It does not decide whether media contains an AI-generated performer, and it does not check resolution, duration, or other Amazon upload requirements."
+    },
+    vietnamSettings: {
+      title: "Vietnam replenishment settings", subtitle: "Manage the SKU map, sales weights and CNY to VND exchange rate. Shared across workspaces.",
+      skuMap: "SKU map", skuHint: "Includes SKU, hot-selling flag, cost, cross-border price and discount price. Files specified in chat apply to that run only.",
+      upload: "Upload map", replace: "Replace map", uploaded: "SKU map saved.", noMap: "No SKU map uploaded", updated: "Updated",
+      weights: "Sales weights", weightsHint: "Combine daily sales across the three periods. Weights must total 100%.", days: (day: number) => `${day} days`,
+      exchange: "CNY → VND exchange rate", cny: "1 CNY =", vnd: "VND", advanced: "Advanced · Day adjustments",
+      adjustment: (day: number) => `${day}-day adjustment`, adjustmentHint: "Daily sales = period sales ÷ (period days + adjustment). Defaults for 7, 15 and 30 days: 0, 0.8 and 0.8.",
+      save: "Save parameters", saving: "Saving…", saved: "Parameters saved for the next run.", appliesNextRun: "Changes apply to the next calculation. Running calculations keep their original inputs.",
+      loading: "Loading settings…", retry: "Retry", unavailable: "Open these settings in the desktop app.",
     },
     workbenchIndex: {
       eyebrow: "Workbench",

@@ -136,6 +136,10 @@ def build_skeleton(source_path: Path, output_path: Path) -> Path:
                 target_main[f"{column}2"] = text
 
         change = result["数据更改"]
+        target_main["S2"] = "=K2*数据更改!$E$2/(30+AV2)+L2*数据更改!$F$2/(15+AW2)+M2*数据更改!$G$2/(7+AX2)"
+        for index, (label, value) in enumerate((("30天销量权重", 0.1), ("15天销量权重", 0.3), ("7天销量权重", 0.6)), 5):
+            change.cell(1, index).value = label
+            change.cell(2, index).value = value
         for column, value in enumerate(DEFAULT_PARAMETERS, 1):
             change.cell(2, column).value = value
 

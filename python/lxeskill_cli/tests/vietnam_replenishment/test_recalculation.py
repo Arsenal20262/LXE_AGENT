@@ -88,9 +88,9 @@ def _formula_caches(
             f"AA{row_number}": canonical_product_time(sources.products[sku]["创建时间"]),
             f"AB{row_number}": "#DIV/0!",
             f"AC{row_number}": None if mapped is None else 0,
-            f"AV{row_number}": config.weight_30d,
-            f"AW{row_number}": config.weight_15d,
-            f"AX{row_number}": config.weight_7d,
+            f"AV{row_number}": config.day_adjustment_30d,
+            f"AW{row_number}": config.day_adjustment_15d,
+            f"AX{row_number}": config.day_adjustment_7d,
             f"AY{row_number}": config.exchange_rate,
         })
         for column in ("AF", "AG", "AH", "AI", "AK", "AL", "AM"):

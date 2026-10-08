@@ -180,37 +180,11 @@ describe("DesktopConfigStore", () => {
     expect(persistedSecrets).not.toContain("source-saihu-secret");
   });
 
-  test("saves Vietnam settings without Yacang credentials and injects all four values", () => {
+  test("keeps legacy Vietnam settings readable but does not inject them into command environments", () => {
     const root = createRoot();
-    const workspace = join(root, "workspace");
-    const store = new DesktopConfigStore(root, workspace, safeStorage, { platform: "win32" });
-    expect(store.state().vietnam_recommendation).toEqual({
-      weight_30d: "0.8", weight_15d: "0.8", weight_7d: "0", exchange_rate: "3900",
-    });
-    const previousEnvironment = store.environment();
-    const saved = store.save({
-      workspace_root: workspace,
-      vietnam_recommendation: {
-        weight_30d: " 0.70 ", weight_15d: "0.65", weight_7d: "1e-1", exchange_rate: "4000",
-      },
-    });
-    expect(saved.yacang).toMatchObject({ configured: false, password_configured: false });
-    expect(saved.vietnam_recommendation).toEqual({
-      weight_30d: "0.70", weight_15d: "0.65", weight_7d: "1e-1", exchange_rate: "4000",
-    });
-    expect(JSON.stringify(store.environment())).not.toBe(JSON.stringify(previousEnvironment));
-    expect(store.environment()).toMatchObject({
-      LXE_VIETNAM_WEIGHT_30D: "0.70",
-      LXE_VIETNAM_WEIGHT_15D: "0.65",
-      LXE_VIETNAM_WEIGHT_7D: "1e-1",
-      LXE_VIETNAM_EXCHANGE_RATE: "4000",
-    });
-    const stableEnvironment = store.environment();
-    store.save({ workspace_root: workspace, vietnam_recommendation: saved.vietnam_recommendation });
-    expect(store.environment()).toEqual(stableEnvironment);
-    const reloaded = new DesktopConfigStore(root, workspace, safeStorage, { platform: "win32" });
-    expect(reloaded.state().vietnam_recommendation).toEqual(saved.vietnam_recommendation);
-    expect(reloaded.environment().LXE_VIETNAM_WEIGHT_30D).toBe("0.70");
+    const store = new DesktopConfigStore(root, join(root, "workspace"), safeStorage, { platform: "win32" });
+    expect(store.state().vietnam_recommendation).toEqual({ weight_30d: "0.8", weight_15d: "0.8", weight_7d: "0", exchange_rate: "3900" });
+    expect(Object.keys(store.environment()).filter(key => key.startsWith("LXE_VIETNAM_"))).toEqual([]);
   });
 
   test("preserves blank secret patches and explicitly clears an integration", () => {

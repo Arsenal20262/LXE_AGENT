@@ -1,16 +1,14 @@
 import { execFile, type ExecFileOptions } from "node:child_process";
 import { existsSync, mkdirSync } from "node:fs";
-import { isAbsolute, join } from "node:path";
+import { join } from "node:path";
 import type {
   DesktopInputAssetSlot,
   DesktopInputAssetVersion,
-  DesktopVietnamSkuMapMutation,
 } from "@lxe/desktop-protocol";
 
 const MAX_OUTPUT_BYTES = 1024 * 1024;
 const MAX_ERROR_BYTES = 4_096;
 const LIST_TIMEOUT_MS = 30_000;
-const INSTALL_TIMEOUT_MS = 180_000;
 const REVISION = /^[0-9a-f]{32}$/u;
 
 export interface AssetCommandExecution {
@@ -31,7 +29,7 @@ export interface DesktopInputAssetsOptions {
 
 const secretNames = /(?:PASSWORD|SECRET|TOKEN|COOKIE|SESSION|API_KEY|MOBILE)$/iu;
 
-const redactAndBound = (message: string): string => {
+export const redactAndBound = (message: string): string => {
   let detail = message.trim();
   for (const [name, secret] of Object.entries(process.env)) {
     if (secret && secretNames.test(name)) detail = detail.replaceAll(secret, "[redacted]");
@@ -177,35 +175,6 @@ export class DesktopInputAssetsService {
     const data = await this.runAssetCommand(["assets", "list"], [], LIST_TIMEOUT_MS);
     if (!Array.isArray(data.slots)) throw new Error("lxeskill assets list returned no slots");
     return data.slots.map(slotValue).filter((slot): slot is DesktopInputAssetSlot => slot !== null);
-  }
-
-  async installVietnamSkuMap(sourcePath: string, expectedRevision: string | null): Promise<DesktopVietnamSkuMapMutation> {
-    if (!isAbsolute(sourcePath)) throw new Error("Selected SKU map path must be absolute");
-    if (expectedRevision !== null && !REVISION.test(expectedRevision)) throw new Error("Invalid SKU map revision");
-    const data = await this.runAssetCommand(
-      ["assets", "vietnam", "sku", "install"],
-      ["--source-path", sourcePath, "--expected-revision", expectedRevision ?? ""],
-      INSTALL_TIMEOUT_MS,
-    );
-    return this.mutationValue(data, ["installed", "unchanged"]);
-  }
-
-  async rollbackVietnamSkuMap(expectedRevision: string): Promise<DesktopVietnamSkuMapMutation> {
-    if (!REVISION.test(expectedRevision)) throw new Error("Invalid SKU map revision");
-    const data = await this.runAssetCommand(
-      ["assets", "vietnam", "sku", "rollback"],
-      ["--expected-revision", expectedRevision],
-      LIST_TIMEOUT_MS,
-    );
-    return this.mutationValue(data, ["rolled_back"]);
-  }
-
-  private mutationValue(data: Record<string, unknown>, accepted: readonly DesktopVietnamSkuMapMutation["status"][]): DesktopVietnamSkuMapMutation {
-    if (!accepted.includes(data.status as DesktopVietnamSkuMapMutation["status"])
-      || typeof data.manifest_revision !== "string" || !REVISION.test(data.manifest_revision)) {
-      throw new Error("lxeskill Vietnam SKU map command returned an invalid result");
-    }
-    return { status: data.status as DesktopVietnamSkuMapMutation["status"], manifest_revision: data.manifest_revision };
   }
 
   async directoryFor(slot: string): Promise<string> {

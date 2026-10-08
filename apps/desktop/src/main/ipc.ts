@@ -12,7 +12,7 @@ import type {
   DesktopCloudState,
   DesktopHealth,
   DesktopInputAssetSlot,
-  DesktopVietnamSkuMapMutation,
+  DesktopVietnamSettingsState,
   DesktopInputAttachmentPayload,
   DesktopDraftAttachmentPayload,
   DesktopLocalModelCredentialInput,
@@ -30,7 +30,6 @@ import { workspaceDirectory } from "./workspace-directory";
 import { WorkspaceApplications } from "./workspace-apps/service";
 import { bundleIconDataUrl } from "./workspace-apps/icons";
 import { readClipboardFilePaths } from "./clipboard-files";
-import { createVietnamSkuMapActions } from "./vietnam-sku-map-actions";
 import {
   validateDraftImagePreviewVariant,
   validateCloudActivationInput,
@@ -43,7 +42,6 @@ import {
   validateSyntheticPerformerId,
   validateSyntheticPerformerSourceKind,
   validateSyntheticPerformerTaskInput,
-  validateVietnamSkuMapRevision,
 } from "./ipc-validation";
 
 export interface DesktopIpcApplication {
@@ -86,8 +84,9 @@ export interface DesktopIpcApplication {
   syntheticPerformerOutputPath(taskId: string): string;
   listInputAssets(): Promise<DesktopInputAssetSlot[]>;
   inputAssetSlotDirectory(slot: string): Promise<string>;
-  installVietnamSkuMap(sourcePath: string, expectedRevision: string | null): Promise<DesktopVietnamSkuMapMutation>;
-  rollbackVietnamSkuMap(expectedRevision: string): Promise<DesktopVietnamSkuMapMutation>;
+  getVietnamSettings(): Promise<DesktopVietnamSettingsState>;
+  saveVietnamParameters(input: unknown): Promise<DesktopVietnamSettingsState>;
+  installVietnamSkuMap(sourcePath: string): Promise<DesktopVietnamSettingsState>;
   registerConversationFiles(paths: string[]): DesktopInputAttachmentPayload[];
   registerPastedConversationFiles(input: unknown): DesktopDraftAttachmentPayload[];
   previewDraftConversationFile(attachmentId: string, variant?: "thumbnail" | "expanded"): Promise<{ data_url: string }>;
@@ -262,24 +261,23 @@ export function registerDesktopIpc(application: DesktopIpcApplication): () => vo
     const error = await shell.openPath(path);
     if (error) throw new Error(error);
   });
-  const mapActions = createVietnamSkuMapActions({
-    list: () => application.listInputAssets(),
-    choose: () => dialog.showOpenDialog({
-      title: "选择越南 SKU 参数表",
-      properties: ["openFile"],
-      filters: [{ name: "Excel 工作簿", extensions: ["xlsx"] }],
-    }),
-    install: (sourcePath, expectedRevision) => application.installVietnamSkuMap(sourcePath, expectedRevision),
-    rollback: expectedRevision => application.rollbackVietnamSkuMap(expectedRevision),
-  });
   ipcMain.handle(IPC_CHANNELS.listInputAssets, () => application.listInputAssets());
-  ipcMain.handle(IPC_CHANNELS.uploadVietnamSkuMap, (event) => {
-    if (!application.isTrustedFileSender(event)) throw new Error("Only the desktop main frame may manage input assets");
-    return mapActions.upload();
+  ipcMain.handle(IPC_CHANNELS.getVietnamSettings, (event) => {
+    trustedWorkspaceSender(event);
+    return application.getVietnamSettings();
   });
-  ipcMain.handle(IPC_CHANNELS.rollbackVietnamSkuMap, (event, expectedRevision: unknown) => {
-    if (!application.isTrustedFileSender(event)) throw new Error("Only the desktop main frame may manage input assets");
-    return mapActions.rollback(validateVietnamSkuMapRevision(expectedRevision));
+  ipcMain.handle(IPC_CHANNELS.saveVietnamParameters, (event, input: unknown) => {
+    trustedWorkspaceSender(event);
+    return application.saveVietnamParameters(input);
+  });
+  ipcMain.handle(IPC_CHANNELS.uploadVietnamSkuMap, async (event) => {
+    trustedWorkspaceSender(event);
+    const selection = await dialog.showOpenDialog({
+      title: "选择越南 SKU 映射表", properties: ["openFile"],
+      filters: [{ name: "Excel 工作簿", extensions: ["xlsx"] }],
+    });
+    if (selection.canceled || !selection.filePaths[0]) return null;
+    return application.installVietnamSkuMap(selection.filePaths[0]);
   });
   ipcMain.handle(IPC_CHANNELS.revealInputAssetSlot, async (_event, slot: unknown) => {
     const directory = await application.inputAssetSlotDirectory(inputAssetSlotId(slot));

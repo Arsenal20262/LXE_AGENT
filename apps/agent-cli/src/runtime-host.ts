@@ -21,7 +21,6 @@ import {
   AtomicRuntimeProviderManager,
   buildSystemPrompt,
   configureRuntimeWireTracing,
-  createManagedLxeSkillTool,
   createRuntimeProvider,
   ExecShellAdapter,
   loadLxeSkillCommandCatalog,
@@ -246,30 +245,6 @@ export function createAgentRuntimeHost(
       });
     },
   });
-  if (cliCommands.some((entry) => entry.managedExecution !== undefined)) {
-    tools.register(createManagedLxeSkillTool({
-      commands: cliCommands,
-      loadMessages: (sessionId) => store.loadMessages(sessionId),
-      resolveAttachment: (sessionId, attachmentId) => store.resolveAttachment(sessionId, attachmentId),
-      run: async (entry, argv, workspaceRoot, signal, timeoutMs) => {
-        if (!lxeSkillArgv) {
-          throw new ToolExecutionError("environment_unavailable", lxeSkillRuntime.snapshot().message || "LXE Skill CLI Python is unavailable");
-        }
-        const runner = new OneShotCliRunner({
-          command: lxeSkillArgv,
-          cwd: options.dataRoot,
-          timeoutMs,
-          maxOutputBytes: 10 * 1024 * 1024,
-          env: {
-            ...lxeSkillEnvironment,
-            LXE_WORKSPACE_ROOT: workspaceRoot,
-            LXESKILL_SKILL_SCOPE: entry.ownerSkills.join(","),
-          },
-        });
-        return runner.execute(argv, signal, timeoutMs);
-      },
-    }));
-  }
   const processes = registerCodingTools(tools, {
     executionPaths, approvals,
     ...(environment.LXE_FD_PATH ? { fdPath: environment.LXE_FD_PATH } : {}),

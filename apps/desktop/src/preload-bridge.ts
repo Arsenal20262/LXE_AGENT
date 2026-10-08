@@ -114,7 +114,8 @@ export function createDesktopBridge(
       listInputAssets: () => ipc.invoke(IPC_CHANNELS.listInputAssets),
       revealInputAssetSlot: (slot) => ipc.invoke(IPC_CHANNELS.revealInputAssetSlot, slot),
       uploadVietnamSkuMap: () => ipc.invoke(IPC_CHANNELS.uploadVietnamSkuMap),
-      rollbackVietnamSkuMap: (expectedRevision) => ipc.invoke(IPC_CHANNELS.rollbackVietnamSkuMap, expectedRevision),
+      getVietnamSettings: () => ipc.invoke(IPC_CHANNELS.getVietnamSettings),
+      saveVietnamParameters: (input) => ipc.invoke(IPC_CHANNELS.saveVietnamParameters, input),
       onCloudStateChanged: (listener) => {
         const handler: IpcListener = (_event, state) => listener(state as DesktopCloudState);
         ipc.on(IPC_CHANNELS.cloudStateChanged, handler);

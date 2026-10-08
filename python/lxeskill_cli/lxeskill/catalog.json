@@ -4,9 +4,7 @@
     {"name": "mabang_brazil_overseas_export", "module": "services.agent_cli.mabang.brazil_overseas_export", "command_path": ["mabang", "brazil-overseas", "export", "run"], "visibility": "business", "session_mode": "none", "owner_skills": ["mabang-brazil-export"], "exposed": true, "timeout_ms": 960000, "deliver_artifacts_on_failure": true, "artifact_paths": [{"field": "artifacts[].path", "role": "deliverable"}], "input_schema": {"type": "object", "properties": {"params": {"type": "object", "properties": {"reports": {"type": "array", "minItems": 1, "items": {"enum": ["inventory_sales_snapshot", "allocation_pending_default_3m", "allocation_signed_before_3m"]}}}, "required": ["reports"], "additionalProperties": false}}, "required": ["params"], "additionalProperties": false}},
     {"name": "mabang_tms_export_run", "module": "services.agent_cli.mabang_tms.export_run", "command_path": ["mabang-tms", "export", "run"], "visibility": "business", "session_mode": "none", "owner_skills": ["mabang-tms-export"], "exposed": true, "timeout_ms": 960000, "deliver_artifacts_on_failure": true, "artifact_paths": [{"field": "artifacts[].path", "role": "deliverable"}], "input_schema": {"type": "object", "properties": {}, "additionalProperties": false}},
     {"name": "yacang_export_run", "module": "services.agent_cli.yacang.export_run", "command_path": ["yacang", "export", "run"], "visibility": "business", "session_mode": "none", "owner_skills": ["yacang-export"], "exposed": true, "timeout_ms": 3600000, "deliver_artifacts_on_failure": true, "artifact_paths": [{"field": "artifacts[].path", "role": "deliverable"}], "input_schema": {"type": "object", "properties": {"params": {"type": "object", "properties": {"reports": {"type": "array", "minItems": 1, "items": {"enum": ["inventory-sales", "inventory-current-snapshot", "warehouse-products"]}}, "warehouses": {"type": "array", "minItems": 1, "items": {"enum": ["MY8801", "PH8805", "TH8802", "VN8806"]}}, "created_date": {"type": "object", "properties": {"start_date": {"type": "string"}, "end_date": {"type": "string"}}, "required": ["start_date", "end_date"], "additionalProperties": false}}, "required": ["reports"], "additionalProperties": false}}, "required": ["params"], "additionalProperties": false}},
-    {"name": "vietnam_replenishment_bind_sku", "module": "services.agent_cli.vietnam_replenishment.bind_sku", "command_path": ["vietnam", "sku", "bind"], "visibility": "business", "session_mode": "none", "owner_skills": ["vietnam-stock-recommendation"], "exposed": true, "timeout_ms": 180000, "managed_execution": {"attachment_argument": "source_path"}, "input_schema": {"type": "object", "properties": {"source_path": {"type": "string", "minLength": 1, "x-lxe-file-input": {"accepted_extensions": [".xlsx"], "instruction": "请在当前对话上传越南 SKU 参数表，并使用附件的真实绝对路径。"}}}, "required": ["source_path"], "additionalProperties": false}},
-    {"name": "vietnam_replenishment_probe_sku", "module": "services.agent_cli.vietnam_replenishment.probe_sku", "command_path": ["vietnam", "sku", "probe"], "visibility": "internal", "session_mode": "none", "owner_skills": [], "exposed": false, "preselection_probe": true, "timeout_ms": 30000, "input_schema": {"type": "object", "properties": {"source_path": {"type": "string", "minLength": 1}}, "required": ["source_path"], "additionalProperties": false}},
-    {"name": "vietnam_replenishment_generate", "module": "services.agent_cli.vietnam_replenishment.generate", "command_path": ["vietnam", "stock", "recommend"], "visibility": "business", "session_mode": "none", "owner_skills": ["vietnam-stock-recommendation"], "exposed": true, "timeout_ms": 3600000, "managed_execution": {}, "artifact_paths": [{"field": "output_xlsx", "role": "deliverable"}], "input_schema": {"type": "object", "properties": {}, "additionalProperties": false}},
+    {"name": "vietnam_replenishment_generate", "module": "services.agent_cli.vietnam_replenishment.generate", "command_path": ["vietnam", "stock", "recommend"], "visibility": "business", "session_mode": "none", "owner_skills": ["vietnam-stock-recommendation"], "exposed": true, "timeout_ms": 3600000, "artifact_paths": [{"field": "output_xlsx", "role": "deliverable"}], "input_schema": {"type": "object", "properties": {"sku_map": {"type": "string", "minLength": 1}}, "additionalProperties": false}},
     {"name": "shangman_goods_export", "command_path": ["shangman", "export", "run"], "visibility": "business", "session_mode": "none", "module": "services.agent_cli.shangman.goods_export", "owner_skills": ["shangman-goods-export"], "timeout_ms": 300000, "exposed": true, "input_schema": {"type": "object", "properties": {}, "additionalProperties": false}, "artifact_paths": [{"field": "artifact_path", "role": "deliverable"}]},
     {"name": "shangman_login_prepare", "command_path": ["shangman", "login", "prepare"], "visibility": "business", "session_mode": "none", "module": "services.agent_cli.shangman.login_prepare", "owner_skills": ["shangman-login"], "timeout_ms": 60000, "exposed": true, "input_schema": {"type": "object", "properties": {}, "additionalProperties": false}, "artifact_paths": [{"field": "image_path", "role": "model_input"}]},
     {"name": "shangman_login_submit", "command_path": ["shangman", "login", "submit"], "visibility": "business", "session_mode": "none", "module": "services.agent_cli.shangman.login_submit", "owner_skills": ["shangman-login"], "timeout_ms": 60000, "exposed": true, "input_schema": {"type": "object", "properties": {"challenge_id": {"type": "string", "minLength": 1}, "captcha_code": {"type": "string", "minLength": 1, "maxLength": 128}}, "additionalProperties": false, "required": ["challenge_id", "captcha_code"]}},
@@ -92,43 +90,6 @@
       "timeout_ms": 30000,
       "exposed": false,
       "input_schema": {"type": "object", "properties": {"action": {"type": "string", "enum": ["list"]}}, "additionalProperties": false}
-    },
-    {
-      "name": "assets_vietnam_sku_install",
-      "command_path": ["assets", "vietnam", "sku", "install"],
-      "visibility": "internal",
-      "session_mode": "none",
-      "module": "services.assets.vietnam_sku_install",
-      "owner_skills": [],
-      "timeout_ms": 180000,
-      "exposed": false,
-      "input_schema": {
-        "type": "object",
-        "properties": {
-          "source_path": {"type": "string", "minLength": 1},
-          "expected_revision": {"type": "string", "pattern": "^(?:[0-9a-f]{32})?$"}
-        },
-        "required": ["source_path", "expected_revision"],
-        "additionalProperties": false
-      }
-    },
-    {
-      "name": "assets_vietnam_sku_rollback",
-      "command_path": ["assets", "vietnam", "sku", "rollback"],
-      "visibility": "internal",
-      "session_mode": "none",
-      "module": "services.assets.vietnam_sku_rollback",
-      "owner_skills": [],
-      "timeout_ms": 30000,
-      "exposed": false,
-      "input_schema": {
-        "type": "object",
-        "properties": {
-          "expected_revision": {"type": "string", "pattern": "^[0-9a-f]{32}$"}
-        },
-        "required": ["expected_revision"],
-        "additionalProperties": false
-      }
     },
     {
       "name": "media_synthetic_performer",
@@ -467,7 +428,6 @@
     "customs_template": {"display_name": "报关资料模板", "used_by": ["报关资料填写"], "dir": "fba/customs_template", "holds": "CLI 只复制副本填写，原件不改。"},
     "invoice_template": {"display_name": "发票模板", "used_by": ["发票填写"], "dir": "fba/invoice_template", "holds": "CLI 只复制副本填写，原件不改。"},
     "export_tax_products": {"display_name": "出口退税产品表", "used_by": ["出口退税发货单汇总", "退税商品资料导入"], "dir": "fba/export_tax_whitelist", "holds": "白名单当前版：Sheet1，列 sku 与 产品名称。products-import 生成的更新副本落在产物目录 fba/export_tax_products，不自动成为当前版。"},
-    "vietnam_replenishment_template": {"display_name": "越南备货清单模板", "used_by": ["旧版历史模板参考"], "dir": "vietnam/replenishment_template", "holds": "旧版历史模板工作簿；越南备货五表生成使用应用内置骨架，不读取此槽位。", "management": "desktop"},
-    "vietnam_sku_parameter_map": {"display_name": "越南 SKU 参数表", "used_by": ["越南备货清单生成"], "dir": "vietnam/sku_parameter_map", "holds": "按精确 SKU 填写成本、跨境价、折扣价和热销标记；生成前必须存在经内容校验的 current。", "management": "desktop"}
+    "vietnam_replenishment_template": {"display_name": "越南备货清单模板", "used_by": ["旧版历史模板参考"], "dir": "vietnam/replenishment_template", "holds": "旧版历史模板工作簿；越南备货五表生成使用应用内置骨架，不读取此槽位。", "management": "desktop"}
   }
 }

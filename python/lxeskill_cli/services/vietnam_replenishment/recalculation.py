@@ -380,9 +380,9 @@ def validate_recalculated_workbook(
                 (11, current.sales_30d, "30天销量"),
                 (12, current.sales_15d, "15天销量"),
                 (13, current.sales_7d, "7天销量"),
-                (48, config.weight_30d, "30天参数"),
-                (49, config.weight_15d, "15天参数"),
-                (50, config.weight_7d, "7天参数"),
+                (48, config.day_adjustment_30d, "30天参数"),
+                (49, config.day_adjustment_15d, "15天参数"),
+                (50, config.day_adjustment_7d, "7天参数"),
                 (51, config.exchange_rate, "汇率"),
             ):
                 actual = _decimal(main_values.cell(row_number, column).value, coordinate=f"{label} 第 {row_number} 行")
@@ -471,7 +471,8 @@ def validate_recalculated_workbook(
                 _check_mapping_result(main_values, sku, row_number, column, literals)
 
         for column, expected_value in enumerate(
-            (config.weight_30d, config.weight_15d, config.weight_7d, config.exchange_rate), 1
+            (config.day_adjustment_30d, config.day_adjustment_15d, config.day_adjustment_7d, config.exchange_rate,
+             config.sales_weight_30d, config.sales_weight_15d, config.sales_weight_7d), 1
         ):
             actual = _decimal(
                 formulas["数据更改"].cell(2, column).value,

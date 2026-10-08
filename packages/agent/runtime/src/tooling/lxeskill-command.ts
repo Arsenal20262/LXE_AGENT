@@ -14,7 +14,6 @@ export interface LxeSkillCommandDefinition {
   ownerSkills: string[];
   attributionSkill?: string;
   artifactPaths?: ArtifactPathDeclaration[];
-  managedExecution?: { attachmentArgument?: string };
   preselectionProbe?: true;
   timeoutMs?: number;
 }
@@ -87,56 +86,6 @@ const artifactPathsOf = (
   });
 };
 
-const MANAGED_TOKEN = /^[a-z][a-z0-9-]*$/u;
-const MANAGED_ARGUMENT = /^[a-z][a-z0-9_]*$/u;
-
-const managedExecutionOf = (
-  raw: Record<string, unknown>, commandPath: string[], ownerSkills: string[], artifactPaths: ArtifactPathDeclaration[],
-) => {
-  if (!Object.prototype.hasOwnProperty.call(raw, "managed_execution")) return undefined;
-  const value = raw.managed_execution;
-  const declaration = value && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown> : null;
-  const schema = raw.input_schema && typeof raw.input_schema === "object" && !Array.isArray(raw.input_schema)
-    ? raw.input_schema as Record<string, unknown> : null;
-  const properties = schema?.properties && typeof schema.properties === "object" && !Array.isArray(schema.properties)
-    ? schema.properties as Record<string, unknown> : null;
-  const required = schema?.required ?? [];
-  const timeout = Number(raw.timeout_ms);
-  if (!declaration || Object.keys(declaration).some(key => key !== "attachment_argument")
-    || raw.visibility !== "business" || raw.session_mode !== "none" || raw.exposed !== true
-    || ownerSkills.length !== 1 || commandPath.length === 0 || !commandPath.every(token => MANAGED_TOKEN.test(token))
-    || !Number.isSafeInteger(timeout) || timeout <= 0 || !schema || schema.type !== "object"
-    || schema.additionalProperties !== false || !properties || !Array.isArray(required)) {
-    throw new Error(`invalid managed execution contract: ${String(raw.name ?? "")}`);
-  }
-  const rawArtifactPaths = raw.artifact_paths;
-  if ((rawArtifactPaths !== undefined && !Array.isArray(rawArtifactPaths))
-    || artifactPaths.length > 1
-    || artifactPaths.some(item => item.role !== "deliverable" || !/^[A-Za-z_]\w*$/u.test(item.field))
-    || (Array.isArray(rawArtifactPaths) && rawArtifactPaths.some(item =>
-      !item || typeof item !== "object" || Array.isArray(item)
-      || Object.keys(item).some(key => key !== "field" && key !== "role")))) {
-    throw new Error(`invalid managed execution artifact contract: ${String(raw.name ?? "")}`);
-  }
-  if (!Object.prototype.hasOwnProperty.call(declaration, "attachment_argument")) {
-    if (Object.keys(properties).length !== 0 || required.length !== 0)
-      throw new Error(`invalid managed execution inputs: ${String(raw.name ?? "")}`);
-    return {};
-  }
-  const argument = declaration.attachment_argument;
-  if (typeof argument !== "string" || !MANAGED_ARGUMENT.test(argument)
-    || Object.keys(properties).length !== 1 || !Object.prototype.hasOwnProperty.call(properties, argument)
-    || required.length !== 1 || required[0] !== argument)
-    throw new Error(`invalid managed execution attachment argument: ${String(raw.name ?? "")}`);
-  const field = properties[argument] as Record<string, unknown> | null;
-  const fileInput = field?.["x-lxe-file-input"] as Record<string, unknown> | undefined;
-  if (!field || field.type !== "string" || !fileInput || !Array.isArray(fileInput.accepted_extensions)
-    || fileInput.accepted_extensions.length !== 1 || fileInput.accepted_extensions[0] !== ".xlsx")
-    throw new Error(`invalid managed execution XLSX input: ${String(raw.name ?? "")}`);
-  return { attachmentArgument: argument };
-};
-
 const preselectionProbeOf = (raw: Record<string, unknown>, ownerSkills: string[]): true | undefined => {
   if (!Object.prototype.hasOwnProperty.call(raw, "preselection_probe")) return undefined;
   const schema = raw.input_schema && typeof raw.input_schema === "object" && !Array.isArray(raw.input_schema)
@@ -147,7 +96,7 @@ const preselectionProbeOf = (raw: Record<string, unknown>, ownerSkills: string[]
     ? properties.source_path as Record<string, unknown> : null;
   const timeout = raw.timeout_ms;
   if (raw.preselection_probe !== true || raw.visibility !== "internal" || raw.exposed !== false
-    || raw.session_mode !== "none" || ownerSkills.length !== 0 || raw.managed_execution !== undefined
+    || raw.session_mode !== "none" || ownerSkills.length !== 0
     || !Number.isSafeInteger(timeout) || Number(timeout) <= 0
     || !schema || schema.type !== "object" || schema.additionalProperties !== false
     || !properties || Object.keys(properties).length !== 1 || !field || field.type !== "string"
@@ -177,7 +126,6 @@ export function loadLxeSkillCommandCatalog(path: string): LxeSkillCommandDefinit
     const ownerSkills = Array.isArray(raw.owner_skills)
       ? raw.owner_skills.map((item) => String(item).trim()).filter(Boolean)
       : [];
-    const managedExecution = managedExecutionOf(raw, commandPath, ownerSkills, artifactPaths);
     const preselectionProbe = preselectionProbeOf(raw, ownerSkills);
     const explicitAttribution = String(raw.attribution_skill ?? "").trim();
     if (ownerSkills.length > 1 && !explicitAttribution) {
@@ -195,7 +143,6 @@ export function loadLxeSkillCommandCatalog(path: string): LxeSkillCommandDefinit
       ownerSkills,
       ...(attributionSkill ? { attributionSkill } : {}),
       ...(artifactPaths.length ? { artifactPaths } : {}),
-      ...(managedExecution ? { managedExecution, timeoutMs: Number(raw.timeout_ms) } : {}),
       ...(preselectionProbe ? { preselectionProbe, timeoutMs: Number(raw.timeout_ms) } : {}),
     };
   });

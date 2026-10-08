@@ -132,24 +132,9 @@ def _describe(path: Path) -> AssetVersion:
     return AssetVersion(path=path, file_name=path.name, updated_at=stamp.strftime("%Y-%m-%d"))
 
 
-def _managed_vietnam_version(generation: str) -> AssetVersion | None:
-    # The import is deliberately late: the managed store uses slot_dir().
-    from services.vietnam_replenishment.sku_map_store import SkuMapStoreError, trusted_version
-
-    try:
-        version = trusted_version(generation)
-    except SkuMapStoreError as exc:
-        raise InputAssetError(str(exc)) from exc
-    if version is None:
-        return None
-    return AssetVersion(path=version.path, file_name=version.file_name, updated_at=version.updated_at)
-
-
 def current_asset(slot_id: str) -> AssetVersion | None:
     """The version a command should use when the caller supplied no path."""
     asset(slot_id)
-    if slot_id == "vietnam_sku_parameter_map":
-        return _managed_vietnam_version(_CURRENT)
     path = _generation_file(slot_id, _CURRENT)
     return _describe(path) if path else None
 
@@ -157,8 +142,6 @@ def current_asset(slot_id: str) -> AssetVersion | None:
 def previous_asset(slot_id: str) -> AssetVersion | None:
     """The retained rollback copy. Never handed to a command or shown to the model."""
     asset(slot_id)
-    if slot_id == "vietnam_sku_parameter_map":
-        return _managed_vietnam_version(_PREVIOUS)
     path = _generation_file(slot_id, _PREVIOUS)
     return _describe(path) if path else None
 

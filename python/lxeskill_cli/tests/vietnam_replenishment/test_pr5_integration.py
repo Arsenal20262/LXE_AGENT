@@ -12,9 +12,8 @@ from openpyxl import Workbook, load_workbook
 import pytest
 
 from lxeskill import cli as lxeskill
-from services.assets.inspect import run as inspect_assets
-from services.assets.vietnam_sku_install import run as install_map
-from services.assets.vietnam_sku_rollback import run as rollback_map
+from services.vietnam_replenishment import settings
+from services.vietnam_replenishment.workbook import RecommendationConfig
 from services.vietnam_replenishment import workflow
 from services.vietnam_replenishment.yacang_sources import VietnamSources
 from shared import workspace
@@ -93,10 +92,6 @@ def _sparse_map(path: Path) -> Path:
     return path
 
 
-def _managed_slot() -> dict:
-    result = inspect_assets({})
-    assert result["success"] is True
-    return next(slot for slot in result["slots"] if slot["slot"] == "vietnam_sku_parameter_map")
 
 
 @pytest.fixture()
@@ -118,18 +113,12 @@ def isolated_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     not (os.environ.get("LXE_OFFICE_NODE") and os.environ.get("LXE_OFFICE_CLI")),
     reason="Host Office Kit paths are not configured",
 )
-def test_install_list_replace_rollback_then_generate_one_final_workbook(
+def test_upload_replace_then_generate_one_final_workbook(
     tmp_path: Path, isolated_state: Path,
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.delenv("LXESKILL_SKILL_SCOPE", raising=False)
-    for name, value in {
-        "LXE_VIETNAM_WEIGHT_30D": "0.7",
-        "LXE_VIETNAM_WEIGHT_15D": "0.6",
-        "LXE_VIETNAM_WEIGHT_7D": "0.1",
-        "LXE_VIETNAM_EXCHANGE_RATE": "4000",
-    }.items():
-        monkeypatch.setenv(name, value)
+    settings.save_parameters(settings.config_json(RecommendationConfig(Decimal("0.7"), Decimal("0.6"), Decimal("0.1"), Decimal("4000"))))
     export_calls: list[str] = []
 
     def fake_export() -> VietnamSources:
@@ -140,29 +129,9 @@ def test_install_list_replace_rollback_then_generate_one_final_workbook(
     a = _map(tmp_path / "map-a.xlsx", cost=10, cross_border=20, discount=15)
     b = _map(tmp_path / "map-b.xlsx", cost=11, cross_border=33, discount=25)
 
-    first = install_map({"source_path": str(a), "expected_revision": ""})
-    assert first["success"] is True and first["status"] == "installed"
-    listed_a = _managed_slot()
-    assert listed_a["management"] == "desktop"
-    assert listed_a["manifest_revision"] == first["manifest_revision"]
-    assert listed_a["current"]["file_name"] == "map-a.xlsx"
-    assert listed_a["previous"] is None
-
-    second = install_map({
-        "source_path": str(b), "expected_revision": first["manifest_revision"],
-    })
-    assert second["success"] is True and second["status"] == "installed"
-    listed_b = _managed_slot()
-    assert listed_b["manifest_revision"] == second["manifest_revision"]
-    assert listed_b["current"]["file_name"] == "map-b.xlsx"
-    assert listed_b["previous"]["file_name"] == "map-a.xlsx"
-
-    rolled = rollback_map({"expected_revision": second["manifest_revision"]})
-    assert rolled["success"] is True and rolled["status"] == "rolled_back"
-    listed_rolled = _managed_slot()
-    assert listed_rolled["manifest_revision"] == rolled["manifest_revision"]
-    assert listed_rolled["current"]["file_name"] == "map-a.xlsx"
-    assert listed_rolled["previous"]["file_name"] == "map-b.xlsx"
+    settings.upload_map(b)
+    settings.upload_map(a)
+    assert settings.read_state()["sku_map"]["file_name"] == "sku-map.xlsx"
 
     assert lxeskill.main(["vietnam", "stock", "recommend"]) == 0
     records = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.strip()]
@@ -170,10 +139,11 @@ def test_install_list_replace_rollback_then_generate_one_final_workbook(
     result = records[0]
     assert result["type"] == "result" and result["ok"] is True
     assert result["data"]["config"] == {
-        "weight_30d": "0.7", "weight_15d": "0.6",
-        "weight_7d": "0.1", "exchange_rate": "4000",
+        "day_adjustment_30d": "0.7", "day_adjustment_15d": "0.6",
+        "day_adjustment_7d": "0.1", "exchange_rate": "4000",
+        "sales_weight_7d": "0.6", "sales_weight_15d": "0.3", "sales_weight_30d": "0.1",
     }
-    assert result["data"]["config_source"] == "environment"
+    assert result["data"]["config_source"] == str(settings.data_directory() / "parameters.json")
     assert result["data"]["sku_count"] == 1
     output = Path(result["data"]["output_xlsx"])
     assert output.is_relative_to(tmp_path / "workspace" / ".lxeagent" / "artifacts")
@@ -203,18 +173,12 @@ def test_install_list_replace_rollback_then_generate_one_final_workbook(
     not (os.environ.get("LXE_OFFICE_NODE") and os.environ.get("LXE_OFFICE_CLI")),
     reason="Host Office Kit paths are not configured",
 )
-def test_chat_bind_sparse_map_then_generate_keeps_all_yacang_skus(
+def test_explicit_sparse_map_keeps_all_yacang_skus(
     tmp_path: Path, isolated_state: Path,
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.delenv("LXESKILL_SKILL_SCOPE", raising=False)
-    for name, value in {
-        "LXE_VIETNAM_WEIGHT_30D": "0.7",
-        "LXE_VIETNAM_WEIGHT_15D": "0.6",
-        "LXE_VIETNAM_WEIGHT_7D": "0.1",
-        "LXE_VIETNAM_EXCHANGE_RATE": "4000",
-    }.items():
-        monkeypatch.setenv(name, value)
+    settings.save_parameters(settings.config_json(RecommendationConfig(Decimal("0.7"), Decimal("0.6"), Decimal("0.1"), Decimal("4000"))))
     export_calls: list[str] = []
 
     def fake_export() -> VietnamSources:
@@ -223,21 +187,7 @@ def test_chat_bind_sparse_map_then_generate_keeps_all_yacang_skus(
 
     monkeypatch.setattr(workflow, "export_vietnam_sources", fake_export)
     sparse_path = _sparse_map(tmp_path / "sparse.xlsx")
-    assert lxeskill.main([
-        "vietnam", "sku", "bind", "--source-path", str(sparse_path),
-    ]) == 0
-    bind_events = [
-        json.loads(line) for line in capsys.readouterr().out.splitlines() if line.strip()
-    ]
-    bind_result = next(event for event in reversed(bind_events) if event["type"] == "result")
-    assert bind_result["ok"] is True
-    assert bind_result["data"]["success"] is True
-    assert bind_result["data"]["status"] == "installed"
-    assert bind_result["files"] == []
-    assert _managed_slot()["current"]["file_name"] == sparse_path.name
-    assert export_calls == []
-
-    assert lxeskill.main(["vietnam", "stock", "recommend"]) == 0
+    assert lxeskill.main(["vietnam", "stock", "recommend", "--sku-map", str(sparse_path)]) == 0
     records = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.strip()]
     assert len(records) == 1
     result = records[0]
@@ -275,3 +225,47 @@ def test_chat_bind_sparse_map_then_generate_keeps_all_yacang_skus(
         assert main["AA4"].value == "2026-09-20 10:00"
     finally:
         book.close()
+
+
+@pytest.mark.skipif(
+    not (os.environ.get("LXE_OFFICE_NODE") and os.environ.get("LXE_OFFICE_CLI")),
+    reason="Host Office Kit paths are not configured",
+)
+def test_default_formula_parity_and_configurable_weights_and_exchange(
+    tmp_path, isolated_state, monkeypatch,
+):
+    from services.vietnam_replenishment import workbook, recalculation
+    from services.vietnam_replenishment.asset_contract import load_sku_parameters
+    source = _sources()
+    source = replace(source, sales={"VN-A": {**source.sales["VN-A"], "7天销量": 70, "15天销量": 90, "30天销量": 120}},
+        products={"VN-A": {**source.products["VN-A"], "创建时间": "2025-01-01 10:00"}})
+    mapping = _map(tmp_path / "map.xlsx", cost=10, cross_border=20, discount=15)
+    default = RecommendationConfig()
+    def generate(name, config):
+        output = tmp_path / f"{name}.xlsx"
+        recalculation.generate_vietnam_workbook(mapping, output, sources=source, config=config)
+        with output.open("rb") as stream:
+            book = load_workbook(stream, data_only=True)
+            try:
+                return [cell.value for cell in book["越南备货清单"][2]], book["数据更改"]["G2"].value
+            finally:
+                book.close()
+    original_load = workbook._load_skeleton
+    def old_fixed_weights():
+        book = original_load()
+        book["越南备货清单"]["S2"] = "=K2*0.1/(30+AV2)+L2*0.3/(15+AW2)+M2*0.6/(7+AX2)"
+        return book
+    with monkeypatch.context() as legacy:
+        legacy.setattr(workbook, "_load_skeleton", old_fixed_weights)
+        legacy.setattr(recalculation, "_load_skeleton", old_fixed_weights)
+        reference, _ = generate("reference", default)
+    actual, cached_weight = generate("default", default)
+    assert actual == reference
+    assert cached_weight == 0.6
+    recent, cached_weight = generate("recent", replace(default, sales_weight_7d=Decimal(1), sales_weight_15d=Decimal(0), sales_weight_30d=Decimal(0)))
+    assert cached_weight == 1
+    assert recent[18] == 10  # S: only the seven-day daily sales.
+    assert recent[7] != actual[7]  # H: final replenishment quantity.
+    fx, _ = generate("exchange", replace(default, exchange_rate=Decimal(4200)))
+    assert fx[7] == actual[7]  # Price conversion never changes units to replenish.
+    assert fx[31:39] != actual[31:39]  # Price/profit results reflect the new exchange rate.

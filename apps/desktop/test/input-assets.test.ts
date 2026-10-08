@@ -65,25 +65,6 @@ describe("DesktopInputAssetsService", () => {
     await expect(service.list()).rejects.toThrow("Python module missing: lxeskill");
   });
 
-  test("uses fixed internal commands and managed environment", async () => {
-    const calls: Array<{ args: string[]; environment: NodeJS.ProcessEnv }> = [];
-    const service = assetService(async (args, options) => {
-      calls.push({ args, environment: options.env ?? {} });
-      return executed(terminal({success: true, status: "installed", manifest_revision: "b".repeat(32)}));
-    });
-    expect(await service.installVietnamSkuMap("/selected/map.xlsx", null)).toEqual({
-      status: "installed", manifest_revision: "b".repeat(32),
-    });
-    expect(calls[0]!.args).toEqual([
-      "-I", "-B", "-m", "lxeskill", "assets", "vietnam", "sku", "install",
-      "--source-path", "/selected/map.xlsx", "--expected-revision", "",
-    ]);
-    expect(calls[0]!.environment.LXE_DATA_ROOT).toBeTruthy();
-    expect(calls[0]!.environment.LXE_SQLITE_DB_PATH).toContain("lxeskill.sqlite3");
-    expect(calls[0]!.environment.LXE_WORKSPACE_ROOT).toContain("workspace");
-    expect(calls[0]!.environment.LXE_MANAGED_PATH).toBeTruthy();
-  });
-
   test("redacts known secrets and marks truncated diagnostics", async () => {
     const previous = process.env.LXE_YACANG_PASSWORD;
     process.env.LXE_YACANG_PASSWORD = "secret-for-test";

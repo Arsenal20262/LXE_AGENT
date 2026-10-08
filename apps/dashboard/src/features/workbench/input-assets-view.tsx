@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { ArrowLeft, FolderOpen, LoaderCircle, RefreshCw, RotateCcw } from "lucide-react";
-import type { DesktopInputAssetSlot, DesktopVietnamSkuMapMutation } from "@lxe/desktop-protocol";
+import { ArrowLeft, FolderOpen, LoaderCircle, RefreshCw } from "lucide-react";
+import type { DesktopInputAssetSlot } from "@lxe/desktop-protocol";
 import { useUiText } from "../../shared/i18n";
 
 const errorText = (error: unknown): string => error instanceof Error ? error.message : String(error);
@@ -12,7 +12,7 @@ const formatBytes = (bytes: number): string => {
 };
 
 export const visibleInputAssetSlots = (slots: DesktopInputAssetSlot[]): DesktopInputAssetSlot[] =>
-  slots.filter(slot => slot.slot !== "vietnam_replenishment_template");
+  slots.filter(slot => slot.slot !== "vietnam_replenishment_template" && slot.slot !== "vietnam_sku_parameter_map");
 
 export function useInputAssetSlots() {
   const [slots, setSlots] = useState<DesktopInputAssetSlot[] | null>(null);
@@ -42,50 +42,26 @@ export function InputAssetsWorkbench({
   error,
   loading,
   onBack,
+  onOpenVietnamSettings,
   refresh,
   slots,
 }: {
   error: string;
   loading: boolean;
   onBack: () => void;
+  onOpenVietnamSettings: () => void;
   refresh: () => Promise<void>;
   slots: DesktopInputAssetSlot[] | null;
 }) {
   const t = useUiText();
   const copy = t.inputAssets;
   const [revealError, setRevealError] = useState("");
-  const [actionError, setActionError] = useState("");
-  const [actionNotice, setActionNotice] = useState("");
-  const [busy, setBusy] = useState(false);
-
   const reveal = async (slot: string) => {
     try {
       await window.lxe?.desktop?.revealInputAssetSlot(slot);
       setRevealError("");
     } catch (cause) {
       setRevealError(errorText(cause));
-    }
-  };
-
-  const showMutation = (result: DesktopVietnamSkuMapMutation) => {
-    setActionNotice(result.status === "installed" ? copy.installed
-      : result.status === "unchanged" ? copy.unchanged : copy.rolledBack);
-  };
-
-  const rollback = async (revision: string) => {
-    const desktop = window.lxe?.desktop;
-    if (!desktop || busy) return;
-    setBusy(true);
-    setActionError("");
-    setActionNotice("");
-    try {
-      showMutation(await desktop.rollbackVietnamSkuMap(revision));
-      await refresh();
-    } catch (cause) {
-      setActionError(errorText(cause));
-      setActionNotice("");
-    } finally {
-      setBusy(false);
     }
   };
 
@@ -99,7 +75,7 @@ export function InputAssetsWorkbench({
         <p className="workbench-eyebrow">{copy.eyebrow}</p>
         <h2>{copy.title}</h2>
         <p className="workbench-index-subtitle">{copy.subtitle}</p>
-        <button className="workbench-refresh" disabled={loading || busy} onClick={() => void refresh()} type="button">
+        <button className="workbench-refresh" disabled={loading} onClick={() => void refresh()} type="button">
           {loading ? <LoaderCircle className="spin" size={14} /> : <RefreshCw size={14} />}
           {loading ? copy.loading : copy.refresh}
         </button>
@@ -107,14 +83,10 @@ export function InputAssetsWorkbench({
 
       {error ? <p className="workbench-error">{copy.loadError}: {error}</p> : null}
       {revealError ? <p className="workbench-error">{revealError}</p> : null}
-      {actionError ? <p className="workbench-error" role="alert">{actionError}</p> : null}
-      {actionNotice ? <p className="workbench-tool-status" role="status">{actionNotice}</p> : null}
 
+      <button className="workbench-refresh" onClick={onOpenVietnamSettings} type="button">{t.vietnamSettings.title}</button>
       <div className="asset-slot-list">
         {visibleInputAssetSlots(slots ?? []).map((slot) => {
-          const managed = slot.slot === "vietnam_sku_parameter_map" && slot.management === "desktop";
-          const canRollback = managed && !!slot.previous && !!slot.manifest_revision
-            && !slot.previous_error && !slot.manifest_error;
           return (
             <article className="asset-slot" key={slot.slot}>
               <header className="asset-slot-header">
@@ -160,16 +132,8 @@ export function InputAssetsWorkbench({
               ) : !slot.current_error && !slot.manifest_error ? (
                 <p className="asset-slot-empty">
                   <strong>{copy.empty}</strong>
-                  <span>{managed ? copy.managedEmptyHint : copy.emptyHint}</span>
+                  <span>{copy.emptyHint}</span>
                 </p>
-              ) : null}
-              {canRollback ? (
-                <div className="asset-slot-actions">
-                  <button disabled={busy || loading} onClick={() => void rollback(slot.manifest_revision!)} type="button">
-                    {busy ? <LoaderCircle className="spin" size={14} /> : <RotateCcw size={14} />}
-                    {busy ? copy.busy : copy.rollback}
-                  </button>
-                </div>
               ) : null}
             </article>
           );

@@ -24,7 +24,7 @@ def _record(capsys) -> dict:
 
 
 def _no_workflow(monkeypatch: pytest.MonkeyPatch) -> None:
-    def unexpected() -> None:
+    def unexpected(_sku_map=None) -> None:
         raise AssertionError("workflow must not run")
 
     monkeypatch.setattr(generate, "generate_current_vietnam_recommendation", unexpected)
@@ -36,7 +36,7 @@ def test_catalog_exposes_no_input_or_asset_override() -> None:
     assert entry["command_path"] == COMMAND
     assert entry["session_mode"] == "none"
     assert entry["owner_skills"] == ["vietnam-stock-recommendation"]
-    assert entry["input_schema"] == {"type": "object", "properties": {}, "additionalProperties": False}
+    assert entry["input_schema"] == {"type": "object", "properties": {"sku_map": {"type": "string", "minLength": 1}}, "additionalProperties": False}
     assert entry["artifact_paths"] == [{"field": "output_xlsx", "role": "deliverable"}]
     assert entry.get("deliver_artifacts_on_failure") is not True
 
@@ -84,13 +84,13 @@ def test_success_delivers_only_final_workbook(
     monkeypatch.setattr(
         generate,
         "generate_current_vietnam_recommendation",
-        lambda: SimpleNamespace(
+        lambda _sku_map=None: SimpleNamespace(
             output_xlsx=output, sku_count=2,
             config=RecommendationConfig(
-                weight_30d=Decimal("0.7"), weight_15d=Decimal("0.6"),
-                weight_7d=Decimal("0.1"), exchange_rate=Decimal("4000"),
+                day_adjustment_30d=Decimal("0.7"), day_adjustment_15d=Decimal("0.6"),
+                day_adjustment_7d=Decimal("0.1"), exchange_rate=Decimal("4000"),
             ),
-            config_source="environment",
+            config_source="parameters.json", sku_map_source="sku-map.xlsx",
         ),
     )
 
@@ -105,10 +105,12 @@ def test_success_delivers_only_final_workbook(
         "sku_count": 2,
         "output_xlsx": str(output),
         "config": {
-            "weight_30d": "0.7", "weight_15d": "0.6",
-            "weight_7d": "0.1", "exchange_rate": "4000",
+            "day_adjustment_30d": "0.7", "day_adjustment_15d": "0.6",
+            "day_adjustment_7d": "0.1", "exchange_rate": "4000",
+            "sales_weight_7d": "0.6", "sales_weight_15d": "0.3", "sales_weight_30d": "0.1",
         },
-        "config_source": "environment",
+        "config_source": "parameters.json",
+        "sku_map_source": "sku-map.xlsx",
     }
 
 
@@ -118,7 +120,7 @@ def test_business_failure_preserves_real_redacted_diagnostic_and_delivers_nothin
     class ObservedFailure(RuntimeError):
         code = "sku_parameter_map_required"
 
-    def fail() -> None:
+    def fail(_sku_map=None) -> None:
         raise ObservedFailure("请先上传越南 SKU 参数映射表: password=topsecret")
 
     monkeypatch.setenv("LXE_DATA_ROOT", str(tmp_path / "state"))
@@ -144,7 +146,7 @@ def test_missing_generated_file_fails_without_deliverable(
     monkeypatch.setattr(
         generate,
         "generate_current_vietnam_recommendation",
-        lambda: SimpleNamespace(output_xlsx=output, sku_count=2),
+        lambda _sku_map=None: SimpleNamespace(output_xlsx=output, sku_count=2),
     )
 
     assert lxeskill.main(COMMAND) == lxeskill.EXIT_BUSINESS

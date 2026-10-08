@@ -384,7 +384,6 @@ export class SkillCatalog {
         "",
         "## lxeskill invocation contract",
         "Before execution, read the matching SKILL.md and use its declared Commands entry.",
-        "If the matching SKILL.md requires managed_lxeskill for a catalog command, call that structured tool using its command ID. Do not fall back to exec or request Full access for that command.",
         "For lxeskill, exec.command must contain exactly one command beginning with lxeskill (or lxeskill.cmd on Windows). Do not wrap it with uv, python -m, cd, newlines, pipes, redirects, &&, ||, semicolons, backticks, or $(). Set the working directory with exec.cwd instead.",
         "Help and diagnostics must also be standalone commands: lxeskill --help, lxeskill list, or lxeskill describe <command-path>.",
         "After an invocation-format error, read the returned recovery data and make at most one grounded correction. If the correction still violates this contract, stop retrying shell variations and report the failure.",

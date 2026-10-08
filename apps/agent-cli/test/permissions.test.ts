@@ -78,26 +78,17 @@ test("host shutdown still stops processes and releases resources when approval a
   }
 });
 
-
-test("Desktop host runs a registered command with fixed argv and the selected workspace", async () => {
-  const root = mkdtempSync(join(tmpdir(), "lxe-managed-host-"));
+test("Desktop host exposes exec without a managed lxeskill tool", async () => {
+  const root = mkdtempSync(join(tmpdir(), "lxe-exec-host-"));
   const workspaceRoot = join(root, "workspace"), skills = join(root, "skills"), soul = join(root, "SOUL.md");
   mkdirSync(workspaceRoot); mkdirSync(skills); writeFileSync(soul, "Synthetic test instructions");
-  const outputRoot = join(workspaceRoot, ".lxeagent", "artifacts"); mkdirSync(outputRoot, { recursive: true });
-  const output = join(outputRoot, "synthetic.xlsx"); writeFileSync(output, "synthetic");
   let managed: ToolDefinition | undefined;
   const original = ToolRegistry.prototype.register;
   const registration = spyOn(ToolRegistry.prototype, "register").mockImplementation(function(this: ToolRegistry, definition) {
     if (definition.name === "managed_lxeskill") managed = definition;
     return original.call(this, definition);
   });
-  let argv: string[] | undefined; let environment: Record<string, string | undefined> | undefined;
-  const runner = spyOn(OneShotCliRunner.prototype, "execute").mockImplementation(async function(this: OneShotCliRunner, args) {
-    argv = args;
-    environment = (this as unknown as { options: { env: Record<string, string | undefined> } }).options.env;
-    return { protocol_version: "1", type: "result", command: "vietnam stock recommend", ok: true,
-      data: { success: true, output_xlsx: output }, files: [output] };
-  });
+  const runner = spyOn(OneShotCliRunner.prototype, "execute");
   const host = createAgentRuntimeHost({
     dataRoot: root, legacyWorkspace: { directory: workspaceRoot, worktree: workspaceRoot },
     agentSoulPath: soul, skillsRoot: skills, userSkillsRoot: join(root, "user"),
@@ -107,16 +98,9 @@ test("Desktop host runs a registered command with fixed argv and the selected wo
     emitter: { emit: async () => {}, typing: async () => {} },
   });
   try {
-    expect(managed).toBeDefined();
-    const workspace = { directory: workspaceRoot, worktree: workspaceRoot };
-    const context = { session_id: "synthetic-session", turn_id: "synthetic-turn", platform: "desktop", workspace,
-      executionPolicy: new PermissionPolicyService().resolve({ session_id: "synthetic-session", workspace, permission_mode: "workspace-write" }),
-      handle: { signal: new AbortController().signal, cancelled: false, drainSteering: () => [], registerProcess: () => () => {} } };
-    const result = await managed!.execute({ command_id: "vietnam_replenishment_generate" }, context);
-    expect(argv).toEqual(["vietnam", "stock", "recommend"]);
-    expect(environment?.LXE_WORKSPACE_ROOT).toBe(workspaceRoot);
-    expect(environment?.LXESKILL_SKILL_SCOPE).toBe("vietnam-stock-recommendation");
-    expect(result.files).toBeUndefined();
+    expect(managed).toBeUndefined();
+    expect(registration.mock.calls.map(([definition]) => definition.name)).toContain("exec");
+    expect(runner).not.toHaveBeenCalled();
   } finally {
     registration.mockRestore(); runner.mockRestore(); await host.stop(); rmSync(root, { recursive: true, force: true });
   }

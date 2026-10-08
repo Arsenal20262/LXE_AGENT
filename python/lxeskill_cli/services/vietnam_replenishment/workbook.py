@@ -24,10 +24,13 @@ from .yacang_sources import VietnamSources
 
 @dataclass(frozen=True)
 class RecommendationConfig:
-    weight_30d: Decimal = Decimal("0.8")
-    weight_15d: Decimal = Decimal("0.8")
-    weight_7d: Decimal = Decimal("0")
+    day_adjustment_30d: Decimal = Decimal("0.8")
+    day_adjustment_15d: Decimal = Decimal("0.8")
+    day_adjustment_7d: Decimal = Decimal("0")
     exchange_rate: Decimal = Decimal("3900")
+    sales_weight_30d: Decimal = Decimal("0.1")
+    sales_weight_15d: Decimal = Decimal("0.3")
+    sales_weight_7d: Decimal = Decimal("0.6")
 
 
 @dataclass(frozen=True)
@@ -175,14 +178,18 @@ def _validated_rows(
     return tuple(result)
 
 
-def validate_recommendation_config(config: RecommendationConfig) -> tuple[Decimal, Decimal, Decimal, Decimal]:
+def validate_recommendation_config(config: RecommendationConfig) -> tuple[Decimal, ...]:
     if not isinstance(config, RecommendationConfig):
         raise WorkbookInputError("推荐参数必须是 RecommendationConfig")
+    weights = tuple(_number(getattr(config, f"sales_weight_{days}d"), "运行参数", f"{days}天销量权重") for days in (30, 15, 7))
+    if sum(weights) != Decimal(1):
+        raise WorkbookInputError("7、15、30 天销量权重合计必须为 100%")
     return (
-        _number(config.weight_30d, "运行参数", "30天"),
-        _number(config.weight_15d, "运行参数", "15天"),
-        _number(config.weight_7d, "运行参数", "7天"),
+        _number(config.day_adjustment_30d, "运行参数", "30天"),
+        _number(config.day_adjustment_15d, "运行参数", "15天"),
+        _number(config.day_adjustment_7d, "运行参数", "7天"),
         _number(config.exchange_rate, "运行参数", "汇率", positive=True),
+        *weights,
     )
 
 

@@ -8,6 +8,7 @@ from typing import Any
 
 from services.vietnam_replenishment.workflow import generate_current_vietnam_recommendation
 from services.yacang.errors import safe_remote_detail
+from services.vietnam_replenishment.settings import config_json
 from shared.filesystem import display_path
 
 
@@ -20,12 +21,12 @@ def _failure(code: str, message: str) -> dict[str, Any]:
 
 
 def run(arguments: dict[str, Any]) -> dict[str, Any]:
-    """Run once, without accepting map paths or per-chat parameter overrides."""
-    if arguments:
-        return _failure("invalid_arguments", "越南备货命令不接受参数或文件路径")
+    """Run once with an optional explicit SKU map and the saved global parameters."""
+    if set(arguments) - {"sku_map"} or ("sku_map" in arguments and (not isinstance(arguments["sku_map"], str) or not arguments["sku_map"].strip())):
+        return _failure("invalid_arguments", "仅接受非空的 sku_map 文件路径")
 
     try:
-        result = generate_current_vietnam_recommendation()
+        result = generate_current_vietnam_recommendation(arguments.get("sku_map"))
         output = Path(result.output_xlsx).resolve(strict=True)
         if not output.is_file() or output.suffix.lower() != ".xlsx" or output.stat().st_size == 0:
             raise ValueError(f"最终 XLSX 无效: {output}")
@@ -43,11 +44,7 @@ def run(arguments: dict[str, Any]) -> dict[str, Any]:
         "warehouse": "VN8806",
         "sku_count": result.sku_count,
         "output_xlsx": str(display_path(output)),
-        "config": {
-            "weight_30d": str(result.config.weight_30d),
-            "weight_15d": str(result.config.weight_15d),
-            "weight_7d": str(result.config.weight_7d),
-            "exchange_rate": str(result.config.exchange_rate),
-        },
+        "config": config_json(result.config),
         "config_source": result.config_source,
+        "sku_map_source": result.sku_map_source,
     }

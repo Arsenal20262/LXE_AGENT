@@ -4,6 +4,7 @@ import { SessionWorkspaceFixture, sessionFixture } from "./session-workspace-fix
 import { AppActionsFixture, actionFixture } from "./app-actions-fixture";
 import { MarkdownFixture, type MarkdownSurface } from "./markdown-fixture";
 import { createDashboardContractFixture } from "./dashboard-contract-fixture";
+import type { DesktopVietnamSettingsState } from "@lxe/desktop-protocol";
 import { useApprovalsQuery } from "../../src/api/queries";
 import type { PendingApproval, PendingUserQuestion, PermissionMode } from "@lxe/desktop-protocol";
 import { FilePreviewLayout } from "../../src/features/file-preview/Sidebar";
@@ -38,6 +39,11 @@ let slowCandidates = false;
 let candidateOverride: { path: string; kind: "file" | "directory" }[] | undefined;
 const pendingCandidates: (() => void)[] = [];
 const referenceSkills = ["office-xlsx", "office-docx", "office-pptx"].map(name => ({ name, description: "Office fixture skill", type: "default", commands: [], references: [], location: "/skills/" + name + "/SKILL.md" }));
+let vietnamUploadError = false;
+let vietnamState: DesktopVietnamSettingsState = { directory: "/fixture/app/skill-data/vietnam-stock-recommendation",
+  parameters: { sales_weight_7d: "0.6", sales_weight_15d: "0.3", sales_weight_30d: "0.1",
+    day_adjustment_7d: "0", day_adjustment_15d: "0.8", day_adjustment_30d: "0.8", exchange_rate: "3900" },
+  sku_map: null, sku_map_error: null, parameters_error: null };
 let chosenFile = "";
 let chosenDirectory: string | null = "/fixture/chosen";
 let sendFailure = false;
@@ -180,6 +186,17 @@ const desktop = {
   installUpdate: async target => { calls.push({operation:"update.install",input:target}); return updateState={phase:"ready",release:updateRelease}; },
   applyAppearance: async () => {},
   listInputAssets: async () => [],
+  getVietnamSettings: async () => structuredClone(vietnamState),
+  saveVietnamParameters: async input => {
+    calls.push({ operation: "vietnam.save", input });
+    vietnamState.parameters = structuredClone(input);
+    return structuredClone(vietnamState);
+  },
+  uploadVietnamSkuMap: async () => {
+    if (vietnamUploadError) throw new Error("BadZipFile: synthetic selected workbook");
+    vietnamState.sku_map = { file_name: "sku-map.xlsx", path: "/fixture/app/sku-map.xlsx", size_bytes: 5000, updated_at: "2026-10-08T08:00:00Z" };
+    return structuredClone(vietnamState);
+  },
   onStatusChanged: (listener: (value: DesktopHealth) => void) => {
     notifyHealth = listener;
     return () => { notifyHealth = undefined; };
@@ -394,6 +411,7 @@ const fixture = {
       </div>)}
     </div>));
   },
+  vietnamUploadFailure(value: boolean) { vietnamUploadError = value; },
   chooseFile(value: string) { chosenFile = value; },
   failCreation(value: boolean) { creationFailure = value; },
   holdCreation(value: boolean) { holdCreation = value; },

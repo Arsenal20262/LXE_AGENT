@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.vietnam_replenishment.sku_map_store import SKU_SLOT, inspect_sku_map
 from shared.input_assets import (
     AssetVersion,
     current_asset,
@@ -31,17 +30,6 @@ def _generation(version: AssetVersion | None) -> dict[str, Any] | None:
     }
 
 
-def _managed_generation(version) -> dict[str, Any] | None:
-    if version is None:
-        return None
-    return {
-        "file_name": version.file_name,
-        "path": str(version.path),
-        "size_bytes": version.size_bytes,
-        "updated_at": version.updated_at,
-    }
-
-
 def _slot(entry) -> dict[str, Any]:
     common = {
         "slot": entry.id,
@@ -51,17 +39,6 @@ def _slot(entry) -> dict[str, Any]:
         "holds": entry.holds,
         "directory": str(slot_dir(entry.id)),
     }
-    if entry.id == SKU_SLOT:
-        status = inspect_sku_map()
-        return {
-            **common,
-            "manifest_revision": status.revision,
-            "current": _managed_generation(status.current),
-            "previous": _managed_generation(status.previous),
-            "current_error": status.current_error,
-            "previous_error": status.previous_error,
-            "manifest_error": status.manifest_error,
-        }
     return {
         **common,
         "manifest_revision": None,

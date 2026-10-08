@@ -137,7 +137,7 @@ test("Yacang exposes one export command with its own deliverable dataset", () =>
   expect(loadLxeSkillDatasets(path).find(entry => entry.id === "yacang_exports")?.dir).toBe("yacang/exports");
 });
 
-test("Vietnam recommendation accepts no inputs and delivers only the final workbook", () => {
+test("Vietnam recommendation and delivers only the final workbook", () => {
   const path = join(process.cwd(), "python/lxeskill_cli/lxeskill/catalog.json");
   const entries = loadLxeSkillCommandCatalog(path);
   const entry = entries.find(entry => entry.name === "vietnam_replenishment_generate");
@@ -151,31 +151,14 @@ test("Vietnam recommendation accepts no inputs and delivers only the final workb
     .toBe("vietnam/recommendations");
 });
 
-test("Vietnam chat SKU binding accepts one XLSX attachment without a generic asset slot", () => {
+test("Vietnam uses one ordinary command with an optional map and no binding lifecycle", () => {
   const path = join(process.cwd(), "python/lxeskill_cli/lxeskill/catalog.json");
-  const entry = loadLxeSkillCommandCatalog(path).find(item => item.name === "vietnam_replenishment_bind_sku");
-  expect(entry).toMatchObject({
-    command: "lxeskill vietnam sku bind",
-    module: "services.agent_cli.vietnam_replenishment.bind_sku",
-    visibility: "business",
-    ownerSkills: ["vietnam-stock-recommendation"],
-    attributionSkill: "vietnam-stock-recommendation",
+  const document = JSON.parse(readFileSync(path, "utf8"));
+  expect(document.entries.filter((entry: any) => entry.managed_execution !== undefined)).toEqual([]);
+  expect(document.entries.filter((entry: any) => entry.name.startsWith("vietnam_replenishment_")).map((entry: any) => entry.name)).toEqual(["vietnam_replenishment_generate"]);
+  expect(document.entries.find((entry: any) => entry.name === "vietnam_replenishment_generate").input_schema).toEqual({
+    type: "object", properties: { sku_map: { type: "string", minLength: 1 } }, additionalProperties: false,
   });
-  expect(entry?.artifactPaths).toBeUndefined();
-
-  const document = JSON.parse(readFileSync(path, "utf8")) as {
-    entries: Array<{
-      name: string;
-      exposed?: boolean;
-      input_schema?: { properties?: { source_path?: Record<string, unknown> } };
-    }>;
-  };
-  const raw = document.entries.find(item => item.name === "vietnam_replenishment_bind_sku");
-  expect(raw?.exposed).toBe(true);
-  expect(raw?.input_schema?.properties?.source_path?.["x-lxe-file-input"]).toMatchObject({
-    accepted_extensions: [".xlsx"],
-  });
-  expect(raw?.input_schema?.properties?.source_path?.["x-lxe-asset-slot"]).toBeUndefined();
 });
 
 test("Mabang TMS exposes one export command with its own deliverable dataset", () => {
@@ -205,77 +188,20 @@ test("Mabang Brazil delivers original batches through a separate ERP skill", () 
 });
 
 
-test("only the two Vietnam commands opt into managed execution", () => {
+test("generic preselection probe validation remains available without a Vietnam probe", () => {
   const path = join(process.cwd(), "python/lxeskill_cli/lxeskill/catalog.json");
-  const managed = loadLxeSkillCommandCatalog(path).filter(entry => entry.managedExecution);
-  expect(managed.map(entry => entry.name)).toEqual([
-    "vietnam_replenishment_bind_sku", "vietnam_replenishment_generate",
-  ]);
-  expect(managed[0]?.managedExecution).toEqual({ attachmentArgument: "source_path" });
-  expect(managed[1]?.managedExecution).toEqual({});
-});
-
-test("managed execution rejects an undeclared attachment argument", () => {
-  const path = join(process.cwd(), "python/lxeskill_cli/lxeskill/catalog.json");
-  const document = JSON.parse(readFileSync(path, "utf8")) as { entries: Array<Record<string, unknown>> };
-  const bind = document.entries.find(entry => entry.name === "vietnam_replenishment_bind_sku")!;
-  bind.managed_execution = { attachment_argument: "other_path" };
-  const directory = mkdtempSync(join(tmpdir(), "lxe-managed-catalog-"));
+  expect(loadLxeSkillCommandCatalog(path).filter(entry => entry.preselectionProbe)).toEqual([]);
+  const probe = { name: "synthetic_probe", command_path: ["synthetic", "probe"], visibility: "internal",
+    session_mode: "none", owner_skills: [], exposed: false, timeout_ms: 30000, preselection_probe: true,
+    input_schema: { type: "object", properties: { source_path: { type: "string", minLength: 1 } }, required: ["source_path"], additionalProperties: false } };
+  const root = mkdtempSync(join(tmpdir(), "lxe-probe-catalog-"));
   try {
-    const invalidPath = join(directory, "catalog.json");
-    writeFileSync(invalidPath, JSON.stringify(document));
-    expect(() => loadLxeSkillCommandCatalog(invalidPath)).toThrow(/managed execution/);
-  } finally { rmSync(directory, { recursive: true, force: true }); }
-});
-
-test("managed catalog accepts only zero or one flat deliverable declaration", () => {
-  const path = join(process.cwd(), "python/lxeskill_cli/lxeskill/catalog.json");
-  const original = JSON.parse(readFileSync(path, "utf8")) as { entries: Array<Record<string, unknown>> };
-  const directory = mkdtempSync(join(tmpdir(), "lxe-managed-artifacts-"));
-  try {
-    const invalidPath = join(directory, "catalog.json");
-    for (const artifactPaths of [
-      null,
-      [{ field: "output_xlsx", role: "diagnostic" }],
-      [{ field: "artifacts[].path", role: "deliverable" }],
-      [{ field: "output.path", role: "deliverable" }],
-      [{ field: "output_xlsx", role: "deliverable" }, { field: "audit", role: "diagnostic" }],
-      [{ field: "output_xlsx", role: "deliverable", extension: ".csv" }],
-    ]) {
-      const document = structuredClone(original);
-      document.entries.find(entry => entry.name === "vietnam_replenishment_generate")!.artifact_paths = artifactPaths;
-      writeFileSync(invalidPath, JSON.stringify(document));
-      expect(() => loadLxeSkillCommandCatalog(invalidPath)).toThrow(/managed execution artifact/);
+    const file = join(root, "catalog.json");
+    writeFileSync(file, JSON.stringify({ protocol_version: "1", entries: [probe] }));
+    expect(loadLxeSkillCommandCatalog(file)[0]?.preselectionProbe).toBe(true);
+    for (const change of [{ exposed: true }, { visibility: "business" }, { owner_skills: ["stock"] }]) {
+      writeFileSync(file, JSON.stringify({ protocol_version: "1", entries: [{ ...probe, ...change }] }));
+      expect(() => loadLxeSkillCommandCatalog(file)).toThrow(/preselection probe/);
     }
-  } finally { rmSync(directory, { recursive: true, force: true }); }
-});
-
-test("preselection probes are internal, unexposed and accept only one source path", () => {
-  const path = join(process.cwd(), "python/lxeskill_cli/lxeskill/catalog.json");
-  const probe = loadLxeSkillCommandCatalog(path).filter(entry => entry.preselectionProbe);
-  expect(probe.map(entry => entry.name)).toEqual(["vietnam_replenishment_probe_sku"]);
-  expect(probe[0]).toMatchObject({
-    command: "lxeskill vietnam sku probe",
-    visibility: "internal",
-    ownerSkills: [],
-    preselectionProbe: true,
-    timeoutMs: 30000,
-  });
-
-  const original = JSON.parse(readFileSync(path, "utf8")) as { entries: Array<Record<string, unknown>> };
-  const directory = mkdtempSync(join(tmpdir(), "lxe-preselection-catalog-"));
-  try {
-    const invalidPath = join(directory, "catalog.json");
-    for (const change of [
-      { visibility: "business" }, { exposed: true }, { session_mode: "lxe_session" },
-      { owner_skills: ["stock"] }, { preselection_probe: false },
-      { input_schema: { type: "object", properties: {}, additionalProperties: false } },
-      { artifact_paths: [{ field: "output", role: "deliverable" }] },
-    ]) {
-      const document = structuredClone(original);
-      Object.assign(document.entries.find(entry => entry.name === "vietnam_replenishment_probe_sku")!, change);
-      writeFileSync(invalidPath, JSON.stringify(document));
-      expect(() => loadLxeSkillCommandCatalog(invalidPath)).toThrow(/preselection probe/);
-    }
-  } finally { rmSync(directory, { recursive: true, force: true }); }
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });

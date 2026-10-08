@@ -11,7 +11,7 @@ describe("InputAssetsWorkbench", () => {
       <InputAssetsWorkbench
         error=""
         loading={false}
-        onBack={() => undefined}
+        onBack={() => undefined} onOpenVietnamSettings={() => undefined}
         refresh={async () => undefined}
         slots={[{
           slot: "export_tax_master",
@@ -59,32 +59,33 @@ describe("InputAssetsWorkbench", () => {
       },
     }];
     const visible = visibleInputAssetSlots(slots);
-    expect(visible.map(slot => slot.slot)).toEqual(["export_tax_master", "vietnam_sku_parameter_map"]);
-    expect(UI_TEXT.en.inputAssets.slotSummary(visible.filter(slot => slot.current !== null).length, visible.length)).toBe("1 / 2 ready");
+    expect(visible.map(slot => slot.slot)).toEqual(["export_tax_master"]);
+    expect(UI_TEXT.en.inputAssets.slotSummary(visible.filter(slot => slot.current !== null).length, visible.length)).toBe("1 / 1 ready");
     const markup = renderToStaticMarkup(
-      <I18nContext.Provider value={UI_TEXT.en}><InputAssetsWorkbench error="" loading={false} onBack={() => undefined} refresh={async () => undefined}
+      <I18nContext.Provider value={UI_TEXT.en}><InputAssetsWorkbench error="" loading={false} onBack={() => undefined} onOpenVietnamSettings={() => undefined} refresh={async () => undefined}
         slots={slots} /></I18nContext.Provider>
     );
     expect(markup).toContain("Export tax master");
-    expect(markup).toContain("Vietnam SKU map");
+    expect(markup).not.toContain("Vietnam SKU map");
     expect(markup).not.toContain("Vietnam historical template");
     expect(markup).not.toContain("old.xlsx");
-    expect(markup).toContain("Current version SHA-256 mismatch");
-    expect(markup).toContain("good.xlsx");
+    expect(markup).not.toContain("Current version SHA-256 mismatch");
+    expect(markup).not.toContain("good.xlsx");
     expect(markup).not.toContain("Upload SKU map");
-    expect(markup).toContain("Roll back to previous");
+    expect(markup).not.toContain("Roll back to previous");
+    expect(markup).toContain("Vietnam replenishment settings");
   });
 
   test("directs operators to chat when the Vietnam SKU map has no current version", () => {
     const markup = renderToStaticMarkup(
-      <InputAssetsWorkbench error="" loading={false} onBack={() => undefined} refresh={async () => undefined}
+      <InputAssetsWorkbench error="" loading={false} onBack={() => undefined} onOpenVietnamSettings={() => undefined} refresh={async () => undefined}
         slots={[{
           slot: "vietnam_sku_parameter_map", management: "desktop", manifest_revision: null,
           display_name: "越南 SKU 参数表", used_by: ["越南备货"], holds: "价格",
           directory: "/state/inputs/vietnam/sku_parameter_map", current: null, previous: null,
         }]} />,
     );
-    expect(markup).toContain("请在聊天中上传并绑定越南 SKU 参数表");
+    expect(markup).toContain("越南备货设置");
     expect(markup).not.toContain("上传映射表");
   });
 });

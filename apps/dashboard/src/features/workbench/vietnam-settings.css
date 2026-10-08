@@ -1,0 +1,15 @@
+.vietnam-settings-view { max-width: 960px; }
+.vietnam-settings-view .asset-slot { margin: 18px 0; }
+.vietnam-settings-view fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.vietnam-settings-view h3 { margin: 0; }
+.vietnam-settings-view p { line-height: 1.6; }
+.vietnam-parameter-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.vietnam-parameter-grid label { display: grid; gap: 8px; }
+.vietnam-settings-view input { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: inherit; font: inherit; }
+.vietnam-exchange { display: flex; align-items: center; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
+.vietnam-exchange input { width: 180px; }
+.vietnam-settings-view summary { cursor: pointer; font-weight: 600; }
+.vietnam-save { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 22px; }
+.vietnam-save button { display: inline-flex; align-items: center; gap: 8px; }
+.vietnam-save span { font-size: 13px; opacity: .75; }
+@media (max-width: 640px) { .vietnam-parameter-grid { grid-template-columns: 1fr; } }

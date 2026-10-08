@@ -24,57 +24,6 @@ class ArtifactPathError(ValueError):
     pass
 
 
-_MANAGED_TOKEN = re.compile(r"^[a-z][a-z0-9-]*$")
-_MANAGED_ARGUMENT = re.compile(r"^[a-z][a-z0-9_]*$")
-
-
-def validate_managed_execution(entry: dict[str, Any]) -> None:
-    """Fail closed when a catalog opt-in cannot be mapped to fixed CLI argv."""
-    if "managed_execution" not in entry:
-        return
-    name = str(entry.get("name") or "<unknown>")
-    declaration = entry["managed_execution"]
-    schema = entry.get("input_schema")
-    if not isinstance(declaration, dict) or set(declaration) - {"attachment_argument"}:
-        raise RuntimeError(f"invalid managed execution declaration for {name}")
-    command_path = entry.get("command_path")
-    owners = entry.get("owner_skills")
-    if (entry.get("visibility") != "business" or entry.get("session_mode") != "none"
-            or entry.get("exposed") is not True or not isinstance(owners, list)
-            or len(owners) != 1 or not isinstance(command_path, list)
-            or not command_path or any(not isinstance(token, str) or not _MANAGED_TOKEN.fullmatch(token) for token in command_path)
-            or not isinstance(entry.get("timeout_ms"), int) or entry["timeout_ms"] <= 0
-            or not isinstance(schema, dict) or schema.get("type") != "object"
-            or schema.get("additionalProperties") is not False):
-        raise RuntimeError(f"invalid managed execution contract for {name}")
-    artifact_paths = entry.get("artifact_paths", [])
-    if (not isinstance(artifact_paths, list) or len(artifact_paths) > 1
-            or any(not isinstance(item, dict) or set(item) != {"field", "role"}
-                   or item.get("role") != "deliverable"
-                   or not isinstance(item.get("field"), str)
-                   or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", item["field"])
-                   for item in artifact_paths)):
-        raise RuntimeError(f"invalid managed execution artifact contract for {name}")
-    properties = schema.get("properties")
-    required = schema.get("required", [])
-    attachment_argument = declaration.get("attachment_argument")
-    if not isinstance(properties, dict) or not isinstance(required, list):
-        raise RuntimeError(f"invalid managed execution input schema for {name}")
-    if attachment_argument is None:
-        if properties or required:
-            raise RuntimeError(f"managed execution requires empty inputs for {name}")
-        return
-    if (not isinstance(attachment_argument, str) or not _MANAGED_ARGUMENT.fullmatch(attachment_argument)
-            or set(properties) != {attachment_argument} or required != [attachment_argument]):
-        raise RuntimeError(f"invalid managed execution attachment argument for {name}")
-    field = properties[attachment_argument]
-    file_input = field.get("x-lxe-file-input") if isinstance(field, dict) else None
-    if (not isinstance(field, dict) or field.get("type") != "string"
-            or not isinstance(file_input, dict)
-            or file_input.get("accepted_extensions") != [".xlsx"]):
-        raise RuntimeError(f"invalid managed execution XLSX input for {name}")
-
-
 def validate_preselection_probe(entry: dict[str, Any]) -> None:
     """Require internal, input-only catalog probes with one fixed path argument."""
     if "preselection_probe" not in entry:
@@ -86,7 +35,7 @@ def validate_preselection_probe(entry: dict[str, Any]) -> None:
     timeout = entry.get("timeout_ms")
     if (entry["preselection_probe"] is not True or entry.get("visibility") != "internal"
             or entry.get("exposed") is not False or entry.get("session_mode") != "none"
-            or entry.get("owner_skills") != [] or "managed_execution" in entry
+            or entry.get("owner_skills") != []
             or not isinstance(timeout, int) or isinstance(timeout, bool) or not 0 < timeout <= 2**53 - 1
             or not isinstance(schema, dict) or schema.get("type") != "object"
             or schema.get("additionalProperties") is not False
@@ -182,7 +131,6 @@ def load_catalog() -> dict[str, dict[str, Any]]:
             )
             if expected != name:
                 raise RuntimeError(f"script tool naming mismatch: {module} -> {name}")
-        validate_managed_execution(entry)
         validate_preselection_probe(entry)
         entries[name] = entry
     return entries
