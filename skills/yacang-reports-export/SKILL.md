@@ -1,6 +1,6 @@
 ---
 name: yacang-reports-export
-description: 导出雅仓（Yacang）库存动销、当前库存列表或仓库产品资料，交付 XLSX。库存动销下载后去掉末列创建日期；另两类保持原始文件。用于独立雅仓导出及东南亚备货的数据采集步骤，不计算备货量，不处理其他平台或历史库存。
+description: 导出雅仓（Yacang）库存动销、当前库存列表或全局产品资料，交付 XLSX。明确的雅仓导出请求直接使用本 Skill；完整越南备货任务中提供计算输入。库存动销去掉末列创建日期，另两类保持原始文件；不计算备货量，不处理其他平台或历史库存。
 type: replenishment
 commands:
   - lxeskill yacang reports export
@@ -22,7 +22,7 @@ commands:
 
 ## 执行
 
-作为越南备货的数据获取步骤时，复用本 Skill 导出 `inventory-sales`、`inventory`（仅 `VN8806`）及全局 `products`，不传 `--created-from` / `--created-to`。这一范围由已确认的越南计算输入决定，无需再次询问报表选择。返回三份报表的 `artifacts` 给 `vietnam-replenishment`，由 AI 再调用独立计算命令；本导出命令不在内部启动计算。
+作为完整越南备货任务的取数步骤时，导出 `inventory-sales`、`inventory`（仅 `VN8806`）及全局 `products`，不传 `--created-from` / `--created-to`。这是已确认的越南计算输入，无需再次询问报表选择或是否接受全局产品资料。成功后使用 `artifacts` 中的真实路径，按 `vietnam-replenishment` 继续独立计算；本导出命令不在内部启动计算。
 
 账号手机号及密码在桌面“雅仓”设置中配置，不读取密码文件、不把凭据放进命令。通过 `exec` 调用唯一 CLI：
 
@@ -42,8 +42,8 @@ lxeskill yacang reports export --report inventory-sales --warehouse MY8801
 ## 结果与交付
 
 - 只读取最后一条 `type="result"` 的 `ok`、`data` 和 `files`。保留 `data.params`、`data.tasks`、`data.artifacts` 的真实范围、文件路径、工作表和行数；下载时间不等于平台数据更新时间。
-- 独立导出将 terminal `files` 一次交给 `send_files`；作为东南亚流程步骤时返回调用入口，由入口统一交付。发送成功才称已交付，发送失败只重试附件发送。
-- `ok=false` 且 `data.status=partial_success` 仍可交付 `files` 中已成功文件，同时说明失败和未执行的仓库/报表及实际原因；不声称全部成功，不自动重跑整单。
+- 独立导出或数据准备任务，将 terminal `files` 一次交给 `send_files`。完整越南备货任务保留三份报表作为计算输入，计算成功后交付最终清单，不自动发送中间报表。发送成功才称已交付，发送失败只重试附件发送。
+- `ok=false` 且 `data.status=partial_success` 时保留已成功文件，说明失败和未执行的仓库/报表及实际原因。独立导出或数据准备任务仍可交付 `files` 中的部分文件；完整越南任务缺输入时停止计算，不混用旧报表。不声称全部成功，不自动重跑整单。
 - 零行明确说明该范围没有数据，不推断零备货需求。除库存动销去掉末列“创建日期”外，不合并、重写其他列或补列，不生成备货建议。
 - 错误保留 `data.error`、任务内 `error` 及顶层 `error.message` 的实际脱敏诊断。`date_range_required` 时说明平台限制并询问库存动销表“创建日期”范围；不得自动退为当天。
 - 登录、限流、网络、提交或队列状态不确定时报告失败和已完成阶段，不自行重试。用户要求再试时才调用；脚本会保留并核对未确认提交，不盲目重新创建任务。

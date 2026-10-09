@@ -79,13 +79,6 @@ describe("skill context", () => {
     expect(vietnamPolicy).toContain("sandbox_permissions");
     expect(vietnamPolicy).not.toContain("managed_lxeskill");
     expect(vietnamPolicy).not.toContain("lxeskill vietnam sku bind");
-    const southeastPolicy = skills.find((skill) => skill.name === "southeast-asia-replenishment-workflow-map")?.content ?? "";
-    expect(skills.find((skill) => skill.name === "southeast-asia-replenishment-workflow-map")?.description).toContain("越南补货建议");
-    expect(skills.find((skill) => skill.name === "southeast-asia-replenishment-workflow-map")?.description).toContain("越南这批该补多少");
-    expect(southeastPolicy).toContain("查询越南备货");
-    expect(southeastPolicy).toContain("看看越南库存");
-    expect(southeastPolicy).toContain("--sku-map");
-    expect(southeastPolicy).toContain("越南备货设置");
     expect(skills.find((skill) => skill.name === "shangman-products-export")?.commands).toEqual(["lxeskill shangman products export"]);
     expect(skills.find((skill) => skill.name === "shangman-login")?.commands).toHaveLength(4);
   });
