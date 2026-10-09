@@ -16,8 +16,12 @@ from shared.office.execution import run_kit_bounded
 @pytest.fixture
 def fake_kit(tmp_path, monkeypatch):
     cli = tmp_path / "中文 fake kit.py"
-    monkeypatch.setenv("LXE_OFFICE_NODE", sys.executable)
+    # A Windows venv redirector has its own child cleanup. Use the base
+    # interpreter to model Node without accidentally testing that cleanup.
+    monkeypatch.setenv("LXE_OFFICE_NODE", sys._base_executable)
     monkeypatch.setenv("LXE_OFFICE_CLI", str(cli))
+    source = str(Path(__file__).resolve().parents[2])
+    monkeypatch.setenv("PYTHONPATH", os.pathsep.join(filter(None, [source, os.environ.get("PYTHONPATH", "")])))
     return cli
 
 
@@ -55,7 +59,8 @@ if mode == "leaf":
         time.sleep(.02)
 closed = mode == "exit-closed"
 child = subprocess.Popen([sys.executable, __file__, "recalculate", "leaf", directory],
-    stdout=subprocess.DEVNULL if closed else None, stderr=subprocess.DEVNULL if closed else None)
+    stdout=subprocess.DEVNULL if closed else None, stderr=subprocess.DEVNULL if closed else None,
+    close_fds=False)
 (root / "kit.pid").write_text(str(os.getpid()))
 deadline = time.monotonic() + 5
 while not (root / "heartbeat").exists() and time.monotonic() < deadline:
@@ -84,11 +89,19 @@ def _cleanup_fixture_children(directory):
                 os.kill(int(path.read_text()), signal.SIGTERM if os.name == "nt" else signal.SIGKILL)
             except (ProcessLookupError, PermissionError):
                 pass
+            except OSError as error:
+                # OpenProcess reports ERROR_INVALID_PARAMETER for an exited PID.
+                if os.name != "nt" or error.winerror != 87:
+                    raise
 
 
 @pytest.mark.parametrize("mode", ["hang", "exit-inherited", "exit-closed"])
-def test_owns_descendants_even_after_intermediate_exit(fake_kit, tmp_path, mode):
+def test_owns_descendants_even_after_intermediate_exit(fake_kit, tmp_path, mode, monkeypatch):
     _tree_script(fake_kit)
+    if os.name == "nt" and mode == "exit-inherited":
+        # The *worker's* venv redirector also reaps descendants on normal exit.
+        # Bypass it here so the inherited-pipe timeout exercises our watchdog.
+        monkeypatch.setattr(sys, "executable", sys._base_executable)
     start = time.monotonic()
     try:
         if mode == "exit-closed":
@@ -125,7 +138,7 @@ def test_cleanup_does_not_stop_an_unrelated_process(fake_kit, tmp_path):
     other = tmp_path / "unrelated"
     other.mkdir()
     process = subprocess.Popen(
-        [sys.executable, str(fake_kit), "recalculate", "leaf", str(other)],
+        [sys._base_executable, str(fake_kit), "recalculate", "leaf", str(other)],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
     )
     try:
@@ -185,7 +198,7 @@ def test_missing_job_does_not_start_kit(fake_kit, tmp_path):
 def test_killing_windows_supervisor_closes_job_and_kills_descendants(fake_kit, tmp_path):
     _tree_script(fake_kit)
     process = subprocess.Popen([
-        sys.executable, "-c",
+        sys._base_executable, "-c",
         "from shared.office.execution import run_kit_bounded; import sys; "
         "run_kit_bounded(['recalculate','hang',sys.argv[1]],timeout_seconds=60,cleanup_seconds=.3)",
         str(tmp_path),
