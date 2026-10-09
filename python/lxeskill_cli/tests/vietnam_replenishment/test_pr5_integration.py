@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from decimal import Decimal
+from itertools import product
 import json
 import os
 from pathlib import Path
@@ -280,3 +281,92 @@ def test_default_formula_parity_and_configurable_weights_and_exchange(
     fx, _ = generate("exchange", replace(default, exchange_rate=Decimal(4200)))
     assert fx[7] == actual[7]  # Price conversion never changes units to replenish.
     assert fx[31:39] != actual[31:39]  # Price/profit results reflect the new exchange rate.
+
+
+@pytest.mark.skipif(
+    not (os.environ.get("LXE_OFFICE_NODE") and os.environ.get("LXE_OFFICE_CLI")),
+    reason="Host Office Kit paths are not configured",
+)
+@pytest.mark.parametrize("explicit", [False, True])
+def test_optional_amounts_keep_quantities_and_only_blank_dependent_results(
+    tmp_path, isolated_state, monkeypatch, capsys, explicit,
+):
+    from services.vietnam_replenishment.recalculation import recalculate_with_office
+
+    monkeypatch.delenv("LXESKILL_SKILL_SCOPE", raising=False)
+    combinations = list(product((False, True), repeat=3))
+    skus = tuple(f"VN-{index:03}" for index in range(len(combinations)))
+    base = _sources()
+    sources = replace(
+        base, skus=skus,
+        sales={sku: {**base.sales["VN-A"], "SKU": sku, "7天销量": 70, "15天销量": 90, "30天销量": 120} for sku in skus},
+        inventory={sku: {**base.inventory["VN-A"], "SKU": sku} for sku in skus},
+        products={sku: {**base.products["VN-A"], "SKU": sku, "创建时间": "2025-01-01 10:00"} for sku in skus},
+        in_transit={sku: Decimal(3) for sku in skus}, in_transit_mismatch=skus,
+    )
+    mapping = tmp_path / "中文 可选金额.xlsx"
+    book = Workbook()
+    amounts = (10, 200000, 150000)
+    book.active.append(["SKU", "热销标记", "成本", "跨境价", "折扣价"])
+    for sku, missing in zip(skus, combinations, strict=True):
+        book.active.append([sku, 2, *(None if absent else value for absent, value in zip(missing, amounts, strict=True))])
+    book.save(mapping)
+    book.close()
+    map_arguments = ["--sku-map-file", str(mapping)] if explicit else []
+    if not explicit:
+        settings.upload_map(mapping)
+    args = ["vietnam", "replenishment", "calculate", *_report_arguments(tmp_path, sources), *map_arguments]
+    assert lxeskill.main(args) == 0
+    [result] = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.strip()]
+    assert result["ok"] is True and result["data"]["validation"]["status"] == "passed"
+    assert result["data"]["validation"]["missing_mapping_count"] == 0
+    output = Path(result["data"]["output_xlsx"])
+    cached = load_workbook(output, data_only=True)
+    formulas = load_workbook(output, data_only=False)
+    try:
+        main = cached["越南备货清单"]
+        quantity, days = main["H2"].value, main["AC2"].value
+        assert quantity > 0 and days > 0
+        financial_columns = ("AF", "AG", "AH", "AI", "AK", "AL", "AM")
+        reference = {column: main[f"{column}2"].value for column in financial_columns}
+        for row, (cost_missing, cross_missing, discount_missing) in enumerate(combinations, 2):
+            assert main[f"H{row}"].value == quantity
+            assert main[f"AC{row}"].value == days
+            blank = {
+                "AF": cross_missing, "AI": cross_missing,
+                "AG": cost_missing or cross_missing, "AH": cost_missing or cross_missing,
+                "AK": discount_missing,
+                "AL": cost_missing or discount_missing, "AM": cost_missing or discount_missing,
+            }
+            for column in financial_columns:
+                assert formulas["越南备货清单"][f"{column}{row}"].data_type == "f"
+                value = main[f"{column}{row}"].value
+                if blank[column]:
+                    assert value in (None, ""), (row, column, value)
+                else:
+                    assert value == reference[column], (row, column, value)
+            for column, absent in zip(("G", "AE", "AJ"), combinations[row - 2], strict=True):
+                if absent:
+                    assert main[f"{column}{row}"].value is None
+
+        if explicit:
+            # Filling values in the delivered workbook must reactivate retained formulas.
+            for row in range(2, len(skus) + 2):
+                for column, amount in zip(("G", "AE", "AJ"), amounts, strict=True):
+                    formulas["越南备货清单"][f"{column}{row}"] = amount
+            filled = tmp_path / "补齐金额.xlsx"
+            formulas.save(filled)
+            updated = tmp_path / "补齐后 重算.xlsx"
+            recalculate_with_office(filled, updated)
+            recalculated = load_workbook(updated, data_only=True)
+            try:
+                for row in range(2, len(skus) + 2):
+                    sheet = recalculated["越南备货清单"]
+                    assert sheet[f"H{row}"].value == quantity
+                    for column in financial_columns:
+                        assert sheet[f"{column}{row}"].value == reference[column]
+            finally:
+                recalculated.close()
+    finally:
+        cached.close()
+        formulas.close()

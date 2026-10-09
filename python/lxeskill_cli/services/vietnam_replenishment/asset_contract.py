@@ -99,7 +99,7 @@ def _blank(value: object) -> bool:
 def load_sku_parameters(path: str | Path) -> dict[str, SkuParameters]:
     """Parse first-sheet inputs without filling gaps.
 
-    Runtime callers must use validate_usable_sku_parameters for completeness.
+    Runtime callers must use validate_usable_sku_parameters for input validation.
     """
     return _load_sku_parameters(path, complete=False)
 
@@ -140,15 +140,15 @@ def _load_sku_parameters(path: str | Path, *, complete: bool) -> dict[str, SkuPa
 
         def number_at(row: tuple, row_number: int, header: str, sku: str | None) -> Decimal | None:
             value, _ = cell_at(row, row_number, header)
+            if _blank(value):
+                if complete and header == "热销标记":
+                    raise AssetContractError("热销标记必填，且只能是 1 或 2")
+                return None
             if complete and header != "热销标记":
                 try:
                     return excel_number(value, sku or "（无有效 SKU）", header, positive=True)
                 except ArithmeticError as exc:
                     raise AssetContractError(f"数值无法用于 Excel: {type(exc).__name__}: {exc}") from exc
-            if _blank(value):
-                if complete:
-                    raise AssetContractError("热销标记必填，且只能是 1 或 2")
-                return None
             if isinstance(value, bool):
                 raise AssetContractError("必须是有限非负数，实际为布尔值")
             try:
@@ -245,7 +245,7 @@ def _load_sku_parameters(path: str | Path, *, complete: bool) -> dict[str, SkuPa
 
 
 def validate_sku_parameter_values(values: Mapping[str, SkuParameters]) -> None:
-    """Every supplied SKU must be complete; ERP coverage is not required."""
+    """Require a hot flag and positive supplied prices; ERP coverage is optional."""
     if not values:
         raise WorkbookInputError("当前越南 SKU 参数映射表没有 SKU，请重新上传")
     for sku, row in values.items():
@@ -256,13 +256,15 @@ def validate_sku_parameter_values(values: Mapping[str, SkuParameters]) -> None:
             ("cross_border_price", "跨境价"),
             ("discount_price", "折扣价"),
         ):
-            excel_number(getattr(row, field), sku, label, positive=True)
+            value = getattr(row, field)
+            if value is not None:
+                excel_number(value, sku, label, positive=True)
         if isinstance(row.hot_flag, bool) or row.hot_flag not in (1, 2):
             raise WorkbookInputError(f"SKU {sku} 的热销标记必填，且只能是 1 或 2")
 
 
 def validate_usable_sku_parameters(path: str | Path) -> dict[str, SkuParameters]:
-    """Require complete mapped SKUs with positive Excel-exact prices."""
+    """Require mapped SKUs with hot flags and optional positive Excel-exact prices."""
     return _load_sku_parameters(path, complete=True)
 
 

@@ -173,7 +173,7 @@ export const ZH_TEXT = {
   },
   vietnamSettings: {
     title: "越南备货设置", subtitle: "管理 SKU 映射表、销量权重和人民币兑越南盾汇率。所有工作目录共用。",
-    skuMap: "SKU 映射表", skuHint: "每个已填写的 SKU：热销标记必填 1 或 2；成本、跨境价和折扣价必填且大于 0。聊天中指定的文件仅用于当次计算。",
+    skuMap: "SKU 映射表", skuHint: "热销标记必填 1 或 2。成本、跨境价和折扣价可留空，填写时须大于 0；缺少金额时，对应价格和利润结果留空，备货量正常计算。聊天中指定的文件仅用于当次计算。",
     upload: "上传映射表", replace: "替换映射表", uploaded: "SKU 映射表已保存。", noMap: "尚未上传映射表", updated: "更新于",
     downloadTemplate: "下载空白模板", exportCurrent: "导出当前映射表", exported: (path: string) => `文件已保存至：${path}`,
     weights: "销量权重", weightsHint: "将各周期日均销量合并，三个权重合计为 100%。", days: (day: number) => `${day} 天`,
@@ -1073,7 +1073,7 @@ export const UI_TEXT: Record<Language, UiText> = {
     },
     vietnamSettings: {
       title: "Vietnam replenishment settings", subtitle: "Manage the SKU map, sales weights and CNY to VND exchange rate. Shared across workspaces.",
-      skuMap: "SKU map", skuHint: "Each listed SKU requires a hot-selling flag of 1 or 2, plus cost, cross-border price and discount price greater than 0. Files specified in chat apply to that run only.",
+      skuMap: "SKU map", skuHint: "Each listed SKU requires a hot-selling flag of 1 or 2. Cost, cross-border price and discount price may be blank; provided amounts must be greater than 0. Missing amounts leave dependent price and profit results blank without affecting replenishment quantities. Files specified in chat apply to that run only.",
       upload: "Upload map", replace: "Replace map", uploaded: "SKU map saved.", noMap: "No SKU map uploaded", updated: "Updated",
       downloadTemplate: "Download blank template", exportCurrent: "Export current map", exported: (path: string) => `File saved to: ${path}`,
       weights: "Sales weights", weightsHint: "Combine daily sales across the three periods. Weights must total 100%.", days: (day: number) => `${day} days`,

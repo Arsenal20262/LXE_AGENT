@@ -208,7 +208,7 @@ def test_usable_sku_map_accepts_complete_rows_and_skips_empty_rows(tmp_path: Pat
     [
         (column, label, invalid)
         for column, label in ((0, "折扣价"), (3, "成本"), (4, "跨境价"))
-        for invalid in (None, " ", 0, "0", -1, "NaN", "Infinity", True, "=1+1")
+        for invalid in (0, "0", -1, "NaN", "Infinity", True, "=1+1")
     ] + [(1, "热销标记", invalid) for invalid in (None, " ", 0, 3, 1.5, True)],
 )
 def test_usable_sku_map_rejects_incomplete_or_invalid_row(
@@ -219,6 +219,23 @@ def test_usable_sku_map_rejects_incomplete_or_invalid_row(
     path = _sku_map(tmp_path / "invalid.xlsx", row)
     with pytest.raises(AssetContractError, match=label):
         validate_usable_sku_parameters(path)
+
+
+@pytest.mark.parametrize("blank", [None, "", "  "])
+def test_usable_sku_map_accepts_individually_or_entirely_blank_amounts(tmp_path, blank):
+    path = _sku_map(
+        tmp_path / "可选 金额.xlsx",
+        (3, 1, "no-cost", blank, 2),
+        (3, 2, "no-cross-border", 1, blank),
+        (blank, 1, "no-discount", 1, 2),
+        (blank, 2, "no-amounts", blank, blank),
+    )
+    assert validate_usable_sku_parameters(path) == {
+        "no-cost": SkuParameters(cross_border_price=Decimal(2), discount_price=Decimal(3), hot_flag=1),
+        "no-cross-border": SkuParameters(cost=Decimal(1), discount_price=Decimal(3), hot_flag=2),
+        "no-discount": SkuParameters(cost=Decimal(1), cross_border_price=Decimal(2), hot_flag=1),
+        "no-amounts": SkuParameters(hot_flag=2),
+    }
 
 
 @pytest.mark.parametrize(
@@ -245,7 +262,7 @@ def test_usable_sku_map_rejects_empty_first_sheet(tmp_path: Path) -> None:
 def test_collects_every_independent_cell_error_in_sheet_order(tmp_path: Path) -> None:
     path = _sku_map(
         tmp_path / "多处 错误.xlsx",
-        (0, None, " VN-A ", None, "bad", "2026-02-30"),
+        (0, None, " VN-A ", -1, "bad", "2026-02-30"),
         ("=1+1", 3, "VN-A", "NaN", True, "tomorrow"),
         (1, 1, 123, "1234567890123456", 2, None),
         (None, None, None, None, None, None),
@@ -270,7 +287,7 @@ def test_collects_every_independent_cell_error_in_sheet_order(tmp_path: Path) ->
 
 
 def test_invalid_sku_does_not_hide_other_fields_or_optional_date(tmp_path: Path) -> None:
-    path = _sku_map(tmp_path / "formula sku.xlsx", (0, "no", "=1+1", None, -1, 123))
+    path = _sku_map(tmp_path / "formula sku.xlsx", (0, "no", "=1+1", -1, -1, 123))
     with pytest.raises(SkuMapValidationError) as caught:
         validate_usable_sku_parameters(path)
     assert len(caught.value.issues) == 6
@@ -293,7 +310,7 @@ def test_corrected_rows_return_exact_values_without_defaults(tmp_path: Path) -> 
     path = _sku_map(tmp_path / "corrected.xlsx", (0, None, "001", None, 2))
     with pytest.raises(SkuMapValidationError) as caught:
         validate_usable_sku_parameters(path)
-    assert len(caught.value.issues) == 3
+    assert len(caught.value.issues) == 2  # Blank cost is valid; zero discount and missing flag are not.
     _sku_map(path, ("1.25", 2, "001", "12.34", "5.67"))
     assert validate_usable_sku_parameters(path) == {"001": SkuParameters(
         cost=Decimal("12.34"), cross_border_price=Decimal("5.67"),

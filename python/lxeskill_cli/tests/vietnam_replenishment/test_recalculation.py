@@ -294,7 +294,7 @@ def test_unmapped_guarded_formula_cannot_be_removed(tmp_path: Path, coordinate: 
 @pytest.mark.parametrize(
     ("column", "invalid", "label"),
     [(column, invalid, label) for column, label in ((3, "成本"), (4, "跨境价"), (5, "折扣价"))
-     for invalid in (None, 0)] + [(2, None, "热销标记")],
+     for invalid in (0, -1)] + [(2, None, "热销标记")],
 )
 def test_generator_rejects_invalid_map_before_writing_or_office(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, column: int, invalid: object, label: str,

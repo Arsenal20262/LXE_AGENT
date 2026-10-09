@@ -122,7 +122,7 @@ def test_empty_current_stops_before_loading_reports(tmp_path: Path, monkeypatch:
     ("label", "values"),
     [(label, {field: invalid})
      for field, label in (("cost", "成本"), ("price", "跨境价"), ("discount", "折扣价"))
-     for invalid in (None, 0)] + [("热销标记", {"hot_flag": None})],
+     for invalid in (0, -1)] + [("热销标记", {"hot_flag": None})],
 )
 @pytest.mark.parametrize("explicit", (False, True))
 def test_invalid_map_stops_before_loading_reports_without_fallback(

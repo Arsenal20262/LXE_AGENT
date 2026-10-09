@@ -127,7 +127,7 @@ app.whenReady().then(async () => {
         await waitFor("document.body.innerText.includes('sku-map.xlsx')", "uploaded map shown");
         assert.equal(await js("document.querySelectorAll('.vietnam-settings-view input')[3].value"), "4200");
         const status = await js("document.querySelector('.vietnam-file-status').textContent");
-        const findings = "SKU 映射表共发现 3 个错误，涉及 2 行；整表校验未通过。\nSKU参数映射!C2 · SKU VN-A · 成本: 必须是有限正数\nSKU参数映射!B3 · SKU VN-B · 热销标记: 必填，且只能是 1 或 2\nSKU参数映射!E3 · SKU VN-B · 折扣价: 缺失";
+        const findings = "SKU 映射表共发现 3 个错误，涉及 2 行；整表校验未通过。\nSKU参数映射!C2 · SKU VN-A · 成本: 必须是有限正数\nSKU参数映射!B3 · SKU VN-B · 热销标记: 必填，且只能是 1 或 2\nSKU参数映射!E3 · SKU VN-B · 折扣价: 必须是有限正数";
         await js(`behavior.vietnamUploadFailure(${JSON.stringify(findings)})`);
         await click(".vietnam-map-upload");
         assert.equal(await js("document.querySelector('[role=alert]').innerText"), findings);

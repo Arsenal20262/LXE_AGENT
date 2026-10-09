@@ -231,11 +231,11 @@ def test_unmapped_current_sku_keeps_source_rows_and_guards_dependent_formulas(
     [
         (field, label, invalid)
         for field, label in (("cost", "成本"), ("cross_border_price", "跨境价"), ("discount_price", "折扣价"))
-        for invalid in (None, Decimal("0"), Decimal("-1"))
+        for invalid in (Decimal("0"), Decimal("-1"))
     ] + [("hot_flag", "热销标记", invalid) for invalid in (None, 0, 3, True)],
 )
 @pytest.mark.parametrize("sku", ("VN-B", "GLOBAL-OTHER"))
-def test_every_mapped_sku_requires_complete_valid_values(
+def test_every_mapped_sku_requires_valid_supplied_values_and_hot_flag(
     tmp_path: Path, field: str, label: str, invalid: object, sku: str,
 ) -> None:
     values = _parameters()
@@ -244,6 +244,26 @@ def test_every_mapped_sku_requires_complete_valid_values(
     with pytest.raises(writer.WorkbookInputError, match=f"{sku}.*{label}"):
         writer.write_vietnam_workbook(output, _sources(), values, writer.RecommendationConfig())
     assert not output.exists()
+
+
+def test_mapped_skus_allow_missing_amounts_including_rows_outside_this_run(tmp_path, monkeypatch):
+    monkeypatch.setattr(writer, "_load_skeleton", _LOAD_REAL_SKELETON)
+    values = {sku: SkuParameters(hot_flag=2) for sku in _parameters()}
+    output = tmp_path / "amounts-blank.xlsx"
+    writer.write_vietnam_workbook(output, _sources(), values, writer.RecommendationConfig())
+    book = load_workbook(output, data_only=False)
+    skeleton = _LOAD_REAL_SKELETON()
+    try:
+        main = book["越南备货清单"]
+        assert main["B2"].value == 2
+        assert all(main[f"{column}2"].value is None for column in ("G", "AE", "AJ"))
+        # Amounts must not alter either replenishment formula.
+        assert main["H2"].value == skeleton["越南备货清单"]["H2"].value
+        assert main["AC2"].value.text == skeleton["越南备货清单"]["AC2"].value.text
+        assert main["AG2"].value.startswith('=IF(OR(ISBLANK(AE2),ISBLANK(G2)),"",')
+    finally:
+        book.close()
+        skeleton.close()
 
 
 def test_empty_parameter_table_and_bad_hot_flag_fail(tmp_path: Path) -> None:

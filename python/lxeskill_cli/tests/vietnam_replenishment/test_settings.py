@@ -87,9 +87,9 @@ def test_upload_is_atomic_and_failed_replacement_keeps_file(tmp_path):
 @pytest.mark.parametrize(
     ("column", "label", "invalid"),
     [(column, label, invalid) for column, label in ((2, "成本"), (3, "跨境价"), (4, "折扣价"))
-     for invalid in (None, 0)] + [(5, "热销标记", invalid) for invalid in (None, 0, 3)],
+     for invalid in (0, -1)] + [(5, "热销标记", invalid) for invalid in (None, 0, 3)],
 )
-def test_incomplete_replacement_preserves_saved_data_and_reports_invalid_saved_map(
+def test_invalid_replacement_preserves_saved_data_and_reports_invalid_saved_map(
     tmp_path, column, label, invalid,
 ):
     state = settings.upload_map(sku_map(tmp_path / "valid.xlsx"))
@@ -122,6 +122,28 @@ def test_incomplete_replacement_preserves_saved_data_and_reports_invalid_saved_m
     assert export.read_bytes() == b"preserve destination"
     assert target.read_bytes() == invalid_bytes
     assert (parameters.read_bytes(), parameters.stat().st_mtime_ns) == before[parameters]
+
+
+def test_blank_amounts_survive_upload_export_and_saved_or_explicit_snapshot(tmp_path):
+    settings.upload_map(sku_map(tmp_path / "original.xlsx"))
+    source = sku_map(tmp_path / "中文 可选金额.xlsx", cost=None)
+    book = load_workbook(source)
+    book.active["C2"] = None
+    book.active["D2"] = None
+    book.save(source)
+    book.close()
+    state = settings.upload_map(source)
+    saved = Path(state["sku_map"]["path"])
+    assert saved.read_bytes() == source.read_bytes()
+    assert settings.read_state()["sku_map_error"] is None
+    exported = tmp_path / "导出 当前表.xlsx"
+    settings.export_map("current", exported)
+    assert exported.read_bytes() == source.read_bytes()
+    for selected in (None, str(source)):
+        with settings.run_inputs(selected) as (snapshot, *_):
+            row = load_sku_parameters(snapshot)["VN-A"]
+            assert row.hot_flag == 1
+            assert (row.cost, row.cross_border_price, row.discount_price) == (None, None, None)
 
 
 def test_explicit_file_overrides_saved_without_changing_it_and_snapshot_is_stable(tmp_path):

@@ -150,14 +150,17 @@ def _validated_rows(
         sales_7d = _number(sales.get("7天销量"), sku, "7天销量")
         sales_15d = _number(sales.get("15天销量"), sku, "15天销量")
         sales_30d = _number(sales.get("30天销量"), sku, "30天销量")
-        cost = _number(values.cost, sku, "成本(cost)", positive=True) if values is not None else None
+        cost = (
+            _number(values.cost, sku, "成本(cost)", positive=True)
+            if values is not None and values.cost is not None else None
+        )
         cross_border = (
             _number(values.cross_border_price, sku, "跨境价(cross_border_price)", positive=True)
-            if values is not None else None
+            if values is not None and values.cross_border_price is not None else None
         )
         discount = (
             _number(values.discount_price, sku, "折扣价(discount_price)", positive=True)
-            if values is not None else None
+            if values is not None and values.discount_price is not None else None
         )
         if values is None:
             hot_flag = None
