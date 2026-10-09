@@ -6,7 +6,7 @@ module.exports = async ({ win, js, step, load, waitFor, click, key, focus, settl
     await settle();
   };
   const textClick = async (text, scope = 'body') => {
-    const expression = `Array.from(document.querySelector(${JSON.stringify(scope)}).querySelectorAll('button')).find(e=>(e.querySelector('strong')?.textContent ?? e.textContent).trim()===${JSON.stringify(text)})`;
+    const expression = `Array.from(document.querySelector(${JSON.stringify(scope)}).querySelectorAll('button')).find(e=>(e.querySelector('strong, .workbench-tool-name')?.textContent ?? e.textContent).trim()===${JSON.stringify(text)})`;
     await waitFor(`Boolean(${expression})`, `button ${text}`);
     await js(`(${expression}).click()`); await settle();
   };
@@ -163,7 +163,7 @@ module.exports = async ({ win, js, step, load, waitFor, click, key, focus, settl
   });
   await step('workbench sends opaque handles and releases task subscription on navigation', async () => {
     await open('workbench', '&platform=win32');
-    await click('.workbench-tool-card');
+    await textClick('Amazon AI performer tag', '.workbench-tool-grid');
     await waitFor("Boolean(document.querySelector('#synthetic-performer-title'))", 'media workbench');
     assert.equal((await js('behavior.ui.listeners()')).task, 1);
     await click('.workbench-source-actions button:first-child');
