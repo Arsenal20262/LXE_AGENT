@@ -82,14 +82,6 @@ export interface TypeScriptAgentRuntimeOptions {
   tools: ToolRegistry;
   toolExposure?: ToolExposureOptions | (() => ToolExposureOptions);
   resolveInvokedSkill?: (name: string, workspace: WorkspaceContext) => Promise<{ name: string; root: string; content: string } | undefined>;
-  preselectSkills?: (context: {
-    job: AgentJob;
-    currentUserMessage: RuntimeMessage;
-    persistedMessages: readonly RuntimeMessage[];
-    skillSnapshot?: RuntimeSkillSnapshot;
-    workspace: WorkspaceContext;
-    signal: AbortSignal;
-  }) => Promise<readonly string[]> | readonly string[];
   onToolResult?: (session: string) => void;
   skillSnapshot?: (workspace: WorkspaceContext) => RuntimeSkillSnapshot;
   workspaceInstances?: RuntimeWorkspaceInstanceProvider;
@@ -505,16 +497,7 @@ export class TypeScriptAgentRuntime implements AgentRuntime {
         }
         return injected;
       };
-      const loadInitialSkills = async (): Promise<RuntimeMessage[]> => {
-        const explicit = invokedSkillNames(job.user_input);
-        const preselected = explicit.length ? [] : await this.options.preselectSkills?.({
-          job, currentUserMessage: userMessage, persistedMessages: messages,
-          ...(skillSnapshot ? { skillSnapshot } : {}), workspace, signal: handle.signal,
-        }) ?? [];
-        handle.signal.throwIfAborted();
-        return loadInvokedSkills([...new Set([...explicit, ...preselected])]);
-      };
-      const instructions = heartbeat ? [] : await loadInitialSkills().catch(async error => {
+      const instructions = heartbeat ? [] : await loadInvokedSkills(invokedSkillNames(job.user_input)).catch(async error => {
         // Keep the submitted input in history when skill selection or loading fails.
         await this.appendMessage(job.session_id, userMessage, "turn_input", job.job_id);
         throw error;

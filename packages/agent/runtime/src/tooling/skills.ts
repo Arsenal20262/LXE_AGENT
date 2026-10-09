@@ -5,7 +5,6 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "nod
 import { parse } from "yaml";
 import { createLogger } from "@lxe/core";
 import { skillPathKey, skillTreeFingerprint, readSkillStates } from "./skill-files";
-import { parseSkillPreselection, type SkillPreselectionDeclaration } from "./skill-preselection";
 import type { JsonObject, WorkspaceContext } from "@lxe/protocol";
 
 export interface SkillPromptOptions {
@@ -28,7 +27,6 @@ export interface SkillManifest {
   source: "repository" | "user" | "shared";
   references: SkillReference[];
   content: string;
-  preselection?: SkillPreselectionDeclaration;
 }
 
 export interface SkillCatalogSnapshot {
@@ -36,7 +34,6 @@ export interface SkillCatalogSnapshot {
   readonly prompt: string;
   readonly modules: Readonly<Record<string, string>>;
   readonly locations?: Readonly<Record<string, string>>;
-  readonly preselection: readonly SkillPreselectionDeclaration[];
 }
 
 export interface SkillCatalogDiagnostic extends JsonObject {
@@ -168,13 +165,6 @@ export const parseSkillManifest = (path: string, source: SkillManifest["source"]
   if (new Set(commands).size !== commands.length) {
     throw new SkillCatalogError(`duplicate command within skill ${name}`);
   }
-  let preselection: SkillPreselectionDeclaration | undefined;
-  if (source === "repository" && metadata.preselect !== undefined) {
-    try { preselection = parseSkillPreselection(metadata.preselect, name); }
-    catch (cause) {
-      throw new SkillCatalogError(`invalid skill preselect: ${path}: ${cause instanceof Error ? cause.message : String(cause)}`);
-    }
-  }
   return {
     name,
     type: String(metadata.type ?? "default").trim() || "default",
@@ -185,7 +175,6 @@ export const parseSkillManifest = (path: string, source: SkillManifest["source"]
     source,
     references,
     content,
-    ...(preselection ? { preselection } : {}),
   };
 };
 
@@ -330,26 +319,12 @@ export class SkillCatalog {
     const moduleEntries = Object.create(null) as Record<string, string>;
     for (const manifest of manifests) moduleEntries[manifest.name] = manifest.type;
     const modules = Object.freeze(moduleEntries);
-    const preselection = Object.freeze(manifests.flatMap(manifest => {
-      if (manifest.source !== "repository" || !manifest.preselection) return [];
-      const rule = manifest.preselection;
-      return [Object.freeze({
-        name: rule.name,
-        textPhrases: Object.freeze([...rule.textPhrases]),
-        ...(rule.attachment ? { attachment: Object.freeze({
-          extensions: Object.freeze([...rule.attachment.extensions]),
-          probeCommandId: rule.attachment.probeCommandId,
-          followupPhrases: Object.freeze([...rule.attachment.followupPhrases]),
-        }) } : {}),
-      })];
-    }));
     const cached: CachedSkillCatalogSnapshot = {
       manifests,
       snapshot: Object.freeze({
         names,
         prompt: this.promptFor(manifests, resolvedWorkspace),
         modules,
-        preselection,
         locations: Object.freeze(Object.fromEntries(manifests.map(manifest => [skillPathKey(manifest.location), manifest.name]))),
       }),
     };

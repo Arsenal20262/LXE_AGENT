@@ -221,9 +221,7 @@ export interface RuntimeAttachmentRecord extends JsonObject {
   ts: number;
 }
 
-export interface RuntimeSkillSnapshot extends Omit<SkillCatalogSnapshot, "preselection"> {
-  readonly preselection?: SkillCatalogSnapshot["preselection"];
-}
+export type RuntimeSkillSnapshot = SkillCatalogSnapshot;
 
 export interface RuntimeStore {
   start(): Promise<void>;

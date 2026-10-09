@@ -193,24 +193,6 @@ test("Mabang Brazil delivers original batches through a separate ERP skill", () 
 });
 
 
-test("generic preselection probe validation remains available without a Vietnam probe", () => {
-  const path = join(process.cwd(), "python/lxeskill_cli/lxeskill/catalog.json");
-  expect(loadLxeSkillCommandCatalog(path).filter(entry => entry.preselectionProbe)).toEqual([]);
-  const probe = { name: "synthetic_probe", command_path: ["synthetic", "probe"], visibility: "internal",
-    session_mode: "none", owner_skills: [], exposed: false, timeout_ms: 30000, preselection_probe: true,
-    input_schema: { type: "object", properties: { source_path: { type: "string", minLength: 1 } }, required: ["source_path"], additionalProperties: false } };
-  const root = mkdtempSync(join(tmpdir(), "lxe-probe-catalog-"));
-  try {
-    const file = join(root, "catalog.json");
-    writeFileSync(file, JSON.stringify({ protocol_version: "1", entries: [probe] }));
-    expect(loadLxeSkillCommandCatalog(file)[0]?.preselectionProbe).toBe(true);
-    for (const change of [{ exposed: true }, { visibility: "business" }, { owner_skills: ["stock"] }]) {
-      writeFileSync(file, JSON.stringify({ protocol_version: "1", entries: [{ ...probe, ...change }] }));
-      expect(() => loadLxeSkillCommandCatalog(file)).toThrow(/preselection probe/);
-    }
-  } finally { rmSync(root, { recursive: true, force: true }); }
-});
-
 test("flags-only export contracts have matching skill ownership and reject invalid modes", () => {
   const path = join(process.cwd(), "python/lxeskill_cli/lxeskill/catalog.json");
   const document = JSON.parse(readFileSync(path, "utf8"));

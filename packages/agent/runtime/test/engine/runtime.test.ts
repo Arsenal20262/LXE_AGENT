@@ -673,7 +673,7 @@ describe("TypeScriptAgentRuntime", () => {
             generation: 7,
             loaded_at: 1,
             instructions_prompt: "Workspace rule",
-            skills: Object.freeze({ names: Object.freeze([]), modules: Object.freeze({}), prompt: "", preselection: Object.freeze([]) }),
+            skills: Object.freeze({ names: Object.freeze([]), modules: Object.freeze({}), prompt: "" }),
             soul: "Cached soul",
           }),
           release: () => { released += 1; },
@@ -1357,7 +1357,6 @@ describe("TypeScriptAgentRuntime", () => {
 
   test("reports heartbeat events without history or tools", async () => {
     const store = new MemoryStore();
-    let preselectionCalls = 0;
     store.messages.push({ role: "user", content: "private history" });
     store.pendingEvents.push({
       event_id: "event-1",
@@ -1382,7 +1381,6 @@ describe("TypeScriptAgentRuntime", () => {
       },
       emitter: { emit: async () => undefined, typing: async () => undefined },
       systemPrompt: "test",
-      preselectSkills: () => { preselectionCalls++; return ["fixture-skill"]; },
     });
     await runtime.start();
     const outcome = await runtime.runTurn({ ...job(), job_kind: "heartbeat", user_input: "" }, handle());
@@ -1394,7 +1392,6 @@ describe("TypeScriptAgentRuntime", () => {
     expect(store.messages).toContainEqual(captured!.messages[0]!);
     expect(JSON.stringify(captured?.messages)).not.toContain("private history");
     expect(store.pendingEvents).toEqual([]);
-    expect(preselectionCalls).toBe(0);
     expect(store.turnContexts).toEqual([expect.objectContaining({ job_kind: "heartbeat", turn_id: "j1" })]);
   });
 
@@ -3161,72 +3158,59 @@ test.each(["read", "text", "mcp", "failed", "storage-failed", "cancelled"] as co
   } finally { await runtime.stop(); }
 });
 
-describe("explicit composer skill invocations", () => {
-  test("preselects a visible skill before the first model request without changing the user text", async () => {
-    const store = new MemoryStore(), tools = new ToolRegistry(), looked: string[] = [];
-    const skillSnapshot = { names: ["fixture-skill"], modules: { "fixture-skill": "fixture" }, prompt: "fixture catalog" };
-    store.messages = [{ role: "user", content: "earlier message" }];
-    tools.register({ name: "fixture_action", description: "fixture", input_schema: { type: "object" }, exposure: "deferred", ownerSkills: ["fixture-skill"], execute: async () => ({ content: [] }) });
-    const turnHandle = handle();
-    let preselectionCalls = 0;
-    const runtime = new TypeScriptAgentRuntime({ permissionPolicy, store, tools, systemPrompt: "test",
+describe("skill loading", () => {
+  test.each([
+    { scenario: "business phrase", text: "查询越南备货", currentFile: false, previousFile: false },
+    { scenario: "calculation request with XLSX", text: "帮我计算一下越南备货", currentFile: true, previousFile: false },
+    { scenario: "XLSX upload alone", text: "", currentFile: true, previousFile: false },
+    { scenario: "reply after an XLSX upload", text: "绑定并查询", currentFile: false, previousFile: true },
+  ])("leaves $scenario to the model without loading a Skill or probing attachments", async ({ text, currentFile, previousFile }) => {
+    const store = new MemoryStore(), tools = new ToolRegistry();
+    let loads = 0, attachmentReads = 0, executions = 0, providerCalls = 0;
+    const attachment = { type: "local_file", attachment_id: "sku-map", turn_id: previousFile ? "previous-turn" : "j1",
+      path: "/uploads/越南 SKU 映射表.xlsx", name: "越南 SKU 映射表.xlsx", size_bytes: 100,
+      media_type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", ts: 1 };
+    if (previousFile) store.messages = [{ role: "user", message_id: "previous-message", content: [attachment] }];
+    store.resolveAttachment = async () => { attachmentReads++; return undefined; };
+    tools.register({ name: "exec", description: "exec fixture", input_schema: { type: "object" },
+      execute: async () => { executions++; return { content: [] }; } });
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy, store, tools,
       emitter: { emit: async () => {}, typing: async () => {} },
-      skillSnapshot: () => skillSnapshot,
-      preselectSkills: ({ job: currentJob, currentUserMessage, persistedMessages, skillSnapshot: currentSnapshot, workspace: currentWorkspace, signal }) => {
-        preselectionCalls++;
-        expect(currentJob.user_input).toBe("run fixture");
-        expect(currentUserMessage).toEqual(expect.objectContaining({ role: "user", content: "run fixture", message_id: "m1" }));
-        expect(persistedMessages).toEqual([{ role: "user", content: "earlier message" }]);
-        expect(currentSnapshot).toBe(skillSnapshot);
-        expect(currentWorkspace).toEqual(workspace);
-        expect(signal).toBe(turnHandle.signal);
-        return ["fixture-skill"];
-      },
-      resolveInvokedSkill: async name => { looked.push(name); return { name, root: "/skills/fixture-skill", content: "Fixture instructions" }; },
+      skillSnapshot: () => ({ names: ["vietnam-replenishment"], modules: { "vietnam-replenishment": "replenishment" },
+        prompt: "Available skills: vietnam-replenishment — /skills/vietnam-replenishment/SKILL.md" }),
+      systemPrompt: context => context.skillPrompt,
+      resolveInvokedSkill: async name => { loads++; return { name, root: "/skills/vietnam-replenishment", content: "Unrequested skill instructions" }; },
       provider: { summarize, turn: async request => {
-        expect(request.tools.some(tool => tool.name === "fixture_action")).toBe(true);
-        expect(request.messages.filter(message => message.role === "user" && typeof message.content === "string" && message.content.includes("Fixture instructions"))).toHaveLength(1);
+        providerCalls++;
+        expect(request.system).toContain("Available skills: vietnam-replenishment");
+        expect(request.system).toContain("/skills/vietnam-replenishment/SKILL.md");
+        expect(JSON.stringify(request.messages)).not.toContain("<skill_content");
+        expect(JSON.stringify(request.messages)).not.toContain("Unrequested skill instructions");
+        if (currentFile || previousFile) expect(JSON.stringify(request.messages)).toContain(attachment.path);
+        expect(request.tools.some(tool => tool.name === "exec")).toBe(true);
         return messageFixture({ stopReason: "stop", content: [{ type: "text", text: "done" }] });
       } },
     });
     await runtime.start();
     try {
-      expect((await runtime.runTurn(job({ user_input: "run fixture" }), turnHandle)).status).toBe("completed");
-      expect(preselectionCalls).toBe(1);
-      expect(looked).toEqual(["fixture-skill"]);
-      expect(store.messages.find(message => message.role === "user" && message.message_id === "m1")?.content).toBe("run fixture");
-      expect(store.messageReasons.filter(reason => reason === "skill_invocation")).toHaveLength(1);
-      expect(JSON.stringify(store.metrics)).toContain('"skill":"fixture-skill"');
+      const result = await runtime.runTurn(job({ user_input: text, source: { platform: "desktop" },
+        user_content_blocks: currentFile ? [attachment] : [] }), handle());
+      expect(result.status).toBe("completed");
+      expect(providerCalls).toBe(1);
+      expect(loads).toBe(0);
+      expect(attachmentReads).toBe(0);
+      expect(executions).toBe(0);
+      expect(store.messageReasons).not.toContain("skill_invocation");
+      const user = store.messages.find(message => message.role === "user" && message.message_id === "m1");
+      expect(user && "invoked_skills" in user).toBe(false);
     } finally { await runtime.stop(); }
   });
 
-  test("an explicit Skill takes precedence over automatic preselection", async () => {
-    const store = new MemoryStore(), looked: string[] = [];
-    let preselectionCalls = 0;
-    const runtime = new TypeScriptAgentRuntime({ permissionPolicy, store, tools: new ToolRegistry(), systemPrompt: "test",
-      emitter: { emit: async () => {}, typing: async () => {} },
-      preselectSkills: () => { preselectionCalls++; return ["another-skill", "fixture-skill"]; },
-      resolveInvokedSkill: async name => { looked.push(name); return { name, root: `/skills/${name}`, content: `${name} instructions` }; },
-      provider: { summarize, turn: async request => {
-        expect(JSON.stringify(request.messages)).not.toContain("another-skill instructions");
-        return messageFixture({ stopReason: "stop", content: [{ type: "text", text: "done" }] });
-      } },
-    });
-    await runtime.start();
-    try {
-      expect((await runtime.runTurn(job({ user_input: "/fixture-skill continue" }), handle())).status).toBe("completed");
-      expect(looked).toEqual(["fixture-skill"]);
-      expect(preselectionCalls).toBe(0);
-      expect(store.messageReasons.filter(reason => reason === "skill_invocation")).toHaveLength(1);
-    } finally { await runtime.stop(); }
-  });
-
-  test("does not load a preselected skill disabled by the turn snapshot", async () => {
+  test("does not load an explicitly requested skill disabled by the turn snapshot", async () => {
     const store = new MemoryStore(); let loads = 0;
     const runtime = new TypeScriptAgentRuntime({ permissionPolicy, store, tools: new ToolRegistry(), systemPrompt: "test",
       emitter: { emit: async () => {}, typing: async () => {} },
       skillSnapshot: () => ({ names: [], modules: {}, prompt: "" }),
-      preselectSkills: () => ["fixture-skill"],
       resolveInvokedSkill: async name => { loads++; return { name, root: "/skills/fixture-skill", content: "Fixture instructions" }; },
       provider: { summarize, turn: async request => {
         expect(JSON.stringify(request.messages)).not.toContain("Fixture instructions");
@@ -3235,26 +3219,9 @@ describe("explicit composer skill invocations", () => {
     });
     await runtime.start();
     try {
-      expect((await runtime.runTurn(job(), handle())).status).toBe("completed");
+      expect((await runtime.runTurn(job({ user_input: "/fixture-skill continue" }), handle())).status).toBe("completed");
       expect(loads).toBe(0);
       expect(store.messageReasons).not.toContain("skill_invocation");
-    } finally { await runtime.stop(); }
-  });
-
-  test("preselected skill read errors stop before the provider and preserve user input", async () => {
-    const store = new MemoryStore(); let providerCalls = 0;
-    const runtime = new TypeScriptAgentRuntime({ permissionPolicy, store, tools: new ToolRegistry(), systemPrompt: "test",
-      emitter: { emit: async () => {}, typing: async () => {} },
-      preselectSkills: () => ["fixture-skill"],
-      resolveInvokedSkill: async () => { throw new Error("EACCES: SKILL.md read failed"); },
-      provider: { summarize, turn: async () => { providerCalls++; return messageFixture(); } },
-    });
-    await runtime.start();
-    try {
-      expect((await runtime.runTurn(job({ user_input: "run fixture" }), handle())).status).toBe("error");
-      expect(providerCalls).toBe(0);
-      expect(store.messages.some(message => message.role === "user" && message.content === "run fixture")).toBe(true);
-      expect(JSON.stringify(store.turnErrors)).toContain("EACCES: SKILL.md read failed");
     } finally { await runtime.stop(); }
   });
 

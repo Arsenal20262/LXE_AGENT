@@ -14,8 +14,6 @@ export interface LxeSkillCommandDefinition {
   ownerSkills: string[];
   attributionSkill?: string;
   artifactPaths?: ArtifactPathDeclaration[];
-  preselectionProbe?: true;
-  timeoutMs?: number;
 }
 
 interface LxeSkillCatalogEntry {
@@ -86,28 +84,6 @@ const artifactPathsOf = (
   });
 };
 
-const preselectionProbeOf = (raw: Record<string, unknown>, ownerSkills: string[]): true | undefined => {
-  if (!Object.prototype.hasOwnProperty.call(raw, "preselection_probe")) return undefined;
-  const schema = raw.input_schema && typeof raw.input_schema === "object" && !Array.isArray(raw.input_schema)
-    ? raw.input_schema as Record<string, unknown> : null;
-  const properties = schema?.properties && typeof schema.properties === "object" && !Array.isArray(schema.properties)
-    ? schema.properties as Record<string, unknown> : null;
-  const field = properties?.source_path && typeof properties.source_path === "object" && !Array.isArray(properties.source_path)
-    ? properties.source_path as Record<string, unknown> : null;
-  const timeout = raw.timeout_ms;
-  if (raw.preselection_probe !== true || raw.visibility !== "internal" || raw.exposed !== false
-    || raw.session_mode !== "none" || ownerSkills.length !== 0
-    || !Number.isSafeInteger(timeout) || Number(timeout) <= 0
-    || !schema || schema.type !== "object" || schema.additionalProperties !== false
-    || !properties || Object.keys(properties).length !== 1 || !field || field.type !== "string"
-    || field.minLength !== 1 || !Array.isArray(schema.required)
-    || schema.required.length !== 1 || schema.required[0] !== "source_path"
-    || (raw.artifact_paths !== undefined && (!Array.isArray(raw.artifact_paths) || raw.artifact_paths.length !== 0))) {
-    throw new Error(`invalid preselection probe contract: ${String(raw.name ?? "")}`);
-  }
-  return true;
-};
-
 export function loadLxeSkillCommandCatalog(path: string): LxeSkillCommandDefinition[] {
   const document = JSON.parse(readFileSync(path, "utf8")) as LxeSkillCatalogDocument;
   if (document.protocol_version !== "1" || !Array.isArray(document.entries)) {
@@ -130,7 +106,6 @@ export function loadLxeSkillCommandCatalog(path: string): LxeSkillCommandDefinit
     const ownerSkills = Array.isArray(raw.owner_skills)
       ? raw.owner_skills.map((item) => String(item).trim()).filter(Boolean)
       : [];
-    const preselectionProbe = preselectionProbeOf(raw, ownerSkills);
     const explicitAttribution = String(raw.attribution_skill ?? "").trim();
     if (ownerSkills.length > 1 && !explicitAttribution) {
       throw new Error(`multi-owner lxeskill command requires attribution_skill: ${entry.name}`);
@@ -147,7 +122,6 @@ export function loadLxeSkillCommandCatalog(path: string): LxeSkillCommandDefinit
       ownerSkills,
       ...(attributionSkill ? { attributionSkill } : {}),
       ...(artifactPaths.length ? { artifactPaths } : {}),
-      ...(preselectionProbe ? { preselectionProbe, timeoutMs: Number(raw.timeout_ms) } : {}),
     };
   });
 }

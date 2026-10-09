@@ -218,7 +218,6 @@ const skillSnapshotSignature = (snapshot: WorkspaceSkillSnapshot): string =>
     JSON.stringify(snapshot.names),
     JSON.stringify(snapshot.modules),
     JSON.stringify(snapshot.locations ?? {}),
-    JSON.stringify(snapshot.preselection),
   );
 
 export class WorkspaceInstanceManager {

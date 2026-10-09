@@ -24,29 +24,6 @@ class ArtifactPathError(ValueError):
     pass
 
 
-def validate_preselection_probe(entry: dict[str, Any]) -> None:
-    """Require internal, input-only catalog probes with one fixed path argument."""
-    if "preselection_probe" not in entry:
-        return
-    name = str(entry.get("name") or "<unknown>")
-    schema = entry.get("input_schema")
-    properties = schema.get("properties") if isinstance(schema, dict) else None
-    field = properties.get("source_path") if isinstance(properties, dict) else None
-    timeout = entry.get("timeout_ms")
-    if (entry["preselection_probe"] is not True or entry.get("visibility") != "internal"
-            or entry.get("exposed") is not False or entry.get("session_mode") != "none"
-            or entry.get("owner_skills") != []
-            or not isinstance(timeout, int) or isinstance(timeout, bool) or not 0 < timeout <= 2**53 - 1
-            or not isinstance(schema, dict) or schema.get("type") != "object"
-            or schema.get("additionalProperties") is not False
-            or not isinstance(properties, dict) or set(properties) != {"source_path"}
-            or not isinstance(field, dict) or field.get("type") != "string"
-            or type(field.get("minLength")) is not int or field["minLength"] != 1
-            or schema.get("required") != ["source_path"]
-            or ("artifact_paths" in entry and entry["artifact_paths"] != [])):
-        raise RuntimeError(f"invalid preselection probe contract for {name}")
-
-
 def load_catalog() -> dict[str, dict[str, Any]]:
     path = Path(__file__).with_name("catalog.json")
     document = json.loads(path.read_text(encoding="utf-8"))
@@ -133,7 +110,6 @@ def load_catalog() -> dict[str, dict[str, Any]]:
             )
             if expected != name:
                 raise RuntimeError(f"script tool naming mismatch: {module} -> {name}")
-        validate_preselection_probe(entry)
         entries[name] = entry
     return entries
 

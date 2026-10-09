@@ -4,16 +4,6 @@ description: 根据三份已有雅仓报表生成越南备货清单，独立计�
 type: replenishment
 commands:
   - lxeskill vietnam replenishment calculate
-preselect:
-  text_phrases:
-    - 查询越南备货
-    - 查询越南的备货
-    - 生成越南备货清单
-    - 出越南备货单
-    - 越南补货建议
-    - 越南补货量
-    - 越南这批该补多少
-    - 帮我出张越南备货表
 ---
 
 # 越南备货清单

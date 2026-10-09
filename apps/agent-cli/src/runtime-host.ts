@@ -1,6 +1,6 @@
 import { withManagedModels, managedCredentialFor, managedTargetKey, singleManagedState, loadLlmProviderCatalog, type ManagedLlmState } from "@lxe/core";
 import { existsSync } from "node:fs";
-import { isAbsolute, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import type {
   EmitRequest,
   JsonObject,
@@ -38,7 +38,6 @@ import {
   registerToolSearch,
   registerUserQuestionTool,
   UserQuestionService,
-  sanitizeToolDisplayText,
   setMcpServerEnabled,
   SkillCatalog,
   SqliteRuntimeStore,
@@ -53,7 +52,6 @@ import {
 } from "@lxe/runtime";
 import { DashboardService } from "./dashboard-service";
 import { loadAgentFeishuConfig } from "./feishu-runtime-config";
-import { createSkillPreselector } from "./skill-preselection";
 
 type Environment = Record<string, string | undefined>;
 
@@ -217,34 +215,6 @@ export function createAgentRuntimeHost(
       : "LXE Skill CLI Python is not configured",
     logger,
   });
-  const preselectSkills = createSkillPreselector({
-    commands: cliCommands,
-    resolveAttachment: (sessionId, attachmentId) => store.resolveAttachment(sessionId, attachmentId),
-    runProbe: async (_entry, argv, signal, timeoutMs) => {
-      if (!lxeSkillArgv) throw new Error(lxeSkillRuntime.snapshot().message || "LXE Skill CLI Python is unavailable");
-      const runner = new OneShotCliRunner({
-        command: lxeSkillArgv,
-        cwd: options.dataRoot,
-        timeoutMs,
-        maxOutputBytes: 64 * 1024,
-        env: lxeSkillEnvironment,
-      });
-      return runner.execute(argv, signal, timeoutMs);
-    },
-    reportProbeFailure: (commandId, error, attachmentPath) => {
-      const actual = error instanceof Error ? error.message
-        : error && typeof error === "object" && "message" in error
-          ? String(error.message) : String(error);
-      let redacted = actual;
-      for (const localPath of [attachmentPath, selectedPython, options.dataRoot, sourceRoot]) {
-        if (localPath && isAbsolute(localPath)) redacted = redacted.replaceAll(localPath, "[local-path]");
-      }
-      logger.warn("skill_preselection_probe_failed", {
-        command_id: commandId,
-        error: sanitizeToolDisplayText(redacted, 512),
-      });
-    },
-  });
   const processes = registerCodingTools(tools, {
     executionPaths, approvals,
     ...(environment.LXE_FD_PATH ? { fdPath: environment.LXE_FD_PATH } : {}),
@@ -327,7 +297,6 @@ export function createAgentRuntimeHost(
       await skillCatalog.refreshForUse();
       return skillCatalog.get(name, { allowedTypes: allowedSkillTypes });
     },
-    preselectSkills,
     contextWindowTokens: providerDescriptor.contextWindowTokens,
     display: {
       model: providerDescriptor.model,
