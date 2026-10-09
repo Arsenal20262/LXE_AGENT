@@ -99,7 +99,7 @@ def _read_rows(path: Path, report: str, *, current_skus: set[str] | None = None)
         return safe_remote_detail(value, secrets=secrets)
 
     if report == "inventory-sales":
-        validate_inventory_sales_workbook(path, warehouse_code="VN8806", diagnostic=diagnostic)
+        validate_inventory_sales_workbook(path, warehouse_code="VN8806", diagnostic=diagnostic, allow_delivery=True)
     elif report == "inventory-current-snapshot":
         validate_inventory_list_workbook(path, warehouse_code="VN8806", diagnostic=diagnostic)
     else:

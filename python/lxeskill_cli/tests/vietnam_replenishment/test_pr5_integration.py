@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from contextlib import closing
 from decimal import Decimal
 from itertools import product
 import json
@@ -10,6 +11,7 @@ import os
 from pathlib import Path
 
 from openpyxl import Workbook, load_workbook
+from openpyxl.worksheet.formula import ArrayFormula
 import pytest
 
 from lxeskill import cli as lxeskill
@@ -237,6 +239,64 @@ def test_explicit_sparse_map_keeps_all_yacang_skus(
         assert main["AA4"].value == "2026-09-20 10:00"
     finally:
         book.close()
+
+
+@pytest.mark.skipif(
+    not (os.environ.get("LXE_OFFICE_NODE") and os.environ.get("LXE_OFFICE_CLI")),
+    reason="Host Office Kit paths are not configured",
+)
+def test_sales_delivery_keeps_recalculated_results_and_formulas(
+    tmp_path, isolated_state, monkeypatch, capsys,
+):
+    from services.yacang.delivery import remove_inventory_sales_creation_date
+
+    monkeypatch.delenv("LXESKILL_SKILL_SCOPE", raising=False)
+    sources = _three_sources()
+    sources = replace(sources, sales={
+        sku: {**row, "创建日期": "2026-10-01"} for sku, row in sources.sales.items()
+    })
+    report_args = _report_arguments(tmp_path, sources)
+    mapping = _sparse_map(tmp_path / "SKU 参数.xlsx")
+    original_sales = Path(report_args[1])
+    original_bytes = original_sales.read_bytes()
+    delivered = tmp_path / "库存动销 交付.xlsx"
+    delivered.write_bytes(original_bytes)
+    remove_inventory_sales_creation_date(delivered)
+
+    outputs = []
+    for sales in (original_sales, delivered):
+        report_args[1] = str(sales)
+        code = lxeskill.main([
+            "vietnam", "replenishment", "calculate", *report_args, "--sku-map-file", str(mapping),
+        ])
+        result = json.loads(capsys.readouterr().out.splitlines()[-1])
+        assert code == 0 and result["ok"], result
+        assert result["data"]["validation"]["status"] == "passed"
+        assert result["data"]["sku_count"] == 3
+        outputs.append(Path(result["data"]["output_xlsx"]))
+
+    def cell_values(sheet):
+        # openpyxl represents array formulas as objects, so compare their
+        # expressions and ranges rather than identities from separate loads.
+        return [tuple((value.text, value.ref) if isinstance(value, ArrayFormula) else value for value in row)
+                for row in sheet.values]
+
+    for data_only in (True, False):
+        with closing(load_workbook(outputs[0], data_only=data_only)) as before, closing(
+            load_workbook(outputs[1], data_only=data_only)
+        ) as after:
+            assert after.sheetnames == before.sheetnames
+            assert len(after.sheetnames) == 5
+            assert cell_values(after["越南备货清单"]) == cell_values(before["越南备货清单"])
+            assert list(after["库存商品信息"].values) == list(before["库存商品信息"].values)
+            assert before["雅仓动销"]["P2"].value == "2026-10-01"
+            assert after["雅仓动销"]["P2"].value is None
+            if data_only:
+                assert after["越南备货清单"]["H3"].value is not None
+                assert after["越南备货清单"]["AA3"].value == "2026-09-20 10:00"
+            else:
+                assert after["越南备货清单"]["H3"].data_type == "f"
+    assert original_sales.read_bytes() == original_bytes
 
 
 @pytest.mark.skipif(

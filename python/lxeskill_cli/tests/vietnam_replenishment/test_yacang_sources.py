@@ -5,6 +5,7 @@ import pytest
 
 from services.yacang.validation import (
     INVENTORY_LIST_HEADERS,
+    INVENTORY_SALES_DELIVERY_HEADERS,
     INVENTORY_SALES_HEADERS,
     WAREHOUSE_PRODUCTS_HEADERS,
 )
@@ -188,6 +189,46 @@ def test_local_files_resolve_workspace_paths_and_record_snapshot_hashes(tmp_path
         assert sources.artifacts[report] == Path(paths[name])
         assert sources.file_hashes[report] == hashlib.sha256(original[name]).hexdigest()
         assert Path(paths[name]).read_bytes() == original[name]
+
+
+def test_delivered_sales_without_date_preserve_calculation_inputs(tmp_path):
+    from services.yacang.delivery import remove_inventory_sales_creation_date
+
+    paths = _valid_file_arguments(tmp_path)
+    original = yacang_sources.load_vietnam_files(**paths)
+    sales_path = Path(paths["sales"])
+    original_bytes = sales_path.read_bytes()
+    delivered = tmp_path / "库存动销 交付.xlsx"
+    delivered.write_bytes(original_bytes)
+    remove_inventory_sales_creation_date(delivered)
+    paths["sales"] = str(delivered)
+
+    actual = yacang_sources.load_vietnam_files(**paths)
+    for field in (
+        "skus", "sales", "inventory", "products", "in_transit", "missing_sales",
+        "missing_inventory", "missing_products", "missing_in_transit", "in_transit_mismatch",
+    ):
+        assert getattr(actual, field) == getattr(original, field)
+    assert actual.artifacts["inventory-sales"] == delivered
+    assert actual.file_hashes["inventory-sales"] != original.file_hashes["inventory-sales"]
+    assert sales_path.read_bytes() == original_bytes
+
+
+@pytest.mark.parametrize("problem", ["missing_column", "extra_column", "wrong_warehouse"])
+def test_delivered_sales_still_reject_invalid_schema_and_warehouse(tmp_path, problem):
+    paths = _valid_file_arguments(tmp_path)
+    headers = INVENTORY_SALES_DELIVERY_HEADERS
+    warehouse = "VN8806"
+    if problem == "missing_column":
+        headers = tuple(header for header in headers if header != "7天销量")
+    elif problem == "extra_column":
+        headers = (*headers, "额外字段")
+    else:
+        warehouse = "MY8801"
+    _workbook(Path(paths["sales"]), headers, [{"SKU": "VN-A", "仓库": warehouse}])
+    expected = "MY8801" if problem == "wrong_warehouse" else "表头不匹配"
+    with pytest.raises(yacang_sources.VietnamSourceError, match=expected):
+        yacang_sources.load_vietnam_files(**paths)
 
 
 def test_local_reports_are_frozen_before_validation_and_temp_files_removed(tmp_path, monkeypatch):
