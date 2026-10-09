@@ -399,8 +399,8 @@ def test_office_failure_preserves_actual_redacted_diagnostic(tmp_path: Path, mon
     source.write_bytes(b"not material to mocked process")
     monkeypatch.setenv("LXE_YACANG_PASSWORD", "private-secret")
     monkeypatch.setattr(
-        recalculation.subprocess,
-        "run",
+        recalculation,
+        "run_kit_bounded",
         lambda *args, **kwargs: SimpleNamespace(
             returncode=7, stderr="Kit failed on sheet 2: private-secret", stdout=""
         ),

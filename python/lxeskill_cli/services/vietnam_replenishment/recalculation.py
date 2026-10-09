@@ -8,7 +8,6 @@ import os
 from pathlib import Path
 import re
 import subprocess
-import sys
 from tempfile import TemporaryDirectory
 from typing import Mapping
 
@@ -17,6 +16,7 @@ from openpyxl.formula.translate import Translator
 from openpyxl.worksheet.formula import ArrayFormula
 
 from services.yacang.errors import safe_remote_detail
+from shared.office.execution import run_kit_bounded
 
 from .asset_contract import (
     AUXILIARY_HEADERS,
@@ -49,17 +49,14 @@ def _office_diagnostic(value: object) -> str:
 
 
 def recalculate_with_office(
-    input_path: str | Path, output_path: str | Path, *, timeout_seconds: int = 300
+    input_path: str | Path, output_path: str | Path, *, timeout_seconds: float = 300
 ) -> None:
     """Use the host's managed LibreOffice Kit through the existing launcher."""
     source = Path(input_path)
     output = Path(output_path)
     if source.resolve() == output.resolve():
         raise WorkbookGenerationError("Office 重算的输入与输出路径不能相同")
-    command = [
-        sys.executable,
-        "-m",
-        "shared.office",
+    arguments = [
         "recalculate",
         "--input",
         str(source),
@@ -67,21 +64,13 @@ def recalculate_with_office(
         str(output),
     ]
     try:
-        result = subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=timeout_seconds,
-            check=False,
-        )
+        result = run_kit_bounded(arguments, timeout_seconds=timeout_seconds)
     except subprocess.TimeoutExpired as exc:
         detail = _office_diagnostic(exc.stderr or exc.stdout or exc)
         raise WorkbookGenerationError(f"Office 重算超时（{timeout_seconds} 秒）: {detail}") from exc
     except OSError as exc:
         raise WorkbookGenerationError(
-            f"无法启动 Office 重算: {type(exc).__name__}: {_office_diagnostic(exc)}"
+            f"Office 重算执行异常: {type(exc).__name__}: {_office_diagnostic(exc)}"
         ) from exc
     if result.returncode != 0:
         detail = _office_diagnostic(result.stderr or result.stdout or "无诊断输出")
