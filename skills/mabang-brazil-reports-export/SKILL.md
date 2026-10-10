@@ -1,6 +1,6 @@
 ---
 name: mabang-brazil-reports-export
-description: 导出马帮 ERP 巴西海外仓的库存动销、三个月内待签收及三个月前已签收调拨原始文件。用于涉及 Shopee 的巴西业务数据准备；不计算备货量。
+description: 导出马帮 ERP 巴西海外仓的库存动销、三个月内待签收及三个月前已签收调拨原始文件。用于涉及 Shopee 的巴西业务数据准备。
 type: replenishment
 commands:
   - lxeskill mabang brazil reports export
