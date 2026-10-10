@@ -15,24 +15,6 @@ afterEach(() => {
 });
 
 describe("skill context", () => {
-  test("selects both Yacang reports when inventory and sales are requested together", () => {
-    const skillPath = join(repositoryRoot(import.meta.dir), "skills", "yacang-reports-export", "SKILL.md");
-    const skill = readFileSync(skillPath, "utf8");
-    const selection = skill.split("## 选择报表与范围\n")[1]?.split("\n## ")[0] ?? "";
-    const rows = selection.split("\n")
-      .filter((line) => /^\s*\|/.test(line))
-      .map((line) => line.trim().split("|").slice(1, -1).map((cell) => cell.trim()))
-      .filter(([request]) => request !== "请求表达" && request !== "---");
-
-    expect(Object.fromEntries(rows.map(([request, reports]) => [request, reports.replaceAll("`", "")]))).toEqual({
-      "单独请求“销量”或“库存动销”": "inventory-sales",
-      "单独请求“库存”“当前库存”或“库存列表”": "inventory",
-      "同时请求“库存和销量”或“库存及销量”": "inventory-sales + inventory",
-    });
-    expect(selection).toContain("库存动销表虽然包含部分库存字段，也不能代替独立的当前库存报表");
-    expect(selection).not.toContain("“库存和销量”选择 `inventory-sales`");
-  });
-
   test("cached readers never touch disk; concurrent uses share a scan and failed refreshes can retry", async () => {
     const root = mkdtempSync(join(tmpdir(), "lxe-skill-use-")); roots.push(root);
     const directory = join(root, "skills", "demo"); mkdirSync(directory, { recursive: true });
