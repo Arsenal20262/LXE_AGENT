@@ -1,6 +1,6 @@
 ---
 name: mabang-tms-products-export
-description: 导出马帮 TMS 当前账号可见仓库的正常商品、库存和销量，交付一份合并 XLSX。用于马帮 TMS 数据导出及涉及 Shopee 的业务数据准备；不计算备货量。
+description: 导出马帮 TMS 当前账号可见仓库的正常商品、库存和销量，交付一份合并 XLSX。用于马帮 TMS 数据导出及涉及 Shopee 的业务数据准备。
 type: replenishment
 commands:
   - lxeskill mabang-tms products export
