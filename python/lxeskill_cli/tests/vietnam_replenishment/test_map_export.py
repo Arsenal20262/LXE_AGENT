@@ -177,6 +177,30 @@ def test_private_bridge_handles_unicode_paths_and_rejects_invalid_inputs(tmp_pat
         assert json.loads(result.stdout)["success"] is False
 
 
+@pytest.mark.parametrize("action", ["read", "invalid"])
+def test_private_bridge_emits_utf8_even_with_legacy_stdio(tmp_path, monkeypatch, action):
+    monkeypatch.setenv("LXE_DATA_ROOT", str(tmp_path / "中文 数据"))
+    script = """
+import runpy, sys
+sys.stdout.reconfigure(encoding="gbk")
+sys.stderr.reconfigure(encoding="gbk")
+sys.argv = ["services.vietnam_replenishment.settings", sys.argv[1]]
+runpy.run_module("services.vietnam_replenishment.settings", run_name="__main__")
+"""
+    child = subprocess.run(
+        [sys.executable, "-I", "-B", "-c", script, action],
+        capture_output=True,
+    )
+    result = json.loads(child.stdout.decode("utf-8"))
+    if action == "read":
+        assert child.returncode == 0, child.stderr
+        assert "中文 数据" in result["data"]["directory"]
+    else:
+        assert child.returncode == 1, child.stderr
+        assert result["success"] is False
+        assert "无效的桌面设置操作" in result["error"]
+
+
 def test_partial_template_write_keeps_destination(tmp_path, monkeypatch):
     output = tmp_path / "existing.xlsx"
     output.write_bytes(b"keep")
