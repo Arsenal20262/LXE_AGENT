@@ -11,7 +11,8 @@ export class DesktopVietnamSettingsService {
   private async call<T = DesktopVietnamSettingsState>(action: "read" | "save" | "upload" | "export", ...values: string[]): Promise<T> {
     const temporaryRoot = join(this.options.dataRoot, "tmp");
     mkdirSync(temporaryRoot, { recursive: true });
-    const args = ["-I", "-B", "-m", "services.vietnam_replenishment.settings", action, ...values];
+    // Isolated mode ignores PYTHON* environment variables, so select UTF-8 explicitly.
+    const args = ["-I", "-B", "-X", "utf8", "-m", "services.vietnam_replenishment.settings", action, ...values];
     const options = {
       cwd: this.options.dataRoot, timeout: 180_000, maxBuffer: 1024 * 1024, windowsHide: true,
       env: { ...process.env, LXE_DATA_ROOT: this.options.dataRoot, TMP: temporaryRoot, TEMP: temporaryRoot,
