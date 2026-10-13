@@ -89,13 +89,20 @@ def _initial_values(row: ReplenishmentRow, missing_snapshot: bool) -> dict[str, 
             f"试算FBA总库存与正式计算不一致: MSKU={row.msku}, "
             f"formula={fba}, calculated={row.fba_total_inventory}"
         )
+    # Inputs are reconciled above; validate formal days against their own inputs
+    # so division by low daily sales does not amplify an accepted stock difference.
+    expected_sales_days = (
+        row.fba_total_inventory / row.weighted_daily_sales if row.weighted_daily_sales > 0 else None
+    )
     if (calculated_sales_days is None) != (row.sales_days is None) or (
-        calculated_sales_days is not None
-        and not math.isclose(calculated_sales_days, row.sales_days, rel_tol=0, abs_tol=1e-6)
+        (expected_sales_days is None) != (row.sales_days is None)
+    ) or (
+        expected_sales_days is not None
+        and not math.isclose(expected_sales_days, row.sales_days, rel_tol=0, abs_tol=1e-6)
     ):
         raise ValueError(
             f"试算可销售天数与正式计算不一致: MSKU={row.msku}, "
-            f"formula={calculated_sales_days}, calculated={row.sales_days}"
+            f"formula={calculated_sales_days}, calculated={row.sales_days}, expected={expected_sales_days}"
         )
     is_sea = row.sheet_name == "海运"
     air_days = (row.companion_air_days or 0) if is_sea else row.replenish_days

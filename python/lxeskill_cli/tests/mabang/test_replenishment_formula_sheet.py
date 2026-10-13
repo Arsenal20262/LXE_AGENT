@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import shutil
 import subprocess
 from dataclasses import replace
@@ -17,10 +18,10 @@ from services.mabang.amazon.fba import store_msku_replenishment as rep
 from test_mabang_store_msku_replenishment import _inventory_input_row, _write_sales_report
 
 
-def case_row(msku="ITEM", *, daily=6, fba=430, unlinked=10, weight=100, template_name="test-companion"):
+def case_row(msku="ITEM", *, daily=6, fba=430, unlinked=10, weight=100, template_name="test-companion", source_fba=None):
     values = {key: 0.0 for key in formulas.SOURCE_VALUE_COLUMNS}
     values.update({"7天销量": daily * 7, "14天销量": daily * 14, "30天销量": daily * 30,
-                   "90天销量": daily * 90, "可售": fba, "计划入库": 1000})
+                   "90天销量": daily * 90, "可售": fba if source_fba is None else source_fba, "计划入库": 1000})
     inventory = replace(_inventory_input_row(msku, fba_total_inventory=fba), actual_inventory=100,
                         remark="整箱包装", product_name="产品", local_sku_name="本地名")
     detail = rep.SalesDetail("平稳", weight, daily * 7, daily * 14, daily * 30, source_values=values)
@@ -304,12 +305,16 @@ def test_sales_days_formula_uses_final_70_20_10_weights(tmp_path):
         raw.close()
 
 
-def test_zero_daily_sales_keeps_blank_days_on_non_shipping_sheet(tmp_path):
+@pytest.mark.parametrize("source_fba", [1, 1.0000008])
+def test_zero_daily_sales_keeps_blank_days_on_non_shipping_sheet(tmp_path, source_fba):
     inventory = _inventory_input_row("ZERO-DAILY", fba_total_inventory=1)
     values = dict.fromkeys(formulas.SOURCE_VALUE_COLUMNS, 0.0)
-    values["可售"] = 1
+    values["可售"] = source_fba
     detail = rep.SalesDetail("平稳", None, 0, 0, 0, source_values=values)
     row = rep.calculate_replenishment_rows([inventory], {rep._row_key(inventory): detail})[0]
+    assert formulas._initial_values(row, False)["T"] is None
+    with pytest.raises(ValueError, match="试算可销售天数与正式计算不一致"):
+        formulas._initial_values(replace(row, sales_days=0), False)
     path = rep.write_replenishment_report([row], tmp_path / "zero-daily.xlsx")
     book = load_workbook(path, data_only=True)
     try:
@@ -339,14 +344,16 @@ def test_sales_days_less_than_one_keeps_fractional_cache(tmp_path):
 
 
 @pytest.mark.skipif(shutil.which("soffice") is None, reason="LibreOffice is not installed")
-def test_sales_days_libreoffice_recalculation_preserves_precision_and_matches_initial_cache(tmp_path):
-    row = case_row("RECALC", daily=9.2, fba=300, unlinked=0, template_name="默认")
+@pytest.mark.parametrize("daily,fba,source_fba", [(9.2, 300, 300), (0.5, 0.25, 0.2500008)])
+def test_sales_days_libreoffice_recalculation_preserves_precision_and_matches_initial_cache(tmp_path, daily, fba, source_fba):
+    row = case_row("RECALC", daily=daily, fba=fba, source_fba=source_fba, unlinked=0, template_name="默认")
     path = rep.write_replenishment_report([row], tmp_path / "recalc-source.xlsx")
     source_values = load_workbook(path, data_only=True)
     try:
         initial_cache = source_values.active["T3"].value
-        assert row.sales_days == pytest.approx(300 / 9.2)
-        assert initial_cache == pytest.approx(300 / 9.2)
+        initial_values = {cell.coordinate: cell.value for cell in source_values.active[3]}
+        assert row.sales_days == pytest.approx(fba / daily, rel=0, abs=1e-12)
+        assert initial_cache == pytest.approx(source_fba / daily, rel=0, abs=1e-12)
     finally:
         source_values.close()
 
@@ -387,12 +394,89 @@ def test_sales_days_libreoffice_recalculation_preserves_precision_and_matches_in
     calculated = {}
     for name in edits:
         workbook = load_workbook(output_dir / f"{name}.xlsx", data_only=True)
-        calculated[name] = workbook[formulas.FINAL_SHIPPING_SHEET]["T3"].value
-        workbook.close()
-    assert calculated["initial"] == pytest.approx(initial_cache)
-    assert calculated["sales-edited"] == pytest.approx(300 / 9.68)
-    assert calculated["stock-edited"] == pytest.approx(400 / 9.2)
+        try:
+            sheet = workbook[formulas.FINAL_SHIPPING_SHEET]
+            calculated[name] = sheet["T3"].value
+            assert not any(cell.data_type == "e" for cells in sheet for cell in cells)
+            if name == "initial":
+                for address, expected in initial_values.items():
+                    actual = sheet[address].value
+                    assert actual == (pytest.approx(expected, rel=0, abs=1e-10) if isinstance(expected, (int, float)) else expected)
+        finally:
+            workbook.close()
+    assert calculated["initial"] == pytest.approx(initial_cache, rel=0, abs=1e-12)
+    assert calculated["sales-edited"] == pytest.approx(source_fba / (6 + daily * 0.3 + daily * 0.1), rel=0, abs=1e-10)
+    assert calculated["stock-edited"] == pytest.approx(400 / daily, rel=0, abs=1e-10)
     assert calculated["zero-sales"] in (None, "")
+
+
+@pytest.mark.parametrize("daily", [0.5, 6])
+@pytest.mark.parametrize("source_fba", [0.25, 0.2500008, 0.2499992, 0.25 + 1e-6])
+def test_sales_days_accepts_existing_stock_tolerance(tmp_path, daily, source_fba):
+    assert abs(source_fba - 0.25) <= 1e-6
+    row = case_row("TOLERANCE", daily=daily, fba=0.25, source_fba=source_fba, unlinked=0, template_name="默认")
+    original = deepcopy(row)
+    path = rep.write_replenishment_report([row], tmp_path / "tolerance.xlsx")
+    book = load_workbook(path, data_only=True)
+    try:
+        sheet = book[formulas.FINAL_SHIPPING_SHEET]
+        assert sheet["T3"].value == pytest.approx(source_fba / daily, rel=0, abs=1e-12)
+        assert sheet["T3"].value - row.sales_days == pytest.approx((source_fba - 0.25) / daily, rel=0, abs=1e-12)
+        assert sheet["I3"].value == row.weighted_daily_sales
+        assert sheet["Q3"].value == source_fba
+        assert sheet["U3"].value == row.sheet_name
+        assert sheet["AD3"].value == row.replenish_quantity
+        assert sheet["AE3"].value == 0
+    finally:
+        book.close()
+    assert row == original
+
+
+@pytest.mark.parametrize("daily", [0.5, 6])
+@pytest.mark.parametrize("source_fba", [math.nextafter(0.25 + 1e-6, math.inf), 0.25 - 1.000001e-6])
+def test_sales_days_rejects_stock_just_outside_existing_tolerance(tmp_path, daily, source_fba):
+    assert abs(source_fba - 0.25) > 1e-6
+    with pytest.raises(ValueError, match="库存分项与真实库存报表不一致"):
+        case_row(daily=daily, fba=0.25, source_fba=source_fba, unlinked=0, template_name="默认")
+    row = case_row(daily=daily, fba=0.25, unlinked=0, template_name="默认")
+    row = replace(row, formula_inputs=replace(row.formula_inputs, values={**row.formula_inputs.values, "可售": source_fba}))
+    target = tmp_path / "report.xlsx"
+    target.write_bytes(b"previous")
+    with pytest.raises(ValueError, match="试算FBA总库存与正式计算不一致"):
+        rep.write_replenishment_report([row], target)
+    assert target.read_bytes() == b"previous"
+    assert list(tmp_path.iterdir()) == [target]
+
+
+@pytest.mark.parametrize("changes,error", [
+    ({"weighted_daily_sales": math.nextafter(0.5 + 1e-9, math.inf)}, "试算加权日销"),
+    ({"sales_days": 0.5000016}, "试算可销售天数"),  # Matches Q/I, but not the formal inputs.
+    ({"sales_days": None}, "试算可销售天数"),
+    ({"sales_days": float("nan")}, "试算可销售天数"),
+    ({"sales_days": float("inf")}, "试算可销售天数"),
+])
+def test_sales_days_tolerance_does_not_hide_inconsistent_formal_values(tmp_path, changes, error):
+    row = case_row(daily=0.5, fba=0.25, source_fba=0.2500008, unlinked=0, template_name="默认")
+    target = tmp_path / "report.xlsx"
+    target.write_bytes(b"previous")
+    with pytest.raises(ValueError, match=error):
+        rep.write_replenishment_report([replace(row, **changes)], target)
+    assert target.read_bytes() == b"previous"
+    assert list(tmp_path.iterdir()) == [target]
+
+
+def test_sales_days_respects_existing_daily_tolerance():
+    row = case_row(daily=0.5, fba=1, source_fba=1.0000008, unlinked=0, template_name="默认")
+    daily = row.weighted_daily_sales + 5e-10
+    row = replace(row, weighted_daily_sales=daily, sales_days=row.fba_total_inventory / daily)
+    assert formulas._initial_values(row, False)["T"] == pytest.approx(1.0000008 / 0.5, rel=0, abs=1e-12)
+
+
+@pytest.mark.parametrize("daily,days", [(1e-10, None), (1e-10, 1e10), (0, 0)])
+def test_sales_days_tolerance_preserves_zero_daily_state(daily, days):
+    row = case_row(daily=0, fba=1, unlinked=0, template_name="默认")
+    with pytest.raises(ValueError, match="试算可销售天数与正式计算不一致"):
+        formulas._initial_values(replace(row, weighted_daily_sales=daily, sales_days=days), False)
 
 
 def test_sales_days_source_mismatch_blocks_report_publication(tmp_path):
