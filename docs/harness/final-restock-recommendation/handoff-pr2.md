@@ -8,7 +8,7 @@
 
 **技术栈：** Python、openpyxl、`uv`、`shared.office.execution.run_kit_bounded()`。
 
-**规则依据：** `/Users/hym/Downloads/YHQUS转换规则.md` 优先；`/Users/hym/Downloads/Amazon_%E6%9C%80%E7%BB%88%E5%A4%87%E8%B4%A7%E5%BB%BA%E8%AE%AESkill_%E5%BC%80%E5%8F%91%E6%96%B9%E6%A1%88.md` 补充未覆盖细节；PR1 契约见 `handoff-pr1.md`。AC 保持 `AB*AD` 严格公式，LibreOffice 的 `#VALUE!` 与“零错误”验收冲突待用户后续确认，命令不得吞掉错误或报告正式验收通过。
+**规则依据：** 2026-10-13 用户最新截图选择 XLSX 提取记录中的 AA（V/W 任一空则空）、AC（AB/AD 任一空则空，否则相乘）及 AD 表头“单件重量”，覆盖此前三项 Markdown 优先选择；其余沿用已确认规则。公式更正归 PR1，本 PR 等待接入该更新；任何实际重算错误仍必须报告失败。
 
 ## 全局约束
 
@@ -58,7 +58,7 @@
 - 成功重算后默认产物写入 `dataset_dir("replenish_final_restock_recommendation")`，文件名为 `YYYYMMDD{店铺名}补货最新.xlsx`。
 - 公式错误会以坐标和真实单元格错误值返回，错误工作簿仍作为诊断产物保存，命令结果为失败。
 
-### 验证结果
+### 初始提交验证结果（历史）
 
 - 服务与 CLI 定向测试：`11 passed, 1 skipped`。唯一跳过项为真实 Office 端到端测试，跳过原因是 `LXE_OFFICE_NODE` 未配置。
 - 复用模块回归：`184 passed`，覆盖来源核验、深圳库存、未关联快照与既有补货模块。
@@ -69,7 +69,7 @@
 
 ### 已知限制与 PR 依赖
 
-- 严格 AC 公式按用户确认保持 `AC=AB*AD`。当 AB 为空且 AD=50 时，LibreOffice 可能返回 `#VALUE!`；处理规则仍待后续确认。当前服务不会吞掉该错误，检查到 Excel 错误时会报告失败并保留错误示例。不得把此状态描述为零错误验收通过。
+- AA/AC 的新规则已获用户确认，PR1 正在其所属分支更正；本 PR 未独立复制公式。正式 Office 重算仍未验证，服务继续对任何 Excel 错误返回失败并保留错误示例。
 - PR2 依赖 PR1 `e9b88b92`（分支 `codex/final-restock-formulas`）的 `final_restock_formulas()` 契约；PR1 handoff 位于 `docs/harness/final-restock-recommendation/handoff-pr1.md`。
 - 当前没有外部 ERP/API 取数逻辑，也没有创建新 Skill。
 
@@ -78,3 +78,11 @@
 - 当前分支：`codex/final-restock-cli`，worktree：`.worktrees/pool-4`，基线提交：PR1 `e9b88b92`；主工作区与 PR1 worktree 未修改。
 - PR2 的 8 个实现、测试与交接文件已提交为 `caef4809 feat: add final restock recommendation CLI`；没有 push 或创建远端 PR。
 - 用户已批准进入下一阶段。PR3 应在新聊天窗口、专用 worktree 中，以本分支最新提交为基线继续；push、创建/更新 PR 与 merge 仍需分别取得明确授权。
+
+## 2026-10-13 截图规则更新（待本地提交与上游同步）
+
+- 本轮只修改本 PR 的文件服务、文件测试和本 handoff（3 个文件）。AD 表头及行映射键改为“单件重量”，数值仍按克；原始输入字段、输出位置 AD、CLI/catalog 与产物路径不变。
+- 正式 Office 小样本测试改为预期零公式错误，并检查清货行 AC 为空、有效海运重量仍为数量乘克数；没有放宽错误检测。该测试须在本分支接入 PR1 新公式且 Office 配置完成后实际运行。
+- 本 worktree 执行 `UV_CACHE_DIR=/private/tmp/lxe-final-restock-uv-cache uv run --frozen --no-sync pytest python/lxeskill_cli/tests/mabang/test_final_restock_workbook.py python/lxeskill_cli/tests/mabang/test_final_restock_workbook_cli.py -q -rs`：**11 passed, 1 skipped**。通过项包括 AD 表头和 50 克源值保持；跳过真实 Office 测试，原因为 `LXE_OFFICE_NODE` 未配置。
+- **NOT VERIFIED：** PR1 新公式与本 PR 的组合回归、真实 Office 端到端及最终零错误 XLSX。当前测试未伪装为已同步上游。
+- Git HEAD 仍为 `afc9528f`。本轮未 add/commit、未 rebase；PR1 新公式尚未进入本 checkout。待用户批准后分别提交本层修改，再同步 PR1，复核后向 PR3 传播。

@@ -138,7 +138,7 @@ def _generate(tmp_path: Path, *, source_path: Path | None = None, inventory_path
     )
 
 
-def test_generates_all_source_rows_and_reports_strict_ac_error(tmp_path: Path) -> None:
+def test_generates_all_source_rows_without_formula_errors(tmp_path: Path) -> None:
     if not os.environ.get("LXE_OFFICE_NODE"):
         pytest.skip("LXE Office runtime is not configured; recalculation remains NOT VERIFIED")
     source_path = _write_source(tmp_path / "202610131000-Amazon-Test_店铺MSKU数据.xlsx")
@@ -156,8 +156,9 @@ def test_generates_all_source_rows_and_reports_strict_ac_error(tmp_path: Path) -
     assert output_path.is_file()
     assert output_path.name.endswith(f"{STORE}补货最新.xlsx")
     assert result.row_count == 4
-    assert result.formula_error_count > 0
-    assert any("AC" in example and "#VALUE!" in example for example in result.formula_error_examples)
+    assert result.success is True
+    assert result.formula_error_count == 0
+    assert result.formula_error_examples == ()
 
     formulas = load_workbook(output_path, data_only=False)
     values = load_workbook(output_path, data_only=True)
@@ -171,7 +172,7 @@ def test_generates_all_source_rows_and_reports_strict_ac_error(tmp_path: Path) -
             "销量趋势", "加权日销", "可售", "待入库", "预留", "计划入库", "在途", "运营中心转运",
             "运营中心处理中", "FBA总库存（马帮）", "可销售天数", "未发出货件总计", "建议运输方式",
             "空运补货天数", "海运补货天数", "空运计划", "空运实际", "空运总重", "海运计划",
-            "海运实际", "海运总重", "单件重量(g)", "本地SKU名称", "备注", "本地库存", "本地SKU",
+            "海运实际", "海运总重", "单件重量", "本地SKU名称", "备注", "本地库存", "本地SKU",
         ]
         assert sheet.freeze_panes == "A2"
         assert sheet.auto_filter.ref == "A1:AH5"
@@ -195,6 +196,8 @@ def test_generates_all_source_rows_and_reports_strict_ac_error(tmp_path: Path) -
         assert cached["J2"].value == pytest.approx(11)
         assert cached["R2"].value == pytest.approx(880)
         assert cached["S2"].value == pytest.approx(80)
+        assert cached["AC2"].value == pytest.approx(cached["AB2"].value * cached["AD2"].value)
+        assert cached["AC3"].value is None  # Clearance quantity is formula-empty.
     finally:
         formulas.close()
         values.close()
@@ -230,7 +233,7 @@ def test_workbook_layout_mapping_and_pr1_formulas_before_office(tmp_path: Path) 
             "销量趋势", "加权日销", "可售", "待入库", "预留", "计划入库", "在途", "运营中心转运",
             "运营中心处理中", "FBA总库存（马帮）", "可销售天数", "未发出货件总计", "建议运输方式",
             "空运补货天数", "海运补货天数", "空运计划", "空运实际", "空运总重", "海运计划",
-            "海运实际", "海运总重", "单件重量(g)", "本地SKU名称", "备注", "本地库存", "本地SKU",
+            "海运实际", "海运总重", "单件重量", "本地SKU名称", "备注", "本地库存", "本地SKU",
         )
         assert sheet["AH4"].value == "SKU-CHILD * 2"
         assert sheet["AH3"].value == "SKU-CLEAR"
@@ -253,7 +256,8 @@ def test_workbook_layout_mapping_and_pr1_formulas_before_office(tmp_path: Path) 
             }
             assert actual == expected
         assert [sheet.cell(row, 2).value for row in range(2, 6)] == ["SEA-1", "CLEAR-1", "COMBO-1", "UNBOUND-1"]
-        assert [sheet.cell(1, column).value for column in range(1, 35)][29] == "单件重量(g)"
+        assert [sheet.cell(1, column).value for column in range(1, 35)][29] == "单件重量"
+        assert sheet["AD2"].value == 50  # Header changes; numeric values remain grams.
     finally:
         workbook.close()
 
