@@ -35,7 +35,7 @@
 
 店铺身份由已有源文件核验判断，不能用模型猜测别名或把本地不匹配说成生产店铺不存在。缺少规范店铺名或任何输入时先报告缺失项；源核验的实际异常仍由既有 CLI 返回。此阶段不额外调用生产店铺查询或导出。
 
-不改公式、输入映射、数据源、Office 执行、旧 42 列报表或公共架构。严格保留 `AC=AB*AD`；AB 公式结果为空字符串而 AD=50 时的 `#VALUE!` 待业务决定。失败文件仅作诊断，不声称零错误验收通过。
+本 PR 不拥有公式、输入映射、数据源、Office 执行、旧 42 列报表或公共架构。2026-10-13 用户最新确认 AA 的 V/W 双空值门槛、AC 的 AB/AD 空值保护及 AD 表头“单件重量”；分别由 PR1/PR2 更正，本 PR 仅同步说明。其他失败文件仍仅作诊断，不声称零错误验收通过。
 
 ## 完成范围
 
@@ -44,7 +44,7 @@
 - 真实源核验测试确认错误店铺返回请求/快照名称；五类缺参返回对应输入诊断。JSONL 测试确认成功和公式错误都会保留既有字段、产物路径，错误仍为 `ok=false`。
 - 范围共 10 个文件：3 个 Skill 文件、1 个 catalog、4 个测试文件、2 个文档。没有新增业务服务、命令、环境变量或依赖。
 
-## 测试证据
+## 初始提交测试证据（历史）
 
 2026-10-13，从本 worktree 根执行。已确认解释器位于 `pool-6/.venv`，services 导入路径指向本 checkout，没有共享其他 worktree 的虚拟环境。
 
@@ -74,12 +74,20 @@ UV_CACHE_DIR=/private/tmp/lxe-final-restock-uv-cache uv run --frozen --no-sync l
 - 正式产物目录仍由 `replenish_final_restock_recommendation` dataset 解析；命名及输出由 PR2 所有，Skill 只交付 terminal 的真实 files。
 - **NOT VERIFIED：** 真实模型自然语言选 Skill/文件发送、真实 Office 重算、Microsoft Excel 原生计算、真实业务数据和零错误最终 XLSX 验收。静态描述与契约检查不等同于模型行为验证；terminal 测试中的产物为合成文件且服务结果被隔离模拟，不证明重算成功。
 - 本阶段不需要生产 ERP/API；店铺校验仅确认离线来源一致性，不代表查过生产店铺列表。
-- 下一阶段须先确定严格 AC 与零错误验收的处理方式，再配置 Office、准备同源离线输入并验证真实生成；模型入口可用固定 terminal 回放单独验收。若要自动取数，需另开范围明确的阶段，不在本 PR 中追加。
+- AA/AC 及表头规则现已确认。下一步先完成各层本地提交及依赖同步，再配置 Office、准备同源离线输入并验证真实生成；模型入口可用固定 terminal 回放单独验收。若要自动取数，需另开范围明确的阶段，不在本 PR 中追加。
 - 主仓库 review 仍按 PR1 → PR2 → PR3 串行；本 PR 依赖 PR2 最新提交，不提前 merge 或机械同步整条 stack。
 
-## Git 交接
+## 初始提交 Git 交接（历史）
 
 - 本阶段实现、测试与本交接采用一个本地提交：`feat: expose final restock recommendation skill`；提交号以 `git log -1 codex/final-restock-skill` 为准。
 - 收口检查覆盖全部 10 个改动文件（含 3 个新增文件）、空白和凭据模式。PR1/PR2 服务、CLI 适配器、业务测试及 lockfile 相对 `afc9528f` 无差异。
 - PR1 保持 `e9b88b92`，PR2 保持 `afc9528f`，两个工作区及主工作区均未被本任务修改；其他已领取 pool 不参与本任务。
 - 没有 push、远端 PR 或 merge。保留 `pool-6` 和 stacked 分支供评审，后续阶段原则上在新聊天、独立 pool 中继续。
+
+## 2026-10-13 截图规则更新（待本地提交与依赖同步）
+
+- 本轮仅修改本 PR 的 Skill 说明及本 handoff（2 个文件），去掉过时的“严格 AC、不允许加空值保护”要求，改为用户新确认的 AA/AC/AD 口径；错误报告和 Office 未验证提示保留。
+- 运行 `bun test packages/agent/runtime/test/tooling/skills.test.ts`：**13 pass, 0 fail, 92 assertions**。未改 catalog，因此未重复全套双端测试。
+- 公式失败 terminal 的合成测试仍保留，验证任意真实错误可被交付为诊断，不意味着合法输入在新公式下仍应产生 AC 错误。
+- Git HEAD 仍为 `563efd4d`；本轮未 add/commit、未 rebase。PR1/PR2 的更正各自在其工作区，尚未传播到本 checkout，故新规则的全链回归仍为 **NOT VERIFIED**。
+- 待批准后按 PR1 → PR2 → PR3 提交和同步依赖，再对受影响层运行定向回归；提交前检查各自 diff/状态/敏感信息。无需修改 main 或连接生产 ERP。

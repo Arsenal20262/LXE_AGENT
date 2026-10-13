@@ -43,5 +43,5 @@ lxeskill replenish final-restock generate --store-name "<完整店铺名>" --msk
 - 成功结果为一个可见工作表 `mskulist`、A:AH 共 34 列，保留本次源表全部 MSKU 行；不另跑旧算法，不手工二次扣库存或货件。
 - `ok=true` 时调用 `send_files(paths=<terminal.files>)`。发送成功后说明店铺、`source_data_time`、`row_count`；没有附件时不猜路径，发送失败只重试交付，不重跑生成。
 - `ok=false` 时保留 `error.message` 及相关 `data`。若包含 `formula_error_count` / `formula_error_examples`，呈现真实单元格坐标和错误值；terminal `files` 可作为**失败诊断文件**发送，明确尚未通过验收，不作为正式可执行备货建议。
-- 公式严格保留 `AC=AB*AD`。AB 的公式结果为 `""`、AD=50 时可能出现 `#VALUE!`；不能改为 IF/IFERROR、填零、删行或隐藏错误来声称零错误验收通过。
+- 按已确认的 XLSX 规则，AA 在 V 或 W 为空时留空；AC 在 AB 或 AD 为空时留空，否则相乘。AD 表头为“单件重量”，输入及总重单位仍为克。出现其他真实公式错误仍须报告，不通过 IFERROR、填零、删行或隐藏错误来声称零错误验收通过。
 - Office 未配置（如 `LXE_OFFICE_NODE`）、重算失败或结果无法核验时，报告实际诊断并标记 **NOT VERIFIED**；不宣称真实重算、Microsoft Excel 原生验证或完整交付成功，也不自行修改宿主环境或安装依赖。
