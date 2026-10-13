@@ -99,6 +99,16 @@ describe("lxeskill command recognition", () => {
           "mabang-store-unlinked-shipments-export",
         ]),
       });
+    expect(entries.find((entry) => entry.name === "mabang_generate_final_restock_recommendation"))
+      .toMatchObject({
+        command: "lxeskill replenish final-restock generate",
+        module: "services.agent_cli.mabang.generate_final_restock_recommendation",
+        visibility: "internal",
+        ownerSkills: [],
+        artifactPaths: [{ field: "output_xlsx_path", role: "deliverable" }],
+      });
+    expect(loadLxeSkillDatasets(catalogPath).find(entry => entry.id === "replenish_final_restock_recommendation")?.dir)
+      .toBe("replenish/final_restock_recommendation");
   });
 });
 
@@ -198,7 +208,7 @@ test("flags-only export contracts have matching skill ownership and reject inval
   const document = JSON.parse(readFileSync(path, "utf8"));
   const entries = loadLxeSkillCommandCatalog(path);
   const scoped = document.entries.filter((entry: any) => entry.input_modes !== undefined);
-  expect(scoped).toHaveLength(12);
+  expect(scoped).toHaveLength(13);
   const known = new Map(entries.map(entry => [entry.command, entry.ownerSkills]));
   for (const raw of scoped) {
     expect(raw.input_modes).toEqual(["flags"]);
