@@ -109,7 +109,7 @@ def test_list_and_help_write_one_terminal_jsonl_record(capsys) -> None:
     assert len(records) == 1
     assert records[0]["type"] == "result"
     assert records[0]["ok"] is True
-    assert len(records[0]["data"]["commands"]) == 44
+    assert len(records[0]["data"]["commands"]) == 45
 
     assert lxeskill.main(["fba", "customs", "preview", "--help"]) == 0
     records = _records(capsys)
@@ -163,10 +163,10 @@ def test_doctor_reports_repository_contract_without_adding_a_list_command(capsys
             "ok": True,
             "data": {
                 "catalog_commands": 47,
-                "business_commands": 40,
-                "skill_files": 37,
-                "owner_skills": 30,
-                "command_declarations": 40,
+                "business_commands": 41,
+                "skill_files": 38,
+                "owner_skills": 31,
+                "command_declarations": 41,
             },
             "files": [],
         }

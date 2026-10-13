@@ -4,12 +4,12 @@ This page is a navigation inventory, not a second source of runtime prompt truth
 
 ## Inventory
 
-The repository currently contains 37 top-level workflow and default runtime skills:
+The repository currently contains 38 top-level workflow and default runtime skills:
 
 | Type | Count | Purpose |
 | --- | ---: | --- |
 | `amazon_fba` | 14 | shipment, customs, purchase, contract, and export-tax workflows |
-| `replenishment` | 16 | Amazon replenishment, Vietnam stock recommendation, and Southeast Asia data preparation with Shangman ERP, Yacang and Mabang TMS |
+| `replenishment` | 17 | Amazon replenishment, Vietnam stock recommendation, and Southeast Asia data preparation with Shangman ERP, Yacang and Mabang TMS |
 | `amazon_operations` | 2 | listing, keyword, competitor, and public-review analysis |
 | `default` | 4 | Office files and custom Skill creation capabilities |
 | `ziniao_browser` | 1 | controlled Ziniao browser lifecycle and page operations |
@@ -50,8 +50,11 @@ Start with `fba-workflow-map` for routing. The individual skills own exact input
 - `replenishment-sales-analyze`
 - `replenishment-algorithm-config-manage`
 - `replenishment-calculate`
+- `replenishment-final-restock`
 
 Use `replenishment-workflow-map` for complete Amazon replenishment tasks or workflow questions; explicit single-step requests go directly to the relevant skill. Snapshot and analysis skills prepare explicit artifacts; calculation consumes those artifacts and the selected algorithm configuration.
+
+明确要求“最终备货建议”或“将原始备货建议量表转换成新表”时使用 `replenishment-final-restock`，通过既有离线命令生成单表 34 列 `mskulist`。需明确同批 MSKU 源表、深圳库存报告及其关联源路径、同店同日货件快照和店铺名；缺输入先澄清，不自动采集或执行旧计算。失败保留实际诊断，错误工作簿仅作为诊断文件。普通备货继续旧流程及原有报表。
 
 ## 东南亚备货
 

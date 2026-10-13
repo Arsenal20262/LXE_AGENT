@@ -103,8 +103,9 @@ describe("lxeskill command recognition", () => {
       .toMatchObject({
         command: "lxeskill replenish final-restock generate",
         module: "services.agent_cli.mabang.generate_final_restock_recommendation",
-        visibility: "internal",
-        ownerSkills: [],
+        visibility: "business",
+        ownerSkills: ["replenishment-final-restock"],
+        attributionSkill: "replenishment-final-restock",
         artifactPaths: [{ field: "output_xlsx_path", role: "deliverable" }],
       });
     expect(loadLxeSkillDatasets(catalogPath).find(entry => entry.id === "replenish_final_restock_recommendation")?.dir)

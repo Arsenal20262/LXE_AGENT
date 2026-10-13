@@ -1,0 +1,85 @@
+# 最终备货建议：PR3 Skill 入口与命令契约
+
+## 目标与最小计划
+
+让“最终备货建议”及“将原始备货建议量表转换成新表”进入独立 Skill，使用明确的离线输入调用 PR2 命令；普通备货继续走现有流程。
+
+- 分支：`codex/final-restock-skill`，Pool：`.worktrees/pool-6`。
+- 基线：PR2 `afc9528f`，父链含 `caef4809`、PR1 `e9b88b92`。保持 stacked 依赖，不修改 PR1/PR2 分支和工作区。
+- 依据：Downloads 中的 `Amazon_%E6%9C%80%E7%BB%88%E5%A4%87%E8%B4%A7%E5%BB%BA%E8%AE%AESkill_%E5%BC%80%E5%8F%91%E6%96%B9%E6%A1%88.md` 的 PR-A；公式以用户确认规则及 PR1 handoff 为准。
+- 用户已批准本地下一阶段开发与必要本地提交；push、远端 PR、merge 须另行确认。
+
+### 改动文件与职责
+
+| 文件 | 最小改动 |
+|---|---|
+| `skills/replenishment-final-restock/SKILL.md`（新增） | 新意图、明确离线输入、一次命令调用、真实失败及产物交付；独立于旧计算规则，因此单独建 Skill。 |
+| `skills/replenishment-workflow-map/SKILL.md` | 新意图优先路由到新 Skill，不运行旧完整流程。 |
+| `skills/replenishment-calculate/SKILL.md` | 明确普通备货与最终备货建议的选择边界。 |
+| `python/lxeskill_cli/lxeskill/catalog.json` | 将既有命令改为 business / exposed，并归属新 Skill；参数和实现不变。 |
+| `python/lxeskill_cli/tests/lxeskill/test_final_restock_skill.py`（新增） | 新命令发现、唯一归属、完整参数、缺输入、源店铺不匹配及错误产物 JSONL 契约。 |
+| Python `test_lxeskill_cli.py`、Bun `lxeskill-command.test.ts` / `skills.test.ts` | 更新数量并覆盖命令归属、实际 Skill 发现与权限过滤。 |
+| `docs/harness/skill/current_skill_catalog.md`、本文件 | 更新清单与本阶段验证/交接。 |
+
+### 实施顺序
+
+1. 先补新入口的 catalog/发现测试，运行确认当前命令仍是 internal，新增 Skill 尚未发现。
+2. 新建 Skill，列明五个必需参数：`store_name`、`msku_source_xlsx_path`、`shenzhen_inventory_report_xlsx_path`、`shenzhen_source_msku_xlsx_path`、`unlinked_shipments_snapshot_path`；已有输入直接计算，缺失或名称含糊先澄清，不启动生产取数。
+3. 修改最小 metadata 与新旧 Skill 边界，更新清单和既有数量断言。
+4. 运行 Python `lxeskill` / `infra` 和 PR2 文件/CLI 定向测试；运行 Bun `lxeskill-command.test.ts` / `skills.test.ts`；实际执行 CLI doctor/help。缺参沿用既有业务校验诊断，不假定 CLI 通用层会执行普通 JSON Schema required 校验。
+5. 检查 diff、空白、敏感信息、状态和 PR1/PR2 保护情况，补齐 handoff 后做一次本地功能提交。
+
+## 复用与边界
+
+调用链：Skill discovery / workflow map → 新 Skill → `lxeskill replenish final-restock generate` → PR2 CLI/文件服务 → PR1 公式 → 既有 Office 执行与产物机制。
+
+店铺身份由已有源文件核验判断，不能用模型猜测别名或把本地不匹配说成生产店铺不存在。缺少规范店铺名或任何输入时先报告缺失项；源核验的实际异常仍由既有 CLI 返回。此阶段不额外调用生产店铺查询或导出。
+
+不改公式、输入映射、数据源、Office 执行、旧 42 列报表或公共架构。严格保留 `AC=AB*AD`；AB 公式结果为空字符串而 AD=50 时的 `#VALUE!` 待业务决定。失败文件仅作诊断，不声称零错误验收通过。
+
+## 完成范围
+
+- 新增 `replenishment-final-restock`，沿用 `replenishment` 权限域，独占 `lxeskill replenish final-restock generate`。catalog 仅修改既有命令的 visibility、owner_skills、exposed；参数、返回字段、失败产物及执行服务保持 PR2 契约。
+- 新旧入口描述明确区分主触发词与转换别名；普通备货仍用原 map/计算，单纯发送旧流程最终文件不切换规则。缺输入先澄清，不扩大为在线采集。
+- 真实源核验测试确认错误店铺返回请求/快照名称；五类缺参返回对应输入诊断。JSONL 测试确认成功和公式错误都会保留既有字段、产物路径，错误仍为 `ok=false`。
+- 范围共 10 个文件：3 个 Skill 文件、1 个 catalog、4 个测试文件、2 个文档。没有新增业务服务、命令、环境变量或依赖。
+
+## 测试证据
+
+2026-10-13，从本 worktree 根执行。已确认解释器位于 `pool-6/.venv`，services 导入路径指向本 checkout，没有共享其他 worktree 的虚拟环境。
+
+```sh
+UV_CACHE_DIR=/private/tmp/lxe-final-restock-uv-cache uv run --frozen --no-sync pytest python/lxeskill_cli/tests/lxeskill python/lxeskill_cli/tests/infra python/lxeskill_cli/tests/mabang/test_final_restock_workbook.py python/lxeskill_cli/tests/mabang/test_final_restock_workbook_cli.py -q --tb=short -rs
+# 502 passed, 5 skipped, 4 warnings
+
+bun test packages/agent/runtime/test/tooling/lxeskill-command.test.ts packages/agent/runtime/test/tooling/skills.test.ts
+# 25 pass, 0 fail, 177 assertions
+
+UV_CACHE_DIR=/private/tmp/lxe-final-restock-uv-cache uv run --frozen --no-sync lxeskill doctor
+# ok=true：47 catalog commands / 41 business commands / 38 Skill files / 31 owners / 41 declarations
+
+UV_CACHE_DIR=/private/tmp/lxe-final-restock-uv-cache uv run --frozen --no-sync lxeskill replenish final-restock generate --help
+# ok=true：business，owner=replenishment-final-restock，五个原有必需参数
+```
+
+- Python 初次在沙箱内运行有 59 项本地模拟服务器相关失败；在沙箱外重跑上述同一范围后全部通过，没有为绕过失败修改生产代码。4 条 warning 为已有 aiohttp 废弃提示。
+- 跳过 4 项 Windows 路径/进程归属测试，另 1 项 PR2 真实 Office 端到端测试因 `LXE_OFFICE_NODE` 未配置跳过。
+- 新增 12 项 Python 用例覆盖公开发现、scope 隔离、五类缺参、真实源店铺不匹配和成功/失败 terminal；Bun 覆盖实际 manifest 发现、类型权限过滤、归属和新旧描述边界。
+- 测试先确认了 internal/未发现状态导致失败；缺参测试最初误假定通用 CLI 执行所有 required 校验，核对调用链后改为验证真实业务诊断，未增加公共校验层。
+- 未运行全量测试或 build/typecheck：改动是入口 Markdown、catalog metadata 和测试，依项目规范仅运行直接相关检查；全量验证留待最终合并阶段。
+
+## 环境、限制与下一步
+
+- Office 继续使用 PR2 的宿主 `LXE_OFFICE_NODE`；本机未配置。`UV_CACHE_DIR` 仅是本次沙箱测试缓存，不是产品新增环境变量。
+- 正式产物目录仍由 `replenish_final_restock_recommendation` dataset 解析；命名及输出由 PR2 所有，Skill 只交付 terminal 的真实 files。
+- **NOT VERIFIED：** 真实模型自然语言选 Skill/文件发送、真实 Office 重算、Microsoft Excel 原生计算、真实业务数据和零错误最终 XLSX 验收。静态描述与契约检查不等同于模型行为验证；terminal 测试中的产物为合成文件且服务结果被隔离模拟，不证明重算成功。
+- 本阶段不需要生产 ERP/API；店铺校验仅确认离线来源一致性，不代表查过生产店铺列表。
+- 下一阶段须先确定严格 AC 与零错误验收的处理方式，再配置 Office、准备同源离线输入并验证真实生成；模型入口可用固定 terminal 回放单独验收。若要自动取数，需另开范围明确的阶段，不在本 PR 中追加。
+- 主仓库 review 仍按 PR1 → PR2 → PR3 串行；本 PR 依赖 PR2 最新提交，不提前 merge 或机械同步整条 stack。
+
+## Git 交接
+
+- 本阶段实现、测试与本交接采用一个本地提交：`feat: expose final restock recommendation skill`；提交号以 `git log -1 codex/final-restock-skill` 为准。
+- 收口检查覆盖全部 10 个改动文件（含 3 个新增文件）、空白和凭据模式。PR1/PR2 服务、CLI 适配器、业务测试及 lockfile 相对 `afc9528f` 无差异。
+- PR1 保持 `e9b88b92`，PR2 保持 `afc9528f`，两个工作区及主工作区均未被本任务修改；其他已领取 pool 不参与本任务。
+- 没有 push、远端 PR 或 merge。保留 `pool-6` 和 stacked 分支供评审，后续阶段原则上在新聊天、独立 pool 中继续。

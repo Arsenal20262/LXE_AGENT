@@ -53,12 +53,12 @@ describe("skill context", () => {
     const source = join(repositoryRoot(import.meta.dir), "skills");
     const names = readdirSync(source).filter((name) => name.startsWith("replenishment-") || name.startsWith("mabang-store-")
       || name === "mabang-brazil-reports-export" || name === "mabang-tms-products-export" || name === "yacang-reports-export" || name.startsWith("shangman-") || name === "southeast-asia-replenishment-workflow-map" || name === "vietnam-replenishment");
-    expect(names).toHaveLength(16);
+    expect(names).toHaveLength(17);
     for (const name of names) cpSync(join(source, name), join(root, "skills", name), { recursive: true });
     const catalog = new SkillCatalog(root, join(root, "missing-user"), { sharedSkillsRoot: false });
     catalog.forceRefresh();
     const skills = catalog.list({ allowedTypes: new Set(["replenishment"]) });
-    expect(skills).toHaveLength(16);
+    expect(skills).toHaveLength(17);
     expect(skills.every(skill => skill.type === "replenishment")).toBe(true);
     expect(catalog.list({ allowedTypes: new Set(["amazon_replenish"]) })).toHaveLength(0);
     expect(catalog.list({ allowedTypes: new Set() })).toHaveLength(0);
@@ -68,6 +68,18 @@ describe("skill context", () => {
     }));
     expect(references).toHaveLength(5);
     expect(skills.find((skill) => skill.name === "replenishment-workflow-map")?.commands).toEqual([]);
+    const finalRestock = skills.find((skill) => skill.name === "replenishment-final-restock");
+    expect(finalRestock?.commands).toEqual(["lxeskill replenish final-restock generate"]);
+    expect(finalRestock?.description).toContain("最终备货建议");
+    expect(finalRestock?.description).toContain("将原始备货建议量表转换成新表");
+    expect(finalRestock?.description).toContain("普通备货");
+    for (const name of ["replenishment-workflow-map", "replenishment-calculate"]) {
+      const skill = skills.find((item) => item.name === name);
+      expect(skill?.description).toContain("最终备货建议");
+      expect(skill?.description).toContain("replenishment-final-restock");
+    }
+    expect(skills.find((skill) => skill.name === "replenishment-calculate")?.commands)
+      .toEqual(["lxeskill replenish calculate"]);
     expect(skills.find((skill) => skill.name === "southeast-asia-replenishment-workflow-map")?.commands).toEqual([]);
     expect(skills.find((skill) => skill.name === "vietnam-replenishment")?.commands).toEqual([
       "lxeskill vietnam replenishment calculate",
