@@ -3,17 +3,21 @@ from __future__ import annotations
 import io
 import json
 from decimal import Decimal
+from importlib.resources import files
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
 
 from lxeskill import cli as lxeskill
 from lxeskill.business import load_catalog
 from services.agent_cli.vietnam_replenishment import generate
+from services.vietnam_replenishment import settings
+from services.vietnam_replenishment.full_workbook import UNCHANGED
 from services.vietnam_replenishment.workbook import RecommendationConfig
-from shared.input_assets import current_asset
+from shared.input_assets import current_asset, previous_asset
+from shared.workspace import activate_project_workspace
 
 
 COMMAND = ["vietnam", "replenishment", "calculate"]
@@ -31,6 +35,22 @@ def _args_with_template(tmp_path: Path) -> list[str]:
         book.save(template)
         book.close()
     return [*ARGS, "--template-file", str(template)]
+
+
+def _valid_template(path: Path, marker: str) -> Path:
+    resource = files("services.vietnam_replenishment").joinpath("resources/skeleton.xlsx")
+    with resource.open("rb") as stream:
+        book = load_workbook(stream)
+    try:
+        book["越南备货清单"]["B2"] = 2
+        book["越南备货清单"]["E2"] = "VN-A"
+        book["越南备货清单"]["G2"] = 10
+        for index, name in enumerate(UNCHANGED, 1):
+            book.create_sheet(name, index)["A1"] = marker
+        book.save(path)
+    finally:
+        book.close()
+    return path
 
 
 def _record(capsys) -> dict:
@@ -58,7 +78,7 @@ def test_catalog_requires_three_reports_and_allows_one_run_map() -> None:
             "template_file": {"type": "string", "minLength": 1, "x-lxe-file-input": {
                 "accepted_extensions": [".xlsx"],
                 "instruction": "请上传完整的东南亚越南备货九表 XLSX 模板，或使用已保存的当前模板。",
-            }, "x-lxe-asset-slot": "vietnam_full_workbook"},
+            }, "x-lxe-asset-slot": "vietnam_full_workbook", "x-lxe-asset-promote-on-success": False},
         },
         "required": list(INPUTS), "additionalProperties": False,
     }
@@ -151,12 +171,71 @@ def test_success_delivers_only_final_workbook(
         "validation": {"status": "passed", "sku_count": 2},
     }
     saved = current_asset("vietnam_full_workbook")
-    assert saved is not None
-    assert saved.path.read_bytes() == (tmp_path / "business-template.xlsx").read_bytes()
+    assert saved is None
+    assert lxeskill.main([*COMMAND, *ARGS]) == lxeskill.EXIT_USAGE
+    missing = _record(capsys)
+    assert missing["error"]["code"] == "input_required"
+    assert missing["recovery"]["field"] == "template_file"
+
+
+def test_chat_template_is_temporary_across_runs_and_sessions(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys,
+) -> None:
+    monkeypatch.setenv("LXE_DATA_ROOT", str(tmp_path / "state"))
+    monkeypatch.setenv("LXE_WORKSPACE_ROOT", str(tmp_path / "workspace"))
+    activate_project_workspace()
+    template_a = _valid_template(tmp_path / "current-a.xlsx", "A")
+    template_b = _valid_template(tmp_path / "one-run-b.xlsx", "B")
+    settings.upload_template(template_a)
+    saved_a = current_asset("vietnam_full_workbook")
+    assert saved_a is not None
+    saved_mtime = saved_a.path.stat().st_mtime_ns
+    assert previous_asset("vietnam_full_workbook") is None
+    output = tmp_path / "workspace" / ".lxeagent" / "artifacts" / "vietnam" / "result.xlsx"
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_bytes(b"synthetic workbook")
+    selected: list[str] = []
+
+    def succeed(**arguments):
+        selected.append(arguments["template"])
+        return SimpleNamespace(
+            output_xlsx=output, sku_count=1, config=RecommendationConfig(),
+            config_source="parameters.json", sku_map_source=arguments["template"],
+            source_files=(), validation={"status": "passed", "sku_count": 1},
+        )
+
+    monkeypatch.setattr(generate, "generate_current_vietnam_recommendation", succeed)
+    monkeypatch.setenv("LXE_AGENT_SESSION_ID", "chat-one")
+    assert lxeskill.main([*COMMAND, *ARGS, "--template-file", str(template_b)]) == 0
+    _record(capsys)
+    assert selected[-1] == str(template_b)
+    assert current_asset("vietnam_full_workbook") == saved_a
+    assert saved_a.path.read_bytes() == template_a.read_bytes()
+    assert saved_a.path.stat().st_mtime_ns == saved_mtime
+    assert previous_asset("vietnam_full_workbook") is None
+
+    monkeypatch.setenv("LXE_AGENT_SESSION_ID", "chat-two")
     assert lxeskill.main([*COMMAND, *ARGS]) == 0
-    reused = _record(capsys)
-    assert reused["ok"] is True
-    assert reused["data"]["asset_sources"]["template_file"]["from"] == "stored"
+    _record(capsys)
+    assert selected[-1] == str(current_asset("vietnam_full_workbook").path)
+    assert current_asset("vietnam_full_workbook").path.read_bytes() == template_a.read_bytes()
+    assert previous_asset("vietnam_full_workbook") is None
+
+    def fail(**_arguments):
+        raise RuntimeError("synthetic calculation failure")
+
+    monkeypatch.setattr(generate, "generate_current_vietnam_recommendation", fail)
+    assert lxeskill.main([*COMMAND, *ARGS, "--template-file", str(template_b)]) == lxeskill.EXIT_BUSINESS
+    _record(capsys)
+    assert current_asset("vietnam_full_workbook").path.read_bytes() == template_a.read_bytes()
+    assert previous_asset("vietnam_full_workbook") is None
+
+    settings.upload_template(template_b)
+    monkeypatch.setattr(generate, "generate_current_vietnam_recommendation", succeed)
+    assert lxeskill.main([*COMMAND, *ARGS]) == 0
+    _record(capsys)
+    assert selected[-1] == str(current_asset("vietnam_full_workbook").path)
+    assert current_asset("vietnam_full_workbook").path.read_bytes() == template_b.read_bytes()
 
 
 def test_business_failure_preserves_real_redacted_diagnostic_and_delivers_nothing(

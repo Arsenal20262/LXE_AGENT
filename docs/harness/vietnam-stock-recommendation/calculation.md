@@ -26,7 +26,7 @@
 
 ## 工作簿生成与发布
 
-[写入器](../../../python/lxeskill_cli/services/vietnam_replenishment/workbook.py)使用包内 `resources/skeleton.xlsx`，投影本轮数据并调整公式引用。开发脚本 `scripts/build-vietnam-skeleton.py` 从已审计模板提取结构、样式和公式；五表计算骨架不含真实 SKU、价格或外链。完整九表业务模板通过现有输入资产槽保存，可在设置页上传后立即成为当前模板，或在命令显式提供文件且计算成功后成为当前模板；本轮先复制快照，不改原文件，也不把真实商品数据放进代码仓库。
+[写入器](../../../python/lxeskill_cli/services/vietnam_replenishment/workbook.py)使用包内 `resources/skeleton.xlsx`，投影本轮数据并调整公式引用。开发脚本 `scripts/build-vietnam-skeleton.py` 从已审计模板提取结构、样式和公式；五表计算骨架不含真实 SKU、价格或外链。完整九表业务模板通过现有输入资产槽保存，设置页上传后成为当前模板；命令显式提供的模板只用于本轮计算，不替换当前版。本轮先复制快照，不改原文件，也不把真实商品数据放进代码仓库。
 
 业务公式保留，权重等参数引用「数据更改」表。[重算与结果校验](../../../python/lxeskill_cli/services/vietnam_replenishment/recalculation.py)通过宿主提供的 Office 运行时在临时目录执行，核对五张计算表的结构、SKU 集合、来源数据、参数、公式和计算缓存。通过后将结果合入九表模板：替换五张计算表的内容，四张业务表的工作表 XML 字节保留，最终顺序与模板一致。允许既有规则产生的负备货量；可售天数 AB 仅在日均销量为零时允许原公式的 `#DIV/0!`。
 
