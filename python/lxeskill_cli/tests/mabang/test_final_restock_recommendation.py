@@ -17,9 +17,9 @@ def test_formula_contract():
     assert formulas["J"] == "=E2/7*0.6+F2/14*0.3+G2/30*0.1"
     assert formulas["R"] == "=K2+L2+M2+O2+P2+Q2"
     assert formulas["S"] == '=IF(J2=0,"",R2/J2)'
-    # The authoritative Markdown requires W only, and direct multiplication.
-    assert formulas["AA"] == '=IF(W2="","",IF((J2*W2-(R2+T2)-IF(Y2="",0,Y2))<=0,"",ROUND(J2*W2-(R2+T2)-IF(Y2="",0,Y2),0)))'
-    assert formulas["AC"] == "=AB2*AD2"
+    # The confirmed XLSX rules guard both shipping days and sea-weight inputs.
+    assert formulas["AA"] == '=IF(OR(V2="",W2=""),"",IF((J2*W2-(R2+T2)-IF(Y2="",0,Y2))<=0,"",ROUND(J2*W2-(R2+T2)-IF(Y2="",0,Y2),0)))'
+    assert formulas["AC"] == '=IF(OR(AB2="",AD2=""),"",AB2*AD2)'
 
 
 @pytest.mark.parametrize("row", [3, 2004, 1_048_576])
@@ -82,15 +82,23 @@ CASES = [
     ("air-weight-no-quantity", {"Y": '=""', "AD": 50}, {"Z": None}),
     ("air-weight-no-weight", {"Y": 10, "AD": None}, {"Z": None}),
     ("air-weight-grams", {"Y": 10, "AD": 2.5}, {"Z": 25}),
-    ("sea-plan-no-air-days-guard", {"V": '=""', "W": 90, "J": 6, "R": 480, "T": 0, "Y": '=""'}, {"AA": 60}),
-    ("sea-plan-no-days", {"W": '=""'}, {"AA": None}),
-    ("sea-plan-deductions", {"W": 90, "J": 6, "R": 480, "T": 10, "Y": 10}, {"AA": 40}),
-    ("sea-plan-zero", {"W": 90, "J": 6, "R": 480, "T": 60, "Y": '=""'}, {"AA": None}),
-    ("sea-plan-positive-rounds-zero", {"W": 90, "J": 6, "R": 539.9, "T": 0, "Y": '=""'}, {"AA": 0, "AB": None}),
+    ("sea-plan-no-air-days", {"V": '=""', "W": 90, "J": 6, "R": 480, "T": 0, "Y": '=""'}, {"AA": None}),
+    ("sea-plan-truly-empty-air-days", {"V": None, "W": 90, "J": 6, "R": 480, "T": 0, "Y": '=""'}, {"AA": None}),
+    ("sea-plan-no-days", {"V": 75, "W": '=""'}, {"AA": None}),
+    ("sea-plan-deductions", {"V": 75, "W": 90, "J": 6, "R": 480, "T": 10, "Y": 10}, {"AA": 40}),
+    ("sea-plan-empty-air-quantity", {"V": 75, "W": 90, "J": 6, "R": 480, "T": 0, "Y": '=""'}, {"AA": 60}),
+    ("sea-plan-zero", {"V": 75, "W": 90, "J": 6, "R": 480, "T": 60, "Y": '=""'}, {"AA": None}),
+    ("sea-plan-positive-rounds-zero", {"V": 75, "W": 90, "J": 6, "R": 539.9, "T": 0, "Y": '=""'}, {"AA": 0, "AB": None}),
     ("sea-weight-grams", {"AB": 10, "AD": 2.5}, {"AC": 25}),
-    ("sea-weight-formula-empty-is-error", {"AB": '=""', "AD": 50}, {"AC": "#VALUE!"}),
-    ("sea-weight-truly-empty-is-zero", {"AB": None, "AD": 50}, {"AC": 0}),
-    ("sea-weight-missing-is-zero", {"AB": 10, "AD": None}, {"AC": 0}),
+    ("sea-weight-formula-empty", {"AB": '=""', "AD": 50}, {"AC": None}),
+    ("sea-weight-truly-empty", {"AB": None, "AD": 50}, {"AC": None}),
+    ("sea-weight-missing", {"AB": 10, "AD": None}, {"AC": None}),
+    ("sea-weight-formula-empty-weight", {"AB": 10, "AD": '=""'}, {"AC": None}),
+    ("sea-weight-zero-quantity", {"AB": 0, "AD": 50}, {"AC": 0}),
+    ("sea-weight-zero-weight", {"AB": 10, "AD": 0}, {"AC": 0}),
+    ("sea-weight-invalid-is-not-hidden", {"AB": "invalid", "AD": 50}, {"AC": "#VALUE!"}),
+    ("whole-row-clearance", {"E": 7, "F": 14, "G": 30, "AF": "清货", "AD": 50},
+     {"V": None, "W": None, "AA": None, "AB": None, "AC": None}),
     ("whole-row-sea", {"E": 42, "F": 84, "G": 180, "H": 540, "K": 450, "L": 10, "M": 5, "N": 999, "O": 5, "P": 5, "Q": 5, "T": 10, "AD": 100},
      {"I": "平稳", "J": 6, "R": 480, "S": 80, "U": "海运", "V": 75, "W": 90, "X": None, "Y": None, "Z": None, "AA": 50, "AB": 50, "AC": 5000}),
     ("whole-row-combined", {"E": 42, "F": 84, "G": 180, "K": 426, "N": 999, "AD": 100},

@@ -1,8 +1,9 @@
 """YHQUS final-restock formulas, independent of the existing replenishment rules.
 
-The authoritative YHQUS Markdown defines the calculations. The proposal's
-appendix supplies the confirmed U-column IF order. Excel performs evaluation;
-this module does not maintain a second numeric algorithm or cached results.
+The user-confirmed XLSX rules take precedence for AA/AC blank guards; the
+proposal's appendix supplies the formulas and confirmed U-column IF order.
+Excel performs evaluation; this module does not maintain a second numeric
+algorithm or cached results.
 """
 from __future__ import annotations
 
@@ -59,9 +60,7 @@ def final_restock_formulas(row_number: int) -> dict[str, str]:
         "X": f'=IF(V{r}="","",IF(({air_plan})<=0,"",ROUND({air_plan},0)))',
         "Y": f'=IF(X{r}="","",IF(ROUND(X{r},-1)<=0,"",ROUND(X{r},-1)))',
         "Z": f'=IF(OR(Y{r}="",AD{r}=""),"",Y{r}*AD{r})',
-        # Do not import the proposal's additional V guard or AC blank guard:
-        # the authoritative Markdown explicitly specifies W only and AB*AD.
-        "AA": f'=IF(W{r}="","",IF(({sea_plan})<=0,"",ROUND({sea_plan},0)))',
+        "AA": f'=IF(OR(V{r}="",W{r}=""),"",IF(({sea_plan})<=0,"",ROUND({sea_plan},0)))',
         "AB": f'=IF(AA{r}="","",IF(ROUND(AA{r},-1)<=0,"",ROUND(AA{r},-1)))',
-        "AC": f"=AB{r}*AD{r}",
+        "AC": f'=IF(OR(AB{r}="",AD{r}=""),"",AB{r}*AD{r})',
     }
