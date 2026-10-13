@@ -25,10 +25,10 @@
   background: var(--surface);
   padding: 18px 20px;
 }
-.vietnam-map-card { display: grid; gap: 10px; }
-.vietnam-map-card .asset-slot-header { gap: 12px; flex-wrap: wrap; }
-.vietnam-map-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.vietnam-map-card .asset-slot-header button {
+.vietnam-template-card { display: grid; gap: 10px; }
+.vietnam-template-card .asset-slot-header { gap: 12px; flex-wrap: wrap; }
+.vietnam-template-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.vietnam-template-card .asset-slot-header button {
   flex-shrink: 0;
   min-height: 32px;
   padding: 5px 10px;

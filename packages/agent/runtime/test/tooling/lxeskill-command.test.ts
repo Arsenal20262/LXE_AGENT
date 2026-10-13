@@ -160,7 +160,7 @@ test("Vietnam calculation requires three local reports and a saved or supplied n
     type: "object",
     properties: {
       sales_file: { type: "string", minLength: 1 }, inventory_file: { type: "string", minLength: 1 },
-      products_file: { type: "string", minLength: 1 }, sku_map_file: { type: "string", minLength: 1 },
+      products_file: { type: "string", minLength: 1 },
       template_file: {
         type: "string", minLength: 1,
         "x-lxe-file-input": {

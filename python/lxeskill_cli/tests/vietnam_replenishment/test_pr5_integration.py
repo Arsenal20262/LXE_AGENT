@@ -25,17 +25,6 @@ from services.vietnam_replenishment.yacang_sources import VietnamSources
 from shared import workspace
 
 
-def _map(path: Path, *, cost: int, cross_border: int, discount: int) -> Path:
-    book = Workbook()
-    try:
-        book.active.append(("SKU", "成本", "跨境价", "折扣价", "热销标记"))
-        book.active.append(("VN-A", cost, cross_border, discount, 2))
-        book.save(path)
-    finally:
-        book.close()
-    return path
-
-
 def _sources() -> VietnamSources:
     """Use the same single-VN8806 source shape as the workflow's Office test."""
     sku = "VN-A"
@@ -86,31 +75,13 @@ def _three_sources() -> VietnamSources:
     )
 
 
-def _sparse_map(path: Path) -> Path:
-    book = Workbook()
-    try:
-        book.active.append(("SKU", "成本", "跨境价", "折扣价", "热销标记"))
-        book.active.append(("VN-A", 10, 20, 15, 2))
-        book.active.append(("VN-B", 5, 25, 18, 2))
-        book.save(path)
-    finally:
-        book.close()
-    return path
-
-
-def _template(path: Path, *, mapping: Path | None = None) -> Path:
+def _template(path: Path, *, rows: list[tuple] | None = None) -> Path:
     resource = files("services.vietnam_replenishment").joinpath("resources/skeleton.xlsx")
     with resource.open("rb") as handle:
         book = load_workbook(handle)
     try:
         main = book["越南备货清单"]
-        if mapping is None:
-            rows = [("VN-A", 2, 12, 22, 16)]
-        else:
-            with closing(load_workbook(mapping, read_only=True, data_only=True)) as mapped:
-                values = mapped.active.values
-                columns = {name: index for index, name in enumerate(next(values))}
-                rows = [tuple(row[columns[name]] for name in ("SKU", "热销标记", "成本", "跨境价", "折扣价")) for row in values]
+        rows = rows if rows is not None else [("VN-A", 2, 12, 22, 16)]
         for row_number, (sku, hot, cost, cross, discount) in enumerate(rows, 2):
             for column, value in (("B", hot), ("E", sku), ("G", cost), ("AE", cross), ("AJ", discount)):
                 main[f"{column}{row_number}"] = value
@@ -170,13 +141,6 @@ def test_upload_replace_then_generate_one_final_workbook(
     monkeypatch.delenv("LXESKILL_SKILL_SCOPE", raising=False)
     settings.save_parameters(settings.config_json(RecommendationConfig(Decimal("0.7"), Decimal("0.6"), Decimal("0.1"), Decimal("4000"))))
     report_args = _report_arguments(tmp_path, _sources())
-    a = _map(tmp_path / "map-a.xlsx", cost=10, cross_border=20, discount=15)
-    b = _map(tmp_path / "map-b.xlsx", cost=11, cross_border=33, discount=25)
-
-    settings.upload_map(b)
-    settings.upload_map(a)
-    assert settings.read_state()["sku_map"]["file_name"] == "sku-map.xlsx"
-
     template = _template(tmp_path / "完整模板.xlsx")
     assert lxeskill.main(["vietnam", "replenishment", "calculate", *report_args, "--template-file", str(template)]) == 0
     records = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.strip()]
@@ -221,16 +185,17 @@ def test_upload_replace_then_generate_one_final_workbook(
     not (os.environ.get("LXE_OFFICE_NODE") and os.environ.get("LXE_OFFICE_CLI")),
     reason="Host Office Kit paths are not configured",
 )
-def test_explicit_sparse_map_keeps_all_yacang_skus(
+def test_sparse_template_keeps_all_yacang_skus(
     tmp_path: Path, isolated_state: Path,
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.delenv("LXESKILL_SKILL_SCOPE", raising=False)
     settings.save_parameters(settings.config_json(RecommendationConfig(Decimal("0.7"), Decimal("0.6"), Decimal("0.1"), Decimal("4000"))))
     report_args = _report_arguments(tmp_path, _three_sources())
-    sparse_path = _sparse_map(tmp_path / "sparse.xlsx")
-    template = _template(tmp_path / "完整模板.xlsx")
-    assert lxeskill.main(["vietnam", "replenishment", "calculate", *report_args, "--sku-map-file", str(sparse_path), "--template-file", str(template)]) == 0
+    template = _template(tmp_path / "完整模板.xlsx", rows=[
+        ("VN-A", 2, 10, 20, 15), ("VN-B", 2, 5, 25, 18),
+    ])
+    assert lxeskill.main(["vietnam", "replenishment", "calculate", *report_args, "--template-file", str(template)]) == 0
     records = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.strip()]
     assert len(records) == 1
     result = records[0]
@@ -329,8 +294,10 @@ def test_sales_delivery_keeps_recalculated_results_and_formulas(
         sku: {**row, "创建日期": "2026-10-01"} for sku, row in sources.sales.items()
     })
     report_args = _report_arguments(tmp_path, sources)
-    mapping = _sparse_map(tmp_path / "SKU 参数.xlsx")
-    template = _template(tmp_path / "完整模板.xlsx")
+    template = _template(tmp_path / "完整模板.xlsx", rows=[
+        ("VN-A", 2, 10, 20, 15), ("VN-B", 2, 5, 25, 18),
+    ])
+    settings.upload_template(template)
     original_sales = Path(report_args[1])
     original_bytes = original_sales.read_bytes()
     delivered = tmp_path / "库存动销 交付.xlsx"
@@ -341,7 +308,7 @@ def test_sales_delivery_keeps_recalculated_results_and_formulas(
     for index, sales in enumerate((original_sales, delivered)):
         report_args[1] = str(sales)
         code = lxeskill.main([
-            "vietnam", "replenishment", "calculate", *report_args, "--sku-map-file", str(mapping),
+            "vietnam", "replenishment", "calculate", *report_args,
             *(["--template-file", str(template)] if index == 0 else []),
         ])
         result = json.loads(capsys.readouterr().out.splitlines()[-1])
@@ -382,15 +349,16 @@ def test_default_formula_parity_and_configurable_weights_and_exchange(
     tmp_path, isolated_state, monkeypatch,
 ):
     from services.vietnam_replenishment import workbook, recalculation
-    from services.vietnam_replenishment.asset_contract import load_sku_parameters
+    from services.vietnam_replenishment.asset_contract import load_template_sku_parameters
     source = _sources()
     source = replace(source, sales={"VN-A": {**source.sales["VN-A"], "7天销量": 70, "15天销量": 90, "30天销量": 120}},
         products={"VN-A": {**source.products["VN-A"], "创建时间": "2025-01-01 10:00"}})
-    mapping = _map(tmp_path / "map.xlsx", cost=10, cross_border=20, discount=15)
+    template = _template(tmp_path / "template.xlsx", rows=[("VN-A", 2, 10, 20, 15)])
+    parameters = load_template_sku_parameters(template, {"VN-A"})
     default = RecommendationConfig()
     def generate(name, config):
         output = tmp_path / f"{name}.xlsx"
-        recalculation.generate_vietnam_workbook(mapping, output, sources=source, config=config)
+        recalculation.generate_vietnam_workbook(output, sources=source, config=config, template=template, parameters=parameters)
         with output.open("rb") as stream:
             book = load_workbook(stream, data_only=True)
             try:
@@ -439,19 +407,17 @@ def test_optional_amounts_keep_quantities_and_only_blank_dependent_results(
         products={sku: {**base.products["VN-A"], "SKU": sku, "创建时间": "2025-01-01 10:00"} for sku in skus},
         in_transit={sku: Decimal(3) for sku in skus}, in_transit_mismatch=skus,
     )
-    mapping = tmp_path / "中文 可选金额.xlsx"
-    book = Workbook()
     amounts = (10, 200000, 150000)
-    book.active.append(["SKU", "热销标记", "成本", "跨境价", "折扣价"])
-    for sku, missing in zip(skus, combinations, strict=True):
-        book.active.append([sku, 2, *(None if absent else value for absent, value in zip(missing, amounts, strict=True))])
-    book.save(mapping)
-    book.close()
-    map_arguments = ["--sku-map-file", str(mapping)] if explicit else []
+    template_rows = [
+        (sku, 2, *(None if absent else value for absent, value in zip(missing, amounts, strict=True)))
+        for sku, missing in zip(skus, combinations, strict=True)
+    ]
+    template = _template(tmp_path / "完整模板.xlsx", rows=template_rows)
     if not explicit:
-        settings.upload_map(mapping)
-    template = _template(tmp_path / "完整模板.xlsx", mapping=mapping)
-    args = ["vietnam", "replenishment", "calculate", *_report_arguments(tmp_path, sources), *map_arguments, "--template-file", str(template)]
+        settings.upload_template(template)
+    args = ["vietnam", "replenishment", "calculate", *_report_arguments(tmp_path, sources)]
+    if explicit:
+        args.extend(("--template-file", str(template)))
     assert lxeskill.main(args) == 0
     [result] = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.strip()]
     assert result["ok"] is True and result["data"]["validation"]["status"] == "passed"

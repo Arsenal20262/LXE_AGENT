@@ -1,5 +1,4 @@
 import { validateTitlebarMenu } from "./titlebar-menu";
-import { exportVietnamMapWithDialog } from "./vietnam-map-export";
 import { fileResult } from "./file-preview/errors";
 import { mkdirSync } from "node:fs";
 import { app, dialog, ipcMain, shell } from "electron";
@@ -14,8 +13,7 @@ import type {
   DesktopHealth,
   DesktopInputAssetSlot,
   DesktopVietnamSettingsState,
-  DesktopVietnamMapExportKind,
-  DesktopVietnamMapExportResult,
+  DesktopVietnamTemplateExportResult,
   DesktopInputAttachmentPayload,
   DesktopDraftAttachmentPayload,
   DesktopLocalModelCredentialInput,
@@ -89,10 +87,8 @@ export interface DesktopIpcApplication {
   inputAssetSlotDirectory(slot: string): Promise<string>;
   getVietnamSettings(): Promise<DesktopVietnamSettingsState>;
   saveVietnamParameters(input: unknown): Promise<DesktopVietnamSettingsState>;
-  installVietnamSkuMap(sourcePath: string): Promise<DesktopVietnamSettingsState>;
-  exportVietnamSkuMap(kind: DesktopVietnamMapExportKind, path: string): Promise<DesktopVietnamMapExportResult>;
   installVietnamTemplate(sourcePath: string): Promise<DesktopVietnamSettingsState>;
-  exportVietnamTemplate(path: string): Promise<DesktopVietnamMapExportResult>;
+  exportVietnamTemplate(path: string): Promise<DesktopVietnamTemplateExportResult>;
   registerConversationFiles(paths: string[]): DesktopInputAttachmentPayload[];
   registerPastedConversationFiles(input: unknown): DesktopDraftAttachmentPayload[];
   previewDraftConversationFile(attachmentId: string, variant?: "thumbnail" | "expanded"): Promise<{ data_url: string }>;
@@ -275,20 +271,6 @@ export function registerDesktopIpc(application: DesktopIpcApplication): () => vo
   ipcMain.handle(IPC_CHANNELS.saveVietnamParameters, (event, input: unknown) => {
     trustedWorkspaceSender(event);
     return application.saveVietnamParameters(input);
-  });
-  ipcMain.handle(IPC_CHANNELS.uploadVietnamSkuMap, async (event) => {
-    trustedWorkspaceSender(event);
-    const selection = await dialog.showOpenDialog({
-      title: "选择越南 SKU 映射表", properties: ["openFile"],
-      filters: [{ name: "Excel 工作簿", extensions: ["xlsx"] }],
-    });
-    if (selection.canceled || !selection.filePaths[0]) return null;
-    return application.installVietnamSkuMap(selection.filePaths[0]);
-  });
-  ipcMain.handle(IPC_CHANNELS.exportVietnamSkuMap, (event, kind: unknown) => {
-    trustedWorkspaceSender(event);
-    return exportVietnamMapWithDialog(kind, options => dialog.showSaveDialog(options),
-      (selectedKind, path) => application.exportVietnamSkuMap(selectedKind, path));
   });
   ipcMain.handle(IPC_CHANNELS.uploadVietnamTemplate, async (event) => {
     trustedWorkspaceSender(event);

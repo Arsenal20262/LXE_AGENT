@@ -25,7 +25,6 @@ from .asset_contract import (
     REQUIRED_SHEETS,
     SkuParameters,
     validate_sku_parameter_values,
-    validate_usable_sku_parameters,
 )
 from .formula_dependencies import guarded_mapping_formula, mapping_formula_blank
 from .full_workbook import combine_full_workbook
@@ -472,47 +471,35 @@ def validate_recalculated_workbook(
 
 
 def generate_vietnam_workbook(
-    map_path: str | Path | None,
     output_path: str | Path,
     *,
     sources: VietnamSources,
     config: RecommendationConfig | None = None,
-    template: str | Path | None = None,
-    parameters: Mapping[str, SkuParameters] | None = None,
+    template: str | Path,
+    parameters: Mapping[str, SkuParameters],
 ) -> Path:
     """Validate current results, then preserve the user's four operational tabs."""
     output = Path(output_path)
     if os.path.lexists(output):
         raise FileExistsError(output)
     current_config = config if config is not None else RecommendationConfig()
-    allow_empty_map = template is not None and map_path is None and parameters is not None
-    if parameters is None:
-        if map_path is None:
-            raise WorkbookGenerationError("缺少本轮 SKU 参数")
-        parameters = validate_usable_sku_parameters(map_path)
-    else:
-        validate_sku_parameter_values(parameters, allow_empty=allow_empty_map)
+    validate_sku_parameter_values(parameters, allow_empty=True)
     output.parent.mkdir(parents=True, exist_ok=True)
     with TemporaryDirectory(prefix=".vietnam-workbook-", dir=output.parent) as directory:
         stage = Path(directory)
         draft = stage / "draft.xlsx"
         recalculated = stage / "recalculated.xlsx"
-        template_snapshot = None
-        if template is not None:
-            template_snapshot = stage / "business-template.xlsx"
-            shutil.copyfile(template, template_snapshot)
-        write_vietnam_workbook(draft, sources, parameters, current_config, allow_empty_map=allow_empty_map)
+        template_snapshot = stage / "business-template.xlsx"
+        shutil.copyfile(template, template_snapshot)
+        write_vietnam_workbook(draft, sources, parameters, current_config, allow_empty_map=True)
         recalculate_with_office(draft, recalculated)
         validate_recalculated_workbook(
             recalculated, sources=sources, parameters=parameters, config=current_config,
-            allow_empty_map=allow_empty_map,
+            allow_empty_map=True,
         )
-        if template_snapshot is not None:
-            complete = stage / "complete.xlsx"
-            combine_full_workbook(template_snapshot, recalculated, complete)
-            os.link(complete, output)
-        else:
-            os.link(recalculated, output)
+        complete = stage / "complete.xlsx"
+        combine_full_workbook(template_snapshot, recalculated, complete)
+        os.link(complete, output)
     return output
 
 

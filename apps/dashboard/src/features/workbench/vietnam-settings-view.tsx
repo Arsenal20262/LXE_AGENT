@@ -108,11 +108,11 @@ export function VietnamSettingsWorkbench({ onBack }: { onBack: () => void }) {
     {notice ? <p className="workbench-tool-status" role="status">{notice}</p> : null}
     {loading ? <p role="status"><LoaderCircle className="spin" size={16} />{copy.loading}</p> : null}
     {!loading && !state ? <button className="workbench-refresh" type="button" onClick={() => void load()}>{copy.retry}</button> : null}
-    <article className="vietnam-settings-card vietnam-map-card">
+    <article className="vietnam-settings-card vietnam-template-card">
       <header className="asset-slot-header"><h3>{copy.template}</h3>
-        <div className="vietnam-map-actions">
-          <button className="vietnam-map-export" type="button" disabled={busy || !state?.template || !!state.template_error} onClick={() => void exportTemplate()}><Download size={14} />{copy.exportCurrent}</button>
-          <button className="vietnam-map-upload" type="button" disabled={busy} onClick={() => void upload()}><Upload size={14} />{state?.template ? copy.replace : copy.upload}</button>
+        <div className="vietnam-template-actions">
+          <button className="vietnam-template-export" type="button" disabled={busy || !state?.template || !!state.template_error} onClick={() => void exportTemplate()}><Download size={14} />{copy.exportCurrent}</button>
+          <button className="vietnam-template-upload" type="button" disabled={busy} onClick={() => void upload()}><Upload size={14} />{state?.template ? copy.replace : copy.upload}</button>
         </div>
       </header>
       <p>{copy.templateHint}</p>

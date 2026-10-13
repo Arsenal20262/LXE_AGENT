@@ -638,8 +638,6 @@ async function bootstrap(): Promise<void> {
     inputAssetSlotDirectory: (slot) => inputAssets.directoryFor(slot),
     getVietnamSettings: () => vietnamSettings.read(),
     saveVietnamParameters: input => vietnamSettings.save(input),
-    installVietnamSkuMap: sourcePath => vietnamSettings.upload(sourcePath),
-    exportVietnamSkuMap: (kind, path) => vietnamSettings.exportMap(kind, path),
     installVietnamTemplate: sourcePath => vietnamSettings.uploadTemplate(sourcePath),
     exportVietnamTemplate: path => vietnamSettings.exportTemplate(path),
     registerConversationFiles: (selectedPaths) => conversationAttachments.register(selectedPaths),
