@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ArrowLeft, ChevronRight, Download, FileSpreadsheet, Upload, Save, LoaderCircle } from "lucide-react";
+import { ArrowLeft, Download, FileSpreadsheet, Upload, Save, LoaderCircle } from "lucide-react";
 import type { DesktopVietnamParameters, DesktopVietnamSettingsState } from "@lxe/desktop-protocol";
 import { useUiText } from "../../shared/i18n";
 import "./vietnam-settings.css";
@@ -136,15 +136,12 @@ export function VietnamSettingsWorkbench({ onBack }: { onBack: () => void }) {
               <div className="vietnam-setting-copy"><h3>{copy.exchange}</h3></div>
               <label className="vietnam-exchange">{copy.cny}<input required inputMode="decimal" aria-label={copy.exchange} value={form.exchange_rate} onChange={event => update("exchange_rate", event.target.value)} />{copy.vnd}</label>
             </section>
-            <details className="vietnam-advanced" open={state.parameters_error ? true : undefined}>
-              <summary><ChevronRight size={14} aria-hidden />{copy.advanced}</summary>
-              <div className="vietnam-setting-row">
-                <p>{copy.adjustmentHint}</p>
-                <div className="vietnam-parameter-grid">{days.map(day => <label key={day}>{copy.adjustment(day)}
-                  <input required inputMode="decimal" value={form[`day_adjustment_${day}d`]} onChange={event => update(`day_adjustment_${day}d`, event.target.value)} />
-                </label>)}</div>
-              </div>
-            </details>
+            <section className="vietnam-setting-row">
+              <div className="vietnam-setting-copy"><h3>{copy.adjustmentsTitle}</h3><p>{copy.adjustmentHint}</p></div>
+              <div className="vietnam-parameter-grid">{days.map(day => <label key={day}>{copy.adjustment(day)}
+                <input required inputMode="decimal" value={form[`day_adjustment_${day}d`]} onChange={event => update(`day_adjustment_${day}d`, event.target.value)} />
+              </label>)}</div>
+            </section>
           </div>
           <div className="vietnam-save"><button className="desktop-primary-button" type="submit">{busy ? <LoaderCircle className="spin" size={14} /> : <Save size={14} />}{busy ? copy.saving : copy.save}</button><span>{copy.appliesNextRun}</span></div>
         </fieldset>

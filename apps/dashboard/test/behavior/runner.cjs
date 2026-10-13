@@ -89,10 +89,12 @@ app.whenReady().then(async () => {
         await js(`(() => { const element = document.querySelectorAll('.vietnam-settings-view input')[${index}]; Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(element, ${JSON.stringify(value)}); element.dispatchEvent(new Event('input', { bubbles: true })); })()`);
         await settle();
       };
-      await step("tool page loads saved defaults and collapsed day adjustments", async () => {
+      await step("tool page loads saved defaults with visible day adjustments", async () => {
         await load("?app&section=workbench&complete=true"); await openSettings();
         assert.deepEqual(await js("[...document.querySelectorAll('.vietnam-settings-view input')].map(el => el.value)"), ["60", "30", "10", "3900", "0", "0.8", "0.8"]);
-        assert.equal(await js("document.querySelector('.vietnam-settings-view details').open"), false);
+        assert.equal(await js("document.querySelector('.vietnam-settings-view details')"), null);
+        assert.equal(await js("document.body.innerText.includes('Day adjustments')"), true);
+        assert.equal(await js("document.body.innerText.includes('Advanced ·')"), false);
       });
       await step("only template upload is available before a template is saved", async () => {
         assert.equal(await js("document.querySelector('.vietnam-map-export').disabled"), true);
