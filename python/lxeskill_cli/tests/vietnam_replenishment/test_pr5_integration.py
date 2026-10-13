@@ -5,10 +5,12 @@ from __future__ import annotations
 from dataclasses import replace
 from contextlib import closing
 from decimal import Decimal
+from importlib.resources import files
 from itertools import product
 import json
 import os
 from pathlib import Path
+from zipfile import ZipFile
 
 from openpyxl import Workbook, load_workbook
 from openpyxl.worksheet.formula import ArrayFormula
@@ -17,6 +19,7 @@ import pytest
 from lxeskill import cli as lxeskill
 from services.vietnam_replenishment import settings
 from services.vietnam_replenishment.workbook import RecommendationConfig
+from services.vietnam_replenishment.full_workbook import REQUIRED_ORDER, UNCHANGED, _sheet_parts
 from services.yacang.validation import INVENTORY_SALES_HEADERS, INVENTORY_LIST_HEADERS, WAREHOUSE_PRODUCTS_HEADERS
 from services.vietnam_replenishment.yacang_sources import VietnamSources
 from shared import workspace
@@ -95,6 +98,32 @@ def _sparse_map(path: Path) -> Path:
     return path
 
 
+def _template(path: Path, *, mapping: Path | None = None) -> Path:
+    resource = files("services.vietnam_replenishment").joinpath("resources/skeleton.xlsx")
+    with resource.open("rb") as handle:
+        book = load_workbook(handle)
+    try:
+        main = book["越南备货清单"]
+        if mapping is None:
+            rows = [("VN-A", 2, 12, 22, 16)]
+        else:
+            with closing(load_workbook(mapping, read_only=True, data_only=True)) as mapped:
+                values = mapped.active.values
+                columns = {name: index for index, name in enumerate(next(values))}
+                rows = [tuple(row[columns[name]] for name in ("SKU", "热销标记", "成本", "跨境价", "折扣价")) for row in values]
+        for row_number, (sku, hot, cost, cross, discount) in enumerate(rows, 2):
+            for column, value in (("B", hot), ("E", sku), ("G", cost), ("AE", cross), ("AJ", discount)):
+                main[f"{column}{row_number}"] = value
+        for index, name in enumerate(UNCHANGED, 1):
+            sheet = book.create_sheet(name, index)
+            sheet["A1"] = f"保留 {name}"
+            sheet["B2"] = "=越南备货清单!H2"
+        book.save(path)
+    finally:
+        book.close()
+    return path
+
+
 
 
 def _report_arguments(directory: Path, sources: VietnamSources) -> list[str]:
@@ -148,7 +177,8 @@ def test_upload_replace_then_generate_one_final_workbook(
     settings.upload_map(a)
     assert settings.read_state()["sku_map"]["file_name"] == "sku-map.xlsx"
 
-    assert lxeskill.main(["vietnam", "replenishment", "calculate", *report_args]) == 0
+    template = _template(tmp_path / "完整模板.xlsx")
+    assert lxeskill.main(["vietnam", "replenishment", "calculate", *report_args, "--template-file", str(template)]) == 0
     records = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.strip()]
     assert len(records) == 1
     result = records[0]
@@ -170,12 +200,10 @@ def test_upload_replace_then_generate_one_final_workbook(
 
     book = load_workbook(output, read_only=True, data_only=True)
     try:
-        assert book.sheetnames == [
-            "越南备货清单", "雅仓库存", "雅仓动销", "数据更改", "库存商品信息",
-        ]
+        assert tuple(book.sheetnames) == REQUIRED_ORDER
         main = book["越南备货清单"]
         assert main["E2"].value == "VN-A"
-        assert [main[cell].value for cell in ("G2", "AE2", "AJ2")] == [10, 20, 15]
+        assert [main[cell].value for cell in ("G2", "AE2", "AJ2")] == [12, 22, 16]
         assert [book["数据更改"].cell(2, column).value for column in range(1, 5)] == [
             0.7, 0.6, 0.1, 4000,
         ]
@@ -184,6 +212,9 @@ def test_upload_replace_then_generate_one_final_workbook(
         ]
     finally:
         book.close()
+    with ZipFile(template) as original, ZipFile(output) as completed:
+        names = _sheet_parts(original)
+        assert all(original.read(names[name]) == completed.read(names[name]) for name in UNCHANGED)
 
 
 @pytest.mark.skipif(
@@ -198,7 +229,8 @@ def test_explicit_sparse_map_keeps_all_yacang_skus(
     settings.save_parameters(settings.config_json(RecommendationConfig(Decimal("0.7"), Decimal("0.6"), Decimal("0.1"), Decimal("4000"))))
     report_args = _report_arguments(tmp_path, _three_sources())
     sparse_path = _sparse_map(tmp_path / "sparse.xlsx")
-    assert lxeskill.main(["vietnam", "replenishment", "calculate", *report_args, "--sku-map-file", str(sparse_path)]) == 0
+    template = _template(tmp_path / "完整模板.xlsx")
+    assert lxeskill.main(["vietnam", "replenishment", "calculate", *report_args, "--sku-map-file", str(sparse_path), "--template-file", str(template)]) == 0
     records = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.strip()]
     assert len(records) == 1
     result = records[0]
@@ -216,9 +248,7 @@ def test_explicit_sparse_map_keeps_all_yacang_skus(
 
     book = load_workbook(output, data_only=True)
     try:
-        assert book.sheetnames == [
-            "越南备货清单", "雅仓库存", "雅仓动销", "数据更改", "库存商品信息",
-        ]
+        assert tuple(book.sheetnames) == REQUIRED_ORDER
         main = book["越南备货清单"]
         assert [main[f"E{row}"].value for row in (2, 3, 4)] == ["VN-A", "VN-B", "VN-C"]
         for name, column in (("雅仓库存", "B"), ("雅仓动销", "A"), ("库存商品信息", "B")):
@@ -245,6 +275,49 @@ def test_explicit_sparse_map_keeps_all_yacang_skus(
     not (os.environ.get("LXE_OFFICE_NODE") and os.environ.get("LXE_OFFICE_CLI")),
     reason="Host Office Kit paths are not configured",
 )
+def test_template_with_no_matching_sku_keeps_erp_rows_and_blank_mapping_results(
+    tmp_path: Path, isolated_state: Path,
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.delenv("LXESKILL_SKILL_SCOPE", raising=False)
+    base = _sources()
+    sku = "VN-NEW"
+    current = replace(
+        base, skus=(sku,),
+        sales={sku: {**base.sales["VN-A"], "SKU": sku}},
+        inventory={sku: {**base.inventory["VN-A"], "SKU": sku}},
+        products={sku: {**base.products["VN-A"], "SKU": sku}},
+        in_transit={sku: Decimal("3")}, in_transit_mismatch=(sku,),
+    )
+    template = _template(tmp_path / "九表模板.xlsx")
+    code = lxeskill.main([
+        "vietnam", "replenishment", "calculate", *_report_arguments(tmp_path, current),
+        "--template-file", str(template),
+    ])
+    result = json.loads(capsys.readouterr().out.splitlines()[-1])
+    assert code == 0 and result["ok"], result
+    assert result["data"]["validation"]["missing_mapping_count"] == 1
+    output = Path(result["data"]["output_xlsx"])
+    book = load_workbook(output, data_only=True)
+    try:
+        assert tuple(book.sheetnames) == REQUIRED_ORDER
+        main = book["越南备货清单"]
+        assert main["E2"].value == sku
+        assert main["F2"].value == "合成产品 A"
+        assert main["J2"].value == 5
+        assert all(main[f"{column}2"].value in (None, "") for column in
+                   ("B", "G", "AE", "AJ", "H", "AC", "AF", "AG", "AH", "AI", "AK", "AL", "AM"))
+    finally:
+        book.close()
+    with ZipFile(template) as original, ZipFile(output) as complete:
+        parts = _sheet_parts(original)
+        assert all(original.read(parts[name]) == complete.read(parts[name]) for name in UNCHANGED)
+
+
+@pytest.mark.skipif(
+    not (os.environ.get("LXE_OFFICE_NODE") and os.environ.get("LXE_OFFICE_CLI")),
+    reason="Host Office Kit paths are not configured",
+)
 def test_sales_delivery_keeps_recalculated_results_and_formulas(
     tmp_path, isolated_state, monkeypatch, capsys,
 ):
@@ -257,6 +330,7 @@ def test_sales_delivery_keeps_recalculated_results_and_formulas(
     })
     report_args = _report_arguments(tmp_path, sources)
     mapping = _sparse_map(tmp_path / "SKU 参数.xlsx")
+    template = _template(tmp_path / "完整模板.xlsx")
     original_sales = Path(report_args[1])
     original_bytes = original_sales.read_bytes()
     delivered = tmp_path / "库存动销 交付.xlsx"
@@ -264,10 +338,11 @@ def test_sales_delivery_keeps_recalculated_results_and_formulas(
     remove_inventory_sales_creation_date(delivered)
 
     outputs = []
-    for sales in (original_sales, delivered):
+    for index, sales in enumerate((original_sales, delivered)):
         report_args[1] = str(sales)
         code = lxeskill.main([
             "vietnam", "replenishment", "calculate", *report_args, "--sku-map-file", str(mapping),
+            *(["--template-file", str(template)] if index == 0 else []),
         ])
         result = json.loads(capsys.readouterr().out.splitlines()[-1])
         assert code == 0 and result["ok"], result
@@ -286,7 +361,7 @@ def test_sales_delivery_keeps_recalculated_results_and_formulas(
             load_workbook(outputs[1], data_only=data_only)
         ) as after:
             assert after.sheetnames == before.sheetnames
-            assert len(after.sheetnames) == 5
+            assert tuple(after.sheetnames) == REQUIRED_ORDER
             assert cell_values(after["越南备货清单"]) == cell_values(before["越南备货清单"])
             assert list(after["库存商品信息"].values) == list(before["库存商品信息"].values)
             assert before["雅仓动销"]["P2"].value == "2026-10-01"
@@ -375,7 +450,8 @@ def test_optional_amounts_keep_quantities_and_only_blank_dependent_results(
     map_arguments = ["--sku-map-file", str(mapping)] if explicit else []
     if not explicit:
         settings.upload_map(mapping)
-    args = ["vietnam", "replenishment", "calculate", *_report_arguments(tmp_path, sources), *map_arguments]
+    template = _template(tmp_path / "完整模板.xlsx", mapping=mapping)
+    args = ["vietnam", "replenishment", "calculate", *_report_arguments(tmp_path, sources), *map_arguments, "--template-file", str(template)]
     assert lxeskill.main(args) == 0
     [result] = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.strip()]
     assert result["ok"] is True and result["data"]["validation"]["status"] == "passed"

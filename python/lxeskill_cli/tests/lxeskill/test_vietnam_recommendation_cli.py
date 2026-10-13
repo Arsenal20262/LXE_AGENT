@@ -13,11 +13,24 @@ from lxeskill import cli as lxeskill
 from lxeskill.business import load_catalog
 from services.agent_cli.vietnam_replenishment import generate
 from services.vietnam_replenishment.workbook import RecommendationConfig
+from shared.input_assets import current_asset
 
 
 COMMAND = ["vietnam", "replenishment", "calculate"]
 INPUTS = {"sales_file": "sales.xlsx", "inventory_file": "inventory.xlsx", "products_file": "products.xlsx"}
 ARGS = [item for name, value in INPUTS.items() for item in (f"--{name.replace('_', '-')}", value)]
+
+
+def _args_with_template(tmp_path: Path) -> list[str]:
+    template = tmp_path / "business-template.xlsx"
+    if not template.exists():
+        book = Workbook()
+        book.active.title = "越南备货清单"
+        for name in ("改库存", "改折扣", "报官方活动", "竞价报名", "雅仓库存", "雅仓动销", "数据更改", "库存商品信息"):
+            book.create_sheet(name)
+        book.save(template)
+        book.close()
+    return [*ARGS, "--template-file", str(template)]
 
 
 def _record(capsys) -> dict:
@@ -40,7 +53,13 @@ def test_catalog_requires_three_reports_and_allows_one_run_map() -> None:
     assert entry["session_mode"] == "none"
     assert entry["owner_skills"] == ["vietnam-replenishment"]
     assert entry["input_schema"] == {
-        "type": "object", "properties": {name: {"type": "string", "minLength": 1} for name in (*INPUTS, "sku_map_file")},
+        "type": "object", "properties": {
+            **{name: {"type": "string", "minLength": 1} for name in (*INPUTS, "sku_map_file")},
+            "template_file": {"type": "string", "minLength": 1, "x-lxe-file-input": {
+                "accepted_extensions": [".xlsx"],
+                "instruction": "请上传完整的东南亚越南备货九表 XLSX 模板，或使用已保存的当前模板。",
+            }, "x-lxe-asset-slot": "vietnam_full_workbook"},
+        },
         "required": list(INPUTS), "additionalProperties": False,
     }
     assert entry["artifact_paths"] == [{"field": "output_xlsx", "role": "deliverable"}]
@@ -107,10 +126,14 @@ def test_success_delivers_only_final_workbook(
         ),
     )
 
-    assert lxeskill.main([*COMMAND, *ARGS]) == 0
+    assert lxeskill.main([*COMMAND, *_args_with_template(tmp_path)]) == 0
     record = _record(capsys)
     assert record["ok"] is True
     assert record["files"] == [str(output)]
+    template_source = record["data"].pop("asset_sources")["template_file"]
+    assert template_source["slot"] == "vietnam_full_workbook"
+    assert template_source["from"] == "upload"
+    assert template_source["file_name"] == "business-template.xlsx"
     assert record["data"] == {
         "success": True,
         "status": "completed",
@@ -127,6 +150,13 @@ def test_success_delivers_only_final_workbook(
         "source_files": [{"report": "inventory-sales", "path": "sales.xlsx", "sha256": "0" * 64}],
         "validation": {"status": "passed", "sku_count": 2},
     }
+    saved = current_asset("vietnam_full_workbook")
+    assert saved is not None
+    assert saved.path.read_bytes() == (tmp_path / "business-template.xlsx").read_bytes()
+    assert lxeskill.main([*COMMAND, *ARGS]) == 0
+    reused = _record(capsys)
+    assert reused["ok"] is True
+    assert reused["data"]["asset_sources"]["template_file"]["from"] == "stored"
 
 
 def test_business_failure_preserves_real_redacted_diagnostic_and_delivers_nothing(
@@ -142,7 +172,7 @@ def test_business_failure_preserves_real_redacted_diagnostic_and_delivers_nothin
     monkeypatch.setenv("LXE_YACANG_PASSWORD", "topsecret")
     monkeypatch.setattr(generate, "generate_current_vietnam_recommendation", fail)
 
-    assert lxeskill.main([*COMMAND, *ARGS]) == lxeskill.EXIT_BUSINESS
+    assert lxeskill.main([*COMMAND, *_args_with_template(tmp_path)]) == lxeskill.EXIT_BUSINESS
     record = _record(capsys)
     assert record["ok"] is False
     assert record["files"] == []
@@ -164,7 +194,7 @@ def test_missing_generated_file_fails_without_deliverable(
         lambda **_arguments: SimpleNamespace(output_xlsx=output, sku_count=2),
     )
 
-    assert lxeskill.main([*COMMAND, *ARGS]) == lxeskill.EXIT_BUSINESS
+    assert lxeskill.main([*COMMAND, *_args_with_template(tmp_path)]) == lxeskill.EXIT_BUSINESS
     record = _record(capsys)
     assert record["ok"] is False
     assert record["files"] == []
@@ -181,26 +211,36 @@ def test_reports_and_explicit_map_reach_workflow(tmp_path, monkeypatch, capsys):
         raise RuntimeError("stopped after argument forwarding")
 
     monkeypatch.setattr(generate, "generate_current_vietnam_recommendation", stop_after_arguments)
-    args = [*ARGS, "--sku-map-file", expected["sku_map_file"]]
+    args = [*_args_with_template(tmp_path), "--sku-map-file", expected["sku_map_file"]]
     assert lxeskill.main([*COMMAND, *args]) == lxeskill.EXIT_BUSINESS
-    assert calls == [{name.removesuffix("_file"): value for name, value in expected.items()}]
+    assert calls == [{**{name.removesuffix("_file"): value for name, value in expected.items()}, "template": str(tmp_path / "business-template.xlsx")}]
     assert _record(capsys)["files"] == []
 
 
 def test_old_no_argument_invocation_reports_missing_paths(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("LXE_DATA_ROOT", str(tmp_path / "state"))
     _no_workflow(monkeypatch)
-    assert lxeskill.main(COMMAND) == lxeskill.EXIT_BUSINESS
+    template = _args_with_template(tmp_path)[-1]
+    assert lxeskill.main([*COMMAND, "--template-file", template]) == lxeskill.EXIT_BUSINESS
     result = _record(capsys)
     assert result["files"] == []
     for name in INPUTS:
         assert name in result["error"]["message"]
 
 
-@pytest.mark.parametrize("explicit", [True, False])
+def test_first_calculation_requires_template_upload(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("LXE_DATA_ROOT", str(tmp_path / "state"))
+    _no_workflow(monkeypatch)
+    assert lxeskill.main([*COMMAND, *ARGS]) == lxeskill.EXIT_USAGE
+    result = _record(capsys)
+    assert result["error"]["code"] == "input_required"
+    assert result["recovery"]["field"] == "template_file"
+    assert result["files"] == []
+
+
 @pytest.mark.parametrize("row_count", [2, 80])
 def test_cli_aggregates_map_errors_before_reading_reports(
-    tmp_path, monkeypatch, capsys, explicit, row_count,
+    tmp_path, monkeypatch, capsys, row_count,
 ):
     from services.vietnam_replenishment import workflow, settings
 
@@ -208,7 +248,7 @@ def test_cli_aggregates_map_errors_before_reading_reports(
     monkeypatch.setattr(workflow, "load_vietnam_files", lambda **_: pytest.fail("Invalid maps must stop calculation"))
     settings.read_state()
     parameters = settings.data_directory() / "parameters.json"
-    source = tmp_path / "中文 输入表.xlsx" if explicit else settings.data_directory() / "sku-map.xlsx"
+    source = tmp_path / "中文 输入表.xlsx"
     book = Workbook()
     book.active.append(["SKU", "热销标记", "成本", "跨境价", "折扣价"])
     for index in range(row_count):
@@ -216,7 +256,7 @@ def test_cli_aggregates_map_errors_before_reading_reports(
     book.save(source)
     book.close()
     before = {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in (source, parameters)}
-    args = [*COMMAND, *ARGS, *(["--sku-map-file", str(source)] if explicit else [])]
+    args = [*COMMAND, *_args_with_template(tmp_path), "--sku-map-file", str(source)]
     assert lxeskill.main(args) == lxeskill.EXIT_BUSINESS
     result = _record(capsys)
     assert result["ok"] is False and result["files"] == []

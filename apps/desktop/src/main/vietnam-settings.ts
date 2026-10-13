@@ -8,7 +8,7 @@ import { redactAndBound, type DesktopInputAssetsOptions } from "./input-assets";
 export class DesktopVietnamSettingsService {
   constructor(private readonly options: DesktopInputAssetsOptions) {}
 
-  private async call<T = DesktopVietnamSettingsState>(action: "read" | "save" | "upload" | "export", ...values: string[]): Promise<T> {
+  private async call<T = DesktopVietnamSettingsState>(action: "read" | "save" | "upload" | "export" | "upload-template" | "export-template", ...values: string[]): Promise<T> {
     const temporaryRoot = join(this.options.dataRoot, "tmp");
     mkdirSync(temporaryRoot, { recursive: true });
     const args = ["-I", "-B", "-m", "services.vietnam_replenishment.settings", action, ...values];
@@ -38,6 +38,10 @@ export class DesktopVietnamSettingsService {
     return this.call("save", serialized);
   }
   upload(path: string): Promise<DesktopVietnamSettingsState> { return this.call("upload", path); }
+  uploadTemplate(path: string): Promise<DesktopVietnamSettingsState> { return this.call("upload-template", path); }
+  exportTemplate(path: string): Promise<DesktopVietnamMapExportResult> {
+    return this.call<DesktopVietnamMapExportResult>("export-template", path);
+  }
   exportMap(kind: DesktopVietnamMapExportKind, path: string): Promise<DesktopVietnamMapExportResult> {
     return this.call<DesktopVietnamMapExportResult>("export", kind, path);
   }

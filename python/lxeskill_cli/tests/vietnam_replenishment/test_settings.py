@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from decimal import Decimal
+from importlib.resources import files
 import json
 from pathlib import Path
 import subprocess
@@ -12,7 +13,9 @@ import pytest
 
 from services.vietnam_replenishment import settings, workflow
 from services.vietnam_replenishment.asset_contract import load_sku_parameters
+from services.vietnam_replenishment.full_workbook import UNCHANGED
 from services.vietnam_replenishment.workbook import RecommendationConfig
+from shared.input_assets import current_asset, previous_asset
 
 
 @pytest.fixture(autouse=True)
@@ -21,6 +24,52 @@ def isolated(tmp_path, monkeypatch):
     monkeypatch.setenv("LXE_WORKSPACE_ROOT", str(tmp_path))
     from shared import workspace
     monkeypatch.setattr(workspace, "_workspace_root", tmp_path)
+    monkeypatch.setattr(workspace, "_input_root", tmp_path / "app" / "inputs")
+
+
+def nine_sheet_template(path: Path, *, marker: str = "first") -> Path:
+    resource = files("services.vietnam_replenishment").joinpath("resources/skeleton.xlsx")
+    with resource.open("rb") as stream:
+        book = load_workbook(stream)
+    try:
+        book["越南备货清单"]["B2"] = 2
+        book["越南备货清单"]["E2"] = "VN-A"
+        book["越南备货清单"]["G2"] = 10
+        for index, name in enumerate(UNCHANGED, 1):
+            book.create_sheet(name, index)["A1"] = marker
+        book.save(path)
+    finally:
+        book.close()
+    return path
+
+
+def test_nine_sheet_template_upload_export_and_invalid_replacement(tmp_path):
+    source = nine_sheet_template(tmp_path / "完整九表.xlsx")
+    state = settings.upload_template(source)
+    assert state["template"]["file_name"] == source.name
+    saved = current_asset("vietnam_full_workbook")
+    assert saved is not None and saved.path.read_bytes() == source.read_bytes()
+    exported = tmp_path / "导出当前模板.xlsx"
+    assert settings.export_template(exported) == {"path": str(exported)}
+    assert exported.read_bytes() == source.read_bytes()
+    with pytest.raises(ValueError, match="不能覆盖"):
+        settings.export_template(saved.path)
+    assert saved.path.read_bytes() == source.read_bytes()
+
+    invalid = tmp_path / "invalid.xlsx"
+    invalid.write_bytes(b"not a workbook")
+    with pytest.raises(ValueError):
+        settings.upload_template(invalid)
+    assert current_asset("vietnam_full_workbook").path.read_bytes() == source.read_bytes()
+
+    replacement = nine_sheet_template(tmp_path / "新版九表.xlsx", marker="second")
+    assert settings.upload_template(replacement)["template"]["file_name"] == replacement.name
+    assert previous_asset("vietnam_full_workbook").path.read_bytes() == source.read_bytes()
+
+
+def test_nine_sheet_template_export_requires_saved_version(tmp_path):
+    with pytest.raises(ValueError, match="模板"):
+        settings.export_template(tmp_path / "missing.xlsx")
 
 
 def sku_map(path: Path, cost=10):

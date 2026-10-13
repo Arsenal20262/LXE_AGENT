@@ -91,6 +91,8 @@ export interface DesktopIpcApplication {
   saveVietnamParameters(input: unknown): Promise<DesktopVietnamSettingsState>;
   installVietnamSkuMap(sourcePath: string): Promise<DesktopVietnamSettingsState>;
   exportVietnamSkuMap(kind: DesktopVietnamMapExportKind, path: string): Promise<DesktopVietnamMapExportResult>;
+  installVietnamTemplate(sourcePath: string): Promise<DesktopVietnamSettingsState>;
+  exportVietnamTemplate(path: string): Promise<DesktopVietnamMapExportResult>;
   registerConversationFiles(paths: string[]): DesktopInputAttachmentPayload[];
   registerPastedConversationFiles(input: unknown): DesktopDraftAttachmentPayload[];
   previewDraftConversationFile(attachmentId: string, variant?: "thumbnail" | "expanded"): Promise<{ data_url: string }>;
@@ -287,6 +289,25 @@ export function registerDesktopIpc(application: DesktopIpcApplication): () => vo
     trustedWorkspaceSender(event);
     return exportVietnamMapWithDialog(kind, options => dialog.showSaveDialog(options),
       (selectedKind, path) => application.exportVietnamSkuMap(selectedKind, path));
+  });
+  ipcMain.handle(IPC_CHANNELS.uploadVietnamTemplate, async (event) => {
+    trustedWorkspaceSender(event);
+    const selection = await dialog.showOpenDialog({
+      title: "选择越南备货模板表", properties: ["openFile"],
+      filters: [{ name: "Excel 工作簿", extensions: ["xlsx"] }],
+    });
+    if (selection.canceled || !selection.filePaths[0]) return null;
+    return application.installVietnamTemplate(selection.filePaths[0]);
+  });
+  ipcMain.handle(IPC_CHANNELS.exportVietnamTemplate, async (event) => {
+    trustedWorkspaceSender(event);
+    const selection = await dialog.showSaveDialog({
+      defaultPath: "越南备货模板表.xlsx",
+      filters: [{ name: "Excel 工作簿", extensions: ["xlsx"] }],
+      properties: ["createDirectory", "showOverwriteConfirmation"],
+    });
+    if (selection.canceled || !selection.filePath) return null;
+    return application.exportVietnamTemplate(selection.filePath);
   });
   ipcMain.handle(IPC_CHANNELS.revealInputAssetSlot, async (_event, slot: unknown) => {
     const directory = await application.inputAssetSlotDirectory(inputAssetSlotId(slot));

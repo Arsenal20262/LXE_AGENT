@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from decimal import Decimal
+from importlib.resources import files
 import os
 from pathlib import Path
 
@@ -11,6 +12,7 @@ from openpyxl import Workbook, load_workbook
 import pytest
 
 from services.vietnam_replenishment import workflow
+from services.vietnam_replenishment.full_workbook import REQUIRED_ORDER
 from services.vietnam_replenishment.asset_contract import load_sku_parameters
 from services.vietnam_replenishment.workbook import RecommendationConfig
 from services.vietnam_replenishment.yacang_sources import VietnamSourceError, VietnamSources
@@ -225,6 +227,41 @@ def test_nondefault_config_reaches_generator_and_result(
     assert calls == ["load", "generate"]
     assert result.config.exchange_rate == Decimal("4000")
     assert result.config_source == str(store.data_directory() / "parameters.json")
+
+
+def test_business_template_reaches_generator_and_reports_nine_sheets(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(workflow, "dataset_dir", lambda *parts: tmp_path / "artifacts" / parts[-1])
+    monkeypatch.setattr(workflow, "load_vietnam_files", lambda **_paths: _sources())
+    supplied = tmp_path / "business-template.xlsx"
+    resource = files("services.vietnam_replenishment").joinpath("resources/skeleton.xlsx")
+    with resource.open("rb") as handle:
+        book = load_workbook(handle)
+    book["越南备货清单"]["B2"] = 2
+    book["越南备货清单"]["E2"] = "VN-A"
+    book["越南备货清单"]["G2"] = 11
+    book["越南备货清单"]["AE2"] = 33
+    book["越南备货清单"]["AJ2"] = 25
+    book.save(supplied)
+    book.close()
+
+    def fake_generate(_map, output: Path, *, sources, config, template, parameters) -> Path:
+        assert _map is None
+        assert template != str(supplied) and template.read_bytes() == supplied.read_bytes()
+        assert parameters["VN-A"].cost == Decimal(11)
+        assert sources.skus == ("VN-A",)
+        output.parent.mkdir(parents=True)
+        output.write_bytes(b"synthetic final workbook")
+        return output
+
+    monkeypatch.setattr(workflow, "generate_vietnam_workbook", fake_generate)
+    result = workflow.generate_current_vietnam_recommendation(
+        sales="sales.xlsx", inventory="inventory.xlsx", products="products.xlsx",
+        template=str(supplied),
+    )
+    assert result.validation["sheets"] == list(REQUIRED_ORDER)
+    assert result.sku_map_source == str(supplied)
 
 
 

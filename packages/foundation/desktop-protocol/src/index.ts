@@ -674,6 +674,8 @@ export interface DesktopVietnamSettingsState {
   directory: string;
   parameters: DesktopVietnamParameters | null;
   parameters_error: string | null;
+  template: DesktopInputAssetVersion | null;
+  template_error: string | null;
   sku_map: DesktopInputAssetVersion | null;
   sku_map_error: string | null;
 }
@@ -746,6 +748,8 @@ export interface LxeDesktopBridge {
     saveVietnamParameters(input: DesktopVietnamParameters): Promise<DesktopVietnamSettingsState>;
     uploadVietnamSkuMap(): Promise<DesktopVietnamSettingsState | null>;
     exportVietnamSkuMap(kind: DesktopVietnamMapExportKind): Promise<DesktopVietnamMapExportResult | null>;
+    uploadVietnamTemplate(): Promise<DesktopVietnamSettingsState | null>;
+    exportVietnamTemplate(): Promise<DesktopVietnamMapExportResult | null>;
     onSyntheticPerformerTaskChanged(
       listener: (task: DesktopSyntheticPerformerTask) => void,
     ): () => void;

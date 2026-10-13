@@ -13,14 +13,17 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 from tempfile import TemporaryDirectory
 from uuid import uuid4
 
 from shared.process_lock import interprocess_lock
+from shared.input_assets import current_asset, promote_asset, slot_dir
 from shared.repository import state_root
 from shared.workspace import resolve_workspace_input
 from services.yacang.errors import safe_remote_detail
 from .sku_map_store import SkuMapStoreError, validate_sku_map
+from .full_workbook import validate_full_template
 from .validation_diagnostics import validation_diagnostic
 from .workbook import RecommendationConfig, validate_recommendation_config
 
@@ -112,7 +115,7 @@ def _locked():
 
 def read_state() -> dict:
     result = {"directory": str(data_directory()), "parameters": None, "parameters_error": None,
-              "sku_map": None, "sku_map_error": None}
+              "sku_map": None, "sku_map_error": None, "template": None, "template_error": None}
     with _locked() as root:
         try:
             result["parameters"] = config_json(_initialize_parameters(root))
@@ -126,6 +129,17 @@ def read_state() -> dict:
                     "updated_at": datetime.fromtimestamp(target.stat().st_mtime, timezone.utc).isoformat()}
         except Exception as exc:
             result["sku_map_error"] = validation_diagnostic(exc)
+        try:
+            version = current_asset("vietnam_full_workbook")
+            if version is not None:
+                validate_full_template(version.path)
+                result["template"] = {
+                    "path": str(version.path), "file_name": version.file_name,
+                    "size_bytes": version.path.stat().st_size,
+                    "updated_at": datetime.fromtimestamp(version.path.stat().st_mtime, timezone.utc).isoformat(),
+                }
+        except Exception as exc:
+            result["template_error"] = validation_diagnostic(exc)
     return result
 
 
@@ -140,6 +154,41 @@ def upload_map(source: Path) -> dict:
     with _locked() as root:
         _replace_map(root, source)
     return read_state()
+
+
+def upload_template(source: Path) -> dict:
+    """Validate one nine-sheet snapshot before replacing the current asset."""
+    if source.stat().st_size > 40 * 1024 * 1024:
+        raise ValueError("越南备货模板超过 40 MiB")
+    with TemporaryDirectory(prefix="vietnam-template-upload-") as directory:
+        snapshot = Path(directory) / source.name
+        shutil.copyfile(source, snapshot)
+        validate_full_template(snapshot)
+        with _locked():
+            promote_asset("vietnam_full_workbook", snapshot)
+    return read_state()
+
+
+def export_template(destination: Path) -> dict:
+    if not destination.is_absolute() or destination.suffix.lower() != ".xlsx":
+        raise ValueError("模板导出路径必须是绝对 .xlsx 文件")
+    if destination.resolve().is_relative_to(slot_dir("vietnam_full_workbook").resolve()):
+        raise ValueError("模板导出不能覆盖应用内保存的模板")
+    with _locked():
+        current = current_asset("vietnam_full_workbook")
+        if current is None:
+            raise ValueError("尚未上传越南备货模板")
+        validate_full_template(current.path)
+        temporary = destination.parent / f".vietnam-template-export-{uuid4().hex}.xlsx"
+        try:
+            with current.path.open("rb") as reader, temporary.open("xb") as writer:
+                shutil.copyfileobj(reader, writer)
+                writer.flush()
+                os.fsync(writer.fileno())
+            os.replace(temporary, destination)
+        finally:
+            temporary.unlink(missing_ok=True)
+    return {"path": str(destination)}
 
 
 def _export_destination(destination: Path) -> None:
@@ -207,17 +256,19 @@ def export_map(kind: str, destination: Path) -> dict:
 
 
 @contextmanager
-def run_inputs(sku_map: str | None = None):
-    """Snapshot settings and map; release the lock before calculation."""
+def run_inputs(sku_map: str | None = None, *, include_map: bool = True):
+    """Snapshot settings and, for legacy runs, the saved map."""
     with TemporaryDirectory(prefix="vietnam-inputs-") as temporary:
         snapshot = Path(temporary) / "sku-map.xlsx"
         with _locked() as root:
             config = _initialize_parameters(root)
-            source = resolve_workspace_input(sku_map) if sku_map is not None else root / "sku-map.xlsx"
-            if sku_map is None and not source.exists():
-                raise SkuMapStoreError("请在越南备货设置上传 SKU 映射表，或用 --sku-map 指定文件")
-            _copy_validated(source, snapshot)
-        yield snapshot, config, str(root / "parameters.json"), str(source)
+            source = None
+            if include_map:
+                source = resolve_workspace_input(sku_map) if sku_map is not None else root / "sku-map.xlsx"
+                if sku_map is None and not source.exists():
+                    raise SkuMapStoreError("请在越南备货设置上传 SKU 映射表，或用 --sku-map 指定文件")
+                _copy_validated(source, snapshot)
+        yield (snapshot if include_map else None), config, str(root / "parameters.json"), (str(source) if source else None)
 
 
 def main() -> int:
@@ -233,6 +284,13 @@ def main() -> int:
             if not source.is_absolute():
                 raise ValueError("上传文件必须是绝对路径")
             result = upload_map(source)
+        elif action == "upload-template" and len(sys.argv) == 3:
+            source = Path(sys.argv[2])
+            if not source.is_absolute():
+                raise ValueError("上传模板必须是绝对路径")
+            result = upload_template(source)
+        elif action == "export-template" and len(sys.argv) == 3:
+            result = export_template(Path(sys.argv[2]))
         elif action == "export" and len(sys.argv) == 4:
             result = export_map(sys.argv[2], Path(sys.argv[3]))
         else:

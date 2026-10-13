@@ -47,7 +47,7 @@ let releaseVietnamExport: (() => void) | undefined;
 let vietnamState: DesktopVietnamSettingsState = { directory: "/fixture/app/skill-data/vietnam-stock-recommendation",
   parameters: { sales_weight_7d: "0.6", sales_weight_15d: "0.3", sales_weight_30d: "0.1",
     day_adjustment_7d: "0", day_adjustment_15d: "0.8", day_adjustment_30d: "0.8", exchange_rate: "3900" },
-  sku_map: null, sku_map_error: null, parameters_error: null };
+  sku_map: null, sku_map_error: null, template: null, template_error: null, parameters_error: null };
 let chosenFile = "";
 let chosenDirectory: string | null = "/fixture/chosen";
 let sendFailure = false;
@@ -201,6 +201,13 @@ const desktop = {
     if (vietnamExportMode === "error") throw new Error("PermissionError: fixture export denied");
     return { path: `/fixture/导出 文件/${kind}.xlsx` };
   },
+  exportVietnamTemplate: async () => {
+    calls.push({ operation: "vietnam.export-template", input: "current" });
+    if (vietnamExportMode === "hold") await new Promise<void>(resolve => { releaseVietnamExport = resolve; });
+    if (vietnamExportMode === "cancel") return null;
+    if (vietnamExportMode === "error") throw new Error("PermissionError: fixture export denied");
+    return { path: "/fixture/导出 文件/current-template.xlsx" };
+  },
   saveVietnamParameters: async input => {
     calls.push({ operation: "vietnam.save", input });
     vietnamState.parameters = structuredClone(input);
@@ -209,6 +216,12 @@ const desktop = {
   uploadVietnamSkuMap: async () => {
     if (vietnamUploadError) throw new Error(typeof vietnamUploadError === "string" ? vietnamUploadError : "BadZipFile: synthetic selected workbook");
     vietnamState.sku_map = { file_name: "sku-map.xlsx", path: "/fixture/app/sku-map.xlsx", size_bytes: 5000, updated_at: "2026-10-08T08:00:00Z" };
+    return structuredClone(vietnamState);
+  },
+  uploadVietnamTemplate: async () => {
+    if (vietnamUploadError) throw new Error(typeof vietnamUploadError === "string" ? vietnamUploadError : "BadZipFile: synthetic selected workbook");
+    vietnamState.template = { file_name: "越南备货清单.xlsx", path: "/fixture/app/越南备货清单.xlsx", size_bytes: 5000, updated_at: "2026-10-08T08:00:00Z" };
+    vietnamState.template_error = null;
     return structuredClone(vietnamState);
   },
   onStatusChanged: (listener: (value: DesktopHealth) => void) => {
@@ -432,8 +445,8 @@ const fixture = {
   vietnamCorruptSettings() {
     vietnamState.parameters = null;
     vietnamState.parameters_error = "JSONDecodeError: fixture broken parameters";
-    vietnamState.sku_map = null;
-    vietnamState.sku_map_error = "BadZipFile: fixture broken map";
+    vietnamState.template = null;
+    vietnamState.template_error = "BadZipFile: fixture broken template";
   },
   mountVietnam(language: "en" | "zh") {
     reset();

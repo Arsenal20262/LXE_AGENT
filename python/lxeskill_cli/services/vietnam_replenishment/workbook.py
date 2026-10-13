@@ -96,9 +96,9 @@ def _map_time_agrees(sku: str, listed_at: object, canonical: str) -> None:
 
 
 def _validated_rows(
-    sources: VietnamSources, parameters: Mapping[str, SkuParameters]
+    sources: VietnamSources, parameters: Mapping[str, SkuParameters], *, allow_empty_map: bool = False,
 ) -> tuple[_CurrentRow, ...]:
-    validate_sku_parameter_values(parameters)
+    validate_sku_parameter_values(parameters, allow_empty=allow_empty_map)
     skus = tuple(sources.skus)
     if not skus:
         raise WorkbookInputError("本轮 VN8806 SKU 集合为空")
@@ -258,12 +258,13 @@ def write_vietnam_workbook(
     sources: VietnamSources,
     parameters: Mapping[str, SkuParameters],
     config: RecommendationConfig,
+    *, allow_empty_map: bool = False,
 ) -> None:
     """Write only current SKU literals and translated formulas; never overwrite output."""
     output = Path(path)
     if output.exists():
         raise FileExistsError(output)
-    rows = _validated_rows(sources, parameters)
+    rows = _validated_rows(sources, parameters, allow_empty_map=allow_empty_map)
     input_config = validate_recommendation_config(config)
     book = _load_skeleton()
     try:

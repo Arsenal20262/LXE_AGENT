@@ -418,7 +418,7 @@ def test_failed_generation_leaves_no_final_file(tmp_path: Path, monkeypatch) -> 
     monkeypatch.setattr(
         recalculation,
         "write_vietnam_workbook",
-        lambda path, sources, parameters, config: Path(path).write_bytes(b"draft"),
+        lambda path, sources, parameters, config, **kwargs: Path(path).write_bytes(b"draft"),
     )
 
     def fail_office(_source, _output):
@@ -438,7 +438,8 @@ def test_success_publishes_after_validation_without_overwriting(tmp_path: Path, 
     events: list[str] = []
     monkeypatch.setattr(recalculation, "validate_usable_sku_parameters", lambda path: _parameters())
 
-    def write(path, sources, parameters, config):
+    def write(path, sources, parameters, config, **kwargs):
+        assert kwargs == {"allow_empty_map": False}
         events.append("write")
         Path(path).write_bytes(b"draft")
 

@@ -244,9 +244,9 @@ def _load_sku_parameters(path: str | Path, *, complete: bool) -> dict[str, SkuPa
         workbook.close()
 
 
-def validate_sku_parameter_values(values: Mapping[str, SkuParameters]) -> None:
+def validate_sku_parameter_values(values: Mapping[str, SkuParameters], *, allow_empty: bool = False) -> None:
     """Require a hot flag and positive supplied prices; ERP coverage is optional."""
-    if not values:
+    if not values and not allow_empty:
         raise WorkbookInputError("当前越南 SKU 参数映射表没有 SKU，请重新上传")
     for sku, row in values.items():
         if not isinstance(row, SkuParameters):
@@ -268,12 +268,78 @@ def validate_usable_sku_parameters(path: str | Path) -> dict[str, SkuParameters]
     return _load_sku_parameters(path, complete=True)
 
 
+def load_template_sku_parameters(path: str | Path, skus: set[str]) -> dict[str, SkuParameters]:
+    """Read current SKU inputs from the nine-sheet business template's main tab.
+
+    Formula prices use their saved Excel results. Conflicting duplicate rows for
+    a current SKU are rejected instead of choosing one arbitrarily.
+    """
+    formulas = values = None
+    try:
+        formulas = load_workbook(path, read_only=True, data_only=False)
+        values = load_workbook(path, read_only=True, data_only=True)
+        if formulas.sheetnames[0] != "越南备货清单" or values.sheetnames != formulas.sheetnames:
+            raise AssetContractError("九表模板缺少首张『越南备货清单』")
+        source = formulas.worksheets[0]
+        cached = values.worksheets[0]
+        headers = next(source.iter_rows(min_row=1, max_row=1, max_col=36))
+        expected = {2: "判断热销", 5: "SKU", 7: "成本", 31: "跨境价", 36: "折扣价"}
+        for column, label in expected.items():
+            if headers[column - 1].value != label:
+                raise AssetContractError(f"越南备货清单!{get_column_letter(column)}1 应为 {label!r}")
+        result: dict[str, SkuParameters] = {}
+        first_rows: dict[str, int] = {}
+        for row_number, (row, saved) in enumerate(zip(
+            source.iter_rows(min_row=2, max_col=36),
+            cached.iter_rows(min_row=2, max_col=36),
+        ), 2):
+            sku = row[4].value
+            if not isinstance(sku, str) or sku.strip() not in skus:
+                continue
+            sku = sku.strip()
+            extracted = []
+            for column, label in ((2, "热销标记"), (7, "成本"), (31, "跨境价"), (36, "折扣价")):
+                cell = row[column - 1]
+                raw = saved[column - 1].value if cell.data_type == "f" else cell.value
+                if cell.data_type == "f" and raw is None:
+                    raise AssetContractError(f"越南备货清单!{cell.coordinate} 的公式没有保存结果，无法提取 {label}")
+                if _blank(raw):
+                    extracted.append(None)
+                else:
+                    try:
+                        extracted.append(excel_number(raw, sku, label, positive=label != "热销标记"))
+                    except (WorkbookInputError, ArithmeticError) as exc:
+                        raise AssetContractError(f"越南备货清单!{cell.coordinate}: {exc}") from exc
+            hot, cost, cross_border, discount = extracted
+            if hot not in (1, 2):
+                raise AssetContractError(f"越南备货清单!B{row_number} 的热销标记必须是 1 或 2")
+            parameter = SkuParameters(cost=cost, cross_border_price=cross_border,
+                                      discount_price=discount, hot_flag=int(hot))
+            if sku in result and result[sku] != parameter:
+                raise AssetContractError(
+                    f"SKU {sku} 在越南备货清单第 {first_rows[sku]}、{row_number} 行的参数冲突"
+                )
+            result[sku] = parameter
+            first_rows.setdefault(sku, row_number)
+        return result
+    except AssetContractError:
+        raise
+    except Exception as exc:
+        raise AssetContractError(f"读取九表模板参数失败: {type(exc).__name__}: {exc}") from exc
+    finally:
+        if formulas is not None:
+            formulas.close()
+        if values is not None:
+            values.close()
+
+
 __all__ = [
     "AssetContractError",
     "SkuMapIssue",
     "SkuMapValidationError",
     "SkuParameters",
     "load_sku_parameters",
+    "load_template_sku_parameters",
     "validate_usable_sku_parameters",
     "validate_sku_parameter_values",
 ]

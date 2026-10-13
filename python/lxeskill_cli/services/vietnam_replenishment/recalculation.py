@@ -7,6 +7,7 @@ from decimal import Decimal, InvalidOperation, ROUND_UP
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 from tempfile import TemporaryDirectory
 from typing import Mapping
@@ -23,9 +24,11 @@ from .asset_contract import (
     MAIN_HEADERS,
     REQUIRED_SHEETS,
     SkuParameters,
+    validate_sku_parameter_values,
     validate_usable_sku_parameters,
 )
 from .formula_dependencies import guarded_mapping_formula, mapping_formula_blank
+from .full_workbook import combine_full_workbook
 from .workbook import (
     RecommendationConfig,
     _CurrentRow,
@@ -287,6 +290,7 @@ def validate_recalculated_workbook(
     sources: VietnamSources,
     parameters: Mapping[str, SkuParameters],
     config: RecommendationConfig,
+    allow_empty_map: bool = False,
 ) -> None:
     """Check formulas, current data, and saved results of the Kit output."""
     formulas = None
@@ -309,7 +313,7 @@ def validate_recalculated_workbook(
                 f"重算结果应恰好包含五张目标表，实际为 {formulas.sheetnames!r}"
             )
         _check_headers(formulas, skeleton)
-        current_rows = {row.sku: row for row in _validated_rows(sources, parameters)}
+        current_rows = {row.sku: row for row in _validated_rows(sources, parameters, allow_empty_map=allow_empty_map)}
         expected = set(sources.skus)
         main = formulas["越南备货清单"]
         main_values = values["越南备货清单"]
@@ -468,29 +472,47 @@ def validate_recalculated_workbook(
 
 
 def generate_vietnam_workbook(
-    map_path: str | Path,
+    map_path: str | Path | None,
     output_path: str | Path,
     *,
     sources: VietnamSources,
     config: RecommendationConfig | None = None,
+    template: str | Path | None = None,
+    parameters: Mapping[str, SkuParameters] | None = None,
 ) -> Path:
-    """Produce one validated output; never call Yacang or use template history."""
+    """Validate current results, then preserve the user's four operational tabs."""
     output = Path(output_path)
     if os.path.lexists(output):
         raise FileExistsError(output)
     current_config = config if config is not None else RecommendationConfig()
-    parameters = validate_usable_sku_parameters(map_path)
+    allow_empty_map = template is not None and map_path is None and parameters is not None
+    if parameters is None:
+        if map_path is None:
+            raise WorkbookGenerationError("缺少本轮 SKU 参数")
+        parameters = validate_usable_sku_parameters(map_path)
+    else:
+        validate_sku_parameter_values(parameters, allow_empty=allow_empty_map)
     output.parent.mkdir(parents=True, exist_ok=True)
     with TemporaryDirectory(prefix=".vietnam-workbook-", dir=output.parent) as directory:
         stage = Path(directory)
         draft = stage / "draft.xlsx"
         recalculated = stage / "recalculated.xlsx"
-        write_vietnam_workbook(draft, sources, parameters, current_config)
+        template_snapshot = None
+        if template is not None:
+            template_snapshot = stage / "business-template.xlsx"
+            shutil.copyfile(template, template_snapshot)
+        write_vietnam_workbook(draft, sources, parameters, current_config, allow_empty_map=allow_empty_map)
         recalculate_with_office(draft, recalculated)
         validate_recalculated_workbook(
-            recalculated, sources=sources, parameters=parameters, config=current_config
+            recalculated, sources=sources, parameters=parameters, config=current_config,
+            allow_empty_map=allow_empty_map,
         )
-        os.link(recalculated, output)
+        if template_snapshot is not None:
+            complete = stage / "complete.xlsx"
+            combine_full_workbook(template_snapshot, recalculated, complete)
+            os.link(complete, output)
+        else:
+            os.link(recalculated, output)
     return output
 
 

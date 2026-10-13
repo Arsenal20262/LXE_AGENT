@@ -69,7 +69,9 @@ CASES = [('yacang_export_run',
    '--products-file',
    'C:/数据 源/产品.xlsx',
    '--sku-map-file',
-   'C:/数据 源/映射.xlsx'])]
+   'C:/数据 源/映射.xlsx',
+   '--template-file',
+   'C:/数据 源/完整模板.xlsx'])]
 
 
 @pytest.mark.parametrize("name,old,new,aliases,options", CASES)

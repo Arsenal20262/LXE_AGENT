@@ -7,7 +7,7 @@ import { DesktopVietnamSettingsService } from "../src/main/vietnam-settings";
 import type { DesktopInputAssetsOptions } from "../src/main/input-assets";
 const roots: string[] = [];
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
-const state = { directory: "/app/skill-data/vietnam-stock-recommendation", parameters: null, parameters_error: null, sku_map: null, sku_map_error: null };
+const state = { directory: "/app/skill-data/vietnam-stock-recommendation", parameters: null, parameters_error: null, sku_map: null, sku_map_error: null, template: null, template_error: null };
 function service(execute?: DesktopInputAssetsOptions["execute"]) {
   const root = mkdtempSync(join(tmpdir(), "vietnam-settings-")); roots.push(root);
   return new DesktopVietnamSettingsService({ dataRoot: root, pythonPath: join(process.cwd(), process.platform === "win32" ? ".venv/Scripts/python.exe" : ".venv/bin/python"), managedPath: "", platform: process.platform, execute });
@@ -17,14 +17,18 @@ test("native settings use a private fixed Python module and pass the selection a
   const store = service(async (args, options) => {
     calls.push(args);
     expect(options.env?.LXE_DATA_ROOT).toContain("vietnam-settings-");
-    return { stdout: JSON.stringify({ success: true, data: args[4] === "export" ? { path: args[6] } : state }), stderr: "", error: null };
+    return { stdout: JSON.stringify({ success: true, data: args[4] === "export" ? { path: args[6] } : args[4] === "export-template" ? { path: args[5] } : state }), stderr: "", error: null };
   });
   await store.read();
   await store.upload("/selected/中文 map.xlsx");
+  await store.uploadTemplate("/selected/越南备货清单.xlsx");
+  expect(await store.exportTemplate("/selected/导出模板.xlsx")).toEqual({ path: "/selected/导出模板.xlsx" });
   expect(await store.exportMap("current", "D:\\中文 map\\导出.xlsx")).toEqual({ path: "D:\\中文 map\\导出.xlsx" });
   expect(calls).toEqual([
     ["-I", "-B", "-m", "services.vietnam_replenishment.settings", "read"],
     ["-I", "-B", "-m", "services.vietnam_replenishment.settings", "upload", "/selected/中文 map.xlsx"],
+    ["-I", "-B", "-m", "services.vietnam_replenishment.settings", "upload-template", "/selected/越南备货清单.xlsx"],
+    ["-I", "-B", "-m", "services.vietnam_replenishment.settings", "export-template", "/selected/导出模板.xlsx"],
     ["-I", "-B", "-m", "services.vietnam_replenishment.settings", "export", "current", "D:\\中文 map\\导出.xlsx"],
   ]);
 });
