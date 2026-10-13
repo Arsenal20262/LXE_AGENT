@@ -76,5 +76,5 @@
 ### Git 状态与下一步
 
 - 当前分支：`codex/final-restock-cli`，worktree：`.worktrees/pool-4`，基线提交：PR1 `e9b88b92`；主工作区与 PR1 worktree 未修改。
-- 以上 PR2 文件都仍是未提交修改；未执行 `git add`、commit、push 或创建远端 PR。
-- 下一步：等待用户明确批准本地 `git add` 和 commit。之后仍需分别取得 push 与创建/更新 PR 的明确授权；PR2 应继续作为 PR1 的 stacked PR 评审。
+- PR2 的 8 个实现、测试与交接文件已提交为 `caef4809 feat: add final restock recommendation CLI`；没有 push 或创建远端 PR。
+- 用户已批准进入下一阶段。PR3 应在新聊天窗口、专用 worktree 中，以本分支最新提交为基线继续；push、创建/更新 PR 与 merge 仍需分别取得明确授权。
