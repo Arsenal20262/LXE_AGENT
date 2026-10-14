@@ -16,9 +16,6 @@ def run(arguments: dict[str, Any]) -> dict[str, Any]:
             shenzhen_inventory_report_xlsx_path=str(
                 arguments.get("shenzhen_inventory_report_xlsx_path") or ""
             ).strip(),
-            shenzhen_source_msku_xlsx_path=str(
-                arguments.get("shenzhen_source_msku_xlsx_path") or ""
-            ).strip(),
             unlinked_shipments_snapshot_path=str(
                 arguments.get("unlinked_shipments_snapshot_path") or ""
             ).strip(),

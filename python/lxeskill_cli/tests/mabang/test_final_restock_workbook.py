@@ -3,6 +3,7 @@ from __future__ import annotations
 from decimal import Decimal
 import os
 from pathlib import Path
+from shutil import copyfile
 import subprocess
 
 import pytest
@@ -120,7 +121,7 @@ def _write_confirmed_empty_snapshot(directory: Path, *, snapshot_time: str = "20
 
 
 def _generate(tmp_path: Path, *, source_path: Path | None = None, inventory_path: Path | None = None,
-              snapshot_path: Path | None = None, inventory_source_path: Path | None = None):
+              snapshot_path: Path | None = None):
     source_path = source_path or _write_source(
         tmp_path / "202610131000-Amazon-Test_店铺MSKU数据.xlsx"
     )
@@ -132,7 +133,6 @@ def _generate(tmp_path: Path, *, source_path: Path | None = None, inventory_path
         STORE,
         msku_source_xlsx_path=source_path,
         shenzhen_inventory_report_xlsx_path=inventory_path,
-        shenzhen_source_msku_xlsx_path=inventory_source_path or source_path,
         unlinked_shipments_snapshot_path=snapshot_path,
         output_dir=tmp_path / "out",
     )
@@ -144,10 +144,14 @@ def test_generates_all_source_rows_without_formula_errors(tmp_path: Path) -> Non
     source_path = _write_source(tmp_path / "202610131000-Amazon-Test_店铺MSKU数据.xlsx")
     inventory_path = _write_inventory_report(tmp_path / "inventory.xlsx", source_path)
     snapshot_path = _write_confirmed_empty_snapshot(tmp_path / "snapshots")
+    # Moving an unchanged, verified source must preserve the report association.
+    moved_source = tmp_path / "moved" / source_path.name
+    moved_source.parent.mkdir()
+    copyfile(source_path, moved_source)
 
     result = _generate(
         tmp_path,
-        source_path=source_path,
+        source_path=moved_source,
         inventory_path=inventory_path,
         snapshot_path=snapshot_path,
     )
@@ -262,27 +266,38 @@ def test_workbook_layout_mapping_and_pr1_formulas_before_office(tmp_path: Path) 
         workbook.close()
 
 
-def test_inventory_source_path_must_match_the_selected_source(tmp_path: Path) -> None:
+@pytest.mark.parametrize("mutation", ["store", "fingerprint"])
+def test_source_store_and_fingerprint_are_verified(tmp_path: Path, mutation: str) -> None:
     source_path = _write_source(tmp_path / "202610131000-Amazon-Test_店铺MSKU数据.xlsx")
     inventory_path = _write_inventory_report(tmp_path / "inventory.xlsx", source_path)
-    other_source = _write_source(tmp_path / "other.xlsx")
     snapshot_path = _write_confirmed_empty_snapshot(tmp_path / "snapshots")
-
-    with pytest.raises(FinalRestockWorkbookError, match="source_msku_xlsx_path"):
-        _generate(
-            tmp_path,
-            source_path=source_path,
-            inventory_path=inventory_path,
-            snapshot_path=snapshot_path,
-            inventory_source_path=other_source,
+    if mutation == "fingerprint":
+        workbook = load_workbook(source_path)
+        workbook.active["I2"] = 78  # Change raw 7-day sales after source verification.
+        workbook.save(source_path)
+        workbook.close()
+    diagnostic = "店铺不一致" if mutation == "store" else "发生变化"
+    with pytest.raises(source_verification.SourceVerificationError, match=diagnostic):
+        generate_final_restock_recommendation(
+            "Wrong-Store" if mutation == "store" else STORE,
+            msku_source_xlsx_path=source_path,
+            shenzhen_inventory_report_xlsx_path=inventory_path,
+            unlinked_shipments_snapshot_path=snapshot_path,
+            output_dir=tmp_path / "out",
         )
 
 
-def test_inventory_report_must_have_the_same_source_batch(tmp_path: Path) -> None:
+@pytest.mark.parametrize("different_content", [True, False])
+def test_inventory_report_must_have_the_same_source_batch(tmp_path: Path, different_content: bool) -> None:
     source_path = _write_source(tmp_path / "202610131000-Amazon-Test_店铺MSKU数据.xlsx")
     different_rows = _source_rows()
-    different_rows[0]["7天销量"] = 78
+    if different_content:
+        different_rows[0]["7天销量"] = 78
     other_source = _write_source(tmp_path / "other.xlsx", different_rows)
+    source_metadata = source_verification.load_verified_source(source_path, store_name=STORE).metadata
+    other_metadata = source_verification.load_verified_source(other_source, store_name=STORE).metadata
+    assert source_metadata["snapshot_id"] != other_metadata["snapshot_id"]
+    assert (source_metadata["source_fingerprint"] != other_metadata["source_fingerprint"]) is different_content
     report = _write_inventory_report(tmp_path / "inventory.xlsx", other_source)
     snapshot = _write_confirmed_empty_snapshot(tmp_path / "snapshots")
 

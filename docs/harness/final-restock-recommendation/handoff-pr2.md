@@ -16,7 +16,7 @@
 - Python 只用 `uv`；不访问生产 ERP，不改运营源文件。
 - 保留完整源行；重复 MSKU、无法证明来源/店铺/批次一致、未知关键输入不得静默去重、分摊或当作 0。
 - catalog 改动后运行 Python `lxeskill`/`infra` 契约测试和 Bun `lxeskill-command` 测试。
-- 用户已批准分别本地提交、旧提交备份及依赖 rebase；不 push、不创建远端 PR、不 merge。
+- 2026-10-14 最新授权：独立审核通过后本地提交 PR2，并安全同步到 PR3、保留其未提交修改。PR3 暂不 commit；不 push、merge 或访问生产 ERP。
 
 ## 文件职责
 
@@ -28,7 +28,7 @@
 
 ## 实施步骤
 
-1. 先写服务测试，覆盖：源文件及深圳报告元数据/来源路径必须匹配；货件快照店铺和日期必须匹配；重复或缺失 MSKU、关键未知数值拒绝；缺少深圳行时库存留空，组合编码读取报告的 `子SKU`，缺失时回退源表本地 SKU；有效确认快照未列出的 MSKU 记为已知 0；每条源行对应一条输出行。
+1. 先写服务测试，覆盖：源文件及深圳报告核验元数据必须匹配；货件快照店铺和日期必须匹配；重复或缺失 MSKU、关键未知数值拒绝；深圳报告必须覆盖全部源 MSKU，库存数值未知时留空，组合编码读取报告的 `子SKU`，缺失时回退源表本地 SKU；有效确认快照未列出的 MSKU 记为已知 0；每条源行对应一条输出行。
 2. 实现唯一服务入口：用 `load_verified_source()` 取得全量源记录；直接解析深圳报告四类业务 Sheet，不调用会过滤行的 `load_inventory_rows()`；复用 `load_unlinked_shipment_quantities()` 和同日校验；按 A:AH 写入列值与 PR1 13 列公式。保持 Calibri 11、冻结 A2、自动筛选、85% 缩放及 J/S 数字格式。
 3. 用 `run_kit_bounded()` 执行 `shared.office recalculate`，读取重算后的文件并统计 Excel 错误单元格。错误诊断保留到结构化 CLI 结果；若存在错误，命令结果失败并仍可交付诊断文件，不声称正式 XLSX 通过零错误验收。
 4. 写 CLI 参数/成功失败测试，再登记 catalog 命令和 dataset；按仓库契约运行定向 Python 与 Bun 测试。
@@ -38,8 +38,8 @@
 
 ### 完成范围
 
-- 已实现离线命令 `lxeskill replenish final-restock generate`，要求显式传入店铺、MSKU 源文件、深圳库存报告、深圳导出时对应的源文件路径和未关联货件快照。
-- 服务使用 `load_verified_source()` 读取完整 MSKU 行；要求深圳报告核验元数据与源文件批次相同，显式来源路径解析到同一文件，并核对深圳报告的全量 MSKU 覆盖。重复 MSKU、孤立货件 MSKU、店铺/日期不符及缺失关键数值会报错。
+- 已实现离线命令 `lxeskill replenish final-restock generate`，当前要求显式传入店铺、MSKU 源文件、深圳库存报告和未关联货件快照，共四项输入。
+- 服务使用 `load_verified_source()` 读取完整 MSKU 行；要求深圳报告核验元数据与源文件批次相同，并核对深圳报告的全量 MSKU 覆盖。重复 MSKU、孤立货件 MSKU、店铺/日期不符及缺失关键数值会报错。
 - 按 A:AH 写出 `mskulist`，保留每条源 MSKU 一行，复用 PR1 `final_restock_formulas(row_number)`；生成后调用 `run_kit_bounded()` 重算并检查公式保留、行列数、缓存结果和 Excel 错误单元格。
 - 命令当前在 catalog 中标为 `internal`、`exposed: false`、无 owner Skill，仍可直接从 CLI 调用。PR3 的 Skill/Agent 编排与将命令开放给 Skill 路由不属于本 PR。
 
@@ -105,3 +105,24 @@ uv run --frozen --no-sync pytest python/lxeskill_cli/tests/mabang/test_final_res
 - 实际走文件服务 → `run_kit_bounded()` → 项目 Office Kit 重算，四行合成输入生成完整 34 列文件，公式错误数为 0；验证清货行 AC 留空、海运重量正确、完整行覆盖、组合 SKU、格式和缓存。此前因环境缺失跳过的 Office 用例本轮已实际通过。
 - **NOT VERIFIED：** Microsoft Excel 原生计算、真实业务同批次 MSKU / 深圳库存 / 未关联货件完整输入集、模型自然语言入口与文件发送。参考结果表不替代业务源输入集，没有访问生产 ERP。未执行全仓库测试或 build/typecheck，留待最终合并阶段按规范处理。
 - 收口记录采用本 PR 独立文档提交；最新 HEAD 以本分支 `git log -1` 为准。接下来由 PR3 rebase 接入本层并执行契约回归。main 未修改，没有 push、远端 PR 或 merge。
+
+## 2026-10-14 重复输入收敛（首轮审核记录）
+
+- 按用户确认删除 `shenzhen_source_msku_xlsx_path`：catalog 的 property/required、CLI 转传、服务参数及物理路径相等检查。当前输入为店铺和三个本地文件；不增加兼容别名、抽象层或新路由。
+- 保留原源表内容指纹、店铺、核验快照及来源元数据比较、深圳报告 MSKU 覆盖、货件同店同日与完整性检查。未修改业务公式、旧备货服务、公共核验模块、Office 执行能力或参数来源导出服务。
+- 用新契约测试先在旧实现得到 4 failed / 1 passed，失败均指向重复参数仍存在或仍被转传；更正后通过。正式 Office 文件测试使用原件的等内容复制源表，确认不再错误依赖原物理路径，同时仍保留全部行和零公式错误。
+- 增补服务层店铺/源指纹拒绝用例，并将批次冲突用例覆盖到“源内容不同”和“内容相同但核验快照不同”；CLI 测试验证四项输入及旧 flag 的 `unknown option` 失败，不静默接受旧接口。
+- 从本 worktree 根、使用自己的 `.venv`，设置上一节 Office 两变量、`PYTHONDONTWRITEBYTECODE=1` 和临时 `UV_CACHE_DIR` 后，执行 `uv run --frozen --no-sync pytest -p no:cacheprovider python/lxeskill_cli/tests/mabang/test_final_restock_workbook.py python/lxeskill_cli/tests/mabang/test_final_restock_workbook_cli.py python/lxeskill_cli/tests/mabang/test_source_verification.py -q -rs --tb=short`：**61 passed，无 skip**，含实际 Office Kit 重算。
+- catalog 必需双端回归：Python `tests/lxeskill` / `tests/infra` **477 passed, 4 skipped, 4 warnings**（4 skip 为 Windows 专属，warning 为原有 aiohttp 提示）；Bun `lxeskill-command.test.ts` **12 pass，85 assertions**。Python 模拟服务器测试在沙箱外执行，仅访问本机测试服务器。
+- 本轮只修改本 PR 的 catalog、CLI、文件服务、两份测试和本 handoff，共六个文件；diff 已检查，旧参数在活跃实现中无残留，旧 flag 仅保留于拒绝回归用例及历史记录。没有 Git 写操作。
+- HEAD 保持 `797436bd`。PR3 需更新其所属 Skill、契约测试和 handoff；本轮不通过跨分支编辑或 rebase 将上游服务/目录覆盖到 PR3。组合验证需明确区别于真正分支同步，后者等待审核及新的 Git 授权。
+
+## 2026-10-14 最终审核与授权收口
+
+- 从 PR1 `70bc0568` 核对 PR2 完整差异，并逐项审查本轮六个文件。代码无需进一步修复：catalog、CLI 和服务均为店铺与三个文件；旧 flag 由既有参数解析器返回 `invalid_arguments / unknown option`。本次仅修正上文“缺少深圳行”表述，实际始终要求完整 MSKU 覆盖。
+- `load_verified_source()` 的店铺、内容指纹、快照摘要、绑定标记和数量核验未变；深圳报告完整元数据相等、MSKU 覆盖、货件同店同日校验未变。AST 比对确认 14 个服务辅助函数均未改变，公式、原备货实现及公共核验模块无改动。
+- 可删减项已落实为重复参数和路径相等检查；沿用现有 catalog → CLI → 离线服务 → Office 调用链，没有新增公共抽象、适配层、状态或 Runtime 路由。本次参数整改未发现 P0–P3 缺陷或阻塞问题。
+- 正式 pool-4 根目录、本工作区独立 `.venv`，使用上一节 Office 两变量，执行 `uv run --frozen --no-sync pytest -p no:cacheprovider python/lxeskill_cli/tests/mabang/test_final_restock_workbook.py python/lxeskill_cli/tests/mabang/test_final_restock_workbook_cli.py python/lxeskill_cli/tests/mabang/test_source_verification.py python/lxeskill_cli/tests/lxeskill python/lxeskill_cli/tests/infra -q -rs --tb=short`：**538 passed, 0 failed, 4 skipped, 4 warnings**。跳过项为 Windows 路径/进程测试，warning 为既有 aiohttp 提示；实际 Office Kit 重算通过。日志：`/private/tmp/final-restock-pr2-close-python.log`。
+- Bun `packages/agent/runtime/test/tooling/lxeskill-command.test.ts`：**12 pass, 0 fail, 85 assertions**。工作差异和相对 PR1 的 `git diff --check` 均通过。
+- 仅将上述六个 PR2 文件纳入 `fix: remove redundant final restock source path` 本地提交，提交号以本分支 `git log -1` 为准。PR3 后续通过依赖同步继承此修复，自身 Skill/契约/交接修改保持未提交。未执行 push、merge 或生产调用。
+- 离线代码具备 Review 条件；主仓库 Review 仍按 PR1 → PR2 → PR3 串行。真实业务完整输入、Microsoft Excel 原生计算、模型选择及附件发送仍为 **NOT VERIFIED**，不将本次定向测试称为全仓库验证。

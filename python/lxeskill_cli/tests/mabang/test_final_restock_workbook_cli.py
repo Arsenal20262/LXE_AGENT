@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 
+from lxeskill import cli as lxeskill
+from lxeskill.business import load_catalog
 from services.agent_cli.mabang import generate_final_restock_recommendation as cli
 
 
-def test_cli_forwards_the_four_offline_inputs(monkeypatch) -> None:
+def test_cli_forwards_the_three_offline_files(monkeypatch) -> None:
     expected = {
         "success": False,
         "store_name": "Amazon-Test",
@@ -28,7 +31,6 @@ def test_cli_forwards_the_four_offline_inputs(monkeypatch) -> None:
         "store_name": " Amazon-Test ",
         "msku_source_xlsx_path": "/inputs/source.xlsx",
         "shenzhen_inventory_report_xlsx_path": "/inputs/shenzhen.xlsx",
-        "shenzhen_source_msku_xlsx_path": "/inputs/source.xlsx",
         "unlinked_shipments_snapshot_path": "/inputs/shipments.xlsx",
     })
 
@@ -37,7 +39,6 @@ def test_cli_forwards_the_four_offline_inputs(monkeypatch) -> None:
         "store_name": "Amazon-Test",
         "msku_source_xlsx_path": "/inputs/source.xlsx",
         "shenzhen_inventory_report_xlsx_path": "/inputs/shenzhen.xlsx",
-        "shenzhen_source_msku_xlsx_path": "/inputs/source.xlsx",
         "unlinked_shipments_snapshot_path": "/inputs/shipments.xlsx",
     }
 
@@ -52,3 +53,19 @@ def test_cli_preserves_actual_failure_diagnostic(monkeypatch) -> None:
         "store_name": "Amazon-Test",
         "exception": "深圳库存报告与本次 MSKU 源文件核验批次不一致",
     }
+
+
+def test_catalog_has_four_inputs_and_rejects_the_removed_flag(monkeypatch, capsys) -> None:
+    entry = load_catalog()["mabang_generate_final_restock_recommendation"]
+    required = ["store_name", "msku_source_xlsx_path", "shenzhen_inventory_report_xlsx_path",
+                "unlinked_shipments_snapshot_path"]
+    assert entry["input_schema"]["required"] == required
+    assert list(entry["input_schema"]["properties"]) == required
+    monkeypatch.delenv("LXESKILL_SKILL_SCOPE", raising=False)
+    assert lxeskill.main([
+        "replenish", "final-restock", "generate", "--shenzhen-source-msku-xlsx-path", "source.xlsx",
+    ]) == lxeskill.EXIT_USAGE
+    terminal = json.loads(capsys.readouterr().out)
+    assert terminal["error"]["code"] == "invalid_arguments"
+    assert terminal["error"]["message"] == "unknown option: --shenzhen-source-msku-xlsx-path"
+    assert terminal["files"] == []

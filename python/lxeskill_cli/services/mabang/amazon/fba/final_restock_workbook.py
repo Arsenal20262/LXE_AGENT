@@ -444,7 +444,6 @@ def generate_final_restock_recommendation(
     *,
     msku_source_xlsx_path: str | Path,
     shenzhen_inventory_report_xlsx_path: str | Path,
-    shenzhen_source_msku_xlsx_path: str | Path,
     unlinked_shipments_snapshot_path: str | Path,
     output_dir: str | Path | None = None,
 ) -> FinalRestockWorkbookResult:
@@ -454,13 +453,7 @@ def generate_final_restock_recommendation(
         raise FinalRestockWorkbookError("store_name 不能为空")
     source_path = _path(msku_source_xlsx_path, label="MSKU 源文件")
     inventory_path = _path(shenzhen_inventory_report_xlsx_path, label="深圳库存报告")
-    inventory_source_path = _path(shenzhen_source_msku_xlsx_path, label="深圳库存导出关联的 MSKU 源文件")
     snapshot_path = _path(unlinked_shipments_snapshot_path, label="未关联货件快照")
-    if inventory_source_path != source_path:
-        raise FinalRestockWorkbookError(
-            "深圳库存导出的 source_msku_xlsx_path 与本次 MSKU 源文件不一致: "
-            f"inventory_source={inventory_source_path}, source={source_path}"
-        )
 
     try:
         verified_source = load_verified_source(source_path, store_name=clean_store_name)
