@@ -73,6 +73,23 @@ describe("skill context", () => {
     expect(finalRestock?.description).toContain("最终备货建议");
     expect(finalRestock?.description).toContain("将原始备货建议量表转换成新表");
     expect(finalRestock?.description).toContain("普通备货");
+    expect(finalRestock?.description).toContain("只给店铺名也应自动调用");
+    const finalPolicy = finalRestock?.content ?? "";
+    const acquisitionSection = finalPolicy.split("## 仅给店铺名时的本轮取数")[1]?.split("## 输入与调用")[0] ?? "";
+    const acquisitionCommands = [
+      "lxeskill replenish store resolve",
+      "lxeskill mabang store msku export",
+      "lxeskill mabang store shenzhen-inventory export",
+      "lxeskill mabang store unlinked-shipments export",
+    ];
+    const positions = acquisitionCommands.map((command) => acquisitionSection.indexOf(command));
+    expect(positions.every((position) => position >= 0)).toBe(true);
+    expect(positions).toEqual([...positions].sort((left, right) => left - right));
+    expect(finalPolicy).toContain("lxeskill replenish final-restock generate --store-name");
+    expect(finalPolicy).toContain("步骤 3 的 `source_msku_xlsx_path` 必须指向步骤 2 本轮返回的 `xlsx_path`");
+    expect(finalPolicy).toContain("ok=false");
+    expect(finalPolicy).toContain("send_files(paths=<terminal.files>)");
+    expect(finalPolicy).not.toContain("用户只给店铺、仅给旧备货结果表或给出部分输入时，先列出缺失项并请求补齐");
     for (const name of ["replenishment-workflow-map", "replenishment-calculate"]) {
       const skill = skills.find((item) => item.name === name);
       expect(skill?.description).toContain("最终备货建议");

@@ -1,6 +1,6 @@
 ---
 name: replenishment-final-restock
-description: 用户明确要求“最终备货建议”或“将原始备货建议量表转换成新表”时使用。基于已核验的本地 MSKU 源表、同源深圳库存报告和同店同日未关联货件快照生成单表 34 列 mskulist。普通备货、补货建议继续使用 replenishment-workflow-map / replenishment-calculate；本入口只处理明确的离线输入，缺输入先澄清。
+description: 用户明确要求“最终备货建议”或“将原始备货建议量表转换成新表”时使用。只给店铺名也应自动调用现有马帮取数 Skill，取得本轮 MSKU 源表、同源深圳库存报告和同店同日未关联货件快照，再生成单表 34 列 mskulist 并交付。普通备货、补货建议继续使用 replenishment-workflow-map / replenishment-calculate。
 type: replenishment
 commands:
   - lxeskill replenish final-restock generate
@@ -11,20 +11,35 @@ commands:
 ## 入口与范围
 
 - 明确要求“最终备货建议”或“将原始备货建议量表转换成新表”时进入本 Skill，不先运行旧备货计算。普通“某店铺备货/补货建议”继续使用 `replenishment-workflow-map` / `replenishment-calculate`；仅要求发送旧流程的最终文件，不代表切换到本 Skill。
-- 本入口读取已有的离线文件。仅询问流程、规则或已有结果时解释或读取对应产物，不重新生成。
-- 用户只给店铺、仅给旧备货结果表或给出部分输入时，先列出缺失项并请求补齐。旧 42 列结果、销量分析报告不能替代原始 MSKU 源表。本入口不自动查询店铺、登录 ERP、采集新数据，也不自动转入旧完整流程。
-- 不搜索历史目录或按修改时间挑选文件，不猜店铺别名、网页 ID、批次或文件路径。名称含糊时请求完整店铺名；不调用生产接口来补齐本阶段的离线输入。
+- 仅询问流程、规则或已有结果时解释或读取对应产物，不重新生成。用户要求生成且只给店铺名时，默认在本轮自动取数，不向用户索取三个文件路径；也不转入旧备货计算。
+- 用户明确指定一整套离线输入时，仍可直接使用下方四项输入调用底层计算。旧 42 列结果、销量分析报告不能替代原始 MSKU 源表；若要求使用部分指定文件，不与本轮采集文件混用，先确认是重新采集整套还是补齐同源输入。
+- 不搜索历史目录或自行按修改时间挑选文件，不猜店铺别名、网页 ID、批次或文件路径。名称含糊时通过现有店铺解析 Skill 获取真实候选；只有歧义、必要授权缺失或取数失败等实际阻塞才向用户询问。
+
+## 仅给店铺名时的本轮取数
+
+按顺序读取对应业务 Skill，并通过 `exec` 调用其已声明的 CLI；每一步只使用最后一条 `type="result"` 的 `data`，`ok=false` 或必需字段缺失即停止并保留真实诊断。运行中等待原会话，不重复启动取数。中间文件不发送，最后只交付计算结果。
+
+| 顺序 | 现有 Skill 与命令 | 本轮必须保留的字段 |
+|---|---|---|
+| 1 | `replenishment-store-resolve`：`lxeskill replenish store resolve --store-name "<用户店铺名>"` | `data.store_name`、`store_id`、`id_type`；有歧义时请用户选择真实候选 |
+| 2 | `mabang-store-msku-export`：`lxeskill mabang store msku export --store-id "<store_id>" --id-type "<id_type>" --store-name "<规范店铺名>"` | `data.xlsx_path`（本轮 MSKU 源表）、`store_name` |
+| 3 | `mabang-store-shenzhen-inventory-export`：`lxeskill mabang store shenzhen-inventory export --store-name "<规范店铺名>"` | `data.shenzhen_warehouse_inventory_report_xlsx_path`、`source_msku_xlsx_path`、`source_msku_data_time` |
+| 4 | `mabang-store-unlinked-shipments-export`：`lxeskill mabang store unlinked-shipments export --store-name "<规范店铺名>"` | `data.snapshot.snapshot_xlsx_path`、布尔值 `confirmed_empty`、三个完整状态结果 |
+
+- 步骤 2 返回的店铺名须与规范店铺名一致。**在调用步骤 4 之前**核对：步骤 3 的 `source_msku_xlsx_path` 必须指向步骤 2 本轮返回的 `xlsx_path`；不一致就结束本轮，不得继续取货件或调用最终计算。库存导出自身会查找该店铺本地最新源表；即使时间相近也不能拿旧文件继续计算或手改路径。底层计算仍会核验文件指纹、店铺、批次、快照及 MSKU 覆盖。
+- 步骤 4 只有三个状态完整成功且快照存在才可继续；`confirmed_empty=true` 是有效空快照，查询失败或缺快照不能当作零货件。不要再运行旧销量分析或 `replenish calculate`。
+- 认证恢复仅按所读取业务 Skill 的真实 `data.auth_refresh_required=true` 规则执行；没有授权、接口失败、同源不一致或跨日不兼容时停止，说明已完成步骤和实际错误，不回退历史文件或伪造数据。
 
 ## 输入与调用
 
-使用用户明确提供的文件，或本轮已成功取得且用户选择使用的产物路径。四项均需明确：
+使用上一步本轮成功返回的产物路径，或用户明确提供的一整套合格离线文件。底层命令仍需四项参数；这些路径由 Agent 传递，正常流程不要求用户填写：
 
 | 参数 | 来源 |
 |---|---|
 | `--store-name` | 本次完整店铺名，须与源文件核验记录一致 |
-| `--msku-source-xlsx-path` | 已含源数据核验信息的马帮原始全量 MSKU XLSX，必须包含 Amazon MSKU 列表导出字段 `uq122` 对应的“本地库存”列 |
-| `--shenzhen-inventory-report-xlsx-path` | 使用该 MSKU 源表导出的深圳库存报告 |
-| `--unlinked-shipments-snapshot-path` | 同店、与源数据同日且完整查询成功的未关联货件快照 |
+| `--msku-source-xlsx-path` | 步骤 2 的 `data.xlsx_path`，已含源数据核验信息的马帮原始全量 MSKU XLSX，必须包含 Amazon MSKU 列表导出字段 `uq122` 对应的“本地库存”列 |
+| `--shenzhen-inventory-report-xlsx-path` | 步骤 3 的 `data.shenzhen_warehouse_inventory_report_xlsx_path` |
+| `--unlinked-shipments-snapshot-path` | 步骤 4 的 `data.snapshot.snapshot_xlsx_path` |
 
 通过 `exec` 执行一次独立命令，不拼接 shell 操作、不直接执行 Python 业务模块：
 
@@ -34,7 +49,7 @@ lxeskill replenish final-restock generate --store-name "<完整店铺名>" --msk
 
 - 只把最后一条 `type="result"` 当作 terminal：先看 `ok`，业务数据读 `data`，附件读 `files`。运行中/session running 时等待原会话，不重新启动命令。
 - CLI 负责源文件、店铺、批次、MSKU 覆盖和数值核验。未知或不匹配的店铺保留实际“源数据核验店铺不一致”诊断和请求/快照名称；这仅证明与输入不匹配，不能宣称该店铺在生产系统不存在。
-- 缺文件、缺关键数值、重复 MSKU、批次冲突或无效快照时停止，保留实际错误及定位信息，请求修正对应输入。不能把未知值当作 0，也不能拿旧文件替代失败输入。
+- 自动取数或计算出现缺文件、缺关键数值、重复 MSKU、批次冲突或无效快照时停止，保留实际错误及定位信息；说明失败步骤和需要恢复的条件，不要求用户自行查找三个路径。不能把未知值当作 0，也不能拿旧文件替代失败输入。
 - 有效且已确认空集的货件快照可以使用；没有快照不能按零货件继续。
 
 ## 结果与交付

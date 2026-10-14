@@ -62,6 +62,20 @@ def test_final_restock_is_exposed_with_one_owner_and_the_existing_inputs(capsys)
     assert all(item["command"] != "replenish calculate" for item in commands)
 
 
+@pytest.mark.parametrize("name,owner,fields", [
+    ("mabang_resolve_fba_store", "replenishment-store-resolve", {"store_name"}),
+    ("mabang_download_store_msku_excel", "mabang-store-msku-export", {"store_name", "store_id", "id_type"}),
+    ("mabang_export_store_msku_actual_inventory", "mabang-store-shenzhen-inventory-export", {"store_name"}),
+    ("mabang_download_store_unlinked_shipments", "mabang-store-unlinked-shipments-export", {"store_name"}),
+])
+def test_store_only_acquisition_reuses_exposed_existing_commands(name, owner, fields) -> None:
+    entry = load_catalog()[name]
+    assert entry["visibility"] == "business"
+    assert entry["exposed"] is True
+    assert owner in entry["owner_skills"]
+    assert fields <= set(entry["input_schema"]["properties"])
+
+
 @pytest.mark.parametrize("scope,command", [
     ("replenishment-calculate", COMMAND),
     (SKILL, ["replenish", "calculate"]),
