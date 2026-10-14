@@ -21,7 +21,6 @@ INPUTS = {
     "store_name": "Amazon-Test",
     "msku_source_xlsx_path": "source.xlsx",
     "shenzhen_inventory_report_xlsx_path": "inventory.xlsx",
-    "shenzhen_source_msku_xlsx_path": "source.xlsx",
     "unlinked_shipments_snapshot_path": "snapshot.xlsx",
 }
 
@@ -80,7 +79,6 @@ def test_new_and_old_commands_respect_their_own_skill_scope(scope, command, monk
     ("store_name", "store_name 不能为空"),
     ("msku_source_xlsx_path", "MSKU 源文件不存在"),
     ("shenzhen_inventory_report_xlsx_path", "深圳库存报告不存在"),
-    ("shenzhen_source_msku_xlsx_path", "深圳库存导出关联的 MSKU 源文件不存在"),
     ("unlinked_shipments_snapshot_path", "未关联货件快照不存在"),
 ])
 def test_incomplete_inputs_return_actual_service_diagnostic(missing, diagnostic, tmp_path: Path, capsys) -> None:
@@ -94,6 +92,16 @@ def test_incomplete_inputs_return_actual_service_diagnostic(missing, diagnostic,
     assert terminal["error"]["code"] == "business_cli_failed"
     assert diagnostic in terminal["error"]["message"]
     assert terminal["data"]["exception"] == terminal["error"]["message"]
+    assert terminal["files"] == []
+
+
+def test_removed_source_path_flag_is_rejected_in_the_new_skill_scope(capsys) -> None:
+    assert lxeskill.main([
+        *_args(INPUTS), "--shenzhen-source-msku-xlsx-path", "source.xlsx",
+    ]) == lxeskill.EXIT_USAGE
+    terminal = _terminal(capsys)
+    assert terminal["error"]["code"] == "invalid_arguments"
+    assert terminal["error"]["message"] == "unknown option: --shenzhen-source-msku-xlsx-path"
     assert terminal["files"] == []
 
 

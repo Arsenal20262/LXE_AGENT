@@ -17,20 +17,19 @@ commands:
 
 ## 输入与调用
 
-使用用户明确提供的文件，或本轮已成功取得且用户选择使用的产物路径。五项均需明确：
+使用用户明确提供的文件，或本轮已成功取得且用户选择使用的产物路径。四项均需明确：
 
 | 参数 | 来源 |
 |---|---|
 | `--store-name` | 本次完整店铺名，须与源文件核验记录一致 |
 | `--msku-source-xlsx-path` | 已含源数据核验信息的马帮原始全量 MSKU XLSX |
 | `--shenzhen-inventory-report-xlsx-path` | 使用该 MSKU 源表导出的深圳库存报告 |
-| `--shenzhen-source-msku-xlsx-path` | 深圳导出结果 `source_msku_xlsx_path` 所记录的关联源路径，须指向本次源文件；不得为凑齐参数自行复制路径冒充来源确认 |
 | `--unlinked-shipments-snapshot-path` | 同店、与源数据同日且完整查询成功的未关联货件快照 |
 
 通过 `exec` 执行一次独立命令，不拼接 shell 操作、不直接执行 Python 业务模块：
 
 ```text
-lxeskill replenish final-restock generate --store-name "<完整店铺名>" --msku-source-xlsx-path "<源文件路径>" --shenzhen-inventory-report-xlsx-path "<深圳报告路径>" --shenzhen-source-msku-xlsx-path "<深圳导出关联源路径>" --unlinked-shipments-snapshot-path "<货件快照路径>"
+lxeskill replenish final-restock generate --store-name "<完整店铺名>" --msku-source-xlsx-path "<源文件路径>" --shenzhen-inventory-report-xlsx-path "<深圳报告路径>" --unlinked-shipments-snapshot-path "<货件快照路径>"
 ```
 
 - 只把最后一条 `type="result"` 当作 terminal：先看 `ok`，业务数据读 `data`，附件读 `files`。运行中/session running 时等待原会话，不重新启动命令。
