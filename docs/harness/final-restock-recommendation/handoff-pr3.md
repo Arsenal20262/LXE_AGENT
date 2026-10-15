@@ -165,3 +165,9 @@ UV_CACHE_DIR=/private/tmp/lxe-final-restock-uv-cache uv run --frozen --no-sync l
 - 本轮仅修改新 Skill、`test_final_restock_skill.py` 和本 handoff：模型可见输入明确要求 MSKU XLSX 含 `uq122` 导出的“本地库存”；AG 允许有限负数并区分 0/空白，AH 使用同源深圳报告组合编码并保留源表回退。未绑定 MSKU 保留原始行、销量及 I/J/R/S 公式，U–AC 九列建议为空；已绑定行仍有原 13 列公式。CLI 参数仍是店铺名加三个文件，不接入 pool-7 的自动取数、Cookie 或 searchToken。
 - 新 Skill 契约 **14 passed**，包括 CLI 对缺少“本地库存”列的真实错误传播和 Skill 规则文本。正式工作区 Python 定向与相关回归 **566 passed、4 skipped、4 warnings**；四项跳过均为 Windows 专属，warning 为既有 aiohttp 弃用提示。首次沙箱运行有 59 项因本机 `127.0.0.1` 模拟服务器绑定被拒而失败，随后在允许本机监听的环境完整重跑并通过，不将首次结果当作代码缺陷。Bun 命令/Skill **25 passed、177 assertions**；Mock Runtime Skill 加载 **8 passed、97 filtered out、78 assertions**。CLI doctor/help 均 `ok=true`，help 只有四项输入；解释器和服务模块路径均属于 pool-6 自身 `.venv` / 源码。
 - 本次契约修订恰为上述三个文件，提交前已检查完整 diff、`git diff --check`、相对 PR2 的 10 文件独立差异与 pool-4 / pool-7 状态；本地提交号以本分支 `git log -1` 为准。pool-7 后续须先备份当前提交及未提交 patch（含未跟踪样本）并核验可恢复性，再在单独授权下同步新 PR3 基线，不能直接对脏工作区 rebase。T 列货件状态边界、真实模型选择、全量测试、build/typecheck、Microsoft Excel 原生重算及继承修复后的真实业务交付均为 **NOT VERIFIED**。旧导航文档的 P3 文案项仍待另行处理；未发现新增阻塞性代码问题。本轮未调用生产 ERP、push 或 merge。
+
+## 2026-10-15 继承 PR2 审计修复的交接
+
+- 同步前 pool-6 HEAD 为 `82f4f7a0`，工作区有 PR2 修复的服务、测试、PR2 handoff 镜像及本 handoff，暂存区和未跟踪文件均为空。HEAD 恢复引用为 `refs/backup/pool6-before-pr2-31076964-20261015`；工作区补丁、逐文件副本、状态与已有 stash 清单存于 `/private/tmp/final-restock-pr2-sync-70ef2uz5/pool-6`，已校验可恢复。远端没有对应分支、当前提交或 PR。
+- 清除已备份的重复工作区镜像后，从旧 PR2 `ef11bbf1` 将 PR3 的五个自属提交重放到 PR2 修复 `31076964`；无冲突，新 HEAD 为 `26d0d9ac`。`range-diff` 五项均相同；相对新 PR2 的已提交差异仍为原 10 个 PR3 文件，未重复提交 PR2 最终表服务、测试或 handoff。本 handoff 的自属未提交修改已恢复，其他工作区差异为零。
+- 同步后 Python 最终表、来源核验及 Skill 定向测试 **92 passed**；Bun 命令/Skill 契约 **25 passed**；Mock Runtime Skill 加载/激活 **8 passed、97 filtered out**。`git diff --check` 通过；基线同步阶段未调用生产 ERP、未新增功能修复 Commit 或修改 pool-4。pool-7 已继承上述代码基线；本 handoff 文档提交后仍需让 pool-7 继承最新 PR3 HEAD。
