@@ -14,6 +14,7 @@ from typing import Any
 
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Border, Font, PatternFill
+from openpyxl.utils import column_index_from_string
 from openpyxl.workbook.properties import CalcProperties
 
 from services.mabang.amazon.fba.final_restock_recommendation import final_restock_formulas
@@ -74,6 +75,7 @@ OUTPUT_SOURCE_COLUMNS = {
     "调仓中": "运营中心处理中",
 }
 FORMULA_COLUMNS = tuple(final_restock_formulas(2))
+ADVICE_FORMULA_COLUMNS = frozenset(("U", "V", "W", "X", "Y", "Z", "AA", "AB", "AC"))
 EXCEL_ERROR_VALUES = {
     "#NULL!", "#DIV/0!", "#VALUE!", "#REF!", "#NAME?", "#NUM!", "#N/A", "#GETTING_DATA",
 }
@@ -311,7 +313,10 @@ def _rows_for_workbook(
                 record.get(source_column), row_number=source_row_number, column=source_column
             )
         raw_weight = record.get("单品重量(g)(cm)")
-        parsed_weight = parse_weight_grams(raw_weight)
+        parsed_weight = (
+            0 if isinstance(raw_weight, (int, float)) and not isinstance(raw_weight, bool) and raw_weight == 0
+            else parse_weight_grams(raw_weight)
+        )
         if _text(raw_weight) and parsed_weight is None:
             raise FinalRestockWorkbookError(
                 f"MSKU 源表第 {source_row_number} 行 单品重量(g)(cm) 无法解析为克数: {raw_weight!r}"
@@ -324,6 +329,7 @@ def _rows_for_workbook(
             allow_negative=True,
         )
         out["本地SKU"] = report_local_sku or _text(record.get("本地SKU"))
+        out["_has_source_local_sku"] = bool(normalize_sku_key(record.get("本地SKU")))
         result.append(out)
     return result
 
@@ -336,6 +342,8 @@ def _write_workbook(path: Path, rows: list[dict[str, Any]]) -> None:
     for row_index, row in enumerate(rows, start=2):
         worksheet.append([row.get(header) for header in HEADERS])
         for column, formula in final_restock_formulas(row_index).items():
+            if not row["_has_source_local_sku"] and column in ADVICE_FORMULA_COLUMNS:
+                continue  # Keep the unbound source row, but do not publish transport or restock advice.
             worksheet[f"{column}{row_index}"] = formula
     for row in worksheet.iter_rows():
         for cell in row:
@@ -384,17 +392,23 @@ def _recalculate(source: Path, output: Path) -> None:
         )
 
 
-def _inspect_recalculated(path: Path, *, expected_rows: int) -> tuple[int, tuple[str, ...]]:
+def _inspect_recalculated(path: Path, *, rows: list[dict[str, Any]]) -> tuple[int, tuple[str, ...]]:
     formulas = load_workbook(path, read_only=True, data_only=False)
     values = load_workbook(path, read_only=True, data_only=True)
     try:
+        expected_rows = len(rows)
         if formulas.sheetnames != [WORKSHEET_NAME] or values.sheetnames != [WORKSHEET_NAME]:
             raise FinalRestockWorkbookError(
                 f"重算后工作表结构错误: {formulas.sheetnames!r}"
             )
         formula_sheet = formulas[WORKSHEET_NAME]
         value_sheet = values[WORKSHEET_NAME]
-        if formula_sheet.max_column != len(HEADERS) or formula_sheet.max_row != expected_rows + 1:
+        if (
+            formula_sheet.max_column != len(HEADERS)
+            or formula_sheet.max_row != expected_rows + 1
+            or value_sheet.max_column != len(HEADERS)
+            or value_sheet.max_row != expected_rows + 1
+        ):
             raise FinalRestockWorkbookError(
                 "重算后工作簿行列数量与源表不一致: "
                 f"actual={formula_sheet.max_row}x{formula_sheet.max_column}, "
@@ -402,21 +416,28 @@ def _inspect_recalculated(path: Path, *, expected_rows: int) -> tuple[int, tuple
             )
         error_count = 0
         examples: list[str] = []
-        formula_rows = range(2, expected_rows + 2)
-        for row_number in formula_rows:
-            trend_value = value_sheet[f"I{row_number}"].value
-            if trend_value is None:
-                raise FinalRestockWorkbookError(
-                    f"Office 重算后 I{row_number} 没有公式结果，不能确认重算已执行"
-                )
-            for column in FORMULA_COLUMNS:
-                formula = formula_sheet[f"{column}{row_number}"].value
-                if not isinstance(formula, str) or not formula.startswith("="):
+        formula_indexes = {column: column_index_from_string(column) - 1 for column in FORMULA_COLUMNS}
+        for row_number, (formula_row, value_row) in enumerate(
+            zip(formula_sheet.iter_rows(), value_sheet.iter_rows(), strict=True), start=1
+        ):
+            if row_number > 1:
+                if value_row[8].value is None:
                     raise FinalRestockWorkbookError(
-                        f"重算后公式丢失或改变为非公式单元格: {column}{row_number}={formula!r}"
+                        f"Office 重算后 I{row_number} 没有公式结果，不能确认重算已执行"
                     )
-        for row in value_sheet.iter_rows():
-            for cell in row:
+                for column, index in formula_indexes.items():
+                    formula = formula_row[index].value
+                    if not rows[row_number - 2]["_has_source_local_sku"] and column in ADVICE_FORMULA_COLUMNS:
+                        if formula not in (None, "") or value_row[index].value not in (None, ""):
+                            raise FinalRestockWorkbookError(
+                                f"缺少本地SKU的 MSKU 重算后仍有运输或补货建议: {column}{row_number}"
+                            )
+                        continue
+                    if not isinstance(formula, str) or not formula.startswith("="):
+                        raise FinalRestockWorkbookError(
+                            f"重算后公式丢失或改变为非公式单元格: {column}{row_number}={formula!r}"
+                        )
+            for cell in value_row:
                 value = cell.value
                 if cell.data_type == "e" or (isinstance(value, str) and value in EXCEL_ERROR_VALUES):
                     error_count += 1
@@ -493,7 +514,7 @@ def generate_final_restock_recommendation(
         _recalculate(formula_path, recalculated_path)
         formula_error_count, formula_error_examples = _inspect_recalculated(
             recalculated_path,
-            expected_rows=len(rows),
+            rows=rows,
         )
         os.replace(recalculated_path, output_path)
 

@@ -141,11 +141,15 @@ def _generate(tmp_path: Path, *, source_path: Path | None = None, inventory_path
     )
 
 
-def test_generates_all_source_rows_without_formula_errors(tmp_path: Path) -> None:
+@pytest.mark.parametrize("unbound_sales", [0, 7])
+def test_generates_all_source_rows_without_formula_errors(tmp_path: Path, unbound_sales: int) -> None:
     if not os.environ.get("LXE_OFFICE_NODE"):
         pytest.skip("LXE Office runtime is not configured; recalculation remains NOT VERIFIED")
-    source_path = _write_source(tmp_path / "202610131000-Amazon-Test_店铺MSKU数据.xlsx")
-    inventory_path = _write_inventory_report(tmp_path / "inventory.xlsx", source_path)
+    source_rows = _source_rows()
+    for column, days in (("7天销量", 7), ("14天销量", 14), ("30天销量", 30), ("90天销量", 90)):
+        source_rows[3][column] = unbound_sales * days // 7
+    source_path = _write_source(tmp_path / "202610131000-Amazon-Test_店铺MSKU数据.xlsx", source_rows)
+    inventory_path = _write_inventory_report(tmp_path / "inventory.xlsx", source_path, source_rows)
     snapshot_path = _write_confirmed_empty_snapshot(tmp_path / "snapshots")
     # Moving an unchanged, verified source must preserve the report association.
     moved_source = tmp_path / "moved" / source_path.name
@@ -189,10 +193,11 @@ def test_generates_all_source_rows_without_formula_errors(tmp_path: Path) -> Non
         assert all(sheet.cell(2, col).font.name == "Calibri" for col in range(1, 35))
         assert all(not sheet.cell(2, col).font.bold for col in range(1, 35))
 
-        formula_columns = tuple(final_restock_formulas(2))
         for row_number in range(2, 6):
             expected = final_restock_formulas(row_number)
-            assert {column: sheet[f"{column}{row_number}"].value for column in formula_columns} == expected
+            if row_number == 5:
+                expected = {column: formula for column, formula in expected.items() if column in ("I", "J", "R", "S")}
+            assert {column: sheet[f"{column}{row_number}"].value for column in expected} == expected
         assert [sheet.cell(row, 2).value for row in range(2, 6)] == ["SEA-1", "CLEAR-1", "COMBO-1", "UNBOUND-1"]
         assert [sheet.cell(row, 1).value for row in range(2, 6)] == [STORE] * 4
         assert sheet["N2"].value == 17
@@ -206,6 +211,11 @@ def test_generates_all_source_rows_without_formula_errors(tmp_path: Path) -> Non
         assert cached["S2"].value == pytest.approx(80)
         assert cached["AC2"].value == pytest.approx(cached["AB2"].value * cached["AD2"].value)
         assert cached["AC3"].value is None  # Clearance quantity is formula-empty.
+        assert sheet["E5"].value == unbound_sales  # Keep the unbound row and its original sales.
+        assert sheet["AH5"].value is None
+        for column in ("U", "V", "W", "X", "Y", "Z", "AA", "AB", "AC"):
+            assert sheet[f"{column}5"].value is None
+            assert cached[f"{column}5"].value is None
     finally:
         formulas.close()
         values.close()
@@ -259,14 +269,55 @@ def test_workbook_layout_mapping_and_pr1_formulas_before_office(tmp_path: Path) 
         assert all(not sheet.cell(2, column).font.bold for column in range(1, 35))
         for row_number in range(2, len(rows) + 2):
             expected = final_restock_formulas(row_number)
+            if row_number == 5:
+                expected = {column: formula for column, formula in expected.items() if column in ("I", "J", "R", "S")}
             actual = {
                 column: sheet[f"{column}{row_number}"].value
                 for column in expected
             }
             assert actual == expected
+        assert all(sheet[f"{column}5"].value is None for column in ("U", "V", "W", "X", "Y", "Z", "AA", "AB", "AC"))
         assert [sheet.cell(row, 2).value for row in range(2, 6)] == ["SEA-1", "CLEAR-1", "COMBO-1", "UNBOUND-1"]
         assert [sheet.cell(1, column).value for column in range(1, 35)][29] == "单件重量"
         assert sheet["AD2"].value == 50  # Header changes; numeric values remain grams.
+    finally:
+        workbook.close()
+
+
+@pytest.mark.parametrize("unbound_sales", [0, 7])
+def test_unbound_rows_keep_source_data_without_advice_formulas(
+    tmp_path: Path, unbound_sales: int,
+) -> None:
+    source_rows = _source_rows()
+    for column, days in (("7天销量", 7), ("14天销量", 14), ("30天销量", 30), ("90天销量", 90)):
+        source_rows[3][column] = unbound_sales * days // 7
+    source_path = _write_source(tmp_path / "202610131000-Amazon-Test_店铺MSKU数据.xlsx", source_rows)
+    report_path = _write_inventory_report(tmp_path / "inventory.xlsx", source_path, source_rows)
+    verified = source_verification.load_verified_source(source_path, store_name=STORE)
+    _, source_by_key = final_workbook._unique_source_rows(verified.records)
+    mapped = final_workbook._rows_for_workbook(
+        verified.records,
+        store_name=STORE,
+        inventory_by_key=final_workbook._load_shenzhen_rows(report_path, expected_keys=set(source_by_key)),
+        shipment_by_key={},
+    )
+    workbook_path = tmp_path / "formulas.xlsx"
+    final_workbook._write_workbook(workbook_path, mapped)
+    workbook = load_workbook(workbook_path, read_only=True, data_only=False)
+    try:
+        sheet = workbook["mskulist"]
+        assert sheet.max_row == 5
+        assert sheet.max_column == 34
+        assert sheet["E5"].value == unbound_sales
+        assert sheet["AH5"].value is None
+        assert all(sheet[f"{column}5"].value is None for column in ("U", "V", "W", "X", "Y", "Z", "AA", "AB", "AC"))
+        for row_number in (2, 3, 4):
+            assert {
+                column: sheet[f"{column}{row_number}"].value
+                for column in final_restock_formulas(row_number)
+            } == final_restock_formulas(row_number)
+        for column in ("I", "J", "R", "S"):
+            assert sheet[f"{column}5"].value == final_restock_formulas(5)[column]
     finally:
         workbook.close()
 
@@ -447,6 +498,28 @@ def test_missing_required_source_number_is_not_converted_to_zero(tmp_path: Path)
 
     with pytest.raises(FinalRestockWorkbookError, match="可售"):
         _generate(tmp_path, source_path=source_path, inventory_path=report, snapshot_path=snapshot)
+
+
+def test_explicit_zero_weight_is_preserved_without_accepting_invalid_weight(tmp_path: Path) -> None:
+    rows = _source_rows()
+    rows[0]["单品重量(g)(cm)"] = 0
+    source_path = _write_source(tmp_path / "202610131000-Amazon-Test_店铺MSKU数据.xlsx", rows)
+    report = _write_inventory_report(tmp_path / "inventory.xlsx", source_path, rows)
+    verified = source_verification.load_verified_source(source_path, store_name=STORE)
+    _, source_by_key = final_workbook._unique_source_rows(verified.records)
+    mapped = final_workbook._rows_for_workbook(
+        verified.records, store_name=STORE,
+        inventory_by_key=final_workbook._load_shenzhen_rows(report, expected_keys=set(source_by_key)),
+        shipment_by_key={},
+    )
+    assert mapped[0]["单件重量"] == 0
+    rows[0]["单品重量(g)(cm)"] = "invalid"
+    with pytest.raises(FinalRestockWorkbookError, match="无法解析为克数"):
+        final_workbook._rows_for_workbook(
+            rows, store_name=STORE,
+            inventory_by_key=final_workbook._load_shenzhen_rows(report, expected_keys=set(source_by_key)),
+            shipment_by_key={},
+        )
 
 
 def test_snapshot_quantities_map_by_msku_and_orphans_are_rejected(tmp_path: Path) -> None:

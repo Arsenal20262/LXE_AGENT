@@ -132,3 +132,11 @@ uv run --frozen --no-sync pytest python/lxeskill_cli/tests/mabang/test_final_res
 - pool-4 `codex/final-restock-cli` 的本层计算服务要求 MSKU 源表含 Amazon MSKU 列表 `uq122` 导出的“本地库存”。AG 使用该 MSKU 自身的字段，允许有限负数并区分 0 与空白；深圳报告的可用库存仍须为有限数，但不再代替 AG。AH 优先读取深圳报告“本地SKU”组合编码，缺失时回退同轮源表“本地SKU”，不再输出“子SKU”配比文本。
 - 仅修改最终表服务、对应定向测试和本交接文件。店铺、批次、指纹、MSKU 覆盖及其他数量校验保持原契约；34 列和原有 13 列公式不变。PR2 接收已核验的三文件，不负责修改共享 MSKU 导出；默认导出尚不含 `uq122`，下游自动取数集成须按需提供此列。
 - 在 pool-4 自身环境使用 Office Kit 运行最终表、来源核验、PR1 公式和普通备货定向回归：**254 passed，无 skip**。PR3 须同步源表“本地库存”必需列的说明，再由 pool-7 安全继承本层修复。T 列状态边界、Microsoft Excel 原生重算、生产端到端交付仍待验证。
+
+## 2026-10-15 未绑定商品建议保护与零重量输入修复
+
+- 以已核验源表的本地 SKU 是否为空判断是否绑定：全部 MSKU 和原始销量保留。未绑定行仅保留 I/J/R/S 分析公式，U:AC 九列运输和补货建议留空；正常绑定行仍使用原有 13 列公式。该例外与旧运营样表“全行均有 13 列公式”不同，Review 时必须明确说明。
+- 同轮真实源表的 24 条未绑定商品重量均为数值 0；原有重量解析器将 0 返回空而拦截生成。本层仅把数值 0 保留为 0，仍拒绝无效重量，不改共享解析器或普通备货。重算校验会确认未绑定行建议单元格及缓存均为空。
+- 本次仍仅修改 `final_restock_workbook.py`、`test_final_restock_workbook.py` 和本 handoff；不改 CLI、取数服务、Runtime、13 列公式定义或其他字段。pool-4 自身环境以 Office Kit 运行最终表、来源核验、PR1 公式及普通备货定向回归：**258 passed，无 skip**。
+- 只读使用 pool-7 已保存的同轮三份真实输入在 pool-4 离线生成 `/private/tmp/pool4-pr2-port-check/20261015Amazon-Yihaiqian-US补货最新.xlsx`；未写入 pool-7、未连接 ERP。输出可读：**2002 行、34 列**，AG/AH 各 **2002/2002** 匹配；1978 条绑定行各 13 列公式，24 条未绑定行各 I/J/R/S，U:AC 共 216 格为空，合计 **25810 个公式**；24 个零重量为 0，缓存 Excel 错误 0。历史全行公式记录不适用于当前保护后的文件。
+- PR2 仍为三文件离线计算入口；默认 MSKU 导出不含 `uq122`，下游自动取数需按需提供。PR3 再安全同步本层接口及未绑定公式例外，pool-7 随后继承，避免重复提交。本轮未调用生产 ERP；T 列货件状态边界、Microsoft Excel 原生重算、保护后的 Desktop 附件交付及全量测试/build/typecheck 为 **NOT VERIFIED**。
