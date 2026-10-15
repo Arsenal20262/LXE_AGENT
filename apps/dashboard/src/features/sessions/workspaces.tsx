@@ -37,7 +37,7 @@ function WorkspaceGroup({ workspace, label, active, props, onActions }: {
   const query = useSessionsInfiniteQuery("", props.enabled && expanded, workspace.directory);
   const sessions = flattenSessionPages(query.data?.pages);
   const statuses = useSessionStatus(sessions.items.map(item => item.session_id), props.enabled && expanded, props.display, false);
-  return <section data-workspace-directory={workspace.directory} className={active ? "workspace-group is-active" : "workspace-group"}>
+  return <section data-workspace-directory={workspace.directory} className="workspace-group">
     <div className="workspace-group-header">
       <button type="button" className="workspace-group-toggle" aria-expanded={expanded} title={workspace.directory} onClick={() => props.onExpandedChange(workspace.directory, !expanded)}>
         {expanded ? <FolderOpen size={17} /> : <Folder size={17} />}
