@@ -28,6 +28,8 @@ commands:
 lxeskill mabang store msku export --store-id "<ID>" --id-type "<fbaWarehouseIds[]|shopId>" --store-name "<规范店铺名>"
 ```
 
+独立“最终备货建议”需要马帮 Amazon MSKU 列表的“本地库存”时，在上述命令后加 `--include-local-inventory`；普通备货及单步导出沿用默认列。若请求该列但导出文件没有该列，命令报错，不使用深圳库存数量代替。
+
 ## 结果与下一步
 
 - CLI 保留网页下载和 XLSX 转换，随后按 XLSX 本地 SKU 去重，批量查询官方库存 SKU 接口（每批最多 50 个），未命中项再逐个查组合明细；不请求 Listing；只有全部成功才发布源表。后续只使用 `data.xlsx_path`。

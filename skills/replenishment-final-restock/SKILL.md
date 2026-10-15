@@ -22,11 +22,12 @@ commands:
 | 顺序 | 现有 Skill 与命令 | 本轮必须保留的字段 |
 |---|---|---|
 | 1 | `replenishment-store-resolve`：`lxeskill replenish store resolve --store-name "<用户店铺名>"` | `data.store_name`、`store_id`、`id_type`；有歧义时请用户选择真实候选 |
-| 2 | `mabang-store-msku-export`：`lxeskill mabang store msku export --store-id "<store_id>" --id-type "<id_type>" --store-name "<规范店铺名>"` | `data.xlsx_path`（本轮 MSKU 源表）、`store_name` |
+| 2 | `mabang-store-msku-export`：`lxeskill mabang store msku export --store-id "<store_id>" --id-type "<id_type>" --store-name "<规范店铺名>" --include-local-inventory` | `data.xlsx_path`（含马帮 Amazon MSKU 列表“本地库存”的本轮源表）、`store_name` |
 | 3 | `mabang-store-shenzhen-inventory-export`：`lxeskill mabang store shenzhen-inventory export --store-name "<规范店铺名>"` | `data.shenzhen_warehouse_inventory_report_xlsx_path`、`source_msku_xlsx_path`、`source_msku_data_time` |
 | 4 | `mabang-store-unlinked-shipments-export`：`lxeskill mabang store unlinked-shipments export --store-name "<规范店铺名>"` | `data.snapshot.snapshot_xlsx_path`、布尔值 `confirmed_empty`、三个完整状态结果 |
 
 - 步骤 2 返回的店铺名须与规范店铺名一致。**在调用步骤 4 之前**核对：步骤 3 的 `source_msku_xlsx_path` 必须指向步骤 2 本轮返回的 `xlsx_path`；不一致就结束本轮，不得继续取货件或调用最终计算。库存导出自身会查找该店铺本地最新源表；即使时间相近也不能拿旧文件继续计算或手改路径。底层计算仍会核验文件指纹、店铺、批次、快照及 MSKU 覆盖。
+- 最终表 AG“本地库存”读取步骤 2 源表中每个 MSKU 自身的“本地库存”，包括组合 MSKU；步骤 3 报告继续用于同源、覆盖和子 SKU 核验，不以其库存数量代替 AG。源表缺少该列时停止，不回退到深圳库存“可用库存量”或历史文件。
 - 步骤 4 只有三个状态完整成功且快照存在才可继续；`confirmed_empty=true` 是有效空快照，查询失败或缺快照不能当作零货件。不要再运行旧销量分析或 `replenish calculate`。
 - 认证恢复仅按所读取业务 Skill 的真实 `data.auth_refresh_required=true` 规则执行；没有授权、接口失败、同源不一致或跨日不兼容时停止，说明已完成步骤和实际错误，不回退历史文件或伪造数据。
 - 深圳库存返回 `ok=false` 且 `data.auth_refresh_required=false` 或缺失时，本轮立即结束；包括“查询条件已被新的搜索覆盖”或返回 HTML 错误页。不得等待后重复导出、改写命令重试或刷新认证，也不得继续货件查询和最终计算。说明阻塞并保留本轮已取得源表，不要求用户自行准备三个文件；只有用户明确要求恢复且失败条件已解决时才重新执行。

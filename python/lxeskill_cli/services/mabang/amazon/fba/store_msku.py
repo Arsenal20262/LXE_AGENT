@@ -340,7 +340,9 @@ def _ids_lines(ids: list[str]) -> str:
     return "\r\n".join(ids)
 
 
-def _step2_form_data(ids: list[str], *, memcache_key: str) -> list[tuple[str, str]]:
+def _step2_form_data(
+    ids: list[str], *, memcache_key: str, include_local_inventory: bool = False,
+) -> list[tuple[str, str]]:
     clean_ids = [_clean_text(item) for item in ids if _clean_text(item)]
     if not clean_ids:
         raise ValueError("id 不能为空")
@@ -349,8 +351,13 @@ def _step2_form_data(ids: list[str], *, memcache_key: str) -> list[tuple[str, st
         ("backUrl", ""),
         ("orderIds", _ids_lines(clean_ids)),
     ]
-    form.extend(("fieldlabel", uq) for uq in STORE_MSKU_FIELDLABELS)
-    for name, uq, map_text in STORE_MSKU_EXPORT_FIELD_DEFS:
+    fieldlabels = (*STORE_MSKU_FIELDLABELS, "uq122") if include_local_inventory else STORE_MSKU_FIELDLABELS
+    fields = (
+        (*STORE_MSKU_EXPORT_FIELD_DEFS, ("本地库存", "uq122", ""))
+        if include_local_inventory else STORE_MSKU_EXPORT_FIELD_DEFS
+    )
+    form.extend(("fieldlabel", uq) for uq in fieldlabels)
+    for name, uq, map_text in fields:
         form.extend(
             [
                 ("map-name[]", name),
@@ -389,6 +396,8 @@ def parse_store_msku_export_gourl(payload: dict[str, Any]) -> str:
 
 async def export_store_msku_file_url(
     ids: list[str],
+    *,
+    include_local_inventory: bool = False,
 ) -> str:
     auth = await resolve_store_msku_auth()
     headers = _request_headers(
@@ -398,7 +407,7 @@ async def export_store_msku_file_url(
     )
     async with erp_http_session.post(
         _fba_export_url(),
-        data=_step2_form_data(ids, memcache_key=auth.memcache_key),
+        data=_step2_form_data(ids, memcache_key=auth.memcache_key, include_local_inventory=include_local_inventory),
         headers=headers,
     ) as resp:
         payload = await _read_store_msku_json(resp, action="店铺MSKU导出")
@@ -495,7 +504,9 @@ def normalize_store_msku_excel(excel_path: str | Path) -> tuple[Path, bool, bool
     raise StoreMskuDownloadError(f"不支持的店铺MSKU数据文件格式: {source_path.suffix}")
 
 
-def validate_store_msku_excel_headers(excel_path: str | Path) -> None:
+def validate_store_msku_excel_headers(
+    excel_path: str | Path, *, include_local_inventory: bool = False,
+) -> None:
     source_path = Path(excel_path).expanduser()
     if not source_path.is_file():
         raise FileNotFoundError(f"店铺MSKU数据Excel不存在: {source_path}")
@@ -520,7 +531,8 @@ def validate_store_msku_excel_headers(excel_path: str | Path) -> None:
         except Exception:
             pass
 
-    missing = [column for column in CORE_STORE_MSKU_HEADERS if column not in columns]
+    required = (*CORE_STORE_MSKU_HEADERS, "本地库存") if include_local_inventory else CORE_STORE_MSKU_HEADERS
+    missing = [column for column in required if column not in columns]
     if missing:
         raise StoreMskuDownloadError(f"店铺MSKU数据Excel缺少列: {', '.join(missing)}")
 
@@ -531,6 +543,7 @@ async def download_store_msku_excel(
     *,
     store_name: str = "",
     output_dir: str | Path | None = None,
+    include_local_inventory: bool = False,
 ) -> StoreMskuExcelResult:
     clean_store_id = normalize_store_id(store_id)
     clean_id_type = normalize_id_type(id_type)
@@ -538,7 +551,7 @@ async def download_store_msku_excel(
 
     def transform_result(ids: list[str], excel_path: Path) -> StoreMskuExcelResult:
         xlsx_path, converted, raw_excel_deleted = normalize_store_msku_excel(excel_path)
-        validate_store_msku_excel_headers(xlsx_path)
+        validate_store_msku_excel_headers(xlsx_path, include_local_inventory=include_local_inventory)
         return StoreMskuExcelResult(
             store_name=clean_store_name,
             store_id=clean_store_id,
@@ -554,7 +567,10 @@ async def download_store_msku_excel(
             ExportPipelineSpec(
                 fetch_ids=fetch_store_msku_ids,
                 fetch_args=(clean_store_id, clean_id_type),
-                request_file_url=export_store_msku_file_url,
+                request_file_url=(
+                    partial(export_store_msku_file_url, include_local_inventory=True)
+                    if include_local_inventory else export_store_msku_file_url
+                ),
                 download_file=partial(
                     download_store_msku_excel_from_url,
                     store_id=clean_store_id,

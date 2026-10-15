@@ -230,6 +230,31 @@ def test_export_store_msku_file_url_posts_full_export_form(monkeypatch) -> None:
     assert _form_value(call, "isMerage") == "2"
 
 
+def test_export_store_msku_file_url_can_opt_in_to_native_local_inventory(monkeypatch) -> None:
+    fake_session = _FakeSession([_FakeResponse({"success": True, "gourl": "https://upload.example.test/a.xls"})])
+    monkeypatch.setattr(msku, "erp_http_session", fake_session)
+    monkeypatch.setattr(msku, "resolve_store_msku_auth", _fake_resolved_auth)
+
+    asyncio.run(msku.export_store_msku_file_url(["719829"], include_local_inventory=True))
+
+    call = fake_session.calls[0]
+    assert _form_values(call, "fieldlabel") == [*msku.STORE_MSKU_FIELDLABELS, "uq122"]
+    assert _form_values(call, "map-name[]") == [
+        *(name for name, _ in msku.STORE_MSKU_EXPORT_FIELDS), "本地库存",
+    ]
+    assert _form_values(call, "map-uq[]") == [
+        *(uq for _, uq in msku.STORE_MSKU_EXPORT_FIELDS), "uq122",
+    ]
+    assert _form_values(call, "map-text[]")[-1] == ""
+
+
+def test_native_local_inventory_opt_in_requires_exported_column(tmp_path: Path) -> None:
+    path = _write_xlsx(tmp_path / "source.xlsx", columns=list(msku.CORE_STORE_MSKU_HEADERS))
+    msku.validate_store_msku_excel_headers(path)
+    with pytest.raises(msku.StoreMskuDownloadError, match="缺少列: 本地库存"):
+        msku.validate_store_msku_excel_headers(path, include_local_inventory=True)
+
+
 def _mock_active_shop(monkeypatch):
     from services.mabang.amazon.fba.store_resolver import FbaStore
     from services.mabang.amazon.fba.sku_catalog import SkuCatalogSnapshot
@@ -279,6 +304,57 @@ def test_download_store_msku_excel_downloads_xlsx(monkeypatch, tmp_path) -> None
     assert Path(result.xlsx_path).is_file()
     assert len([call for call in fake_session.calls if call["method"] == "POST"]) == 2
     assert len([call for call in fake_session.calls if call["method"] == "GET"]) == 1
+
+
+def test_opt_in_export_publishes_verified_native_local_inventory(monkeypatch, tmp_path) -> None:
+    from services.mabang.amazon.fba.source_verification import load_verified_source
+
+    _mock_active_shop(monkeypatch)
+    fake_session = _FakeSession([
+        _FakeResponse({"success": True, "id": "1001"}),
+        _FakeResponse({"success": True, "gourl": "https://upload.example.test/store.xlsx"}),
+        _FakeResponse(body=_xlsx_bytes(
+            [{"店铺名称": "Amazon-Lerxiuer-FR", "MSKU": "COMBO-1", "本地库存": 7}],
+            columns=["店铺名称", "MSKU", "ASIN", "本地SKU", "本地库存"],
+        )),
+    ])
+    monkeypatch.setattr(msku, "get_auth_context", _fake_auth_context)
+    monkeypatch.setattr(msku, "erp_http_session", fake_session)
+    monkeypatch.setattr(msku, "external_http_session", fake_session)
+    monkeypatch.setattr(msku, "_timestamp_text", lambda *_args, **_kwargs: "202605251530")
+
+    result = asyncio.run(msku.download_store_msku_excel(
+        "697456821", "shopId", store_name="Amazon-Lerxiuer-FR",
+        output_dir=tmp_path, include_local_inventory=True,
+    ))
+
+    assert result.to_payload()["success"] is True
+    assert _form_values(fake_session.calls[1], "map-uq[]")[-1] == "uq122"
+    verified = load_verified_source(result.xlsx_path, store_name="Amazon-Lerxiuer-FR")
+    assert verified.records[0]["本地库存"] == 7
+
+
+def test_opt_in_export_does_not_publish_when_native_column_is_missing(monkeypatch, tmp_path) -> None:
+    _mock_active_shop(monkeypatch)
+    fake_session = _FakeSession([
+        _FakeResponse({"success": True, "id": "1001"}),
+        _FakeResponse({"success": True, "gourl": "https://upload.example.test/store.xlsx"}),
+        _FakeResponse(body=_xlsx_bytes(
+            [{"店铺名称": "Amazon-Lerxiuer-FR", "MSKU": "M-1"}],
+            columns=["店铺名称", "MSKU", "ASIN", "本地SKU"],
+        )),
+    ])
+    monkeypatch.setattr(msku, "get_auth_context", _fake_auth_context)
+    monkeypatch.setattr(msku, "erp_http_session", fake_session)
+    monkeypatch.setattr(msku, "external_http_session", fake_session)
+    monkeypatch.setattr(msku, "_timestamp_text", lambda *_args, **_kwargs: "202605251530")
+
+    with pytest.raises(msku.StoreMskuDownloadError, match="缺少列: 本地库存"):
+        asyncio.run(msku.download_store_msku_excel(
+            "697456821", "shopId", store_name="Amazon-Lerxiuer-FR",
+            output_dir=tmp_path, include_local_inventory=True,
+        ))
+    assert not list(tmp_path.glob("*_店铺MSKU数据.xlsx"))
 
 
 def test_download_store_msku_excel_requires_store_name() -> None:

@@ -85,6 +85,7 @@ describe("skill context", () => {
     const positions = acquisitionCommands.map((command) => acquisitionSection.indexOf(command));
     expect(positions.every((position) => position >= 0)).toBe(true);
     expect(positions).toEqual([...positions].sort((left, right) => left - right));
+    expect(acquisitionSection).toContain("--include-local-inventory");
     expect(finalPolicy).toContain("lxeskill replenish final-restock generate --store-name");
     expect(finalPolicy).toContain("步骤 3 的 `source_msku_xlsx_path` 必须指向步骤 2 本轮返回的 `xlsx_path`");
     expect(finalPolicy).toContain("ok=false");

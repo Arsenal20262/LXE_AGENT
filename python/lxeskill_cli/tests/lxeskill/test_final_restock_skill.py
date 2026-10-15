@@ -76,6 +76,15 @@ def test_store_only_acquisition_reuses_exposed_existing_commands(name, owner, fi
     assert fields <= set(entry["input_schema"]["properties"])
 
 
+def test_final_restock_opts_in_to_native_msku_local_inventory() -> None:
+    entry = load_catalog()["mabang_download_store_msku_excel"]
+    assert entry["input_schema"]["properties"]["include_local_inventory"]["type"] == "boolean"
+    skill = (Path(__file__).resolve().parents[4] / "skills" / SKILL / "SKILL.md").read_text(encoding="utf-8")
+    assert 'lxeskill mabang store msku export --store-id' in skill
+    assert '--include-local-inventory' in skill
+    assert '步骤 2 源表中每个 MSKU 自身的“本地库存”' in skill
+
+
 @pytest.mark.parametrize("scope,command", [
     ("replenishment-calculate", COMMAND),
     (SKILL, ["replenish", "calculate"]),
