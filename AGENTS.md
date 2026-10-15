@@ -23,12 +23,6 @@ When you receive an instruction:
 2. If the instruction is ambiguous, ask for clarification.
 3. Otherwise, carry out the instruction.
 
-## 默认前端设计 Skill
-
-- 新建或改造网页、桌面应用界面、HTML 报告及其他前端视觉与交互时，默认先读取并使用 [frontend-design](.agents/skills/frontend-design/SKILL.md)，无需用户再次点名。
-- 修改已有界面时，优先沿用项目现有设计系统与交互惯例；用户明确指定的风格和需求优先。
-- 纯后端、数据处理及不涉及界面设计的任务不加载此 skill。
-
 ## 工具链
 
 - Python 一律用 `uv`（禁 pip），JS 一律用 `bun`（禁 npm/yarn）；安装带 `--frozen`，不要动 lockfile 之外的版本。
