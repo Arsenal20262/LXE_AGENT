@@ -10,7 +10,7 @@ from openpyxl import Workbook
 from lxeskill import cli as lxeskill
 from lxeskill.business import load_catalog
 from services.agent_cli.mabang import generate_final_restock_recommendation as adapter
-from services.mabang.amazon.fba.final_restock_workbook import FinalRestockWorkbookResult
+from services.mabang.amazon.fba.final_restock_workbook import FinalRestockWorkbookResult, SOURCE_REQUIRED_COLUMNS
 from services.mabang.amazon.fba.sku_catalog import LocalSkuDefinition, SkuCatalogSnapshot
 from services.mabang.amazon.fba.source_verification import annotate_source
 
@@ -103,6 +103,40 @@ def test_removed_source_path_flag_is_rejected_in_the_new_skill_scope(capsys) -> 
     assert terminal["error"]["code"] == "invalid_arguments"
     assert terminal["error"]["message"] == "unknown option: --shenzhen-source-msku-xlsx-path"
     assert terminal["files"] == []
+
+
+def test_source_without_native_local_inventory_is_rejected_by_cli(tmp_path: Path, capsys) -> None:
+    source = tmp_path / "202610151000-Amazon-Test_店铺MSKU数据.xlsx"
+    workbook = Workbook()
+    columns = [column for column in SOURCE_REQUIRED_COLUMNS if column != "本地库存"]
+    workbook.active.append(columns)
+    workbook.active.append([
+        "MSKU-1" if column == "MSKU" else "SKU-1" if column == "本地SKU" else 0
+        for column in columns
+    ])
+    workbook.save(source)
+    workbook.close()
+    annotate_source(
+        source,
+        SkuCatalogSnapshot("Amazon-Test", "100", "shopId", (LocalSkuDefinition("SKU-1", 1),)),
+        requested_store_name="Amazon-Test",
+    )
+    inputs = {key: str(source) for key in INPUTS if key != "store_name"}
+    assert lxeskill.main(_args({"store_name": "Amazon-Test", **inputs})) == lxeskill.EXIT_BUSINESS
+    terminal = _terminal(capsys)
+    assert terminal["ok"] is False
+    assert terminal["error"]["code"] == "business_cli_failed"
+    assert "本地库存" in terminal["error"]["message"]
+    assert "缺少列" in terminal["error"]["message"]
+    assert terminal["files"] == []
+
+
+def test_skill_describes_unbound_advice_exception() -> None:
+    skill = (Path(__file__).resolve().parents[4] / "skills" / SKILL / "SKILL.md").read_text()
+    assert "`uq122`" in skill
+    assert "I/J/R/S" in skill
+    assert "U–AC" in skill
+    assert "13 列公式" in skill
 
 
 def test_unknown_store_returns_actual_local_source_mismatch(tmp_path: Path, capsys) -> None:

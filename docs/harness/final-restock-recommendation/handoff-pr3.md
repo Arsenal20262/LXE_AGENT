@@ -5,9 +5,9 @@
 让“最终备货建议”及“将原始备货建议量表转换成新表”进入独立 Skill，使用明确的离线输入调用 PR2 命令；普通备货继续走现有流程。
 
 - 分支：`codex/final-restock-skill`，Pool：`.worktrees/pool-6`。
-- 当前基线：PR2 `37128c3a`，父链含 PR1 `70bc0568`。2026-10-14 按最新授权同步 PR2 参数修复；各层更正归位原分支，早期基线与本次同步前 HEAD 均有备份。
+- 当前基线：PR2 `ef11bbf1`（含 AG/AH 与未绑定商品两个修复），父链含 PR1 `70bc0568`。2026-10-15 已备份旧 PR3 HEAD `63672882` 并仅重放本 PR 的四个提交；较早的参数同步记录保留在下文。
 - 依据：Downloads 中的 `Amazon_%E6%9C%80%E7%BB%88%E5%A4%87%E8%B4%A7%E5%BB%BA%E8%AE%AESkill_%E5%BC%80%E5%8F%91%E6%96%B9%E6%A1%88.md` 的 PR-A；公式以用户确认规则及 PR1 handoff 为准。
-- 2026-10-14 最新授权：在 pool-6 最终审核后，仅将 PR3 自属 Skill、契约测试和本 handoff 三个文件本地提交；不 push、merge、创建远端 PR 或连接生产 ERP。
+- 2026-10-15 基线同步阶段仅更新 PR3 自属 Skill、契约测试和本 handoff，未另行提交；随后获授权将这三个文件收为一个本地契约提交，不 push、merge、创建远端 PR 或连接生产 ERP。
 
 ### 改动文件与职责
 
@@ -157,3 +157,11 @@ UV_CACHE_DIR=/private/tmp/lxe-final-restock-uv-cache uv run --frozen --no-sync l
 - 审核发现并更正本 handoff 当前说明中的旧“五项”文案。另有 **P3 文档 follow-up**：`docs/harness/skill/current_skill_catalog.md:57` 仍写“深圳库存报告及其关联源路径”；该导航文档不是 Runtime Skill 正文，不影响已验证命令，但会误导读者。本轮限定只提交三个文件，因此保留并报告，未擅自修改第四个文件；最小后续更正为删除“及其关联源路径”。没有发现阻塞性代码问题。
 - 本次三个文件以 `fix: align final restock skill with four-input contract` 本地提交，实际提交号以本分支 `git log -1` 为准。PR3 相对 PR2 独立范围仍为 10 个文件：3 个 Skill、1 个 catalog metadata、4 个测试、2 个文档；不包含 PR2 服务、业务测试、公式或上游 handoff 的重复差异。
 - 具备代码 Review 条件，附上述非阻塞 P3 文档项。真实模型选择（缺 DeepSeek API Key）、全量测试、build/typecheck、Windows 原生路径、Microsoft Excel 原生计算、真实完整业务输入与附件交付继续为 **NOT VERIFIED**。未 push、merge、创建远端 PR 或调用生产 ERP。
+
+## 2026-10-15 继承 PR2 两项修复与契约收口
+
+- pool-6 `codex/final-restock-skill` 原 HEAD `63672882`、工作区干净，直接依赖 PR2 旧基线 `37128c3a`。pool-4 最新 HEAD `ef11bbf1`，包含 `75a1556e` AG/AH 映射与 `ef11bbf1` 未绑定保护；pool-7 有独立未提交改动，本轮仅查看其状态，没有清理、覆盖或写入。GitHub 连接查询 PR3 原四个提交均返回未找到，本地无远端跟踪分支；备份分支 `codex/final-restock-skill-before-pr2-fixes-20261015` 保留旧 HEAD `63672882`。
+- 在 pool-6 执行 `git rebase --onto ef11bbf1 37128c3a`，四个 PR3 提交无冲突重放，映射为 `be6f8e22→c4b1d2f2`、`de65576a→ad7e19a1`、`6f496e9e→ea45a3f3`、`63672882→43b07ff7`。`range-diff` 四项完全相同；新 HEAD `43b07ff7` 的直接上游为最新 PR2 `ef11bbf1`。PR3 相对 PR2 仍是原 10 个自属文件，未重复提交 PR2 服务或测试。
+- 本轮仅修改新 Skill、`test_final_restock_skill.py` 和本 handoff：模型可见输入明确要求 MSKU XLSX 含 `uq122` 导出的“本地库存”；AG 允许有限负数并区分 0/空白，AH 使用同源深圳报告组合编码并保留源表回退。未绑定 MSKU 保留原始行、销量及 I/J/R/S 公式，U–AC 九列建议为空；已绑定行仍有原 13 列公式。CLI 参数仍是店铺名加三个文件，不接入 pool-7 的自动取数、Cookie 或 searchToken。
+- 新 Skill 契约 **14 passed**，包括 CLI 对缺少“本地库存”列的真实错误传播和 Skill 规则文本。正式工作区 Python 定向与相关回归 **566 passed、4 skipped、4 warnings**；四项跳过均为 Windows 专属，warning 为既有 aiohttp 弃用提示。首次沙箱运行有 59 项因本机 `127.0.0.1` 模拟服务器绑定被拒而失败，随后在允许本机监听的环境完整重跑并通过，不将首次结果当作代码缺陷。Bun 命令/Skill **25 passed、177 assertions**；Mock Runtime Skill 加载 **8 passed、97 filtered out、78 assertions**。CLI doctor/help 均 `ok=true`，help 只有四项输入；解释器和服务模块路径均属于 pool-6 自身 `.venv` / 源码。
+- 本次契约修订恰为上述三个文件，提交前已检查完整 diff、`git diff --check`、相对 PR2 的 10 文件独立差异与 pool-4 / pool-7 状态；本地提交号以本分支 `git log -1` 为准。pool-7 后续须先备份当前提交及未提交 patch（含未跟踪样本）并核验可恢复性，再在单独授权下同步新 PR3 基线，不能直接对脏工作区 rebase。T 列货件状态边界、真实模型选择、全量测试、build/typecheck、Microsoft Excel 原生重算及继承修复后的真实业务交付均为 **NOT VERIFIED**。旧导航文档的 P3 文案项仍待另行处理；未发现新增阻塞性代码问题。本轮未调用生产 ERP、push 或 merge。
