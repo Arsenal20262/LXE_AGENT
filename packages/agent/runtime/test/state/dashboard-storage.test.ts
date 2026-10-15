@@ -1,16 +1,52 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Database } from "bun:sqlite";
 import type { RuntimeMessage } from "../../src/engine/types";
-import { InvalidTranscriptCursorError, SqliteRuntimeStore } from "../../src/state/storage";
+import { InvalidTranscriptCursorError, SqliteRuntimeStore, transcriptDisplayPage } from "../../src/state/storage";
 import { removeTemporaryRoot } from "../temp-directory";
 import { testWorkspace } from "../workspace";
 
 const roots: string[] = [];
 afterEach(async () => {
   for (const root of roots.splice(0)) await removeTemporaryRoot(root);
+});
+
+test("old compaction events have identical indexed/direct markers without rewriting the transcript", async () => {
+  const root = mkdtempSync(join(tmpdir(), "lxe-compaction-display-")); roots.push(root);
+  const database = join(root, "agent.sqlite3");
+  let store = new SqliteRuntimeStore(database);
+  await store.start();
+  await store.ensureSession({ workspace: testWorkspace, session_id: "s", source: {} });
+  const events = [
+    { kind: "transcript_header", version: 2, session_id: "s", created_at: "x" },
+    { kind: "message", message: { role: "assistant", content: "A" }, ts: 1 },
+    { kind: "context_patch", patch_kind: "compaction", start: 0, delete_count: 0, insert_messages: [], compacted_count: 255, ts: 1 },
+    { kind: "context_patch", patch_kind: "compaction", start: 0, delete_count: 0, insert_messages: [], ts: 1 },
+    { kind: "message", message: { role: "assistant", content: "B" }, ts: 1 },
+    { kind: "context_reset", ts: 1 },
+    { kind: "memory_clear", ts: 1 },
+    { kind: "message", message: { role: "user", content: "[上下文已压缩：9 条消息 → 摘要]", context_marker: { kind: "compaction", compacted_count: 9 } }, ts: 1 },
+  ];
+  const path = join(root, "session_transcripts", "s.jsonl");
+  mkdirSync(join(root, "session_transcripts"), { recursive: true });
+  const original = events.map(event => JSON.stringify(event)).join("\n") + "\n";
+  writeFileSync(path, original);
+  try {
+    const direct = transcriptDisplayPage("s", events, { limit: 20 });
+    const fields = (messages: typeof direct.messages) => messages.map(({ display_id, display_group_id, role, content, context_marker }) => ({ display_id, display_group_id, role, content, context_marker }));
+    const indexed = await store.loadTranscriptDisplayPage("s", { limit: 20 });
+    expect(fields(indexed.messages)).toEqual(fields(direct.messages));
+    expect(indexed.messages.map(message => message.context_marker)).toEqual([
+      undefined, { kind: "compaction", compacted_count: 255 }, { kind: "compaction" }, undefined, undefined, undefined, undefined,
+    ]);
+    const latest = await store.loadTranscriptDisplayPage("s", { limit: 5 });
+    expect(latest.messages[0]?.context_marker).toEqual({ kind: "compaction" });
+    await store.stop(); store = new SqliteRuntimeStore(database); await store.start();
+    expect(fields((await store.loadTranscriptDisplayPage("s", { limit: 20 })).messages)).toEqual(fields(indexed.messages));
+    expect(readFileSync(path, "utf8")).toBe(original);
+  } finally { await store.stop(); }
 });
 
 describe("SqliteRuntimeStore dashboard queries", () => {
@@ -458,6 +494,7 @@ describe("SqliteRuntimeStore dashboard queries", () => {
       expect.objectContaining({
         role: "system",
         content: "[上下文已压缩：2 条消息 → 摘要]",
+        context_marker: { kind: "compaction", compacted_count: 2 },
         display_group_id: expect.any(String),
       }),
       expect.objectContaining({ role: "user", content: "after compaction", display_group_id: expect.any(String) }),

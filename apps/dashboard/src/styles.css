@@ -11390,6 +11390,8 @@ pre {
 
 .image-view-group { min-width: 0; padding: 6px 0; }
 .image-view-summary { display: flex; align-items: center; gap: 8px; color: var(--muted); background: none; border: 0; cursor: pointer; padding: 6px 0 10px; font: inherit; font-size: .75rem; }
+.conversation-compaction-marker { display: flex; align-items: center; gap: 8px; color: var(--muted); padding: 6px 0 10px; font-size: .75rem; }
+.conversation-compaction-marker svg { flex-shrink: 0; }
 .image-view-note { margin: 0; padding: 8px 16px; opacity: .7; font-size: .75rem; }
 
 

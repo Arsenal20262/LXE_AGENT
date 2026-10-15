@@ -93,6 +93,8 @@ export type SessionMessage = {
   client_message_id?: string;
   message_id?: string;
   source_reason?: string;
+  /** Derived from a persisted compaction event, never inferred from message text. */
+  context_marker?: { kind: "compaction"; compacted_count?: number };
   role: string;
   /** Epoch seconds from the immutable transcript event. */
   created_at?: number;

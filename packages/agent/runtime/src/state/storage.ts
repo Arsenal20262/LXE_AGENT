@@ -119,6 +119,7 @@ const publicMessage = (value: JsonObject): JsonObject => {
   delete message.image_views;
   delete message.artifacts;
   delete message.attachments;
+  delete message.context_marker; // Only persisted context events can create timeline markers.
   if (!Array.isArray(message.content)) return message;
   const attachments: JsonObject[] = [];
   const content: JsonValue[] = [];
@@ -229,7 +230,7 @@ const displayPageMetadata = (
   group_cursors: Array.from({ length: end - start }, (_, i) => displayGroupCursor(sessionId, start + i)),
 });
 
-const transcriptDisplayPage = (
+export const transcriptDisplayPage = (
   sessionId: string,
   events: JsonObject[],
   options: DashboardSessionPageOptions,

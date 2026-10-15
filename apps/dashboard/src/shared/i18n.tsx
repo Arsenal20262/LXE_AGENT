@@ -338,6 +338,7 @@ export const ZH_TEXT = {
   },
   conversation: {
     viewedImages: (count: number) => `查看了 ${count} 张图片`,
+    contextCompacted: (count?: number) => count === undefined ? "已压缩上下文" : `已压缩上下文 · ${count} 条消息`,
     currentImageFile: "预览当前文件",
     historicalImage: "预览历史图片",
     newTitle: "新对话",
@@ -1238,6 +1239,7 @@ export const UI_TEXT: Record<Language, UiText> = {
     },
     conversation: {
       viewedImages: (count: number) => `Viewed ${count} image${count === 1 ? "" : "s"}`,
+      contextCompacted: (count?: number) => count === undefined ? "Context compacted" : `Context compacted · ${count} message${count === 1 ? "" : "s"}`,
       currentImageFile: "Preview of current file",
       historicalImage: "Preview of historical image",
       newTitle: "New chat",

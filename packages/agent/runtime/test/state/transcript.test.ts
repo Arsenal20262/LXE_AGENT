@@ -10,6 +10,7 @@ import {
   normalizeTranscriptMessage,
   parseTranscriptText,
   scanTranscriptBuffer,
+  transcriptDisplayMarker,
 } from "../../src/state/transcript";
 import type { RuntimeMessage } from "../../src/engine/types";
 import { testWorkspace } from "../workspace";
@@ -20,6 +21,20 @@ afterEach(() => {
 });
 
 describe("Transcript v2", () => {
+  test("only successful compaction events expose a structured display marker", () => {
+    for (const count of [0, 4, 255]) {
+      expect(transcriptDisplayMarker({ kind: "context_patch", patch_kind: "compaction", compacted_count: count }))
+        .toEqual({ role: "system", content: `[上下文已压缩：${count} 条消息 → 摘要]`, context_marker: { kind: "compaction", compacted_count: count } });
+    }
+    for (const count of [undefined, null, "4", -1, 1.5, NaN, Infinity]) {
+      expect(transcriptDisplayMarker({ kind: "context_patch", patch_kind: "compaction", ...(count === undefined ? {} : { compacted_count: count }) })?.context_marker)
+        .toEqual({ kind: "compaction" });
+    }
+    for (const kind of ["context_reset", "memory_clear", "compaction_failed", "message"]) {
+      expect(transcriptDisplayMarker({ kind, message: { role: "user", content: "[上下文已压缩：4 条消息 → 摘要]" } })?.context_marker).toBeUndefined();
+    }
+  });
+
   test("rejects legacy v1 events and tool blocks with a migration hint", () => {
     expect(() => applyTranscriptEvent([], {
       kind: "replacement",

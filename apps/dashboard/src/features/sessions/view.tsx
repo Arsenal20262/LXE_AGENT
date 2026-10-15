@@ -38,6 +38,7 @@ import {
   Paperclip,
   Plus,
   Search,
+  Shrink,
   Settings2,
   Square,
   Pin,
@@ -1403,6 +1404,12 @@ export const UnifiedConversationRow = React.memo(function UnifiedConversationRow
   const stateLabel = row.status === "error" ? t.conversation.error : row.status === "cancelled" ? t.conversation.cancelled
     : row.status === "completed" ? t.conversation.completed : row.status === "queued" ? t.conversation.queued : t.conversation.running;
   if (row.kind === "status") return <ConversationStatus row={row} />;
+  if (row.kind === "compaction") {
+    const count = row.message?.context_marker?.compacted_count;
+    return <div className="conversation-compaction-marker"><Shrink size={14} aria-hidden="true" />
+      <span>{t.conversation.contextCompacted(typeof count === "number" && Number.isSafeInteger(count) && count >= 0 ? count : undefined)}</span>
+    </div>;
+  }
   if (row.kind === "answer_meta") return <div className="answer-footer">
     <MessageMeta role="assistant" text={row.answerMeta!.text} createdAt={row.answerMeta!.createdAt} />
   </div>;
