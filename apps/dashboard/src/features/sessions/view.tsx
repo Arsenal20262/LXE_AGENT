@@ -1,3 +1,5 @@
+import { projectSessionTitle } from "../../api/session-titles";
+import { Pencil } from "lucide-react";
 import { ApprovalGate, PermissionPicker } from "./permissions";
 import { ReferenceComposer } from "./ReferenceComposer";
 import { UserReferenceText } from "./UserReferenceText";
@@ -1542,7 +1544,8 @@ export function SessionDetailView({
   onFollowingChange?: (following: boolean) => void;
 }) {
   const t = useUiText();
-  const session = detail?.session || fallbackSession;
+  const rawSession = detail?.session || fallbackSession;
+  const session = rawSession ? projectSessionTitle(rawSession) : rawSession;
   const messages = detail?.messages || [];
   const sessionKey = display?.viewKey ?? session?.session_id ?? "new";
   const rows = display?.rows ?? conversationRows(messages,
@@ -1615,6 +1618,7 @@ function SessionActionsMenu({
   onClose,
   onDelete,
   onPin,
+  onRename,
 }: {
   anchor: HTMLElement;
   deletingBlocked: boolean;
@@ -1624,12 +1628,13 @@ function SessionActionsMenu({
   onClose: (restoreFocus?: boolean) => void;
   onDelete: () => void;
   onPin: () => void;
+  onRename?: () => void;
 }) {
   const t = useUiText();
   const menuRef = useRef<HTMLDivElement>(null);
   const rect = anchor.getBoundingClientRect();
   const width = 150;
-  const estimatedHeight = error ? 113 : 82;
+  const estimatedHeight = error ? 147 : 116;
   const left = Math.max(8, Math.min(window.innerWidth - width - 8, rect.right - width));
   const top = rect.bottom + 5 + estimatedHeight <= window.innerHeight
     ? rect.bottom + 5
@@ -1679,6 +1684,7 @@ function SessionActionsMenu({
       role="menu"
       style={{ left, top, width }}
     >
+      {onRename && !session.blank ? <button disabled={pending} onClick={onRename} role="menuitem" type="button"><Pencil size={12} /><span>{t.sessions.rename}</span></button> : null}
       <button disabled={pending} onClick={onPin} role="menuitem" type="button">
         {session.pinned_at > 0 ? <PinOff size={12} /> : <Pin size={12} />}
         <span>{session.pinned_at > 0 ? t.sessions.unpin : t.sessions.pin}</span>
@@ -1762,6 +1768,7 @@ export const SessionsIndex = React.memo(function SessionsIndex({
   onNew,
   onOpen,
   onPin,
+  onRenameSession,
   onDelete,
   onTransientInteractionChange,
   visible = true,
@@ -1787,6 +1794,7 @@ export const SessionsIndex = React.memo(function SessionsIndex({
   onLoadMore: () => void;
   onNew: () => void;
   onOpen: (session: SessionPayload) => void;
+  onRenameSession?: (session: SessionPayload) => void;
   onPin: (session: SessionPayload, pinned: boolean) => Promise<void>;
   onDelete: (session: SessionPayload) => Promise<void>;
   onTransientInteractionChange?: (active: boolean) => void;
@@ -1899,7 +1907,7 @@ export const SessionsIndex = React.memo(function SessionsIndex({
           onClick={() => onOpen(session)}
         >
           <span className="session-index-icon" data-session-state={state} role="img" aria-label={statusLabel} title={statusLabel} />
-          <span className="primary-cell">{sessionTitle}{trimmedQuery ? <small className="session-workspace-result" title={session.workspace.directory}>{session.workspace.directory}</small> : null}</span>
+          <span className="primary-cell" onDoubleClick={event => { if (session.blank) return; event.preventDefault(); onRenameSession?.(session); }}>{sessionTitle}{trimmedQuery ? <small className="session-workspace-result" title={session.workspace.directory}>{session.workspace.directory}</small> : null}</span>
         </button>
         <button
           aria-expanded={menuOpen}
@@ -1994,6 +2002,7 @@ export const SessionsIndex = React.memo(function SessionsIndex({
             closeMenu(false);
           }}
           onPin={() => void pinSelected()}
+          onRename={onRenameSession ? () => { const session = menu.session; closeMenu(); onRenameSession(session); } : undefined}
         />
       ) : null}
       {confirmation ? (

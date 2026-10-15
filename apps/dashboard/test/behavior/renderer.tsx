@@ -58,6 +58,8 @@ let holdCreation = false;
 const pendingCreations: (() => void)[] = [];
 let registrationFailure = false;
 let renameFailure = false;
+let holdSessionRename = false;
+let releaseSessionRename: (() => void) | undefined;
 let holdRegistration = false;
 let releaseRegistration: (() => void) | undefined;
 let invalidateDashboard: (() => void) | undefined;
@@ -143,6 +145,13 @@ function workspaceRpc(call: { operation: string; input: Record<string, unknown> 
       return { session_id: row.session_id, turn_id: "turn", message_id: "message", created: false, state: "queued" };
     })();
     case "sessions.stop": return { session_id: input.session_id, stopped: true };
+    case "sessions.rename": return (async () => {
+      if (holdSessionRename) await new Promise<void>(resolve => { releaseSessionRename = resolve; });
+      if (renameFailure) throw new Error("SQLITE_READONLY: fixture rename denied");
+      const row = workspaceSessions.find(row => row.session_id === input.session_id)!;
+      row.title = String(input.title).trim(); row.title_version = (row.title_version ?? 0) + 1; row.title_source = "user";
+      persistWorkspaces(); return { ...row };
+    })();
     case "sessions.pin": {
       const row = workspaceSessions.find(row => row.session_id === input.session_id)!;
       row.pinned_at = input.pinned ? 1 : 0; return row;
@@ -447,6 +456,8 @@ const fixture = {
   releaseCreations() { holdCreation = false; pendingCreations.splice(0).forEach(resolve => resolve()); },
   failRegistration(value: boolean) { registrationFailure = value; },
   failRename(value: boolean) { renameFailure = value; },
+  holdSessionRename(value: boolean) { holdSessionRename = value; },
+  releaseSessionRename() { holdSessionRename = false; releaseSessionRename?.(); },
   holdRegistration(value: boolean) { holdRegistration = value; },
   releaseRegistration() { releaseRegistration?.(); },
   refreshWorkspaces() { invalidateDashboard?.(); },

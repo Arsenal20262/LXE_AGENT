@@ -138,7 +138,8 @@ describe("Transcript v2", () => {
       { role: "user", content: "next" },
     ]);
     const lines = readFileSync(path, "utf8").split("\n").filter(Boolean);
-    expect(lines).toHaveLength(3);
+    expect(lines).toHaveLength(4);
+    expect(lines.map(line => JSON.parse(line).kind)).toEqual(["transcript_header", "message", "message", "session_title"]);
     for (const line of lines) expect(() => JSON.parse(line)).not.toThrow();
     const page = await store.loadTranscriptDisplayPage("torn", { limit: 10 });
     expect(page.messages).toEqual([
@@ -209,7 +210,7 @@ describe("Transcript v2", () => {
     const path = join(root, "session_transcripts", "s1.jsonl");
     const events = parseTranscriptText(readFileSync(path, "utf8"));
     expect(events.map((event) => event.kind)).toEqual([
-      "transcript_header", "turn_context", "message", "message", "turn_error", "context_patch",
+      "transcript_header", "turn_context", "message", "session_title", "message", "turn_error", "context_patch",
     ]);
     expect(events.filter((event) => event.kind === "message").map((event) => event.turn_id))
       .toEqual(["turn-1", "turn-1"]);

@@ -1,3 +1,4 @@
+import type { SessionTitleService } from "../state/session-title";
 import { ExecutionPaths } from "../permissions/execution-paths";
 import { workspaceArtifactRoot } from "@lxe/core";
 import { join } from "node:path";
@@ -76,6 +77,7 @@ import type {
 
 export interface TypeScriptAgentRuntimeOptions {
   store: RuntimeStore;
+  sessionTitles?: SessionTitleService;
   provider?: RuntimeProvider;
   providerManager?: RuntimeProviderManager;
   wireTraceController?: RuntimeWireTraceControllerPort;
@@ -173,8 +175,9 @@ export class TypeScriptAgentRuntime implements AgentRuntime {
     message: RuntimeMessage,
     reason: string,
     turnId?: string,
+    titleInput?: string,
   ): Promise<void> {
-    await this.options.store.appendMessage(sessionId, message, reason, turnId);
+    await this.options.store.appendMessage(sessionId, message, reason, turnId, titleInput);
     if (reason.startsWith("tool_results")) this.options.onToolResult?.(sessionId);
     await this.notifySessionChanged(sessionId, "messages");
   }
@@ -213,6 +216,7 @@ export class TypeScriptAgentRuntime implements AgentRuntime {
     await Promise.allSettled([...this.active].map(async (handle) => {
       if (!handle.signal.aborted) this.logger.warn("runtime stopped with active turn");
     }));
+    await this.options.sessionTitles?.stop();
     const stopped = await Promise.allSettled([...(this.options.services ?? [])].reverse().map((service) => service.stop()));
     for (const result of stopped) if (result.status === "rejected") this.logger.error("runtime_service_stop_failed", { error: result.reason });
     await this.options.workspaceInstances?.disposeAll("runtime_stop");
@@ -249,7 +253,9 @@ export class TypeScriptAgentRuntime implements AgentRuntime {
     }
     const workspace = assertWorkspaceAvailable(session.workspace);
     const executionPaths = this.options.executionPaths ?? new ExecutionPaths(join(process.cwd(), "var"));
-    const providerSnapshot = this.options.providerManager?.acquire();
+    const configuredProvider = this.options.providerManager?.acquire();
+    const providerSnapshot = configuredProvider ? { ...configuredProvider, provider: configuredProvider.provider.captureForTurn?.() ?? configuredProvider.provider } : undefined;
+    let titleRequested = false;
     const provider = providerSnapshot?.provider ?? this.options.provider;
     if (!provider) throw new Error("runtime provider is not configured");
     const skillActivations = new Map<string, SkillActivationUsage>();
@@ -480,6 +486,8 @@ export class TypeScriptAgentRuntime implements AgentRuntime {
       };
       await this.options.store.appendTurnContext(job.session_id, turnContext);
       let messages = heartbeat ? [] : await this.options.store.loadMessages(job.session_id);
+      const titleInput = heartbeat ? "" : job.user_content_blocks?.length
+        ? job.user_content_blocks.filter(block => block.type === "text").map(block => String(block.text ?? "")).join(" ") : job.user_input;
       const userContent: RuntimeMessageContent = heartbeat
         ? heartbeatPrompt(pendingEvents)
         : userContentWithSystemEvents(job.user_input, job.user_content_blocks, pendingEvents);
@@ -499,7 +507,7 @@ export class TypeScriptAgentRuntime implements AgentRuntime {
       };
       const instructions = heartbeat ? [] : await loadInvokedSkills(invokedSkillNames(job.user_input)).catch(async error => {
         // Keep the submitted input in history when skill selection or loading fails.
-        await this.appendMessage(job.session_id, userMessage, "turn_input", job.job_id);
+        await this.appendMessage(job.session_id, userMessage, "turn_input", job.job_id, titleInput);
         throw error;
       });
       if (instructions.length) userMessage.invoked_skills = instructions.flatMap(item => item.role === "user" ? item.invoked_skills ?? [] : []);
@@ -518,7 +526,7 @@ export class TypeScriptAgentRuntime implements AgentRuntime {
         contextCapacity: contextWindowTokens ?? DEFAULT_CONTEXT_WINDOW_TOKENS,
         pendingEventCount: pendingEvents.length,
       });
-      await this.appendMessage(job.session_id, userMessage, heartbeat ? "heartbeat" : "turn_input", job.job_id);
+      await this.appendMessage(job.session_id, userMessage, heartbeat ? "heartbeat" : "turn_input", job.job_id, titleInput);
       for (const instruction of instructions) await this.appendMessage(job.session_id, instruction, "skill_invocation", job.job_id);
       await saveDisplay(initialMeasurement);
       await finalAnswerStreamer?.updateContext(initialMeasurement);
@@ -648,6 +656,10 @@ export class TypeScriptAgentRuntime implements AgentRuntime {
               const request = providerRequest(attemptObserver, wireTrace);
               const estimatedInput = requestContextTokenEstimate(request.system, request.messages, request.tools);
               const requestId = randomUUID();
+              if (!titleRequested && !heartbeat && providerSnapshot) {
+                titleRequested = true;
+                this.options.sessionTitles?.onMainRequest(job.session_id, job.message_id || job.job_id, providerSnapshot, userIdentity);
+              }
               const response = structuredClone(await provider.turn(request));
               delete response.contextTokenAnchor;
               const usage = response.usage;

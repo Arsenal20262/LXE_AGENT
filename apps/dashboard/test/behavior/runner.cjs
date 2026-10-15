@@ -70,7 +70,9 @@ app.whenReady().then(async () => {
   };
   try {
     await load();
-    if (suite === "markdown") {
+    if (suite === "session-titles") {
+      await require("./session-titles.cjs")({win,js,step,load,waitFor,click,key,focus,settle,state});
+    } else if (suite === "markdown") {
       await require("./markdown.cjs")({win, js, step, settle});
     } else if (suite === "conversation-content" || suite === "conversation-window") {
       await require("./conversation-contracts.cjs")({suite, win, url, js, step, load, waitFor, click, key, focus, settle, state});

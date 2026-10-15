@@ -106,6 +106,7 @@ export interface RuntimeSummaryResult {
 }
 
 export interface RuntimeProviderRequest {
+  auxiliary?: { maxOutputTokens: number; reasoning: "minimum" };
   temperature?: number;
   system: string;
   messages: RuntimeMessage[];
@@ -118,6 +119,8 @@ export interface RuntimeProviderRequest {
 }
 
 export interface RuntimeProvider {
+  /** Bind lazy credentials once for a turn and its auxiliary work. */
+  captureForTurn?(): RuntimeProvider;
   turn(request: RuntimeProviderRequest): Promise<AssistantMessage>;
   summarize(request: RuntimeSummaryRequest): Promise<RuntimeSummaryResult>;
 }
@@ -238,7 +241,7 @@ export interface RuntimeStore {
   resolveArtifact(sessionId: string, artifactId: string): Promise<RuntimeArtifactRecord | undefined>;
   resolveAttachment(sessionId: string, attachmentId: string): Promise<RuntimeAttachmentRecord | undefined>;
   attachmentPaths(sessionId: string): Promise<string[]>;
-  appendMessage(sessionId: string, message: RuntimeMessage, reason?: string, turnId?: string): Promise<void>;
+  appendMessage(sessionId: string, message: RuntimeMessage, reason?: string, turnId?: string, titleInput?: string): Promise<void>;
   replaceMessages(
     sessionId: string,
     messages: RuntimeMessage[],

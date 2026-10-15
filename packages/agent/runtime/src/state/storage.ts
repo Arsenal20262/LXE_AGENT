@@ -1,3 +1,4 @@
+import { fallbackSessionTitle, type SessionTitleState, type SessionTitleSource } from "./session-title";
 import { omitImageData } from "../messages/image-content";
 import { DEFAULT_PERMISSION_MODE, parsePermissionMode, type PermissionMode } from "@lxe/protocol";
 import { validContextDisplaySnapshot, type ContextDisplaySnapshot } from "@lxe/protocol";
@@ -152,16 +153,10 @@ const mergeObjects = (base: JsonObject, patch: JsonObject): JsonObject => {
 
 const retiredWorkspaceColumn = ["workspace", "server", "scope"].join("_");
 
-const sessionTitle = (message: RuntimeMessage, reason: string): string => {
+const humanTitleText = (message: RuntimeMessage, reason: string): string => {
   if (message.role !== "user" || !["turn_input", "user_input", "inbound"].includes(reason)) return "";
-  const content = typeof message.content === "string" ? message.content : (() => {
-    const textContent = message.content
-      .filter((block) => block.type === "text" && typeof block.text === "string")
-      .map((block) => String(block.text)).join(" ").trim();
-    if (textContent) return textContent;
-    return message.content.map((block) => transcriptAttachment(block)?.name ?? "").filter(Boolean).join(" ");
-  })();
-  return content.replaceAll(/\s+/g, " ").trim().slice(0, 120);
+  return typeof message.content === "string" ? message.content : message.content
+    .filter(block => block.type === "text" && typeof block.text === "string").map(block => String(block.text)).join(" ");
 };
 
 interface TranscriptDisplayPage {
@@ -532,6 +527,12 @@ export class SqliteRuntimeStore implements RuntimeStore {
         database.exec("ALTER TABLE agent_sessions ADD COLUMN pinned_at REAL NOT NULL DEFAULT 0");
       }
       for (const [name, declaration] of [
+        ["title_source", "TEXT NOT NULL DEFAULT ''"],
+        ["title_version", "INTEGER NOT NULL DEFAULT 0"],
+        ["title_input", "TEXT NOT NULL DEFAULT ''"],
+        ["title_attempted", "INTEGER NOT NULL DEFAULT 0"],
+        // Only sessions admitted after this migration opt into automatic naming.
+        ["title_automatic", "INTEGER NOT NULL DEFAULT 0"],
         ["context_display", "TEXT"],
         ["workspace_directory", "TEXT NOT NULL DEFAULT ''"],
         ["workspace_worktree", "TEXT NOT NULL DEFAULT ''"],
@@ -619,8 +620,8 @@ export class SqliteRuntimeStore implements RuntimeStore {
       this.db().query(`
         INSERT INTO agent_sessions (
           session_id, source, workspace_directory, workspace_worktree, permission_mode,
-          created_at, last_active_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+          created_at, last_active_at, title_automatic
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, 1)
         ON CONFLICT(session_id) DO UPDATE SET
           source = excluded.source,
           workspace_directory = excluded.workspace_directory,
@@ -643,8 +644,8 @@ export class SqliteRuntimeStore implements RuntimeStore {
       if (existing) return this.sessionPayload(existing);
       const id = randomUUID().replaceAll("-", ""), now = Date.now() / 1_000;
       this.db().query(`INSERT INTO agent_sessions
-        (session_id, source, workspace_directory, workspace_worktree, permission_mode, created_at, last_active_at, blank)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 1)`).run(id, JSON.stringify({ platform: "desktop", chat_type: "dm" }), workspace.directory, workspace.worktree, DEFAULT_PERMISSION_MODE, now, now);
+        (session_id, source, workspace_directory, workspace_worktree, permission_mode, created_at, last_active_at, blank, title_automatic)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1)`).run(id, JSON.stringify({ platform: "desktop", chat_type: "dm" }), workspace.directory, workspace.worktree, DEFAULT_PERMISSION_MODE, now, now);
       return this.sessionPayload(this.getPrepared<Record<string, unknown>>("SELECT * FROM agent_sessions WHERE session_id = ?", id)!);
     })();
   }
@@ -844,25 +845,39 @@ export class SqliteRuntimeStore implements RuntimeStore {
     message: RuntimeMessage,
     reason = "runtime",
     turnId = "",
+    titleInput?: string,
   ): Promise<void> {
     const safeSessionId = text(sessionId);
     await this.enqueueSessionWrite(safeSessionId, async () => {
       const path = this.transcriptPath(safeSessionId);
+      // Recover any already-appended title metadata before choosing the first input.
+      await this.enqueueIndexSync(safeSessionId, path);
       const cached = this.validCacheBeforeWrite(safeSessionId, path);
       const persisted = structuredClone(message);
+      const originalText = titleInput ?? humanTitleText(message, reason);
+      const title = fallbackSessionTitle(originalText);
+      const state = title ? this.readTitleState(safeSessionId) : undefined;
+      const input = state?.input ?? (title && state?.automatic ? {
+        id: message.role === "user" ? message.message_id || turnId || randomUUID() : randomUUID(), text: originalText,
+      } : undefined);
       await this.appendTranscriptEvent(safeSessionId, {
         kind: "message",
         message: persisted as unknown as JsonObject,
         reason,
+        // This travels with the original input, so a crash before the title append
+        // cannot make a later prompt become the first source or include injections.
+        ...(input && !state?.input ? { title_input: input } : {}),
         ...(text(turnId) ? { turn_id: text(turnId) } : {}),
         ts: Date.now() / 1_000,
       });
-      const title = sessionTitle(message, reason);
-      this.db().query(`
-          UPDATE agent_sessions SET last_active_at = ?, message_count = message_count + 1,
-            title = CASE WHEN title = '' AND ? <> '' THEN ? ELSE title END
-          WHERE session_id = ?
-        `).run(Date.now() / 1_000, title, title, safeSessionId);
+      this.db().query("UPDATE agent_sessions SET last_active_at = ?, message_count = message_count + 1 WHERE session_id = ?")
+        .run(Date.now() / 1_000, safeSessionId);
+      if (input && state?.automatic && !state.title && state.version === 0) {
+        await this.appendTranscriptEvent(safeSessionId, {
+          kind: "session_title", title: fallbackSessionTitle(input.text), source: "fallback", version: 1,
+          input, message_ids: [input.id], ts: Date.now() / 1_000,
+        });
+      }
       if (cached) await this.appendReplayCacheMessage(safeSessionId, path, cached, persisted);
       else this.removeReplayCacheEntry(safeSessionId);
       await this.enqueueIndexSync(safeSessionId, path);
@@ -1253,7 +1268,7 @@ export class SqliteRuntimeStore implements RuntimeStore {
     const rows = this.allPrepared<Record<string, unknown>>(`
       SELECT session_id, permission_mode, source, workspace_directory, workspace_worktree,
              model, reasoning_effort, model_config, created_at, last_active_at,
-             blank, message_count, tool_call_count, input_tokens, output_tokens, title, pinned_at, api_call_count
+             blank, message_count, tool_call_count, input_tokens, output_tokens, title, title_source, title_version, pinned_at, api_call_count
       FROM agent_sessions ${where}
       ORDER BY CASE WHEN pinned_at > 0 THEN 0 ELSE 1 END ASC,
                CASE WHEN pinned_at > 0 THEN pinned_at ELSE last_active_at END DESC,
@@ -1285,10 +1300,61 @@ export class SqliteRuntimeStore implements RuntimeStore {
     const row = this.getPrepared<Record<string, unknown>>(`
       SELECT session_id, permission_mode, source, workspace_directory, workspace_worktree,
              model, reasoning_effort, model_config, created_at, last_active_at,
-             blank, message_count, tool_call_count, input_tokens, output_tokens, title, pinned_at, api_call_count
+             blank, message_count, tool_call_count, input_tokens, output_tokens, title, title_source, title_version, pinned_at, api_call_count
       FROM agent_sessions WHERE session_id = ?
     `, safeSessionId);
     return row ? this.sessionPayload(row) : undefined;
+  }
+
+  sessionMetadata(sessionId: string): JsonObject | undefined {
+    const row = this.getPrepared<Record<string, unknown>>("SELECT * FROM agent_sessions WHERE session_id = ?", text(sessionId));
+    return row ? this.sessionPayload(row) : undefined;
+  }
+
+  private readTitleState(sessionId: string): SessionTitleState | undefined {
+    const row = this.getPrepared<Record<string, unknown>>("SELECT title, title_source, title_version, title_input, title_attempted, title_automatic, blank FROM agent_sessions WHERE session_id = ?", sessionId);
+    if (!row) return undefined;
+    const input = parseObject(row.title_input);
+    return { title: text(row.title), source: text(row.title_source), version: Number(row.title_version ?? 0),
+      attempted: row.title_attempted === 1, automatic: row.title_automatic === 1, blank: row.blank === 1,
+      ...(typeof input.id === "string" && typeof input.text === "string" ? { input: { id: input.id, text: input.text } } : {}) };
+  }
+
+  async titleState(sessionId: string): Promise<SessionTitleState | undefined> {
+    await this.waitForSessionWrites(sessionId);
+    await this.enqueueIndexSync(sessionId, this.transcriptPath(sessionId));
+    return this.readTitleState(sessionId);
+  }
+
+  async acceptTitle(sessionId: string, title: string, source: SessionTitleSource, options: {
+    expectedVersion?: number; signal?: AbortSignal; provider?: string; model?: string;
+  } = {}): Promise<boolean> {
+    return this.enqueueSessionWrite(sessionId, async () => {
+      const path = this.transcriptPath(sessionId);
+      await this.enqueueIndexSync(sessionId, path);
+      const state = this.readTitleState(sessionId);
+      if (!state) { if (options.expectedVersion !== undefined) return false; throw new Error(`session not found: ${sessionId}`); }
+      if (options.signal?.aborted || (options.expectedVersion !== undefined && state.version !== options.expectedVersion)) return false;
+      await this.appendTranscriptEvent(sessionId, { kind: "session_title", title, source, version: state.version + 1,
+        message_ids: source === "user" ? [] : state.input ? [state.input.id] : [],
+        ...(options.provider ? { provider: options.provider, model: options.model ?? "" } : {}), ts: Date.now() / 1_000 });
+      this.removeReplayCacheEntry(sessionId);
+      await this.enqueueIndexSync(sessionId, path);
+      return true;
+    });
+  }
+
+  async recordTitleRequest(sessionId: string, version: number, request: JsonObject, signal: AbortSignal): Promise<boolean> {
+    return this.enqueueSessionWrite(sessionId, async () => {
+      const path = this.transcriptPath(sessionId);
+      await this.enqueueIndexSync(sessionId, path);
+      const state = this.readTitleState(sessionId);
+      if (!state || state.version !== version || signal.aborted) return false;
+      await this.appendTranscriptEvent(sessionId, { kind: "session_title_request", version, ...request, ts: Date.now() / 1_000 });
+      this.removeReplayCacheEntry(sessionId);
+      await this.enqueueIndexSync(sessionId, path);
+      return true;
+    });
   }
 
   async deleteSession(sessionId: string): Promise<boolean> {
@@ -1367,7 +1433,7 @@ export class SqliteRuntimeStore implements RuntimeStore {
     const row = this.getPrepared<Record<string, unknown>>(`
       SELECT session_id, permission_mode, source, workspace_directory, workspace_worktree,
              model, reasoning_effort, model_config, created_at, last_active_at,
-             blank, message_count, tool_call_count, input_tokens, output_tokens, title, pinned_at, api_call_count, context_display
+             blank, message_count, tool_call_count, input_tokens, output_tokens, title, title_source, title_version, pinned_at, api_call_count, context_display
       FROM agent_sessions WHERE session_id = ?
     `, safeSessionId);
     if (!row) return undefined;
@@ -1415,6 +1481,8 @@ export class SqliteRuntimeStore implements RuntimeStore {
       permission_mode: parsePermissionMode(row.permission_mode),
       blank: row.blank === 1,
       title: text(row.title),
+      title_source: text(row.title_source),
+      title_version: Number(row.title_version ?? 0),
       pinned_at: Math.max(0, Number(row.pinned_at ?? 0)),
       source,
       workspace,
@@ -1557,7 +1625,7 @@ export class SqliteRuntimeStore implements RuntimeStore {
     return result;
   }
 
-  private enqueueSessionWrite(sessionId: string, operation: () => Promise<void>): Promise<void> {
+  private enqueueSessionWrite<T>(sessionId: string, operation: () => Promise<T>): Promise<T> {
     return this.enqueueKeyed(this.writeQueues, sessionId, operation);
   }
 
@@ -1732,8 +1800,22 @@ export class SqliteRuntimeStore implements RuntimeStore {
         const event = line.event;
         eventCount += 1;
         if (text(event.kind) === "turn_context") latestContext = event;
+        if (event.kind === "session_title" && typeof event.title === "string" && Number.isSafeInteger(event.version)) {
+          this.db().query(`UPDATE agent_sessions SET title = ?, title_source = ?, title_version = ?,
+            title_input = CASE WHEN ? <> '' THEN ? ELSE title_input END
+            WHERE session_id = ?`).run(event.title, text(event.source), Number(event.version),
+              event.input ? JSON.stringify(event.input) : "", event.input ? JSON.stringify(event.input) : "", sessionId);
+        }
+        if (event.kind === "session_title_request") {
+          this.db().query("UPDATE agent_sessions SET title_attempted = 1 WHERE session_id = ?").run(sessionId);
+        }
         indexHistoryImages(this.db(), sessionId, line, text(event.turn_id) || text(latestContext?.turn_id));
         if (text(event.kind) === "message") {
+          const originalInput = parseObject(event.title_input);
+          if (typeof originalInput.id === "string" && typeof originalInput.text === "string") {
+            this.db().query("UPDATE agent_sessions SET title_input = ? WHERE session_id = ? AND title_input = ''")
+              .run(JSON.stringify(originalInput), sessionId);
+          }
           rawMessageCount += 1;
           const message = parseObject(event.message);
           if (Array.isArray(message.content)) {

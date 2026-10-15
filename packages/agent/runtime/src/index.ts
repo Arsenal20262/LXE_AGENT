@@ -38,3 +38,5 @@ export type * from "./messages/assistant-message";
 
 export { WorkspaceFileSearch, DEFAULT_FILE_SEARCH_EXCLUDED_DIRECTORIES } from "./tooling/file-references";
 export { relocateAgentData } from "./state/relocate-data";
+
+export * from "./state/session-title";

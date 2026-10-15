@@ -33,6 +33,7 @@ import {
   type SqliteRuntimeStore,
   type ToolRegistry,
   type UserQuestionService,
+  type SessionTitleService,
   type PermissionApprovalService,
 } from "@lxe/runtime";
 
@@ -41,6 +42,7 @@ type Environment = Record<string, string | undefined>;
 /** Agent-process dependencies required by the Dashboard query service. */
 interface DashboardServiceOptions {
   questions?: UserQuestionService;
+  sessionTitles?: SessionTitleService;
   approvals?: PermissionApprovalService;
   onPermissionChanged?: (sessionId: string) => Promise<void> | void;
   /** Writable desktop/source state. */
@@ -265,6 +267,13 @@ export class DashboardService {
       .map(execDisplayUpdate).filter((item): item is NonNullable<typeof item> => Boolean(item)) }),
     "sessions.list": (input) => this.sessions(input) as DashboardRpcResult<"sessions.list">,
     "sessions.detail": (input) => this.session(input) as Promise<DashboardRpcResult<"sessions.detail">>,
+    "sessions.rename": async input => {
+      if (!this.options.sessionTitles) return rpcError("unavailable", "Session titles are unavailable");
+      await this.options.sessionTitles.rename(input.session_id, input.title);
+      const session = this.options.store.sessionMetadata(input.session_id);
+      if (!session) return rpcError("not_found", "session not found");
+      return session as DashboardRpcResult<"sessions.rename">;
+    },
     "sessions.pin": (input) => this.pinSession(input) as DashboardRpcResult<"sessions.pin">,
     "sessions.delete": (input) => this.deleteSession(input) as Promise<DashboardRpcResult<"sessions.delete">>,
     "sessions.files.candidates": input => this.fileCandidates(input.session_id, input.query),
@@ -374,6 +383,7 @@ export class DashboardService {
     if (!await this.options.store.getSession(input.session_id)) {
       return rpcError("not_found", "session not found");
     }
+    this.options.sessionTitles?.cancel(input.session_id);
     await this.options.terminateSession?.(input.session_id);
     await this.options.approvals?.forgetSession(input.session_id);
     this.options.questions?.forgetSession(input.session_id);

@@ -1,3 +1,4 @@
+import { SessionTitleService } from "@lxe/runtime";
 import { withManagedModels, managedCredentialFor, managedTargetKey, singleManagedState, loadLlmProviderCatalog, type ManagedLlmState } from "@lxe/core";
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -123,6 +124,7 @@ export function createAgentRuntimeHost(
   const databasePath = String(environment.LXE_AGENT_SQLITE_DB_PATH ?? "").trim()
     || join(options.dataRoot, "db", "agent.sqlite3");
   const store = new SqliteRuntimeStore(databasePath, { legacyWorkspace: options.legacyWorkspace });
+  const sessionTitles = new SessionTitleService({ store, onChanged: sessionId => options.onSessionChanged?.(sessionId, "title"), logger });
   const permissionPolicy = new PermissionPolicyService();
   const executionPaths = new ExecutionPaths(options.dataRoot);
   const providerManager = new AtomicRuntimeProviderManager(
@@ -244,7 +246,7 @@ export function createAgentRuntimeHost(
   runtimeServices.push(mcpManager);
   let workspaceInstances!: WorkspaceInstanceManager;
   const dashboardService = new DashboardService({
-    questions, approvals,
+    questions, approvals, sessionTitles,
     onPermissionChanged: sessionId => options.onSessionChanged?.(sessionId, "permission"),
     stateRoot: options.dataRoot,
     llmConfigRoot: options.llmConfigRoot,
@@ -282,7 +284,7 @@ export function createAgentRuntimeHost(
   const providerDescriptor = providerManager.acquire().descriptor;
   const runtime = new TypeScriptAgentRuntime({
     permissionPolicy, executionPaths, approvalAvailable: true,
-    store,
+    store, sessionTitles,
     providerManager,
     environment,
     wireTraceController: configureRuntimeWireTracing({

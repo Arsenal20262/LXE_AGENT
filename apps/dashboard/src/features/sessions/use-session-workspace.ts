@@ -1,3 +1,4 @@
+import { projectSessionData } from "../../api/session-titles";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { DashboardRpcResult, DesktopConversationActivityPayload, DesktopInputAttachmentPayload, SkillPayload } from "@lxe/desktop-protocol";
@@ -35,6 +36,7 @@ export function useSessionWorkspace({ activeSection, runtimeReady: dashboardRunt
 }) {
   const t = useUiText();
   const queryClient = useQueryClient();
+  const [renamingSession, setRenamingSession] = useState<SessionPayload | null>(null);
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [selectedSessionId, updateSelectedSessionId] = useState("");
@@ -192,6 +194,14 @@ export function useSessionWorkspace({ activeSection, runtimeReady: dashboardRunt
     await queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.sessions.lists });
   }
 
+  async function renameSession(session: SessionPayload, title: string): Promise<void> {
+    const accepted = await sessionActions.rename(session.session_id, title);
+    conversationDisplay.updateTitle(accepted);
+    queryClient.setQueriesData({ queryKey: dashboardQueryKeys.sessions.lists }, projectSessionData);
+    queryClient.setQueriesData({ queryKey: dashboardQueryKeys.sessions.detailSession(session.session_id) }, projectSessionData);
+    void queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.sessions.lists });
+  }
+
   async function deleteSession(session: SessionPayload): Promise<void> {
     await sessionActions.delete(session.session_id);
     forgetPreviewSession(session.session_id); forgetComposerEditor(session.session_id);
@@ -232,12 +242,25 @@ export function useSessionWorkspace({ activeSection, runtimeReady: dashboardRunt
     ? sessionDetailQuery.display.activity ?? conversationActivityQuery.data ?? null
     : null;
 
+  useEffect(() => {
+    if (activeSection !== "sessions" || !dashboardRuntimeReady || newConversation || !selectedSession || selectedSession.blank) return;
+    const renameKey = (event: KeyboardEvent) => {
+      const primary = /Mac|iPhone|iPad/.test(navigator.platform) ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
+      if (event.code !== "KeyG" || !primary || !event.altKey || event.shiftKey || event.repeat || event.isComposing
+        || document.querySelector("[role='dialog'][aria-modal='true']")) return;
+      event.preventDefault(); setRenamingSession(selectedSession);
+    };
+    window.addEventListener("keydown", renameKey);
+    return () => window.removeEventListener("keydown", renameKey);
+  }, [activeSection, dashboardRuntimeReady, newConversation, selectedSession]);
+
   const sessionIndexActions = {
     onSearchClose: useLatestCallback(() => { setSessionSearchOpen(false); setQuery(""); }),
     onLoadMore: useLatestCallback(loadMoreSessions),
     onNew: useLatestCallback(startNewConversation),
     onOpen: useLatestCallback(openSession),
     onPin: useLatestCallback(setSessionPinned),
+    onRenameSession: useLatestCallback((session: SessionPayload) => { if (!session.blank) setRenamingSession(session); }),
     onDelete: useLatestCallback(deleteSession),
   };
   const selectedBusy = Boolean(conversationActivity?.active || conversationActivity?.queued.length);
@@ -246,6 +269,7 @@ export function useSessionWorkspace({ activeSection, runtimeReady: dashboardRunt
   return {
     selection: { selectedSessionId, newConversation, selectedSession } as const,
     sidebar: {
+      renamingSession,
       expanded: expandedWorkspaces,
       display: sessionDetailQuery.display,
       currentBlank: newConversation ? blankSession : null,
@@ -294,7 +318,8 @@ export function useSessionWorkspace({ activeSection, runtimeReady: dashboardRunt
     } as const)),
     actions: {
       openSession, startNewConversation, renameWorkspace, startSkillConversation,
-      sendConversation, stopConversation, setSessionPinned, deleteSession,
+      sendConversation, stopConversation, setSessionPinned, deleteSession, renameSession,
+      cancelSessionRename: () => setRenamingSession(null),
       openConversationFile, revealConversationFile, openConversationAttachment,
       openSearch: handleSessionSearchToggle,
       changeSearch: (value: string) => setQuery(value),

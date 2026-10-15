@@ -1,3 +1,4 @@
+import { projectSessionData, projectSessionTitle } from "../../api/session-titles";
 import type { DesktopConversationActivityPayload, DesktopConversationSendPayload, DesktopConversationTurnPayload, DesktopInputAttachmentPayload } from "@lxe/desktop-protocol";
 import type { BackgroundTaskChangedPayload } from "@lxe/desktop-protocol";
 import type { SessionDetailPayload, SessionMessage } from "../../api/payloads";
@@ -60,6 +61,15 @@ export class ConversationDisplayController {
   completeHistory(ticket: HistoryTicket, page: SessionDetailPayload, direction: "latest" | "older" | "newer"): boolean {
     if (!this.isCurrent(ticket)) return false;
     this.receiveHistory(page, direction, ticket.revision); return true;
+  }
+
+  updateTitle(session: import("@lxe/desktop-protocol").SessionPayload): void {
+    projectSessionTitle(session);
+    if (session.session_id !== this.state.sessionId) return;
+    this.state = { ...this.state,
+      ...(this.state.detail ? { detail: projectSessionData(this.state.detail) } : {}),
+      ...(this.state.latest ? { latest: projectSessionData(this.state.latest) } : {}) };
+    this.publish();
   }
 
   select(sessionId: string, newDraft = false, draftKey?: string, directory?: string): void {
@@ -125,6 +135,7 @@ export class ConversationDisplayController {
     this.notify();
   }
   receiveHistory(page: SessionDetailPayload, direction: "latest" | "older" | "newer", requestRevision = this.revision): void {
+    page = projectSessionData(page);
     if (page.session.session_id !== this.state.sessionId) return;
     // Keep the bounded newest page separately only when reading an older, disconnected window.
     const latest = direction === "latest" ? boundConversationWindow(page) : this.state.latest;

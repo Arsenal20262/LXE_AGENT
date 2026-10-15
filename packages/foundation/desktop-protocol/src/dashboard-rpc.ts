@@ -71,6 +71,8 @@ export type SessionPayload = {
   permission_mode: PermissionMode;
   blank?: boolean;
   title: string;
+  title_version?: number;
+  title_source?: string;
   pinned_at: number;
   source: Record<string, unknown>;
   source_summary: SourceSummary;
@@ -507,6 +509,7 @@ export interface DashboardRpcSpec {
     input: { session_id: string };
     result: { items: BackgroundTaskChangedPayload[] };
   };
+  "sessions.rename": { input: { session_id: string; title: string }; result: SessionPayload };
   "sessions.pin": {
     input: { session_id: string; pinned: boolean };
     result: SessionPayload;
@@ -767,6 +770,9 @@ export function parseDashboardRpcCall(value: unknown): DashboardRpcCall {
         ...(messageAfter === undefined ? {} : { message_after: messageAfter }),
       } };
     }
+    case "sessions.rename":
+      exactKeys(input, ["session_id", "title"], `${operation}.input`);
+      return { operation, input: { session_id: textValue(input.session_id, `${operation}.session_id`)!, title: textValue(input.title, `${operation}.title`)! } };
     case "sessions.pin":
       exactKeys(input, ["session_id", "pinned"], `${operation}.input`);
       return { operation, input: {

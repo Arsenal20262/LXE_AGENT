@@ -8,6 +8,7 @@ export const sessionActions = {
   renameWorkspace: (directory: string, display_name: string) => callDashboard({ operation: "workspaces.rename", input: { directory, display_name } }),
   send: (input: DashboardRpcCall<"sessions.send">["input"]) => callDashboard({ operation: "sessions.send", input }),
   stop: (session_id: string) => callDashboard({ operation: "sessions.stop", input: { session_id } }),
+  rename: (session_id: string, title: string) => callDashboard({ operation: "sessions.rename", input: { session_id, title } }),
   pin: (session_id: string, pinned: boolean) => callDashboard({ operation: "sessions.pin", input: { session_id, pinned } }),
   delete: (session_id: string) => callDashboard({ operation: "sessions.delete", input: { session_id } }),
   openFile: (session_id: string, artifactId: string) => callDashboard({ operation: "sessions.file.open", input: { session_id, artifact_id: artifactId } }),

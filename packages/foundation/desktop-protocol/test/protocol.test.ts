@@ -57,11 +57,11 @@ describe("desktop agent protocol", () => {
     expect(roundTripEvent({
       type: "session.changed",
       thread_id: "session-1",
-      payload: { changes: ["messages", "usage", "artifacts", "messages"] },
+      payload: { changes: ["messages", "usage", "artifacts", "title", "messages"] },
     })).toEqual({
       type: "session.changed",
       thread_id: "session-1",
-      payload: { changes: ["messages", "usage", "artifacts"] },
+      payload: { changes: ["messages", "usage", "artifacts", "title"] },
     });
 
     for (const payload of [
@@ -545,4 +545,13 @@ test("image preview RPC accepts registered references and rejects arbitrary path
   expect(() => parseDashboardRpcCall({ operation: "sessions.image_view.preview",
     input: { session_id: "s", view_id: "v", variant: "original" },
   })).toThrow("variant must be");
+});
+
+
+test("session rename RPC preserves the title for runtime validation and rejects invalid shapes", () => {
+  expect(parseDashboardRpcCall({ operation: "sessions.rename", input: { session_id: " s ", title: " 中文\n标题 " } }))
+    .toEqual({ operation: "sessions.rename", input: { session_id: "s", title: "中文\n标题" } });
+  for (const input of [{ session_id: "s", title: " " }, { session_id: "s", title: 12 }, { session_id: "s", title: "Name", force: true }]) {
+    expect(() => parseDashboardRpcCall({ operation: "sessions.rename", input })).toThrow();
+  }
 });

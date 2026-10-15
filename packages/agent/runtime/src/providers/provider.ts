@@ -616,10 +616,21 @@ export function providerTemperature(descriptor: ProviderDescriptor, temperature?
   return { temperature };
 }
 
+/** Call-local limits; never mutate the selected model or its captured credentials. */
+export function auxiliaryDescriptor(descriptor: ProviderDescriptor, request: Pick<RuntimeProviderRequest, "auxiliary">): ProviderDescriptor {
+  if (!request.auxiliary) return descriptor;
+  const effort = descriptor.thinkingLevels[0] ?? "off";
+  const result = { ...descriptor, maxTokens: Math.min(descriptor.maxTokens, request.auxiliary.maxOutputTokens),
+    thinkingEffort: effort, thinkingEnabled: effort !== "off" };
+  delete result.thinkingBudgetTokens;
+  return result;
+}
+
 export function buildProviderRequest(
   descriptor: ProviderDescriptor,
-  request: Pick<RuntimeProviderRequest, "system" | "messages" | "tools" | "toolChoice" | "userIdentity" | "temperature">,
+  request: Pick<RuntimeProviderRequest, "system" | "messages" | "tools" | "toolChoice" | "userIdentity" | "temperature" | "auxiliary">,
 ): Record<string, unknown> {
+  descriptor = auxiliaryDescriptor(descriptor, request);
   return {
     model: descriptor.model,
     max_tokens: descriptor.maxTokens,
@@ -701,6 +712,13 @@ class CredentialResolvingRuntimeProvider implements RuntimeProvider {
     private readonly resolve: () => ProviderDescriptor,
     private readonly factory: RuntimeProviderFactory,
   ) {}
+
+  captureForTurn(): RuntimeProvider {
+    let descriptor: ProviderDescriptor | undefined;
+    let provider: RuntimeProvider | undefined;
+    return new CredentialResolvingRuntimeProvider(this.definition,
+      () => descriptor ??= this.resolve(), value => provider ??= this.factory(value));
+  }
 
   private prepared(): RuntimeProvider {
     try {

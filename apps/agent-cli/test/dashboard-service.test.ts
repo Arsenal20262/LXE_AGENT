@@ -2,7 +2,7 @@ import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { SkillCatalog, SqliteRuntimeStore, ToolRegistry, type RuntimeProviderManager } from "@lxe/runtime";
+import { SessionTitleService, SkillCatalog, SqliteRuntimeStore, ToolRegistry, type RuntimeProviderManager } from "@lxe/runtime";
 import type { AgentDashboardRpcCall, UserSkillPayload } from "@lxe/desktop-protocol";
 import {
   DASHBOARD_TOOL_RESULT_PAGE_PREVIEW_BYTES,
@@ -811,4 +811,26 @@ test("composer candidates and skills use the session workspace and current catal
     await service.call({ operation: "sessions.delete", input: { session_id: "a" } });
     await expect(candidates("a")).rejects.toThrow("session not found");
   } finally { service.dispose(); await store.stop(); }
+});
+
+
+test("session rename returns accepted metadata and updates list/detail/search while preserving actual failures", async () => {
+  const root = mkdtempSync(join(tmpdir(), "lxe-rename-rpc-")); roots.push(root);
+  const store = new SqliteRuntimeStore(join(root, "agent.sqlite3"));
+  await store.start(); await store.ensureSession({ session_id: "s", workspace: workspaceFor(root), source: {} });
+  await store.appendMessage("s", { role: "user", content: "First prompt" }, "turn_input");
+  const titles = new SessionTitleService({ store });
+  const service = new DashboardService({ stateRoot: root, llmConfigRoot: join(root, "llm"), skillsRoot: join(root, "skills"),
+    userSkillsRoot: join(root, "user"), environment: {}, store, tools: new ToolRegistry(), mcpConfig: { servers: [] }, sessionTitles: titles });
+  try {
+    const renamed = await service.call({ operation: "sessions.rename", input: { session_id: "s", title: "新\n名称" } });
+    expect(renamed).toMatchObject({ title: "新 名称", title_version: 2, title_source: "user" });
+    expect((await service.call({ operation: "sessions.detail", input: { session_id: "s" } })).session.title).toBe("新 名称");
+    expect((await service.call({ operation: "sessions.list", input: { query: "新 名称" } })).items).toHaveLength(1);
+    expect((await service.call({ operation: "sessions.list", input: { query: "First prompt" } })).items).toHaveLength(0);
+    const failure = spyOn(store, "acceptTitle").mockRejectedValueOnce(new Error("SQLITE_READONLY: actual database error"));
+    await expect(service.call({ operation: "sessions.rename", input: { session_id: "s", title: "Retry" } })).rejects.toThrow("SQLITE_READONLY: actual database error");
+    failure.mockRestore();
+    expect((await service.call({ operation: "sessions.rename", input: { session_id: "s", title: "Retry" } })).title_version).toBe(3);
+  } finally { await titles.stop(); await store.stop(); }
 });

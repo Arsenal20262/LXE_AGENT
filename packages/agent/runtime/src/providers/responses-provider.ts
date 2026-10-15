@@ -1,3 +1,4 @@
+import { auxiliaryDescriptor } from "./provider";
 import { providerTemperature } from "./provider";
 import { canReplayMetadata, completeTool, replaySignature } from "../messages/replay";
 import { AssistantMessageAccumulator } from "../messages/accumulator";
@@ -212,8 +213,9 @@ export const buildResponsesSummaryThinkingPayload = (
 
 export function buildResponsesRequest(
   descriptor: ProviderDescriptor,
-  request: Pick<RuntimeProviderRequest, "system" | "messages" | "tools" | "toolChoice" | "userIdentity" | "temperature">,
+  request: Pick<RuntimeProviderRequest, "system" | "messages" | "tools" | "toolChoice" | "userIdentity" | "temperature" | "auxiliary">,
 ): Record<string, unknown> {
+  descriptor = auxiliaryDescriptor(descriptor, request);
   // This wire drops `metadata`, but takes `user` - which is the field DeepSeek
   // rate-limits and isolates against. A shared Feishu bot would otherwise put
   // everyone in one bucket.
