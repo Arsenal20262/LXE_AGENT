@@ -8389,7 +8389,6 @@ pre {
   color: var(--danger);
 }
 
-.session-actions-hint,
 .session-actions-error {
   margin: 3.1px 6.4px 2.4px;
   color: var(--muted);

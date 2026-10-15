@@ -1694,13 +1694,11 @@ function SessionActionsMenu({
         disabled={pending || deletingBlocked}
         onClick={onDelete}
         role="menuitem"
-        title={deletingBlocked ? t.sessions.deleteRunning : undefined}
         type="button"
       >
         <Trash2 size={12} />
         <span>{t.sessions.delete}</span>
       </button>
-      {deletingBlocked ? <p className="session-actions-hint">{t.sessions.deleteRunning}</p> : null}
       {error ? <p className="session-actions-error" role="alert">{error}</p> : null}
     </div>,
     document.body,
