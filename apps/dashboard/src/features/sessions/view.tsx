@@ -5,6 +5,7 @@ import { FileAvailabilityBadge } from "../file-preview/FileFailure";
 import { PreviewHeaderActions, usePreviewSidebar } from "../file-preview/Sidebar";
 import { OpenFileButton } from "../file-preview/OpenFileButton";
 import { UserQuestionGate } from "./user-questions";
+import { questionAnswerSummary, UserQuestionSummary } from "./user-question-summary";
 import type { PendingUserQuestion, PendingApproval, PermissionMode } from "@lxe/desktop-protocol";
 import type { DesktopDraftAttachmentPayload } from "@lxe/desktop-protocol";
 import { conversationAttachments } from "./attachment-draft";
@@ -1414,6 +1415,8 @@ export const UnifiedConversationRow = React.memo(function UnifiedConversationRow
   if (row.kind === "tool") {
     const operation = row.operation ?? (row.liveTool ? liveToolOperations([row.liveTool])[0] : undefined);
     if (!operation) return null;
+    const answers = questionAnswerSummary(operation);
+    if (answers) return <UserQuestionSummary items={answers} />;
     const StatusIcon = { pending: Clock, running: LoaderCircle, success: Check, error: CircleAlert, unconfirmed: CircleHelp }[operation.status];
     const statusLabel = t.message.toolStatuses[operation.status];
     return <section className="tool-turn-group embedded single"><ul className="tool-op-list"><li className={`tool-op state-${operation.status}`}>

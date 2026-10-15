@@ -32,12 +32,12 @@
 
 用户主动停止后，Runtime 会另外写入模型可见的中断说明，桌面仅显示“已停止”，不把说明拼到下一条用户消息。技术取消不生成这条说明；完整规则见 [取消与失败](../runtime/runtime_flow.md#cancel-与失败)。
 
-提问历史与其他工具共用展示，默认折叠为一行“调用工具 ask_user_question”。展开后可以查看原始问题参数和工具结果，包括答案或实际取消、失败信息；历史记录不能再次提交。已有记录直接使用这套展示，无需迁移。
+成功回答后，提问记录直接显示只读问答摘要卡片：上方是次要颜色的题目，下方是用户答案，多选和补充文字逐行显示，空答案显示“已跳过”。实时结果和历史记录使用同一格式，旧记录无需迁移。等待、取消、失败或无法完整解析的记录仍保留通用工具展示，展开可查看原始问题参数和实际结果。
 
 未来接其他渠道时，可替换 `UserQuestionInteraction`，并显式配置可用来源。等待归属与答案校验仍须留在运行时。
 
 ## 验证
 
-定向测试覆盖工具归属和校验、空答案及全部跳过、提交/停止竞态、来源控制、模型暂停与历史配对、RPC 协议、通知失效及无全局数量门槛的调度。Electron fixture 使用真实问题组件、通用工具记录、会话列表、preload IPC、Gateway scheduler、Agent 子进程、运行时和 SQLite；只有模型是固定回答，不连接外部服务。它还验证单选即确认、逐题跳过与返回修改、未确认草稿保护、自动提交失败重试、历史折叠与展开、完整参数和结果、旧草稿兼容、页码恢复、键盘选择、蓝点优先级和窄窗口滚动，并保存明暗主题截图到系统临时目录。
+定向测试覆盖工具归属和校验、空答案及全部跳过、提交/停止竞态、来源控制、模型暂停与历史配对、RPC 协议、通知失效及无全局数量门槛的调度。Electron fixture 使用真实问题组件、回答摘要、通用工具记录、会话列表、preload IPC、Gateway scheduler、Agent 子进程、运行时和 SQLite；只有模型是固定回答，不连接外部服务。它还验证单选即确认、逐题跳过与返回修改、未确认草稿保护、自动提交失败重试、只读问答摘要、失败原文、旧草稿兼容、页码恢复、键盘选择、蓝点优先级和窄窗口滚动，并保存明暗主题截图到系统临时目录。
 
 从仓库根启动 `bun apps/dashboard/test/features/sessions/user-questions-fixture-server.ts`。将 `apps/desktop/src/preload.ts` 和 `apps/desktop/test/fixtures/user-questions.electron.ts` 分别用 `bun build --target node --format cjs --external electron --outfile <临时路径>` 构建，再用本 checkout 的 Electron 可执行文件运行 `<验收脚本路径> <preload路径>`。默认端口为 5201；需要改端口时，为服务和 Electron 设置相同的 `LXE_QUESTION_FIXTURE_PORT`。每次验收使用新启动的 fixture server；退出时停止它，临时数据库随之清理。

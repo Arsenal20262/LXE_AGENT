@@ -64,6 +64,15 @@ app.whenReady().then(async () => {
       if (resultText) await until(`document.querySelector(${JSON.stringify(`${selector} .result-block`)})?.textContent.includes(${JSON.stringify(resultText)})`);
       return selector;
     };
+    const answeredHistory = async (callId: string, answers: string[]) => {
+      const selector = historySelector(callId);
+      await until(`!!document.querySelector(${JSON.stringify(`${selector} .user-question-summary`)})`);
+      assert.deepEqual(await js(`[...document.querySelectorAll(${JSON.stringify(`${selector} dd`)})].map(e=>e.textContent.trim())`), answers);
+      assert.equal(await js(`document.querySelectorAll(${JSON.stringify(`${selector} button, ${selector} input, ${selector} textarea, ${selector} form`)}).length`), 0);
+      assert.equal(await js(`!!document.querySelector(${JSON.stringify(`${selector} .tool-op-summary`)})`), false);
+      await js(`document.querySelector(${JSON.stringify(`${selector} .user-question-summary`)}).scrollIntoView({block:'nearest'})`);
+      return selector;
+    };
     const assertCompactLayout = async () => {
       const layout = await js(`(() => {
         const card = document.querySelector('.user-question-card').getBoundingClientRect();
@@ -183,17 +192,21 @@ app.whenReady().then(async () => {
     assert.equal(await js("document.querySelector('.conversation-compose-box .reference-editor').textContent"), "保留原来的聊天草稿");
     assert.equal(await js(`sessionStorage.getItem('lxe.question-draft.'+${JSON.stringify(saved.request_id)})`), null);
     assert.equal(await js(`sessionStorage.getItem('lxe.question-page.'+${JSON.stringify(saved.request_id)})`), null);
-    const answeredHistory = await expandHistory(saved.tool_call_id, "不要修改已经发布的内容");
-    const history = await js(`document.querySelector(${JSON.stringify(`${answeredHistory} .result-block`)}).textContent`);
-    assert.ok(history.includes("店铺 B") && history.includes("表格") && history.includes("摘要") && history.includes("附上来源链接"));
-    assert.equal(await js(`document.querySelector(${JSON.stringify(`${answeredHistory} .tool-status-icon`)}).dataset.toolStatus`), "success");
+    const acceptedAnswers = ["店铺 B", "表格摘要附上来源链接", "不要修改已经发布的内容"];
+    const acceptedHistory = await answeredHistory(saved.tool_call_id, acceptedAnswers);
+    assert.deepEqual(await js(`[...document.querySelectorAll(${JSON.stringify(`${acceptedHistory} dt`)})].map(e=>e.textContent)`),
+      ["先处理哪个店铺？", "需要哪些输出？", "还有什么需要注意？"]);
     await screenshot("history-answered-light");
     await js("document.documentElement.dataset.theme='dark'");
     await screenshot("history-answered-dark");
     await js("document.documentElement.dataset.theme='light'");
-    await click(`${answeredHistory} .tool-op-summary`);
-    await assertCollapsedHistory(saved.tool_call_id);
-    await screenshot("history-collapsed");
+    window.setSize(760, 600);
+    await screenshot("history-answered-narrow");
+    assert.equal(await js(`document.querySelector(${JSON.stringify(`${acceptedHistory} .user-question-summary`)}).getBoundingClientRect().right <= innerWidth`), true);
+    assert.equal(await js("document.documentElement.scrollWidth <= innerWidth"), true);
+    window.setSize(1050, 850);
+    window.reload();
+    await answeredHistory(saved.tool_call_id, acceptedAnswers);
     await until(`document.querySelector(${JSON.stringify(activeDot)})?.dataset.sessionState==='running'`);
     await click('.conversation-send-button');
     await until("document.querySelector('.conversation-compose-box .reference-editor').textContent===''");
@@ -311,18 +324,13 @@ app.whenReady().then(async () => {
     assert.equal(await js("document.querySelectorAll('.user-question-card input:checked').length"), 0);
     await click(primary);
     await until("!document.querySelector('.user-question-card')");
-    const longHistory = await expandHistory(single.tool_call_id, "ANSWER_END");
-    const parameters = await js(`JSON.parse(document.querySelector(${JSON.stringify(`${longHistory} .message-json`)}).textContent)`);
-    assert.equal(parameters.questions[0].options.length, 4, "Expanded history keeps all question options");
-    const result = await js(`JSON.parse(document.querySelector(${JSON.stringify(`${longHistory} .tool-result-full code`)}).textContent)`);
-    assert.equal(result.answers[0].custom.trim(), longAnswer, "Expanded history keeps the full long answer");
+    const longHistory = await answeredHistory(single.tool_call_id, [longAnswer]);
     assert.equal(await js("document.documentElement.scrollWidth <= innerWidth"), true);
     await screenshot("history-long-dark");
     await js("document.documentElement.dataset.theme='light'");
     await screenshot("history-long-light");
-    await js(`document.querySelector(${JSON.stringify(`${longHistory} .result-block`)}).scrollIntoView()`);
+    await js(`document.querySelector(${JSON.stringify(`${longHistory} dd`)}).scrollIntoView({block:'end'})`);
     await screenshot("history-long-result");
-    await click(`${longHistory} .tool-op-summary`);
     console.log("PASS: automatic single-choice submit, failure retention, free text confirmation, textarea Enter, long content scrolling, narrow light/dark layout");
     await request("fixture.start", { session_id: "c", variant: "single" });
     await refresh(); await page("1 / 1");
@@ -353,10 +361,7 @@ app.whenReady().then(async () => {
     assert.equal(await js("!!document.querySelector('.user-question-card')"), true);
     assert.equal(submits, beforeSingles + 1);
     await until("!document.querySelector('.user-question-card')");
-    const singlesHistory = await expandHistory(singles.tool_call_id, "answers");
-    assert.deepEqual(await js(`JSON.parse(document.querySelector(${JSON.stringify(`${singlesHistory} .tool-result-full code`)}).textContent).answers`), [
-      { id: "one", selected: ["店铺 A"] }, { id: "two", selected: ["店铺 B"] }, { id: "three", selected: ["店铺 B"] },
-    ]);
+    await answeredHistory(singles.tool_call_id, ["店铺 A", "店铺 B", "店铺 B"]);
     console.log("PASS: single choices confirm immediately, returning to edit preserves the newest choice, final double click submits once and waits for acknowledgement");
 
     // Explicit skips survive session changes and reload; the question and options stay editable.
@@ -394,10 +399,7 @@ app.whenReady().then(async () => {
     assert.equal(submits, beforeSkips);
     await click(skip);
     await until("!document.querySelector('.user-question-card')");
-    const skippedHistory = await expandHistory(skipped.tool_call_id, "answers");
-    assert.deepEqual(await js(`JSON.parse(document.querySelector(${JSON.stringify(`${skippedHistory} .tool-result-full code`)}).textContent).answers`), [
-      { id: "one", selected: ["店铺 B"] }, { id: "many", selected: [] }, { id: "text", selected: [] },
-    ]);
+    await answeredHistory(skipped.tool_call_id, ["店铺 B", "已跳过", "已跳过"]);
     assert.equal(submits, beforeSkips + 1);
 
     // Skipping the last page first wraps to the missed first question; all-skipped is a normal result.
@@ -415,11 +417,7 @@ app.whenReady().then(async () => {
     assert.equal(await js(`document.querySelector(${JSON.stringify(primary)}).disabled`), false);
     assert.equal(submits, beforeAllSkipped + 1);
     await click(primary); await until("!document.querySelector('.user-question-card')");
-    const allSkippedHistory = await expandHistory(allSkipped.tool_call_id, "answers");
-    assert.equal(await js(`document.querySelector(${JSON.stringify(`${allSkippedHistory} .tool-status-icon`)}).dataset.toolStatus`), "success");
-    assert.deepEqual(await js(`JSON.parse(document.querySelector(${JSON.stringify(`${allSkippedHistory} .tool-result-full code`)}).textContent).answers`), [
-      { id: "one", selected: [] }, { id: "many", selected: [] }, { id: "text", selected: [] },
-    ]);
+    await answeredHistory(allSkipped.tool_call_id, ["已跳过", "已跳过", "已跳过"]);
     assert.equal(submits, beforeAllSkipped + 2);
     console.log("PASS: skip single/multi/text, clear only drafted answers, restore skips across session switch/reload, revise skipped choices, wrap missed questions, all-skipped result and failed-submit retry");
     console.log("PASS: simultaneous submit/stop settles the owned call and leaves one completed history operation");

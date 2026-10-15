@@ -161,7 +161,11 @@ export function composeConversationRows(projection: ConversationHistoryProjectio
       if ((preferLive === true || preferLive && preferLive.has(turn.turn_id)) && part.message) return { ...saved, ...part, groupId: saved.groupId, message: { ...saved.message!, content: part.message.content } };
       // A transcript call (or a yielded command result) is not an execution end.
       // Tool lifecycle state is authoritative independently of text refresh revisions.
-      if (part.liveTool) return { ...saved, ...part, groupId: saved.groupId, operation: undefined };
+      if (part.liveTool) return { ...saved, ...part, groupId: saved.groupId,
+        // Live previews may omit question arguments; accepted transcript answers
+        // can already render while the rest of the turn is still streaming.
+        operation: part.liveTool.name === "ask_user_question" && part.liveTool.status === "success" && saved.operation?.status === "success"
+          ? saved.operation : undefined };
       return { ...saved, presentation: part.presentation };
     });
     const partIds = new Set(parts.map((part) => part.id));

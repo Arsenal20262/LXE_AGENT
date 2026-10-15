@@ -11284,6 +11284,12 @@ pre {
 .session-index-item .session-index-icon[data-session-state="unavailable"] { border-style: dotted; opacity: .8; }
 @keyframes session-status-breathe { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
 @media (prefers-reduced-motion: reduce) { .session-index-item .session-index-icon[data-session-state] { animation: none; } }
+.user-question-summary { box-sizing: border-box; width: min(640px, 100%); margin: 0; padding: 12px 16px; border: 1px solid #e3e3e3; border-radius: 12px; background: transparent; font-size: .85rem; line-height: 1.6; }
+:root[data-theme="dark"] .user-question-summary { border-color: var(--border); }
+.user-question-summary-item + .user-question-summary-item { margin-top: 14px; }
+.user-question-summary dt { color: var(--text-soft); white-space: pre-wrap; overflow-wrap: anywhere; }
+.user-question-summary dd { margin: 3px 0 0; color: var(--text-strong); white-space: pre-wrap; overflow-wrap: anywhere; }
+.user-question-summary-skipped { color: var(--text-soft); }
 /* Keep the header and actions visible while longer question content scrolls inside the card. */
 .conversation-compose-box:has(> .user-question-card) { padding: 0; border: 0; background: transparent; box-shadow: none; gap: 8px; }
 .user-question-card { --question-option-fill: #f3f3f3; --question-option-hover: #ebebeb; --question-option-selected: #e8e8e8; width: min(var(--assistant-content-width, 780px), 100%); margin-inline: auto; box-sizing: border-box; border: 1px solid var(--border-strong); border-radius: 16px; background: var(--surface); padding: 12px; display: flex; flex-direction: column; gap: 12px; max-height: min(60dvh, 560px); font-size: .8rem; }
