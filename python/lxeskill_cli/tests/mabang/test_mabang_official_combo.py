@@ -397,6 +397,7 @@ def test_snapshot_failure_blocks_warehouse_and_cookie_retry_is_local(monkeypatch
         calls.append('warehouse')
         if len(calls) == 1:
             raise inv.StoreMskuActualInventoryAuthError('expired cookie')
+        return '', 'synthetic-search-token'
     async def refresh(**kw):
         calls.append('refresh')
     async def download(**kw):

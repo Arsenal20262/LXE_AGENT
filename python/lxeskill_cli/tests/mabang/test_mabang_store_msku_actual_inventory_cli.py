@@ -73,3 +73,49 @@ def test_auth_classification_preserves_actual_error(monkeypatch):
         payload = cli.run({'store_name': 'shop'})
         assert payload['auth_refresh_required'] is expected
         assert payload['exception'] == str(error)
+
+
+def test_html_business_error_reaches_terminal_without_files_or_auth_recovery(monkeypatch, tmp_path, capsys):
+    import json
+    from unittest.mock import AsyncMock
+    from lxeskill import cli as lxeskill
+    from services.mabang.amazon.fba import store_msku_actual_inventory as inventory
+    from test_mabang_store_msku_actual_inventory import (
+        _FakeResponse, _FakeSession, _fake_auth_context, WAREHOUSE_ERROR_HTML, WAREHOUSE_ERROR,
+        SEARCH_TOKEN,
+    )
+    from test_source_verification import row, source
+
+    source(tmp_path / "source/202610141349-shop_店铺MSKU数据.xlsx", [row(**{
+        "父ASIN": "P", "商品链接": "https://example.test/A",
+        **dict.fromkeys((*inventory.SALES_COLUMNS, *inventory.FBA_STOCK_COLUMNS), 0),
+    })])
+    session = _FakeSession([
+        _FakeResponse(payload={"success": True, "searchToken": SEARCH_TOKEN}),
+        _FakeResponse(body=WAREHOUSE_ERROR_HTML),
+    ])
+    monkeypatch.setattr(inventory, "erp_http_session", session)
+    monkeypatch.setattr(inventory, "get_auth_context", _fake_auth_context)
+    refresh = AsyncMock(side_effect=AssertionError("业务错误不得刷新认证"))
+    monkeypatch.setattr(inventory, "refresh_mabang_auth", refresh)
+    monkeypatch.setenv("LXESKILL_SKILL_SCOPE", "mabang-store-shenzhen-inventory-export")
+    monkeypatch.setenv("LXE_DATA_ROOT", str(tmp_path / "state"))
+    monkeypatch.setenv("LXE_WORKSPACE_ROOT", str(tmp_path / "workspace"))
+
+    async def download(store_name):
+        return await inventory.export_store_msku_actual_inventory(
+            store_name, input_dir=tmp_path / "source", output_dir=tmp_path / "output",
+        )
+
+    monkeypatch.setattr(cli, "export_store_msku_actual_inventory", download)
+    assert lxeskill.main(["mabang", "store", "shenzhen-inventory", "export", "--store-name", "shop"]) == lxeskill.EXIT_BUSINESS
+    terminal = json.loads(capsys.readouterr().out.strip())
+    assert terminal["ok"] is False
+    assert WAREHOUSE_ERROR in terminal["error"]["message"]
+    assert terminal["data"]["exception"] == terminal["error"]["message"]
+    assert terminal["data"]["auth_refresh_required"] is False
+    assert terminal["files"] == []
+    assert SEARCH_TOKEN not in json.dumps(terminal)
+    assert not list((tmp_path / "output").glob("*.xlsx"))
+    assert len(session.calls) == 2
+    refresh.assert_not_called()

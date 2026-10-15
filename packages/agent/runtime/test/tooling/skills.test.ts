@@ -88,6 +88,10 @@ describe("skill context", () => {
     expect(finalPolicy).toContain("lxeskill replenish final-restock generate --store-name");
     expect(finalPolicy).toContain("步骤 3 的 `source_msku_xlsx_path` 必须指向步骤 2 本轮返回的 `xlsx_path`");
     expect(finalPolicy).toContain("ok=false");
+    for (const policy of [finalPolicy, skills.find((item) => item.name === "mabang-store-shenzhen-inventory-export")?.content ?? ""]) {
+      expect(policy).toContain("不得等待后重复导出、改写命令重试或刷新认证");
+      expect(policy).toContain("查询条件已被新的搜索覆盖");
+    }
     expect(finalPolicy).toContain("send_files(paths=<terminal.files>)");
     expect(finalPolicy).not.toContain("用户只给店铺、仅给旧备货结果表或给出部分输入时，先列出缺失项并请求补齐");
     for (const name of ["replenishment-workflow-map", "replenishment-calculate"]) {

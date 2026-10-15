@@ -16,6 +16,7 @@ references:
 - 只把最后一条 `type="result"` 当作 terminal：先看 `ok`，业务字段读 `data`，附件读 `files`；失败保留 `error.message` 和相关 `data.context`，不把业务示例当成完整 terminal。
 - 命令返回运行中/session running 时等待同一会话，不重复启动下载或导出。
 - 只有 `data.auth_refresh_required=true` 才按 `lxeskill auth refresh` 的恢复流程刷新一次，再重试失败步骤；为 false 或缺失时停止并保留诊断，不凭错误文本中的 401/403 或 ID 猜测认证失败。
+- `ok=false` 且 `data.auth_refresh_required=false` 或缺失时，本轮立即结束；“查询条件已被新的搜索覆盖”和 HTML 业务错误同样按此处理。不得等待后重复导出、改写命令重试或刷新认证，不继续后续备货步骤；只有用户明确要求恢复且失败条件已解决时才重新执行。
 - 店铺歧义展示真实候选供选择；绑定冲突、分页异常、数据服务权限错误停止。文件占用时提示关闭对应文件后重试，不删除目标。
 - 业务执行中不修改安装目录脚本、依赖或历史报表绕过错误；用户另行要求源码修复时按开发任务处理。
 - 完整备货任务按 `replenishment-workflow-map` 连续推进；单步请求只执行指定步骤，缺前置数据时说明缺什么及下一步，不自行扩展为完整备货。
