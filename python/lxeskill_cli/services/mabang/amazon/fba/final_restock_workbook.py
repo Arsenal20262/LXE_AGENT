@@ -324,12 +324,18 @@ def _rows_for_workbook(
         out["单件重量"] = parsed_weight
         out["未发出货件总计"] = shipment_by_key.get(key, 0)
         report_local_sku = inventory_by_key[key]
+        source_local_sku = _text(record.get("本地SKU"))
+        if report_local_sku and report_local_sku != source_local_sku:
+            raise FinalRestockWorkbookError(
+                f"深圳库存报告 MSKU={msku} 本地SKU与源表不一致: "
+                f"源表={source_local_sku!r}, 报告={report_local_sku!r}"
+            )
         out["本地库存"] = _optional_number(
             record.get("本地库存"), context=f"MSKU 源表第 {source_row_number} 行 本地库存",
             allow_negative=True,
         )
-        out["本地SKU"] = report_local_sku or _text(record.get("本地SKU"))
-        out["_has_source_local_sku"] = bool(normalize_sku_key(record.get("本地SKU")))
+        out["本地SKU"] = report_local_sku or source_local_sku
+        out["_has_source_local_sku"] = bool(normalize_sku_key(source_local_sku))
         result.append(out)
     return result
 
@@ -516,12 +522,16 @@ def generate_final_restock_recommendation(
             recalculated_path,
             rows=rows,
         )
-        os.replace(recalculated_path, output_path)
+        published_path = (
+            output_path.with_name(f"{output_path.stem}-公式错误诊断{output_path.suffix}")
+            if formula_error_count else output_path
+        )
+        os.replace(recalculated_path, published_path)
 
     return FinalRestockWorkbookResult(
         store_name=clean_store_name,
         source_data_time=source_data_time,
-        output_xlsx_path=str(output_path),
+        output_xlsx_path=str(published_path),
         row_count=len(rows),
         formula_error_count=formula_error_count,
         formula_error_examples=formula_error_examples,

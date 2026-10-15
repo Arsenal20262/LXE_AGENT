@@ -392,7 +392,7 @@ def test_ah_uses_report_local_sku_and_falls_back_to_source_when_blank(tmp_path: 
             for row_number in range(2, sheet.max_row + 1):
                 msku = sheet.cell(row_number, msku_column).value
                 if msku == "SEA-1":
-                    sheet.cell(row_number, local_sku_column).value = "REPORT-SEA"
+                    sheet.cell(row_number, local_sku_column).value = " SKU-SEA "
                 elif msku == "CLEAR-1":
                     sheet.cell(row_number, local_sku_column).value = None
         workbook.save(report)
@@ -405,8 +405,43 @@ def test_ah_uses_report_local_sku_and_falls_back_to_source_when_blank(tmp_path: 
     rows = final_workbook._rows_for_workbook(
         source.records, store_name=STORE, inventory_by_key=inventory_by_key, shipment_by_key={},
     )
-    assert [row["本地SKU"] for row in rows] == ["REPORT-SEA", "SKU-CLEAR", "SKU-COMBO", ""]
+    assert [row["本地SKU"] for row in rows] == ["SKU-SEA", "SKU-CLEAR", "SKU-COMBO", ""]
     assert [row["本地库存"] for row in rows] == [15, None, 7, None]
+
+
+@pytest.mark.parametrize("msku,changed_sku", [
+    ("SEA-1", "REPORT-SEA"),
+    ("COMBO-1", "REPORT-COMBO"),
+    ("UNBOUND-1", "REPORT-UNBOUND"),
+])
+def test_ah_rejects_report_local_sku_changed_after_source_verification(
+    tmp_path: Path, msku: str, changed_sku: str,
+) -> None:
+    source_path = _write_source(tmp_path / "202610131000-Amazon-Test_店铺MSKU数据.xlsx")
+    report = _write_inventory_report(tmp_path / "inventory.xlsx", source_path)
+    workbook = load_workbook(report)
+    try:
+        for sheet in workbook.worksheets:
+            if sheet.title == source_verification.SHEET:
+                continue
+            headers = [cell.value for cell in sheet[1]]
+            msku_column = headers.index("MSKU") + 1
+            local_sku_column = headers.index("本地SKU") + 1
+            for row_number in range(2, sheet.max_row + 1):
+                if sheet.cell(row_number, msku_column).value == msku:
+                    sheet.cell(row_number, local_sku_column).value = changed_sku
+        workbook.save(report)
+    finally:
+        workbook.close()
+
+    source = source_verification.load_verified_source(source_path, store_name=STORE)
+    _, source_by_key = final_workbook._unique_source_rows(source.records)
+    inventory_by_key = final_workbook._load_shenzhen_rows(report, expected_keys=set(source_by_key))
+    with pytest.raises(FinalRestockWorkbookError, match="本地SKU.*不一致"):
+        final_workbook._rows_for_workbook(
+            source.records, store_name=STORE,
+            inventory_by_key=inventory_by_key, shipment_by_key={},
+        )
 
 
 def test_ag_preserves_negative_zero_and_blank_local_stock(tmp_path: Path) -> None:
@@ -563,3 +598,39 @@ def test_office_failure_preserves_real_diagnostic(monkeypatch, tmp_path: Path) -
     monkeypatch.setattr(final_workbook, "run_kit_bounded", fail)
     with pytest.raises(FinalRestockWorkbookError, match="LXE_OFFICE_NODE is not configured"):
         final_workbook._recalculate(tmp_path / "in.xlsx", tmp_path / "out.xlsx")
+
+
+def test_formula_error_does_not_replace_same_day_successful_output(monkeypatch, tmp_path: Path) -> None:
+    source = _write_source(tmp_path / "202610131000-Amazon-Test_店铺MSKU数据.xlsx")
+    report = _write_inventory_report(tmp_path / "inventory.xlsx", source)
+    snapshot = _write_confirmed_empty_snapshot(tmp_path / "snapshots")
+    recalculation_count = 0
+
+    def recalculate_with_distinct_valid_xlsx(input_path: Path, output_path: Path) -> None:
+        nonlocal recalculation_count
+        recalculation_count += 1
+        workbook = load_workbook(input_path)
+        try:
+            workbook.properties.description = f"publication-test-{recalculation_count}"
+            workbook.save(output_path)
+        finally:
+            workbook.close()
+
+    inspections = iter([(0, ()), (1, ("AC3=#VALUE!",))])
+    monkeypatch.setattr(final_workbook, "_recalculate", recalculate_with_distinct_valid_xlsx)
+    monkeypatch.setattr(
+        final_workbook, "_inspect_recalculated",
+        lambda path, *, rows: next(inspections),
+    )
+    first = _generate(tmp_path, source_path=source, inventory_path=report, snapshot_path=snapshot)
+    official_path = Path(first.output_xlsx_path)
+    official_bytes = official_path.read_bytes()
+    assert first.success
+
+    second = _generate(tmp_path, source_path=source, inventory_path=report, snapshot_path=snapshot)
+    diagnostic_path = Path(second.output_xlsx_path)
+    assert not second.success
+    assert second.formula_error_examples == ("AC3=#VALUE!",)
+    assert diagnostic_path.is_file() and diagnostic_path != official_path
+    assert official_path.read_bytes() == official_bytes
+    assert diagnostic_path.read_bytes() != official_bytes

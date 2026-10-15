@@ -140,3 +140,10 @@ uv run --frozen --no-sync pytest python/lxeskill_cli/tests/mabang/test_final_res
 - 本次仍仅修改 `final_restock_workbook.py`、`test_final_restock_workbook.py` 和本 handoff；不改 CLI、取数服务、Runtime、13 列公式定义或其他字段。pool-4 自身环境以 Office Kit 运行最终表、来源核验、PR1 公式及普通备货定向回归：**258 passed，无 skip**。
 - 只读使用 pool-7 已保存的同轮三份真实输入在 pool-4 离线生成 `/private/tmp/pool4-pr2-port-check/20261015Amazon-Yihaiqian-US补货最新.xlsx`；未写入 pool-7、未连接 ERP。输出可读：**2002 行、34 列**，AG/AH 各 **2002/2002** 匹配；1978 条绑定行各 13 列公式，24 条未绑定行各 I/J/R/S，U:AC 共 216 格为空，合计 **25810 个公式**；24 个零重量为 0，缓存 Excel 错误 0。历史全行公式记录不适用于当前保护后的文件。
 - PR2 仍为三文件离线计算入口；默认 MSKU 导出不含 `uq122`，下游自动取数需按需提供。PR3 再安全同步本层接口及未绑定公式例外，pool-7 随后继承，避免重复提交。本轮未调用生产 ERP；T 列货件状态边界、Microsoft Excel 原生重算、保护后的 Desktop 附件交付及全量测试/build/typecheck 为 **NOT VERIFIED**。
+
+## 2026-10-15 AH 来源一致性与正式文件发布保护
+
+- pool-4 `codex/final-restock-cli` 的修复前 HEAD 为 `ef11bbf1`。深圳报告写入“本地SKU”时直接沿用同轮 MSKU 源表的该字段（仅去首尾空白），组合商品的“子SKU”配比另列；没有已证实的合法转换或人工修改步骤。最终表读取时，报告“本地SKU”非空必须与源表一致，否则按 MSKU 明确报错；报告为空仍回退源表。已保存的同轮真实文件 2002 个 MSKU 键完全覆盖，1978 个非空值一致，24 个双方均为空，0 个不一致；“报告空白、源表非空”的回退另由定向测试覆盖。
+- 重算及结构检查通过且无公式错误才替换同日正式 XLSX；公式错误工作簿保存在独立的“公式错误诊断”文件，失败结果仍返回真实错误，既有同日合格文件不受影响。深圳报告仍参与来源元数据、店铺、批次、MSKU 覆盖及深圳库存数值校验；其库存数值不再写入最终表 AG，AH 的非空值与源表一致。因此本轮不删除三文件契约，是否进一步收敛需单独确认是否仍要求实时深圳库存取证。
+- 修改仅为最终表服务、对应测试和本 handoff；34 列、13 列公式、AG `uq122`、未绑定保护、普通备货及取数能力未改。pool-4 的最终表/来源/原备货相关回归 **266 passed**；pool-6、pool-7 镜像的最终表与 CLI 测试各 **32 passed**。pool-7 的同轮真实三文件在镜像代码下离线生成 **2002 行、34 列、0 公式错误**，未调用 ERP。Microsoft Excel 原生重算、T 列业务边界、保护后 Desktop 再交付仍为 **NOT VERIFIED**。
+- 本层修复归属 PR2 的单个本地 `fix` Commit；pool-6、pool-7 目前只是相同未提交差异，尚未通过提交祖先关系继承。后续获授权后再顺序同步 PR3、pool-7，不在下游重复提交本层服务或测试。
