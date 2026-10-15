@@ -57,7 +57,7 @@ SOURCE_NUMBER_COLUMNS = (
     "在途", "待调仓", "调仓中",
 )
 SOURCE_REQUIRED_COLUMNS = (
-    "MSKU", "父ASIN", "ASIN", "本地SKU", "本地SKU名称", "备注", "单品重量(g)(cm)",
+    "MSKU", "父ASIN", "ASIN", "本地SKU", "本地SKU名称", "备注", "单品重量(g)(cm)", "本地库存",
     *SOURCE_NUMBER_COLUMNS,
 )
 OUTPUT_SOURCE_COLUMNS = {
@@ -152,17 +152,18 @@ def _strict_number(value: Any, *, row_number: int, column: str) -> int | float:
     return float(number)
 
 
-def _optional_number(value: Any, *, context: str) -> int | float | None:
-    if value is None or not _text(value):
+def _optional_number(value: Any, *, context: str, allow_negative: bool = False) -> int | float | None:
+    if value is None or (isinstance(value, str) and not value.strip()):
         return None
     if isinstance(value, bool):
         raise FinalRestockWorkbookError(f"{context} 不是有效数值: {value!r}")
     try:
-        number = Decimal(_text(value).replace(",", ""))
+        number = Decimal(str(value).strip().replace(",", ""))
     except (InvalidOperation, ValueError) as exc:
         raise FinalRestockWorkbookError(f"{context} 不是有效数值: {value!r}") from exc
-    if not number.is_finite() or number < 0:
-        raise FinalRestockWorkbookError(f"{context} 必须是有限非负数: {value!r}")
+    if not number.is_finite() or (number < 0 and not allow_negative):
+        requirement = "有限数" if allow_negative else "有限非负数"
+        raise FinalRestockWorkbookError(f"{context} 必须是{requirement}: {value!r}")
     return int(number) if number == number.to_integral_value() else float(number)
 
 
@@ -200,9 +201,9 @@ def _load_shenzhen_rows(
     report_path: Path,
     *,
     expected_keys: set[str],
-) -> dict[str, tuple[int | float | None, str]]:
+) -> dict[str, str]:
     workbook = load_workbook(report_path, read_only=True, data_only=True)
-    by_key: dict[str, tuple[int | float | None, str]] = {}
+    by_key: dict[str, str] = {}
     try:
         business_sheets = [
             sheet for sheet in workbook.worksheets
@@ -213,7 +214,7 @@ def _load_shenzhen_rows(
         for sheet in business_sheets:
             rows = sheet.iter_rows(values_only=True)
             headers = [_text(value) for value in next(rows, ())]
-            required = ("MSKU", ACTUAL_INVENTORY_QUANTITY_COLUMN, "子SKU")
+            required = ("MSKU", ACTUAL_INVENTORY_QUANTITY_COLUMN, "本地SKU", "子SKU")
             missing = [column for column in required if column not in headers]
             if missing:
                 raise FinalRestockWorkbookError(
@@ -235,11 +236,9 @@ def _load_shenzhen_rows(
                         f"深圳库存报告存在重复 MSKU: {msku!r}"
                     )
                 actual = cells[indexes[ACTUAL_INVENTORY_QUANTITY_COLUMN]] if indexes[ACTUAL_INVENTORY_QUANTITY_COLUMN] < len(cells) else None
-                child_skus = cells[indexes["子SKU"]] if indexes["子SKU"] < len(cells) else None
-                by_key[key] = (
-                    _optional_number(actual, context=f"深圳库存报告 MSKU={msku} 库存"),
-                    _text(child_skus),
-                )
+                _optional_number(actual, context=f"深圳库存报告 MSKU={msku} 库存", allow_negative=True)
+                local_sku = cells[indexes["本地SKU"]] if indexes["本地SKU"] < len(cells) else None
+                by_key[key] = _text(local_sku)
     except FinalRestockWorkbookError:
         raise
     except Exception as exc:
@@ -286,7 +285,7 @@ def _rows_for_workbook(
     records: list[dict[str, Any]],
     *,
     store_name: str,
-    inventory_by_key: dict[str, tuple[int | float | None, str]],
+    inventory_by_key: dict[str, str],
     shipment_by_key: dict[str, int | float],
 ) -> list[dict[str, Any]]:
     _, source_by_key = _unique_source_rows(records)
@@ -319,9 +318,12 @@ def _rows_for_workbook(
             )
         out["单件重量"] = parsed_weight
         out["未发出货件总计"] = shipment_by_key.get(key, 0)
-        actual_inventory, child_skus = inventory_by_key[key]
-        out["本地库存"] = actual_inventory
-        out["本地SKU"] = child_skus or _text(record.get("本地SKU"))
+        report_local_sku = inventory_by_key[key]
+        out["本地库存"] = _optional_number(
+            record.get("本地库存"), context=f"MSKU 源表第 {source_row_number} 行 本地库存",
+            allow_negative=True,
+        )
+        out["本地SKU"] = report_local_sku or _text(record.get("本地SKU"))
         result.append(out)
     return result
 

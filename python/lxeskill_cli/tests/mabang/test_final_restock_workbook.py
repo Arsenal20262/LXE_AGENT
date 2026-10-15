@@ -26,7 +26,7 @@ STORE = "Amazon-Test"
 SOURCE_HEADERS = (
     "店铺名称", "MSKU", "父ASIN", "ASIN", "本地SKU", "本地SKU名称", "商品名称", "备注",
     "7天销量", "14天销量", "30天销量", "90天销量", "可售", "待入库", "预留",
-    "计划入库", "在途", "待调仓", "调仓中", "单品重量(g)(cm)",
+    "计划入库", "在途", "待调仓", "调仓中", "单品重量(g)(cm)", "本地库存",
 )
 
 
@@ -36,37 +36,40 @@ def _source_rows() -> list[dict[str, object]]:
             "MSKU": "SEA-1", "父ASIN": "PARENT-SEA", "ASIN": "ASIN-SEA", "本地SKU": "SKU-SEA",
             "本地SKU名称": "Ocean item", "备注": "", "7天销量": 77, "14天销量": 154,
             "30天销量": 330, "90天销量": 990, "可售": 880, "待入库": 0, "预留": 0,
-            "计划入库": 17, "在途": 0, "待调仓": 0, "调仓中": 0, "单品重量(g)(cm)": "50g 10*10*10",
+            "计划入库": 17, "在途": 0, "待调仓": 0, "调仓中": 0, "单品重量(g)(cm)": "50g 10*10*10", "本地库存": 15,
         },
         {
             "MSKU": "CLEAR-1", "父ASIN": "PARENT-CLEAR", "ASIN": "ASIN-CLEAR", "本地SKU": "SKU-CLEAR",
             "本地SKU名称": "Clearance item", "备注": "清货", "7天销量": 7, "14天销量": 14,
             "30天销量": 30, "90天销量": 90, "可售": 0, "待入库": 0, "预留": 0,
-            "计划入库": 0, "在途": 0, "待调仓": 0, "调仓中": 0, "单品重量(g)(cm)": 50,
+            "计划入库": 0, "在途": 0, "待调仓": 0, "调仓中": 0, "单品重量(g)(cm)": 50, "本地库存": None,
         },
         {
             "MSKU": "COMBO-1", "父ASIN": "PARENT-COMBO", "ASIN": "ASIN-COMBO", "本地SKU": "SKU-COMBO",
             "本地SKU名称": "Combo item", "备注": "", "7天销量": 7, "14天销量": 14,
             "30天销量": 30, "90天销量": 90, "可售": 0, "待入库": 0, "预留": 0,
-            "计划入库": 0, "在途": 0, "待调仓": 0, "调仓中": 0, "单品重量(g)(cm)": 25,
+            "计划入库": 0, "在途": 0, "待调仓": 0, "调仓中": 0, "单品重量(g)(cm)": 25, "本地库存": 7,
         },
         {
             "MSKU": "UNBOUND-1", "父ASIN": "PARENT-UNBOUND", "ASIN": "ASIN-UNBOUND", "本地SKU": "",
             "本地SKU名称": "Unbound item", "备注": "", "7天销量": 7, "14天销量": 14,
             "30天销量": 30, "90天销量": 90, "可售": 0, "待入库": 0, "预留": 0,
-            "计划入库": 0, "在途": 0, "待调仓": 0, "调仓中": 0, "单品重量(g)(cm)": 50,
+            "计划入库": 0, "在途": 0, "待调仓": 0, "调仓中": 0, "单品重量(g)(cm)": 50, "本地库存": None,
         },
     ]
 
 
-def _write_source(path: Path, rows: list[dict[str, object]] | None = None) -> Path:
+def _write_source(
+    path: Path, rows: list[dict[str, object]] | None = None,
+    *, headers: tuple[str, ...] = SOURCE_HEADERS,
+) -> Path:
     rows = _source_rows() if rows is None else rows
     path.parent.mkdir(parents=True, exist_ok=True)
     workbook = Workbook()
     sheet = workbook.active
-    sheet.append(SOURCE_HEADERS)
+    sheet.append(headers)
     for row in rows:
-        sheet.append([row.get(header) for header in SOURCE_HEADERS])
+        sheet.append([row.get(header) for header in headers])
     workbook.save(path)
     workbook.close()
     local_skus = tuple(
@@ -195,8 +198,9 @@ def test_generates_all_source_rows_without_formula_errors(tmp_path: Path) -> Non
         assert sheet["N2"].value == 17
         assert cached["T2"].value == 0
         assert sheet["AG3"].value is None
+        assert sheet["AG2"].value == 15
         assert sheet["AH3"].value == "SKU-CLEAR"
-        assert sheet["AH4"].value == "SKU-CHILD * 2"
+        assert sheet["AH4"].value == "SKU-COMBO"
         assert cached["J2"].value == pytest.approx(11)
         assert cached["R2"].value == pytest.approx(880)
         assert cached["S2"].value == pytest.approx(80)
@@ -239,9 +243,10 @@ def test_workbook_layout_mapping_and_pr1_formulas_before_office(tmp_path: Path) 
             "空运补货天数", "海运补货天数", "空运计划", "空运实际", "空运总重", "海运计划",
             "海运实际", "海运总重", "单件重量", "本地SKU名称", "备注", "本地库存", "本地SKU",
         )
-        assert sheet["AH4"].value == "SKU-CHILD * 2"
+        assert sheet["AH4"].value == "SKU-COMBO"
         assert sheet["AH3"].value == "SKU-CLEAR"
         assert sheet["AG3"].value is None
+        assert sheet["AG2"].value == 15
         assert sheet["N2"].value == 17
         assert sheet["T2"].value == 0
         assert sheet["AD2"].value == 50
@@ -266,14 +271,17 @@ def test_workbook_layout_mapping_and_pr1_formulas_before_office(tmp_path: Path) 
         workbook.close()
 
 
-@pytest.mark.parametrize("mutation", ["store", "fingerprint"])
+@pytest.mark.parametrize("mutation", ["store", "fingerprint", "local_inventory_fingerprint"])
 def test_source_store_and_fingerprint_are_verified(tmp_path: Path, mutation: str) -> None:
     source_path = _write_source(tmp_path / "202610131000-Amazon-Test_店铺MSKU数据.xlsx")
     inventory_path = _write_inventory_report(tmp_path / "inventory.xlsx", source_path)
     snapshot_path = _write_confirmed_empty_snapshot(tmp_path / "snapshots")
-    if mutation == "fingerprint":
+    if mutation in {"fingerprint", "local_inventory_fingerprint"}:
         workbook = load_workbook(source_path)
-        workbook.active["I2"] = 78  # Change raw 7-day sales after source verification.
+        if mutation == "fingerprint":
+            workbook.active["I2"] = 78  # Change raw 7-day sales after source verification.
+        else:
+            workbook.active.cell(2, SOURCE_HEADERS.index("本地库存") + 1).value = 99
         workbook.save(source_path)
         workbook.close()
     diagnostic = "店铺不一致" if mutation == "store" else "发生变化"
@@ -317,6 +325,106 @@ def test_inventory_report_must_cover_every_source_msku(tmp_path: Path) -> None:
 
     with pytest.raises(FinalRestockWorkbookError, match="覆盖与源表不一致"):
         _generate(tmp_path, source_path=source_path, inventory_path=report, snapshot_path=snapshot)
+
+
+def test_ah_uses_report_local_sku_and_falls_back_to_source_when_blank(tmp_path: Path) -> None:
+    source_path = _write_source(tmp_path / "202610131000-Amazon-Test_店铺MSKU数据.xlsx")
+    report = _write_inventory_report(tmp_path / "inventory.xlsx", source_path)
+    workbook = load_workbook(report)
+    try:
+        for sheet in workbook.worksheets:
+            if sheet.title == source_verification.SHEET:
+                continue
+            headers = [cell.value for cell in sheet[1]]
+            msku_column = headers.index("MSKU") + 1
+            local_sku_column = headers.index("本地SKU") + 1
+            for row_number in range(2, sheet.max_row + 1):
+                msku = sheet.cell(row_number, msku_column).value
+                if msku == "SEA-1":
+                    sheet.cell(row_number, local_sku_column).value = "REPORT-SEA"
+                elif msku == "CLEAR-1":
+                    sheet.cell(row_number, local_sku_column).value = None
+        workbook.save(report)
+    finally:
+        workbook.close()
+
+    source = source_verification.load_verified_source(source_path, store_name=STORE)
+    _, source_by_key = final_workbook._unique_source_rows(source.records)
+    inventory_by_key = final_workbook._load_shenzhen_rows(report, expected_keys=set(source_by_key))
+    rows = final_workbook._rows_for_workbook(
+        source.records, store_name=STORE, inventory_by_key=inventory_by_key, shipment_by_key={},
+    )
+    assert [row["本地SKU"] for row in rows] == ["REPORT-SEA", "SKU-CLEAR", "SKU-COMBO", ""]
+    assert [row["本地库存"] for row in rows] == [15, None, 7, None]
+
+
+def test_ag_preserves_negative_zero_and_blank_local_stock(tmp_path: Path) -> None:
+    source_rows = _source_rows()
+    source_rows[0]["本地库存"] = -3
+    source_rows[1]["本地库存"] = 0
+    source_path = _write_source(tmp_path / "202610131000-Amazon-Test_店铺MSKU数据.xlsx", source_rows)
+    report = _write_inventory_report(tmp_path / "inventory.xlsx", source_path)
+    verified = source_verification.load_verified_source(source_path, store_name=STORE)
+    _, source_by_key = final_workbook._unique_source_rows(verified.records)
+    inventory_by_key = final_workbook._load_shenzhen_rows(report, expected_keys=set(source_by_key))
+    rows = final_workbook._rows_for_workbook(
+        verified.records, store_name=STORE, inventory_by_key=inventory_by_key,
+        shipment_by_key={},
+    )
+    assert [row["本地库存"] for row in rows] == [-3, 0, 7, None]
+    with pytest.raises(FinalRestockWorkbookError, match="必须是有限非负数"):
+        final_workbook._optional_number(-1, context="未关联货件数量")
+
+
+@pytest.mark.parametrize("invalid", ["NaN", "Infinity", True, "unknown"])
+def test_ag_rejects_invalid_nonfinite_or_nonnumeric_local_inventory(tmp_path: Path, invalid) -> None:
+    rows = _source_rows()
+    rows[0]["本地库存"] = invalid
+    source_path = _write_source(tmp_path / "202610131000-Amazon-Test_店铺MSKU数据.xlsx", rows)
+    verified = source_verification.load_verified_source(source_path, store_name=STORE)
+    report = _write_inventory_report(tmp_path / "inventory.xlsx", source_path, rows)
+    _, source_by_key = final_workbook._unique_source_rows(verified.records)
+    inventory_by_key = final_workbook._load_shenzhen_rows(report, expected_keys=set(source_by_key))
+    with pytest.raises(FinalRestockWorkbookError, match="本地库存"):
+        final_workbook._rows_for_workbook(
+            verified.records, store_name=STORE, inventory_by_key=inventory_by_key,
+            shipment_by_key={},
+        )
+
+
+def test_inventory_report_original_columns_suffice_for_ah_and_ag_stays_native(tmp_path: Path) -> None:
+    source_path = _write_source(tmp_path / "202610131000-Amazon-Test_店铺MSKU数据.xlsx")
+    report = _write_inventory_report(tmp_path / "inventory.xlsx", source_path)
+    workbook = load_workbook(report, read_only=True)
+    try:
+        for sheet in workbook.worksheets:
+            if sheet.title == source_verification.SHEET:
+                continue
+            headers = [cell.value for cell in sheet[1]]
+            assert inventory.ACTUAL_INVENTORY_QUANTITY_COLUMN in headers
+            assert "本地SKU" in headers
+            assert "本地库存（仓位库存）" not in headers
+    finally:
+        workbook.close()
+    verified = source_verification.load_verified_source(source_path, store_name=STORE)
+    _, source_by_key = final_workbook._unique_source_rows(verified.records)
+    inventory_by_key = final_workbook._load_shenzhen_rows(report, expected_keys=set(source_by_key))
+    rows = final_workbook._rows_for_workbook(
+        verified.records, store_name=STORE, inventory_by_key=inventory_by_key,
+        shipment_by_key={},
+    )
+    assert rows[0]["本地库存"] == 15
+    assert rows[2]["本地SKU"] == "SKU-COMBO"
+
+
+def test_source_without_native_local_inventory_is_rejected(tmp_path: Path) -> None:
+    source_path = _write_source(
+        tmp_path / "202610131000-Amazon-Test_店铺MSKU数据.xlsx",
+        headers=tuple(header for header in SOURCE_HEADERS if header != "本地库存"),
+    )
+    verified = source_verification.load_verified_source(source_path, store_name=STORE)
+    with pytest.raises(FinalRestockWorkbookError, match="缺少列.*本地库存"):
+        final_workbook._unique_source_rows(verified.records)
 
 
 def test_duplicate_source_msku_is_rejected(tmp_path: Path) -> None:

@@ -126,3 +126,9 @@ uv run --frozen --no-sync pytest python/lxeskill_cli/tests/mabang/test_final_res
 - Bun `packages/agent/runtime/test/tooling/lxeskill-command.test.ts`：**12 pass, 0 fail, 85 assertions**。工作差异和相对 PR1 的 `git diff --check` 均通过。
 - 仅将上述六个 PR2 文件纳入 `fix: remove redundant final restock source path` 本地提交，提交号以本分支 `git log -1` 为准。PR3 后续通过依赖同步继承此修复，自身 Skill/契约/交接修改保持未提交。未执行 push、merge 或生产调用。
 - 离线代码具备 Review 条件；主仓库 Review 仍按 PR1 → PR2 → PR3 串行。真实业务完整输入、Microsoft Excel 原生计算、模型选择及附件发送仍为 **NOT VERIFIED**，不将本次定向测试称为全仓库验证。
+
+## 2026-10-15 AG/AH 字段映射修复归位
+
+- pool-4 `codex/final-restock-cli` 的本层计算服务要求 MSKU 源表含 Amazon MSKU 列表 `uq122` 导出的“本地库存”。AG 使用该 MSKU 自身的字段，允许有限负数并区分 0 与空白；深圳报告的可用库存仍须为有限数，但不再代替 AG。AH 优先读取深圳报告“本地SKU”组合编码，缺失时回退同轮源表“本地SKU”，不再输出“子SKU”配比文本。
+- 仅修改最终表服务、对应定向测试和本交接文件。店铺、批次、指纹、MSKU 覆盖及其他数量校验保持原契约；34 列和原有 13 列公式不变。PR2 接收已核验的三文件，不负责修改共享 MSKU 导出；默认导出尚不含 `uq122`，下游自动取数集成须按需提供此列。
+- 在 pool-4 自身环境使用 Office Kit 运行最终表、来源核验、PR1 公式和普通备货定向回归：**254 passed，无 skip**。PR3 须同步源表“本地库存”必需列的说明，再由 pool-7 安全继承本层修复。T 列状态边界、Microsoft Excel 原生重算、生产端到端交付仍待验证。
