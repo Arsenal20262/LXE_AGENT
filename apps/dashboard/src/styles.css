@@ -5890,6 +5890,10 @@ h1 {
   margin-bottom: 0.75em;
 }
 
+.conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown :is(h1, h2, h3, h4, h5, h6, strong, b) {
+  font-weight: 600;
+}
+
 .conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown :is(h1, h2, h3, h4, h5, h6) {
   margin-bottom: 7px;
 }
