@@ -147,3 +147,22 @@ uv run --frozen --no-sync pytest python/lxeskill_cli/tests/mabang/test_final_res
 - 重算及结构检查通过且无公式错误才替换同日正式 XLSX；公式错误工作簿保存在独立的“公式错误诊断”文件，失败结果仍返回真实错误，既有同日合格文件不受影响。深圳报告仍参与来源元数据、店铺、批次、MSKU 覆盖及深圳库存数值校验；其库存数值不再写入最终表 AG，AH 的非空值与源表一致。因此本轮不删除三文件契约，是否进一步收敛需单独确认是否仍要求实时深圳库存取证。
 - 修改仅为最终表服务、对应测试和本 handoff；34 列、13 列公式、AG `uq122`、未绑定保护、普通备货及取数能力未改。pool-4 的最终表/来源/原备货相关回归 **266 passed**；pool-6、pool-7 镜像的最终表与 CLI 测试各 **32 passed**。pool-7 的同轮真实三文件在镜像代码下离线生成 **2002 行、34 列、0 公式错误**，未调用 ERP。Microsoft Excel 原生重算、T 列业务边界、保护后 Desktop 再交付仍为 **NOT VERIFIED**。
 - 本层修复归属 PR2 的单个本地 `fix` Commit；pool-6、pool-7 目前只是相同未提交差异，尚未通过提交祖先关系继承。后续获授权后再顺序同步 PR3、pool-7，不在下游重复提交本层服务或测试。
+
+## 2026-10-16 所有绑定核验失败行的建议保护（未提交）
+
+- 工作区为 pool-4 / `codex/final-restock-cli`，初始 HEAD `3107696452552e63853a435af51a7630faa0b335`，初始工作区干净。本轮只修改 `final_restock_workbook.py`、`test_final_restock_workbook.py` 和本交接；没有 Git 写操作、生产 ERP 调用或 Desktop 进程操作。
+- 实际根因：之前仅用源表本地 SKU 是否非空设置 `_has_source_local_sku`，忽略了 `load_verified_source()` 已核对的「是否通过绑定核验」布尔结论。`source_verification.classify()` 的合法失败类别为本地 SKU 规范化后为空，以及非空但 catalog `stock_type=None`（未匹配、类型未核验）；普通和组合 SKU 的合法类型 1/2 通过。修复前 pool-4 用合法合成源表及实际 Office Kit 复现核验 False 却返回成功、`U2=空运（急发）`、`Y2=50`，0 公式错误并不能发现这种业务错误。
+- 最小修复：映射行直接读取 `record[TAG_COLUMNS[1]]` 为内部 `_binding_verified`；写入公式及重算后检查共用此结论。False 行保留完整商品行、销量、库存、AG/AH 和 I/J/R/S，U–AC 九列不写建议公式且重算后公式和缓存必须为空；True 行原 13 列公式逐字保留。AH 合法空白回退、非空本地 SKU 或正 AG 库存均不能提升资格。没有另写 SKU 分类器，没有改变 13 列公式、共享来源/库存取数、CLI/catalog、Runtime 或普通备货。
+- 来源结论可信且无回退：`load_verified_source()` 先核对店铺、来源与快照指纹，再重新分类，要求绑定三元标签与重算结果完全一致且资格字段为真正 bool，并核对数量。本轮未发现第三种遗漏的合法 False 类别；不完整/重复/非法 catalog、非法组合组件、缺失/篡改的 metadata 或绑定标签等仍是既有硬失败，不降级为空建议继续。全部行合法核验失败时仍允许保留分析表，不引入旧报表的「无可计算记录」拦截。
+- 新增三组回归覆盖混合通过/失败、报告本地 SKU 全空的合法回退、全部失败；包含真正 type=2 组合商品、两种失败类别及正 AG 库存。每组实际生成并对输出再次调用 Office Kit 重算，检查两次结果的行、销量、AG/AH、全部公式文本及建议缓存；修复前 **3 failed**，修复后通过，已通过的组合样例仍为「空运（急发）」和空运实际 50。
+- 从 pool-4 根、独立 `.venv`，配置本 handoff 已记录的 `LXE_OFFICE_NODE` / `LXE_OFFICE_CLI`，以 `UV_CACHE_DIR=/private/tmp/pool4-binding-uv PYTHONDONTWRITEBYTECODE=1 uv run --frozen --no-sync pytest -p no:cacheprovider` 运行 `test_final_restock_workbook.py`、`test_final_restock_workbook_cli.py`、`test_source_verification.py`、`test_source_verification_storage.py`、`test_final_restock_recommendation.py`、`test_replenishment_formula_sheet.py`、`test_mabang_store_msku_replenishment.py`：**306 passed，无 skip**。没有新增环境变量；catalog/JS 未改，不重复运行无关双端契约或全量测试。
+- 使用 pool-7 已保存的 202610151516 MSKU 与同源深圳报告、202610151522 货件快照，在新临时目录生成 `/private/tmp/pr2-binding-eligibility-real-c0zilhpd/20261016Amazon-Yihaiqian-US补货最新.xlsx`。独立逐格核验：**2002 行、34 列、1978 行核验通过各 13 列公式、24 行不通过各 I/J/R/S，公式共 25810 个、U–AC 的 216 格公式及缓存为空、缓存 Excel 错误 0、ZIP CRC 有效**；AG、AH、销量 E–H、库存 K–Q 各 **2002/2002** 与原输入一致，三输入 SHA-256 前后不变。根代理另行读回文件及输入哈希确认。真实批次未包含非空但未匹配 SKU，该新增分支由上述合成回归证明。汇总在同目录 `verification-report.json`，脚本为 `/private/tmp/pr2-binding-eligibility-real-regression.py`；未覆盖原输入或 Desktop 附件。
+- 当前具备 PR2 本地 Commit 的技术条件，三文件均未暂存/未提交；完整 diff 与 `git diff --check` 已核对。本轮不 commit、push、merge、rebase 或同步下游。Microsoft Excel 原生重算、Windows、全量合并前验证、build/typecheck 和修复后的 Desktop 交付仍为 **NOT VERIFIED**；T 列状态与 FBA 在途边界仍待业务确认。
+- 安全同步方式（须另获 Git 授权）：先保存各层 HEAD 恢复引用、工作区逐文件副本/补丁与状态；PR2 提交此自属 fix 后，将 PR3 的自属提交从旧 PR2 `31076964` 重放到新 PR2，复核 `range-diff`；PR3 仅在自身 Skill/契约测试/交接中把「缺少本地 SKU」说明扩为「绑定核验未通过」。再将 pool-7 自属提交从旧 PR3 `04a6b024` 重放到新 PR3，恢复并核对其独立脱敏改动，禁止复制 PR2 服务/测试在下游重复提交。pool-7 同步应避开用户 Desktop 测试，并对整链做兼容和定向回归。
+- pool-7 保护证据在 `/private/tmp/pool7-redaction-preservation-20261016.json`：原 HEAD `70181992`，库存 CLI 脱敏、对应测试、auto-data handoff 三个未暂存文件的完整差异及 SHA-256 均已保存。本轮结束时三个文件及整个 diff 与证据逐字节一致；后续恢复时 adapter/测试须哈希一致，handoff 须完整保留旧段后再追加同步记录。PR3 / pool-7 尚未继承本修复，不能以本轮 pool-4 验收声称运行中的 Desktop 已修复。
+
+## 2026-10-16 本地提交授权收口
+
+- 用户已明确授权仅在 pool-4 暂存并创建一个本地 fix Commit，范围为最终表服务、对应测试和本 handoff。提交备注为 `fix: suppress restock advice for all unverified MSKUs`，Commit ID 以本分支 `git log -1` 为准；原「未提交」章节保留为修复阶段记录。
+- 服务与测试的 Git blob 分别为 `0f39e8fa`、`a894aecb` 开头，与 306 项通过时一致；本轮复用该定向证据，并重新核对真实回归汇总与 XLSX ZIP。源码和基线无变化，不重复运行 306 项或全量测试。提交前核对三文件完整差异、暂存范围及 `git diff --cached --check`；资格仍由来源核验 bool 统一控制，未恢复仅判断本地 SKU 非空的逻辑。
+- 本轮仅进行获授权的 pool-4 本地暂存/提交，不操作其他分支、rebase、push、merge 或生产 ERP。pool-7 脱敏三文件及其完整 diff 已只读核对，仍与保护证据一致；后续 PR3 → pool-7 同步继续等待单独授权，按上一节备份和串行继承流程处理。

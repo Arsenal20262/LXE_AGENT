@@ -62,6 +62,7 @@ def _source_rows() -> list[dict[str, object]]:
 def _write_source(
     path: Path, rows: list[dict[str, object]] | None = None,
     *, headers: tuple[str, ...] = SOURCE_HEADERS,
+    local_skus: tuple[LocalSkuDefinition, ...] | None = None,
 ) -> Path:
     rows = _source_rows() if rows is None else rows
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -72,10 +73,11 @@ def _write_source(
         sheet.append([row.get(header) for header in headers])
     workbook.save(path)
     workbook.close()
-    local_skus = tuple(
-        LocalSkuDefinition(str(row["本地SKU"]), 1)
-        for row in rows if str(row.get("本地SKU") or "").strip()
-    )
+    if local_skus is None:
+        local_skus = tuple(
+            LocalSkuDefinition(str(row["本地SKU"]), 1)
+            for row in rows if str(row.get("本地SKU") or "").strip()
+        )
     source_verification.annotate_source(
         path,
         SkuCatalogSnapshot(STORE, "401403", "shopId", local_skus),
@@ -219,6 +221,76 @@ def test_generates_all_source_rows_without_formula_errors(tmp_path: Path, unboun
     finally:
         formulas.close()
         values.close()
+
+
+@pytest.mark.parametrize("all_failed,blank_report_skus", [(False, False), (False, True), (True, False)])
+def test_binding_verdict_controls_advice_after_office_recalculation(
+    tmp_path: Path, all_failed: bool, blank_report_skus: bool,
+) -> None:
+    if not os.environ.get("LXE_OFFICE_NODE"):
+        pytest.skip("LXE Office runtime is not configured; recalculation remains NOT VERIFIED")
+    source_rows = _source_rows()
+    source_rows.append({**source_rows[2], "MSKU": "UNMATCHED-1", "本地SKU": "UNKNOWN-LOCAL-SKU"})
+    local_skus = (
+        LocalSkuDefinition("SKU-SEA", 1),
+        LocalSkuDefinition("SKU-CLEAR", 1),
+        LocalSkuDefinition("SKU-COMBO", 2, (inventory.ComboComponent("SKU-CHILD", Decimal(2)),)),
+        LocalSkuDefinition("UNKNOWN-LOCAL-SKU", None),
+    )
+    if all_failed:
+        source_rows = source_rows[3:]
+        local_skus = local_skus[-1:]
+    source_path = _write_source(
+        tmp_path / "202610131000-Amazon-Test_店铺MSKU数据.xlsx", source_rows,
+        local_skus=local_skus,
+    )
+    verified = source_verification.load_verified_source(source_path, store_name=STORE)
+    verdicts = {row["MSKU"]: row["是否通过绑定核验"] for row in verified.records}
+    assert verdicts == (
+        {"UNBOUND-1": False, "UNMATCHED-1": False} if all_failed else
+        {"SEA-1": True, "CLEAR-1": True, "COMBO-1": True, "UNBOUND-1": False, "UNMATCHED-1": False}
+    )
+    report_rows = (
+        [{**row, "本地SKU": ""} for row in source_rows] if blank_report_skus else source_rows
+    )
+    report_path = _write_inventory_report(tmp_path / "inventory.xlsx", source_path, report_rows)
+    result = _generate(tmp_path, source_path=source_path, inventory_path=report_path)
+    assert result.success and result.formula_error_count == 0
+    assert result.row_count == len(source_rows)
+
+    # Recalculate the delivered formulas again; blank caches alone must not hide advice.
+    recalculated_again = tmp_path / "recalculated-again.xlsx"
+    final_workbook._recalculate(Path(result.output_xlsx_path), recalculated_again)
+    for path in (Path(result.output_xlsx_path), recalculated_again):
+        formulas = load_workbook(path, read_only=True, data_only=False)
+        values = load_workbook(path, read_only=True, data_only=True)
+        try:
+            sheet, cached = formulas["mskulist"], values["mskulist"]
+            assert sheet.max_row == len(source_rows) + 1 and sheet.max_column == 34
+            for row_number, source_row in enumerate(source_rows, 2):
+                msku = source_row["MSKU"]
+                assert sheet[f"B{row_number}"].value == msku
+                assert [sheet[f"{column}{row_number}"].value for column in ("E", "F", "G", "H")] == [
+                    source_row[column] for column in ("7天销量", "14天销量", "30天销量", "90天销量")
+                ]
+                assert sheet[f"AG{row_number}"].value == source_row["本地库存"]
+                assert sheet[f"AH{row_number}"].value == (source_row["本地SKU"] or None)
+                expected = final_restock_formulas(row_number)
+                for column in ("I", "J", "R", "S"):
+                    assert sheet[f"{column}{row_number}"].value == expected[column]
+                assert cached[f"I{row_number}"].value is not None
+                for column in ("U", "V", "W", "X", "Y", "Z", "AA", "AB", "AC"):
+                    if verdicts[msku]:
+                        assert sheet[f"{column}{row_number}"].value == expected[column]
+                    else:
+                        assert sheet[f"{column}{row_number}"].value is None
+                        assert cached[f"{column}{row_number}"].value is None
+                if msku == "COMBO-1":
+                    assert cached[f"U{row_number}"].value == "空运（急发）"
+                    assert cached[f"Y{row_number}"].value == 50
+        finally:
+            formulas.close()
+            values.close()
 
 
 def test_workbook_layout_mapping_and_pr1_formulas_before_office(tmp_path: Path) -> None:

@@ -20,6 +20,7 @@ from openpyxl.workbook.properties import CalcProperties
 from services.mabang.amazon.fba.final_restock_recommendation import final_restock_formulas
 from services.mabang.amazon.fba.source_verification import (
     SHEET as SOURCE_VERIFICATION_SHEET,
+    TAG_COLUMNS,
     SourceVerificationError,
     load_verified_source,
     read_report_metadata,
@@ -335,7 +336,7 @@ def _rows_for_workbook(
             allow_negative=True,
         )
         out["本地SKU"] = report_local_sku or source_local_sku
-        out["_has_source_local_sku"] = bool(normalize_sku_key(source_local_sku))
+        out["_binding_verified"] = record[TAG_COLUMNS[1]]
         result.append(out)
     return result
 
@@ -348,8 +349,8 @@ def _write_workbook(path: Path, rows: list[dict[str, Any]]) -> None:
     for row_index, row in enumerate(rows, start=2):
         worksheet.append([row.get(header) for header in HEADERS])
         for column, formula in final_restock_formulas(row_index).items():
-            if not row["_has_source_local_sku"] and column in ADVICE_FORMULA_COLUMNS:
-                continue  # Keep the unbound source row, but do not publish transport or restock advice.
+            if not row["_binding_verified"] and column in ADVICE_FORMULA_COLUMNS:
+                continue  # Keep the unverified source row without transport or restock advice.
             worksheet[f"{column}{row_index}"] = formula
     for row in worksheet.iter_rows():
         for cell in row:
@@ -433,10 +434,10 @@ def _inspect_recalculated(path: Path, *, rows: list[dict[str, Any]]) -> tuple[in
                     )
                 for column, index in formula_indexes.items():
                     formula = formula_row[index].value
-                    if not rows[row_number - 2]["_has_source_local_sku"] and column in ADVICE_FORMULA_COLUMNS:
+                    if not rows[row_number - 2]["_binding_verified"] and column in ADVICE_FORMULA_COLUMNS:
                         if formula not in (None, "") or value_row[index].value not in (None, ""):
                             raise FinalRestockWorkbookError(
-                                f"缺少本地SKU的 MSKU 重算后仍有运输或补货建议: {column}{row_number}"
+                                f"未通过本地SKU绑定核验的 MSKU 重算后仍有运输或补货建议: {column}{row_number}"
                             )
                         continue
                     if not isinstance(formula, str) or not formula.startswith("="):
