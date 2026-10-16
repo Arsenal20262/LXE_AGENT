@@ -8508,13 +8508,13 @@ pre {
 
 .sidebar-session-section .session-index-item {
   display: block;
-  padding: 0 3px 0 0;
+  padding: 0;
   color: var(--sidebar-ink-soft);
 }
 
 .sidebar-session-section .session-index-open {
   width: 100%;
-  padding: 5.5px 8px;
+  padding: 5.5px 0 5.5px 8px;
 }
 
 .sidebar-session-section .session-index-actions {
@@ -8562,8 +8562,8 @@ pre {
   font-weight: 400;
   text-overflow: clip;
   white-space: nowrap;
-  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent 100%);
-  mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 12px), transparent 100%);
+  mask-image: linear-gradient(to right, #000 calc(100% - 12px), transparent 100%);
 }
 
 .sidebar-session-section .empty-state {
