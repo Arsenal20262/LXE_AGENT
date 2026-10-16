@@ -783,6 +783,7 @@ export class TypeScriptAgentRuntime implements AgentRuntime {
         }
 
         const resultSlots: Array<ToolResultBlock | undefined> = new Array(calls.length);
+        const questionBatch = calls.some(call => call.name === "ask_user_question");
         const orderedResults = (): ToolResultBlock[] =>
           resultSlots.filter((result): result is ToolResultBlock => result !== undefined);
         let interruptedBySteering = false;
@@ -962,7 +963,19 @@ export class TypeScriptAgentRuntime implements AgentRuntime {
             await recordUsage("cancelled");
             return this.outcome("cancelled", "", inputTokens, outputTokens, toolCalls);
           }
-          const parallel = this.options.tools.definition(calls[callIndex]!.name)?.supportsParallelCalls === true;
+          // Decide from the entire response before dispatch, regardless of call order.
+          // Answers only resume the model loop; they never authorize stale sibling calls.
+          if (questionBatch && calls[callIndex]!.name !== "ask_user_question") {
+            resultSlots[callIndex] = {
+              type: "tool_result",
+              tool_call_id: calls[callIndex]!.id,
+              content: "Tool execution blocked because this response contains ask_user_question. This call was not executed and will not resume. Reconsider the question result in a subsequent model response and issue a new tool call only if appropriate. A skipped question is not consent or authorization.",
+              is_error: true,
+            };
+            callIndex += 1;
+            continue;
+          }
+          const parallel = !questionBatch && this.options.tools.definition(calls[callIndex]!.name)?.supportsParallelCalls === true;
           let waveEnd = callIndex + 1;
           if (parallel) {
             while (waveEnd < calls.length
