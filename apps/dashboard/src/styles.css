@@ -8533,6 +8533,7 @@ pre {
 }
 
 .sidebar-session-section .session-index-icon {
+  border-width: 1px;
   color: currentColor;
   opacity: 0.35;
 }
@@ -8558,6 +8559,7 @@ pre {
   min-width: 0;
   color: inherit;
   font-size: 0.8375rem;
+  font-weight: 400;
   text-overflow: clip;
   white-space: nowrap;
   -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent 100%);
