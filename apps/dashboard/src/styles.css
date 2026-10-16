@@ -5893,6 +5893,24 @@ h1 {
   background: var(--border);
 }
 
+/* Light chat prose only; shared Markdown previews keep their existing theme. */
+:root:not([data-theme="dark"]) .conversation-feed .message-markdown hr {
+  margin: 20px 0;
+  background: #e3e3e2;
+}
+
+:root:not([data-theme="dark"]) .conversation-feed .message-markdown a[href] {
+  color: #184f95;
+  font-weight: 500;
+  text-decoration-color: #a3b7d4;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+:root:not([data-theme="dark"]) .conversation-feed .message-markdown a[href]:hover {
+  color: #2a78d6;
+}
+
 /* A quote carries no vertical padding of its own: the rail hugs the text and
    the block keeps the same rhythm as a paragraph, so quoting a line never
    pushes the text around it. The margin reset has to be repeated here because
