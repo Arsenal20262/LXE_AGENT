@@ -6470,8 +6470,13 @@ code {
 
 /* Pixel-checked dark chat colours. Keep the palette local: the sidebar,
    composer, user bubbles, tool output and other Markdown viewers retain theirs. */
-:root[data-theme="dark"] :is(.conversation-scroll-area, .conversation-feed) {
+:root[data-theme="dark"] :is(.conversation-view, .conversation-scroll-area, .conversation-feed) {
   background-color: #151515;
+}
+
+/* The dock is part of the chat canvas; the input card keeps its own surface. */
+:root[data-theme="dark"] .conversation-composer-dock {
+  background: linear-gradient(to bottom, transparent, #151515 18px);
 }
 
 :root[data-theme="dark"] .conversation-scroll-area::before {
