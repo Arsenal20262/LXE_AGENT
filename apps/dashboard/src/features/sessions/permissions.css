@@ -7,7 +7,7 @@
   --confirm-surface: #fff;
   --confirm-ink: #0b0b0b;
   --confirm-description: #52514e;
-  --confirm-border: #dededb;
+  --confirm-border: #d1d1d1;
   --confirm-hover: #f0f0ef;
   --confirm-focus: #1677ff;
   width: min(440px, 100%);
