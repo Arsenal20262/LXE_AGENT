@@ -5805,6 +5805,13 @@ h1 {
   overflow-wrap: anywhere;
 }
 
+/* Streaming prose is a grid item before it becomes a final-answer card.
+   Let it shrink to the chat column so wide tables scroll inside their wrapper
+   instead of giving every paragraph the table's intrinsic width. */
+.conversation-feed .message-markdown {
+  min-width: 0;
+}
+
 .message-card.role-assistant .message-block-list > .message-text,
 .message-card.role-assistant .message-block-list > .message-markdown {
   margin-block: 4px;
