@@ -5880,6 +5880,56 @@ h1 {
   margin-top: 3px;
 }
 
+/* Assistant prose shares one reading rhythm in both themes, including while
+   streaming. Other Markdown surfaces retain their existing typography. */
+.conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown {
+  line-height: 1.55;
+}
+
+.conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown p:not(:last-child) {
+  margin-bottom: 0.75em;
+}
+
+.conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown :is(h1, h2, h3, h4, h5, h6) {
+  margin-bottom: 7px;
+}
+
+.conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown h1 {
+  margin-top: 30px;
+  font-size: 1.5rem;
+}
+
+.conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown h2 {
+  margin-top: 26px;
+  font-size: 1.1875rem;
+}
+
+.conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown h3 {
+  margin-top: 21px;
+  font-size: 1rem;
+}
+
+.conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown :is(h4, h5, h6) {
+  margin-top: 18px;
+}
+
+/* Keep the first heading flush with its container, including inside quotes. */
+.conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown > :is(h1, h2, h3, h4, h5, h6):first-child,
+.conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown blockquote > :is(h1, h2, h3, h4, h5, h6):first-child {
+  margin-top: 0;
+}
+
+.conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown > :is(h1, h2, h3, h4, h5, h6):last-child,
+.conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown blockquote > :is(h1, h2, h3, h4, h5, h6):last-child {
+  margin-bottom: 0;
+}
+
+/* Table density is independent of the prose rhythm; code blocks already
+   declare their own line height. */
+.conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown table {
+  line-height: 1.7;
+}
+
 .message-markdown a {
   color: var(--info);
   font-weight: 600;
