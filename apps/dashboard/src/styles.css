@@ -9309,6 +9309,28 @@ pre {
   padding: 5px 9px;
 }
 
+/* Light chat tool rows use text contrast for interaction, leaving status
+   colours and the keyboard focus outline independent. */
+:root:not([data-theme="dark"]) .conversation-feed .tool-op-summary:is(:hover, :focus-visible) {
+  background: transparent;
+}
+
+:root:not([data-theme="dark"]) .conversation-feed .tool-op:not(.state-error) .tool-op-name {
+  color: #8a8984;
+}
+
+:root:not([data-theme="dark"]) .conversation-feed .tool-op-argument {
+  color: #52514f;
+}
+
+:root:not([data-theme="dark"]) .conversation-feed .tool-op:not(.state-error) .tool-op-summary:not(:disabled):is(:hover, :focus-visible) .tool-op-name {
+  color: #52514f;
+}
+
+:root:not([data-theme="dark"]) .conversation-feed .tool-op-summary:not(:disabled):is(:hover, :focus-visible) .tool-op-argument {
+  color: #0b0b0b;
+}
+
 .optimistic-message-state {
   display: flex;
   align-items: center;
