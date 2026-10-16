@@ -16,6 +16,8 @@
      this one stack. Document viewers keep the fonts declared by the file. */
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --bg: #fafaf9;
+  /* Shared canvas for chat content, composer dock and scroll-edge fades. */
+  --conversation-bg: var(--bg);
   --bg-soft: #ffffff;
   --surface: #ffffff;
   --surface-muted: #f7f4f0;
@@ -144,6 +146,7 @@ button {
 :root[data-theme="dark"] {
   color-scheme: dark;
   --bg: #242322;
+  --conversation-bg: #151515;
   --bg-soft: #2b2927;
   --surface: #32302e;
   --surface-muted: #2e2c2a;
@@ -4945,14 +4948,14 @@ h1 {
 
 .conversation-scroll-area::before {
   top: 0;
-  background: linear-gradient(to bottom, var(--bg) 30%, transparent);
+  background: linear-gradient(to bottom, var(--conversation-bg) 30%, transparent);
 }
 
 /* The composer dock's own gradient sits below the scroll container, so it
    never reached the edge that does the cutting. This one covers that edge. */
 .conversation-scroll-area::after {
   bottom: 0;
-  background: linear-gradient(to top, var(--bg) 30%, transparent);
+  background: linear-gradient(to top, var(--conversation-bg) 30%, transparent);
 }
 
 .conversation-jump-latest {
@@ -6471,20 +6474,7 @@ code {
 /* Pixel-checked dark chat colours. Keep the palette local: the sidebar,
    composer, user bubbles, tool output and other Markdown viewers retain theirs. */
 :root[data-theme="dark"] :is(.conversation-view, .conversation-scroll-area, .conversation-feed) {
-  background-color: #151515;
-}
-
-/* The dock is part of the chat canvas; the input card keeps its own surface. */
-:root[data-theme="dark"] .conversation-composer-dock {
-  background: linear-gradient(to bottom, transparent, #151515 18px);
-}
-
-:root[data-theme="dark"] .conversation-scroll-area::before {
-  background: linear-gradient(to bottom, #151515 30%, transparent);
-}
-
-:root[data-theme="dark"] .conversation-scroll-area::after {
-  background: linear-gradient(to top, #151515 30%, transparent);
+  background-color: var(--conversation-bg);
 }
 
 :root[data-theme="dark"] .conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown {
@@ -8723,14 +8713,12 @@ pre {
   opacity: 0.6;
 }
 
-/* The plane, not a card. --surface here sits under every card in the
-   transcript, which in light mode differed from --bg by five units and hid the
-   problem; on dark the same pair is far enough apart that the composer dock's
-   fade to --bg showed up as a band across the bottom. */
+/* Share the chat canvas with the dock and edge fades to avoid visible seams.
+   Cards, including the input card, keep their own surface colours. */
 .conversation-view {
   position: relative;
   overflow: hidden;
-  background: var(--bg);
+  background: var(--conversation-bg);
 }
 
 .conversation-header {
@@ -9731,7 +9719,7 @@ pre {
   z-index: 7;
   flex: 0 0 auto;
   padding: 0 24px 18px;
-  background: linear-gradient(to bottom, transparent, var(--bg) 18px);
+  background: linear-gradient(to bottom, transparent, var(--conversation-bg) 18px);
 }
 
 /* Same axis as .conversation-feed — both track --assistant-content-width. */
