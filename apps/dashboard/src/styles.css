@@ -6330,6 +6330,49 @@ code {
   font-weight: 650;
 }
 
+/* Screenshot-derived light chat palette. Keep these overrides local: the
+   shared highlighter also renders tool output, file previews and skill docs. */
+:root:not([data-theme="dark"]) .conversation-feed .message-markdown code:not(pre code) {
+  border: 1px solid #dadad9;
+  background: #f0f0ef;
+  color: #8e2726;
+}
+
+:root:not([data-theme="dark"]) .conversation-feed .message-markdown pre.code-block {
+  border-color: #e4e4e3;
+  background: #fff;
+  color: #1a1a1a;
+}
+
+:root:not([data-theme="dark"]) .conversation-feed .message-markdown .code-block :is(.hljs-comment, .hljs-quote) {
+  color: #999;
+  font-style: normal;
+}
+
+:root:not([data-theme="dark"]) .conversation-feed .message-markdown .code-block :is(.hljs-keyword, .hljs-selector-tag, .hljs-literal, .hljs-doctag, .hljs-number, .hljs-function, .hljs-operator) {
+  color: #c6631b;
+}
+
+:root:not([data-theme="dark"]) .conversation-feed .message-markdown .code-block :is(.hljs-string, .hljs-regexp, .hljs-addition) {
+  color: #1f9e3c;
+}
+
+:root:not([data-theme="dark"]) .conversation-feed .message-markdown .code-block :is(.hljs-title, .hljs-section, .hljs-name, .hljs-selector-id, .hljs-selector-class, .hljs-built_in, .hljs-type) {
+  color: #0273e7;
+}
+
+:root:not([data-theme="dark"]) .conversation-feed .message-markdown .code-block :is(.hljs-variable, .hljs-template-variable, .hljs-attr, .hljs-selector-attr, .hljs-attribute, .hljs-property, .hljs-params, .hljs-symbol) {
+  color: #1a1a1a;
+}
+
+:root:not([data-theme="dark"]) .conversation-feed .message-markdown .code-block :is(.hljs-punctuation, .hljs-meta) {
+  color: #737373;
+}
+
+:root:not([data-theme="dark"]) .conversation-feed .message-markdown .code-block .hljs-deletion {
+  color: #8e2726;
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;
