@@ -9483,6 +9483,19 @@ pre {
   border-color: var(--danger-border);
 }
 
+:root:not([data-theme="dark"]) .conversation-feed .turn-file-item {
+  box-shadow: 0 1px 2px rgb(0 0 0 / 6%), 0 3px 8px rgb(0 0 0 / 8%);
+}
+
+:root:not([data-theme="dark"]) .conversation-feed .turn-file-item:not(.has-error) {
+  border-color: #d1d1d1;
+}
+
+:root:not([data-theme="dark"]) .conversation-feed .turn-file-item:has(> .turn-file-card:hover:not(:disabled)):not(.has-error) {
+  border-color: #bdbdbd;
+  background: var(--surface);
+}
+
 /* Kept on every row, including when the whole set shares a type, because it is
    the anchor the eye lands on - a list of bare names reads as a wall of text.
    Quiet and narrow so it stops competing with the name for both width and
