@@ -131,12 +131,14 @@ def test_source_without_native_local_inventory_is_rejected_by_cli(tmp_path: Path
     assert terminal["files"] == []
 
 
-def test_skill_describes_unbound_advice_exception() -> None:
+def test_skill_describes_binding_verification_advice_guard() -> None:
     skill = (Path(__file__).resolve().parents[4] / "skills" / SKILL / "SKILL.md").read_text()
     assert "`uq122`" in skill
     assert "I/J/R/S" in skill
     assert "U–AC" in skill
     assert "13 列公式" in skill
+    assert "绑定核验未通过" in skill
+    assert "未能匹配库存/组合目录" in skill
 
 
 def test_unknown_store_returns_actual_local_source_mismatch(tmp_path: Path, capsys) -> None:

@@ -41,7 +41,7 @@ lxeskill replenish final-restock generate --store-name "<完整店铺名>" --msk
 
 - 成功结果为一个可见工作表 `mskulist`、A:AH 共 34 列，保留本次源表全部 MSKU 行；不另跑旧算法，不手工二次扣库存或货件。
 - AG“本地库存”取源表中该 MSKU 的“本地库存”，允许有限负数，区分真实 0 和空白；AH“本地SKU”优先取同源深圳库存报告的组合编码，缺失时回退源表“本地SKU”。深圳报告的可用库存不代替 AG。
-- 缺少源表本地 SKU 的商品仍保留原始行和销量，I/J/R/S 保留分析公式，U–AC 不生成运输或补货建议；已绑定商品仍使用原有 13 列公式。不得删掉未绑定行或把其空白建议填成 0。
+- 来源绑定核验未通过的商品（本地 SKU 为空或未能匹配库存/组合目录）仍保留原始行和销量，I/J/R/S 保留分析公式，U–AC 不生成运输或补货建议；核验通过的商品仍使用原有 13 列公式。不得删掉未绑定行或把其空白建议填成 0。
 - `ok=true` 时调用 `send_files(paths=<terminal.files>)`。发送成功后说明店铺、`source_data_time`、`row_count`；没有附件时不猜路径，发送失败只重试交付，不重跑生成。
 - `ok=false` 时保留 `error.message` 及相关 `data`。若包含 `formula_error_count` / `formula_error_examples`，呈现真实单元格坐标和错误值；terminal `files` 可作为**失败诊断文件**发送，明确尚未通过验收，不作为正式可执行备货建议。
 - 按已确认的 XLSX 规则，AA 在 V 或 W 为空时留空；AC 在 AB 或 AD 为空时留空，否则相乘。AD 表头为“单件重量”，输入及总重单位仍为克。出现其他真实公式错误仍须报告，不通过 IFERROR、填零、删行或隐藏错误来声称零错误验收通过。
