@@ -54,7 +54,7 @@ Start with `fba-workflow-map` for routing. The individual skills own exact input
 
 Use `replenishment-workflow-map` for complete Amazon replenishment tasks or workflow questions; explicit single-step requests go directly to the relevant skill. Snapshot and analysis skills prepare explicit artifacts; calculation consumes those artifacts and the selected algorithm configuration.
 
-明确要求“最终备货建议”或“将原始备货建议量表转换成新表”时使用 `replenishment-final-restock`。只给店铺名也会复用店铺解析、MSKU 下载、深圳库存及未关联货件快照导出，核对本轮同源后调用既有文件计算命令，生成并交付单表 34 列 `mskulist`；用户无需准备或填写三个文件路径。明确指定整套离线输入时仍可直接计算。失败保留实际诊断，错误工作簿仅作为诊断文件；普通备货继续旧流程及原有报表。
+明确要求“最终备货建议”或“将原始备货建议量表转换成新表”时使用 `replenishment-final-restock`。用户只提供店铺名即可启动本轮店铺解析、MSKU 下载、深圳库存及未关联货件快照导出；核验同源后调用内部文件计算命令，生成并交付单表 34 列 `mskulist`。失败保留实际诊断并停止，不要求用户上传计算文件；普通备货继续旧流程及原有报表。
 
 ## 东南亚备货
 

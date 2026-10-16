@@ -2,9 +2,22 @@
 
 ## 范围与工作区
 
-- 分支 `codex/final-restock-auto-data`，Pool `.worktrees/pool-7`；原从 PR3 `63672882` 创建，现以 PR3 `82f4f7a0` 为上游，自动取数提交重放为 `c0d10ac8`，后续 fix 见本分支 Git 记录。依赖链为 main → PR1 → PR2 → PR3 → 本次修改。
-- 原 `ba543ed0` 自动取数衔接重放为 `c0d10ac8`；本轮自属修复涉及既有 Amazon 库存导出、MSKU 按需导出 `uq122`、对应 Skill/契约测试及本交接。AG/AH 映射与未绑定商品建议保护已由 PR2 提供，pool-7 不重复修改最终表服务或测试。仍保留三文件输入契约及 Runtime；未新增客户端或数据源。
-- 当前收口拆为库存导出和 MSKU `uq122` 衔接两个本地 fix Commit；不 push、merge，也不连接生产 ERP。
+- 分支 `codex/final-restock-auto-data`，Pool `.worktrees/pool-7`；本次入口收口提交前 HEAD 为 `4e479e14837ffe637d2c4bf5a837aadcaad6a13d`，最新 PR2 为 `894a413edc3ccebcc464ec288ae80b0ec7c2f5f9`。本次提交号以 `git log -1` 为准。
+- 本地开发历史仍为 main → PR1 → PR2 → 原 PR3（pool-6，`5361155f2ff82c2998c9da8e5e321665d162c7ec`）→ pool-7，全部历史提交和备份保留。正式提审已调整为下面三个 PR，原 PR3 不单独创建远端 PR，也不作为独立运营功能发布。
+- AG/AH 映射和绑定核验保护由 PR2 提供；pool-7 复用既有取数、`uq122`、Cookie、searchToken、HTML 错误识别及失败停止能力。用户只提供店铺名，不上传模板或三份原始数据；三文件计算 CLI 继续供 Agent 编排、内部离线测试和故障排查使用。
+
+## 正式三 PR 方案与部署边界（2026-10-16 生效）
+
+| 正式 PR | 范围 | 提审 Base | Head |
+|---|---|---|---|
+| PR1 | 13列备货公式 | `main` | `codex/final-restock-formulas`（`70bc0568e9ac0d93aadd141f736d46b7a4431044`） |
+| PR2 | 最终表计算引擎、校验及34列 Excel 生成 | PR1 / `codex/final-restock-formulas` | `codex/final-restock-cli`（`894a413edc3ccebcc464ec288ae80b0ec7c2f5f9`） |
+| 最终功能 PR | 原 PR3＋pool-7，店铺名自动取数、核验、计算及交付 | 最新 PR2 / `codex/final-restock-cli` | `codex/final-restock-auto-data`，必须包含本次入口收口提交 |
+
+- 按 PR1 → PR2 → 最终功能 PR 串行提审。原 PR3 提交已在 pool-7 祖先中，直接比较最新 PR2 与 pool-7 即覆盖完整功能，不删除或重写历史，不单独推送原 PR3 分支用于创建远端 PR。
+- PR2 合入后先只读核对最新 main、祖先关系和实际差异，再调整最终功能 PR 的合并目标；若上游采用 Squash 导致祖先关系变化，也不机械 rebase。可建议对最终功能 PR 使用 Squash Merge，让主分支一次进入完整功能，但 merge 方式另需批准。
+- 只从包含本次收口的最终提交构建并核对发布候选的 `source_commit`；不部署 pool-6、离线阶段提交或尚未包含入口修改的 `4e479e14`。Skill、catalog 和 Python 服务须来自同一构建版本，Desktop 使用该版本的 Skill 资源目录。Git 历史或本地 Pool 中保留旧 Skill 不等于运行时同时加载它。
+- 下文各日期章节保留当时的诊断、测试和同步历史；涉及旧四阶段提审或阶段性离线使用的安排均由本节替代，不能据此单独发布原 PR3。
 
 ## 入口与调用链
 
@@ -16,7 +29,7 @@
 4. `mabang-store-unlinked-shipments-export` → `lxeskill mabang store unlinked-shipments export`，取得三个状态完整成功的 `data.snapshot.snapshot_xlsx_path`。有效空快照可用，失败不能当零货件。
 5. `lxeskill replenish final-restock generate`，传入规范店铺和以上三个实际路径；原服务核验文件指纹、店铺、批次、快照、MSKU 覆盖及数值，再生成并重算 34 列 XLSX。仅发送最终 terminal `files`。
 
-用户明确指定整套离线文件时，仍可直接调用底层计算。普通备货继续进入旧流程；不为新流程运行旧销量分析或旧 `replenish calculate`。失败保留真实诊断，不寻找历史文件，不要求用户自行准备三个路径。
+底层计算命令继续接收上述文件路径，供本流程及内部离线测试、故障排查使用；它不作为用户手动提供文件的对外入口。普通备货继续进入旧流程；不为新流程运行旧销量分析或旧 `replenish calculate`。失败保留真实诊断，不寻找历史文件，不要求用户自行准备三个路径。
 
 ## 验证与限制
 
@@ -119,7 +132,7 @@
 - 当前提交链为 PR1 `70bc0568` → PR2 `37128c3a` → PR3 `63672882` → 自动取数 `ba543ed0`；四个 Pool 的工作区状态已只读核对。pool-7 未提交的 19 个跟踪文件和 1 个 HTML fixture 中，`final_restock_workbook.py` 与 `test_final_restock_workbook.py` 的 AG、AH、未绑定建议保护均修复 PR2 所属的离线生成服务，应先归位 pool-4；PR1 的 13 列公式函数不变。pool-7 保留按需 `uq122` 导出（MSKU Service/CLI/catalog/Skill 及测试）、库存搜索至导出的 Cookie/`searchToken`/HTML 错误修复（库存 Service/Skill、测试与 fixture）、自动取数 Skill 的相应命令和失败规则、两端 Skill 契约测试及本交接。当前 pool-7 没有可整段复制到 PR3 的未提交代码；PR3 继承 PR2 后须在自身 Skill/契约测试中明确离线 MSKU 源表新增的“本地库存”必需列，再由 pool-7 继承依赖，不把自动取数命令复制到 PR3，也不重复提交工作簿修复。
 - 现行离线产物是 `/private/tmp/pool7-unbound-offline-regression/20261015Amazon-Yihaiqian-US补货最新.xlsx`：2002 行、34 列，AG/AH 各 2002/2002 与同轮输入一致；1978 条已绑定每行 13 列公式，24 条未绑定每行只保留 I/J/R/S，U:AC 的 216 个公式与缓存单元格为空，合计 25810 个公式，缓存 Excel 错误 0。上文 26026 个公式属于保护前的历史产物，不能作为现行代码的全行公式验收或提交说明；保护后的 Desktop 再交付仍未验证。
 - 本次从 pool-7 根目录补跑最终表、来源核验、PR1 公式及旧普通备货定向组 `258 passed`，库存/MSKU Service 与 CLI 定向组 `162 passed`；catalog 所需 Python 契约组在允许本机 `127.0.0.1` 模拟服务器的环境中 `495 passed, 4 skipped`（仅 Windows 专属），Bun 契约 `25 pass`。Python 契约首次在受限沙箱内因 59 个本机监听被拒而失败，换用本机模拟环境后全数通过；未连接生产 ERP。本次未重跑全量、build/typecheck；之前通过证据对应代码与本轮仅文档变更的范围须在最终同步后再复核。`git diff --check` 与相对 PR3 的检查通过。
-- 正式提审按 PR1 → PR2 → PR3 → pool-7 串行：先取得 Git 操作授权，在 pool-4 为工作簿映射和未绑定保护分别形成小而完整的 `fix` 提交并更新 PR2 handoff；安全同步到 pool-6 后补齐其源表必需列说明与契约测试，再同步到 pool-7，确认 pool-7 不再有重复的工作簿差异；最后对 pool-7 自属修复分组提交。同步前只做只读比较，不能因本交接的归属判断擅自 rebase/commit。T 列三个货件状态边界待运营确认，Microsoft Excel 原生重算、Windows、全量测试及保护后的真实 Desktop 交付仍为 **NOT VERIFIED**。
+- 此处的修复归位和本地同步属于当时记录；原四阶段提审安排已由文首正式三 PR 方案替代。原 PR3 和 pool-7 以 pool-7 为统一 Head、最新 PR2 为 Base 提审，不单独发布离线阶段。T 列三个货件状态边界待运营确认，Microsoft Excel 原生重算、Windows、全量测试及保护后的真实 Desktop 交付仍为 **NOT VERIFIED**。
 
 ## 2026-10-15 继承最新 PR3 后的当前状态
 
@@ -127,7 +140,7 @@
 - 相对 PR3，已提交的自动取数衔接仍为 6 个文件；同步后待提交差异为 17 个已跟踪文件及 1 个脱敏 HTML fixture：库存 Service/Skill、MSKU 按需 `uq122` 导出的 Service/CLI/catalog/Skill、自动取数 Skill、两端及来源/库存测试、本 handoff。`final_restock_workbook.py` 和 `test_final_restock_workbook.py` 与 PR3 上游完全一致，不再重复提交 AG、AH、未绑定商品或零重量修复；共享库存 Service 未恢复冗余“本地库存（仓位库存）”列或 `quantity_column` 二次解析。原普通备货默认 MSKU 导出参数保持不变。
 - 同一 pool-7 工作区离线回归：Python 相关契约、最终表、库存、MSKU、来源及普通备货 **972 passed、4 skipped、4 warnings**（跳过均为 Windows 专属；warning 为既有 aiohttp 弃用提示）；Bun Skill/命令契约 **25 passed**；Mock Runtime 加载/激活 **8 passed、97 filtered out**；Runtime `tsc --noEmit` 与 Desktop 源码构建均通过。测试不连接生产 ERP，Mock Runtime 不证明同步后的真实模型选择。
 - 使用本轮已保存的 15:16 MSKU 源表（含 `uq122`）和同前缀深圳报告、15:22 同日货件快照重新离线生成 `/private/tmp/pool7-pr3-sync-offline-4c2ys00o/20261015Amazon-Yihaiqian-US补货最新.xlsx`；源表与深圳报告的来源元数据一致，货件快照同日。生成服务返回 0 个公式错误，XLSX ZIP 校验通过，`mskulist` 为 2002 行、34 列；AG、AH 各 2002/2002 与本轮输入一致，AG 为 1971 正、30 零、1 负。24 条源表未绑定行保留 I/J/R/S，U–AC 的 216 格公式及缓存留空；全部公式共 **25810** 个，与当前定义逐格一致，缓存未见 Excel 错误。历史 26026 个全行公式属于保护前产物，不能作为当前实现的验收数字。
-- 当前没有发现新增 P0–P3 代码阻塞；T 列三个货件状态与 FBA 在途的业务边界仍待运营确认。Microsoft Excel 原生重算、Windows 验证、全量合并前测试、同步后的真实模型选择及未绑定保护后的 Desktop 再交付仍为 **NOT VERIFIED**。本轮未调用生产 ERP，仅按自属范围形成两个本地 fix Commit，未 push/merge/创建远端 PR；下一步依 PR1→PR2→PR3→pool-7 的顺序提审。
+- 当时没有发现新增 P0–P3 代码阻塞；T 列三个货件状态与 FBA 在途的业务边界仍待运营确认。Microsoft Excel 原生重算、Windows 验证、全量合并前测试、同步后的真实模型选择及未绑定保护后的 Desktop 再交付仍为 **NOT VERIFIED**。本轮未调用生产 ERP，仅按自属范围形成两个本地 fix Commit，未 push/merge/创建远端 PR；正式提审采用文首 PR1 → PR2 → 最终功能 PR 的三 PR 方案。
 
 ## 2026-10-15 至 16 日继承 PR2/PR3 审计修复
 
@@ -164,4 +177,12 @@
 - pool-7 从旧 PR3 基线 `a2a2d06b2c62c49ae1ca997693cb4af305b128f3` 无冲突地 rebase 到 `5361155f`，同步检查点 HEAD 为 `788e972d4284acc02c2a31375350e7741ce774f8`。四个原 pool-7 提交的 `range-diff` 均为 `=`；相对新 PR3 仍为原有 20 个自属文件。PR2 的 `final_restock_workbook.py` 与 `test_final_restock_workbook.py` 未重复进入 pool-7 提交范围。备份恢复的 CLI 与测试内容 SHA 分别为 `eb8bc4417febfa095a4a1a1aa2d42582185312b9ce8cb2a61a40066ab57aa41b` 和 `c497d30b64b4cc87b2322bbd82e4625ebc551106c19fb761caac659bf7cb7935`。
 - 同步后直接回归：Python Office Kit/最终表、来源核验、普通备货、MSKU/库存 CLI 与脱敏、Skill 契约 **471 passed**；Bun Skill/CLI 契约 **25 passed、190 assertions**；Mock Runtime Skill 加载 **8 passed、97 filtered、78 assertions**。没有调用生产 ERP。既有同轮文件离线结果为 2002 行、34 列、25810 个公式、0 个 Excel 错误，216 个未核验建议单元格空白；本次未重新生成该真实输入文件，因为 PR2 生成器未变化，改由 Python Office Kit 直接回归验证。
 - pool-7 本地 Fix Commit 只含库存 CLI searchToken 异常脱敏、四项合成 aiohttp 异常测试和本 handoff 三个文件；不重复实现 PR2 的绑定保护，不改 13 列公式、AG/AH、普通备货或 Runtime。提交后 pool-7 工作区干净；本轮未 push、merge、创建远端 PR 或调用 ERP。
-- 已知一个 P3 文档不一致：PR3 的 `docs/harness/skill/current_skill_catalog.md` 仍写成必须提供三个离线输入，未描述自动取数；pool-7 自属版本已修正为自动取数契约。为遵守 PR3 三文件提交范围，本次未回改 PR3。没有发现新增 P0–P2；Microsoft Excel 原生重算、Windows、全量合并前测试、真实 ERP 端到端及新一轮 Desktop 交付仍为 **NOT VERIFIED**。
+- 早先记录的 P3 文档不一致判断已撤销：PR3 的 Skill、目录和 handoff 描述的是 PR3 自身的离线技术阶段，未描述尚未由该阶段提供的自动取数，内容与该阶段能力一致。pool-7 才加入只给店铺名的自动取数流程；本次仅收敛 pool-7 最终对外入口，不改写或回改 PR3 历史。
+
+## 2026-10-16 最终备货对外入口收敛与三 PR 本地收口
+
+- 目标入口只接受店铺名：`replenishment-final-restock` 和 `replenishment-workflow-map` 均引导本轮自动取数、核验、计算和交付；用户提供离线文件不再作为最终备货建议的替代流程，失败时保留真实错误并停止。普通备货仍由原 `replenishment-workflow-map` / `replenishment-calculate` 处理。
+- 底层 `lxeskill replenish final-restock generate` 继续接收店铺名和三个文件路径共四项参数，Skill 只从本轮自动导出的产物填入；本次未修改 PR2 文件计算服务、绑定核验、公式、ERP 取数、Runtime 实现或 CLI。未发现额外的最终备货离线 Skill 或重复计算入口。
+- 修改仅在 pool-7 / `codex/final-restock-auto-data`：`skills/replenishment-final-restock/SKILL.md`、`skills/replenishment-workflow-map/SKILL.md`、`docs/harness/skill/current_skill_catalog.md`、`packages/agent/runtime/test/tooling/skills.test.ts` 和本 handoff。只将这五个文件以一个本地 fix Commit 收口，PR1～原 PR3 分支及历史不修改；提交号以 `git log -1` 为准，提交后检查工作区干净。
+- 本次收口定向验证（均从 pool-7 根运行）：`UV_CACHE_DIR=/private/tmp/pool7-entrance-uv-cache PYTHONDONTWRITEBYTECODE=1 uv run --frozen --no-sync pytest -p no:cacheprovider python/lxeskill_cli/tests/lxeskill/test_final_restock_skill.py -q --tb=short`：**19 passed**；`bun test packages/agent/runtime/test/tooling/skills.test.ts packages/agent/runtime/test/tooling/lxeskill-command.test.ts`：**25 passed、203 assertions**；`bun test packages/agent/runtime/test/engine/runtime.test.ts -t 'skill loading'`：**7 passed、98 filtered、67 assertions**。验证店铺名自动取数指令、无离线替代入口、命令唯一归属、普通备货分流和模拟 Runtime Skill 加载；未调用真实模型或 ERP。`git diff --check` 通过。没有修改生成逻辑，故不重跑全量或真实文件生成；本次 Desktop 交付、Microsoft Excel 原生重算及 Windows 验收仍为 **NOT VERIFIED**。历史同轮文件结果仍是 2002 行、34列、25810 个公式、0 个 Excel 错误，不能写作本次重新生成。
+- 原 PR3 的离线阶段只保留为开发历史，由最终功能 PR 一并审查；正式只创建三个远端 PR。相对最新 PR2 的最终差异包含原 PR3 和 pool-7 完整功能，PR2 计算核心和 Runtime 实现没有新增差异。后续 push、创建远端 PR、merge 和发布均分别申请授权，本轮仅完成 pool-7 本地提交，不调用 ERP。

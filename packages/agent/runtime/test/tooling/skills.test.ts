@@ -75,6 +75,7 @@ describe("skill context", () => {
     expect(finalRestock?.description).toContain("普通备货");
     expect(finalRestock?.description).toContain("只给店铺名也应自动调用");
     const finalPolicy = finalRestock?.content ?? "";
+    expect(finalPolicy).toContain("用户要求生成且只给店铺名时，默认在本轮自动取数");
     const acquisitionSection = finalPolicy.split("## 仅给店铺名时的本轮取数")[1]?.split("## 输入与调用")[0] ?? "";
     const acquisitionCommands = [
       "lxeskill replenish store resolve",
@@ -89,6 +90,20 @@ describe("skill context", () => {
     expect(finalPolicy).toContain("lxeskill replenish final-restock generate --store-name");
     expect(finalPolicy).toContain("步骤 3 的 `source_msku_xlsx_path` 必须指向步骤 2 本轮返回的 `xlsx_path`");
     expect(finalPolicy).toContain("ok=false");
+    expect(finalPolicy).toContain("对外生成入口只接受店铺名");
+    expect(finalPolicy).toContain("失败步骤");
+    expect(finalPolicy).toContain("保留实际错误及定位信息");
+    expect(finalPolicy).toContain("不要求用户自行查找三个路径");
+    expect(finalPolicy).not.toContain("用户明确指定一整套离线输入");
+    expect(finalPolicy).not.toContain("用户明确提供的一整套合格离线文件");
+    const workflowMap = skills.find((item) => item.name === "replenishment-workflow-map")?.content ?? "";
+    expect(workflowMap).toContain("只用店铺名启动本轮自动取数");
+    expect(workflowMap).toContain("普通备货仍按本流程");
+    expect(workflowMap).toContain("replenishment-calculate");
+    expect(workflowMap).not.toContain("离线输入模式");
+    const currentSkillCatalog = readFileSync(join(repositoryRoot(import.meta.dir), "docs/harness/skill/current_skill_catalog.md"), "utf8");
+    expect(currentSkillCatalog).toContain("用户只提供店铺名即可启动本轮");
+    expect(currentSkillCatalog).not.toContain("明确指定整套离线输入时仍可直接计算");
     for (const policy of [finalPolicy, skills.find((item) => item.name === "mabang-store-shenzhen-inventory-export")?.content ?? ""]) {
       expect(policy).toContain("不得等待后重复导出、改写命令重试或刷新认证");
       expect(policy).toContain("查询条件已被新的搜索覆盖");
