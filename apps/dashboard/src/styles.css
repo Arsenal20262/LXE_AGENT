@@ -5923,6 +5923,14 @@ h1 {
   color: var(--text-soft);
 }
 
+/* Neutral rails and a wider inset at every quote level in light chat prose. */
+:root:not([data-theme="dark"]) .conversation-feed .message-markdown blockquote {
+  margin-left: 7px;
+  padding-left: 14px;
+  border-left: 4px solid #e4e4e3;
+  color: #52514f;
+}
+
 .message-markdown blockquote > :first-child {
   margin-top: 0;
 }
