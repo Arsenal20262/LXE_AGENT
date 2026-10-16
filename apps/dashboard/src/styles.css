@@ -9250,7 +9250,7 @@ pre {
   justify-self: end;
   margin: 22px 0 1px;
   padding: 9px 13px;
-  border: 1px solid var(--border);
+  border: 1px solid transparent;
   border-radius: 14px;
   background: var(--conversation-muted-fill);
 }
