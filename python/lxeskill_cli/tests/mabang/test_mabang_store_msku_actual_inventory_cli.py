@@ -1,5 +1,15 @@
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+import json
+from types import SimpleNamespace
+from unittest.mock import Mock
+
+from aiohttp import ClientResponseError, RequestInfo, TooManyRedirects
+from multidict import CIMultiDict, CIMultiDictProxy
+import pytest
+from yarl import URL
+
 
 from services.agent_cli.mabang import export_store_msku_actual_inventory as cli
 from services.mabang.amazon.fba.store_msku_actual_inventory import ActualInventoryResult
@@ -75,8 +85,63 @@ def test_auth_classification_preserves_actual_error(monkeypatch):
         assert payload['exception'] == str(error)
 
 
+@pytest.mark.parametrize("error_type", [ClientResponseError, TooManyRedirects])
+@pytest.mark.parametrize("search_token", ["synthetic-search-token", "synthetic +&/令牌"])
+def test_export_request_exception_redacts_search_token_in_terminal(
+    monkeypatch, tmp_path, capsys, caplog, error_type, search_token,
+):
+    from lxeskill import cli as lxeskill
+    from services.mabang.amazon.fba import store_msku_actual_inventory as inventory
+
+    base_url = "https://example.invalid/index.php?mod=warehouse.doexportwarehousestock&flag=1"
+    monkeypatch.setattr(inventory, "_warehouse_export_url", lambda: base_url)
+    requested_urls = []
+
+    @asynccontextmanager
+    async def fail_get(url, **kwargs):
+        requested_urls.append(url)
+        request_url = URL(url)
+        assert request_url.query["searchToken"] == search_token
+        info = RequestInfo(request_url, "GET", CIMultiDictProxy(CIMultiDict()), request_url)
+        raise error_type(info, (), status=302, message="synthetic redirect boundary")
+        yield  # pragma: no cover — the request fails while entering its context.
+
+    get = Mock(side_effect=fail_get)
+    monkeypatch.setattr(inventory, "erp_http_session", SimpleNamespace(get=get))
+
+    async def export(store_name):
+        return await inventory.download_warehouse_stock_xlsx(
+            store_name=store_name, output_dir=tmp_path / "output",
+            cookie_header="session=synthetic-cookie", search_token=search_token,
+        )
+
+    monkeypatch.setattr(cli, "export_store_msku_actual_inventory", export)
+    monkeypatch.setenv("LXESKILL_SKILL_SCOPE", "mabang-store-shenzhen-inventory-export")
+    monkeypatch.setenv("LXE_DATA_ROOT", str(tmp_path / "state"))
+    monkeypatch.setenv("LXE_WORKSPACE_ROOT", str(tmp_path / "workspace"))
+
+    assert lxeskill.main([
+        "mabang", "store", "shenzhen-inventory", "export", "--store-name", "shop",
+    ]) == lxeskill.EXIT_BUSINESS
+    terminal = json.loads(capsys.readouterr().out.strip())
+    assert terminal["ok"] is False
+    message = terminal["error"]["message"]
+    assert terminal["data"]["exception"] == message
+    assert terminal["data"]["auth_refresh_required"] is False
+    assert "302" in message and "synthetic redirect boundary" in message
+    assert "mod=warehouse.doexportwarehousestock" in message
+    assert "searchToken=[REDACTED]" in message
+    encoded_token = requested_urls[0].partition("searchToken=")[2]
+    for diagnostic_text in (json.dumps(terminal, ensure_ascii=False), caplog.text):
+        assert search_token not in diagnostic_text
+        assert encoded_token not in diagnostic_text
+        assert "synthetic-cookie" not in diagnostic_text
+    assert terminal["files"] == []
+    get.assert_called_once()
+    assert not list((tmp_path / "output").glob("*.xlsx"))
+
+
 def test_html_business_error_reaches_terminal_without_files_or_auth_recovery(monkeypatch, tmp_path, capsys):
-    import json
     from unittest.mock import AsyncMock
     from lxeskill import cli as lxeskill
     from services.mabang.amazon.fba import store_msku_actual_inventory as inventory
