@@ -8069,7 +8069,7 @@ pre {
 }
 
 .home-session-row:hover {
-  background: var(--row-hover);
+  background: var(--sidebar-hover, var(--row-hover));
 }
 
 .home-session-title {
