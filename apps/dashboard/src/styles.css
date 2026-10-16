@@ -6507,6 +6507,17 @@ code {
   background: #2d2d2d;
 }
 
+:root[data-theme="dark"] .conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown blockquote {
+  border-left-color: #2d2d2d;
+  color: #c3c2b7;
+}
+
+/* Only the verified default state; hover keeps the existing link styling. */
+:root[data-theme="dark"] .conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown a[href]:not(:hover) {
+  color: #6da8ed;
+  text-decoration-color: #39506a;
+}
+
 :root[data-theme="dark"] .conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown :is(th, td) {
   color: #f0efec;
   border-color: #373737;
