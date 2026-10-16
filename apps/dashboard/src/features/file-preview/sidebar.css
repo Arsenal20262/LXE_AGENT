@@ -387,6 +387,15 @@
 :root[data-theme=dark] .file-sidebar,:root[data-theme=dark] .file-document-toolbar,:root[data-theme=dark] .file-tab-strip {
   border-color:#ffffff18}
 
+/* The resize target shares the panel surface; its feedback overlays the same
+   one-pixel divider without changing the hit area or interaction colours. */
+:root[data-theme=dark] .file-layout {
+  --tool-sidebar-bg:#212121}
+:root[data-theme=dark] :is(.file-sidebar,.file-preview-resizer) {
+  background:var(--tool-sidebar-bg)}
+:root[data-theme=dark] .file-sidebar {
+  border-left-color:#373737}
+
 /* Reading controls follow LXE colours; heavyweight viewers own their scroll area. */
 .file-tab>button:last-child { visibility:hidden }
 .file-tab:is(.active,:hover,:focus-within)>button:last-child { visibility:visible }
