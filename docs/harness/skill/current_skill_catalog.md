@@ -52,9 +52,13 @@ Start with `fba-workflow-map` for routing. The individual skills own exact input
 - `replenishment-calculate`
 - `replenishment-final-restock`
 
-Use `replenishment-workflow-map` for complete Amazon replenishment tasks or workflow questions; explicit single-step requests go directly to the relevant skill. Snapshot and analysis skills prepare explicit artifacts; calculation consumes those artifacts and the selected algorithm configuration.
+Use `replenishment-workflow-map` to select an Amazon replenishment workflow or explain its steps; explicit single-step requests go directly to the relevant skill. After the ordinary workflow is selected, snapshot and analysis skills prepare explicit artifacts, and calculation consumes those artifacts and the selected algorithm configuration.
 
-明确要求“最终备货建议”或“将原始备货建议量表转换成新表”时使用 `replenishment-final-restock`。用户只提供店铺名即可启动本轮店铺解析、MSKU 下载、深圳库存及未关联货件快照导出；核验同源后调用内部文件计算命令，生成并交付单表 34 列 `mskulist`。失败保留实际诊断并停止，不要求用户上传计算文件；普通备货继续旧流程及原有报表。
+Amazon 业务已明确且用户明确要求“最终备货建议”时使用 `replenishment-final-restock`，不限定店铺或关键词组合；身份由现有店铺解析能力确认，不猜别名。明确其他 ERP 或东南亚请求沿用对应 Skill，平台业务真正不明确时才澄清。明确普通备货走原流程，只有备货类型不明确或流程要求冲突时，才用现有 `ask_user_question` 选择“普通备货”或“最终备货建议”；跳过或取消时停止生成。已明确平台或类型不重复询问，店铺歧义只确认店铺；单步请求和已有文件交付不受影响。
+
+入口确认后，用户只需提供店铺名，由 Agent 完成本轮店铺解析、MSKU 下载、深圳库存及未关联货件快照导出；核验同源后调用内部文件计算命令，生成并交付单表 34 列 `mskulist`。失败保留实际诊断并停止，不要求用户上传模板或计算文件；普通备货继续旧流程及原有报表。入口选择是 Skill 对话契约，不新增 Runtime 路由或将店铺 ID 写入代码。
+
+各能力的用途、输入输出和衔接关系集中在 [最终备货 Skill](../../../skills/replenishment-final-restock/SKILL.md)：MSKU 源表提供基础数据及 AG（`uq122`），深圳库存报告提供来源/编码核对及 AH，货件快照提供 T；最终计算完成核验和重算后才交付。目录不重复维护接口参数，CLI/catalog 仍是命令契约权威。
 
 ## 东南亚备货
 

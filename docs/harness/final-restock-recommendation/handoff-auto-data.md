@@ -2,9 +2,10 @@
 
 ## 范围与工作区
 
-- 分支 `codex/final-restock-auto-data`，Pool `.worktrees/pool-7`；本次入口收口提交前 HEAD 为 `4e479e14837ffe637d2c4bf5a837aadcaad6a13d`，最新 PR2 为 `894a413edc3ccebcc464ec288ae80b0ec7c2f5f9`。本次提交号以 `git log -1` 为准。
+- 分支 `codex/final-restock-auto-data`，Pool `.worktrees/pool-7`；本次 Skill 语义优化基于 `03af76b0a7c1e7106391ee7ec6332f433a6f4edf`，最新 PR2 为 `894a413edc3ccebcc464ec288ae80b0ec7c2f5f9`。用户已授权仅本地暂存并提交下述 6 个文件；最终提交号以 `git log -1` 为准。
 - 本地开发历史仍为 main → PR1 → PR2 → 原 PR3（pool-6，`5361155f2ff82c2998c9da8e5e321665d162c7ec`）→ pool-7，全部历史提交和备份保留。正式提审已调整为下面三个 PR，原 PR3 不单独创建远端 PR，也不作为独立运营功能发布。
 - AG/AH 映射和绑定核验保护由 PR2 提供；pool-7 复用既有取数、`uq122`、Cookie、searchToken、HTML 错误识别及失败停止能力。用户只提供店铺名，不上传模板或三份原始数据；三文件计算 CLI 继续供 Agent 编排、内部离线测试和故障排查使用。
+- 当前入口以本文件“意图入口最小修正”及“平台边界与库存文案收敛”章节为准；此前三个字符串同时出现的限制保留为历史记录，已由用户授权替换。
 
 ## 正式三 PR 方案与部署边界（2026-10-16 生效）
 
@@ -19,9 +20,57 @@
 - 只从包含本次收口的最终提交构建并核对发布候选的 `source_commit`；不部署 pool-6、离线阶段提交或尚未包含入口修改的 `4e479e14`。Skill、catalog 和 Python 服务须来自同一构建版本，Desktop 使用该版本的 Skill 资源目录。Git 历史或本地 Pool 中保留旧 Skill 不等于运行时同时加载它。
 - 下文各日期章节保留当时的诊断、测试和同步历史；涉及旧四阶段提审或阶段性离线使用的安排均由本节替代，不能据此单独发布原 PR3。
 
+## 2026-10-16 关键词与流程选择调整（历史记录，已由意图入口取代）
+
+- 用户批准：生成请求同时包含完整店铺名 `Amazon-Yihaiqian-US`、中文“亚马逊”和“最终备货建议”且无流程冲突时直接启动；词序不限。其他店铺（即使明确提到最终建议）、简称、缺少任一关键词或泛指备货时，先让用户单选“普通备货”或“最终备货建议”。不把英文 Amazon 自动当成中文关键词。
+- 复用 Desktop 的 `ask_user_question`；工具不可用时对话询问并等待。确认前不解析店铺、不取数、不计算，跳过或取消不默认选择。确认最终流程后只需店铺名，不反复要求关键词；明确普通备货或已选普通流程继续原算法。单步请求、流程说明和已有文件交付不扩展为完整生成。
+- 最小范围共 6 个文件：`skills/replenishment-final-restock/SKILL.md`、`skills/replenishment-workflow-map/SKILL.md`、`skills/replenishment-calculate/SKILL.md`、`docs/harness/skill/current_skill_catalog.md`、`packages/agent/runtime/test/tooling/skills.test.ts` 及本 handoff。三个 Skill 的索引描述与正文同步，避免旧普通备货入口直接执行；只改对话契约，不新增 Skill、Runtime 路由、店铺 ID 配置或环境变量。PR2 内部计算接口、公式及马帮取数机制保持原样，Cookie/searchToken/HTML 错误处理仍由原实现承担。
+- 本轮新验证：Bun Skill/CLI 契约 `26 passed`（232 assertions），Python 最终 Skill/CLI 定向回归 `19 passed`，既有问题卡片 Runtime 测试 `10 passed`（75 assertions）。新增 Skill 契约测试先在旧文案失败，再在修改后通过；实际加载 38 个 Skill、17 个备货 Skill，最终备货 Skill 唯一，命令归属保持不变。
+- 测试命令均从 pool-7 根运行：`bun test packages/agent/runtime/test/tooling/skills.test.ts packages/agent/runtime/test/tooling/lxeskill-command.test.ts`；`UV_CACHE_DIR=/private/tmp/pool7-entrance-uv-cache PYTHONDONTWRITEBYTECODE=1 uv run --frozen --no-sync pytest -p no:cacheprovider python/lxeskill_cli/tests/lxeskill/test_final_restock_skill.py -q --tb=short`；`bun test packages/agent/runtime/test/tooling/user-questions.test.ts`。
+- 验证边界：以上验证证明入口文案被 Runtime 索引正确加载、两种命令契约及现有问题卡片机制可用，不等于真实模型已逐场景遵守路由规则。额外真实模型隔离验证在沙箱内连接失败，沙箱外申请被自动审批拒绝，理由为未授权向外部 DeepSeek 发送项目 Skill/catalog；尚未取得场景结果，不绕过审批。临时演练脚本位于 `/private/tmp/final-restock-entry-choice-check.ts`，所有业务 exec 仅记录，不执行 ERP。修改后的真实模型路由、Desktop 对话选择以及生产取数/交付均 **NOT VERIFIED**；本轮没有调用生产 ERP 或重新生成业务 Excel。
+- Git：检查完整 diff 和 `git diff --check`；未暂存、未 commit/push/merge，其他 Pool 未修改。正式三 PR 的 Base/Head 关系不变，本次入口修改随 pool-7 的最终功能 PR 提审；发布候选须包含本次修改对应的后续提交，不能仅使用当前旧 HEAD。
+
+## 2026-10-16 参考雅仓 Skill 的轻量文档优化
+
+- 参考 `skills/yacang-reports-export/SKILL.md` 及 `docs/harness/skill/yacang-export-validation.md` 的表达方式：先交代业务范围，再区分报表职责，用少量命令连接输入与结果，最后集中写字段口径和限制。不复制雅仓的仓库、账号、队列或重试规则。
+- 最终 Skill 补充业务用途及六步能力衔接表：店铺解析解决名称/ID，MSKU 导出提供本轮基础数据及既有核验，深圳库存报告提供同源/编码核对，三状态货件快照提供 T，最终计算负责文件核验及 Office 重算，`send_files` 只负责发送已通过检查的文件。三份输入的职责集中说明：AG=`uq122`；AH=报告普通/组合编码，空时回退源表；T=快照商品件数，不是发货单张数。
+- 说明核验语义边界：现有“绑定核验”确认本地 SKU 商品类型，不证明实时 Listing 一致；文件级核验失败停止整轮，商品级未通过则保留真实行及 I/J/R/S，U–AC 留空。保留 HTML 业务失败停止、既有认证恢复及诊断文件规则，没有新增验证、重试或补数能力。
+- 删除重复的四参数表，保留一条内部计算命令示例；完整参数以 CLI/catalog 和各能力 Skill 为准。导航及目录仅简述范围并指向最终 Skill，不复制能力表。最终成功要求 `ok=true`、`formula_error_count=0` 且有附件；诊断文件明确不作为正式建议。
+- 本轮追加修改 5 个既有文件：最终 Skill、备货导航、目录、`skills.test.ts` 和本 handoff。保留上一轮入口调整及普通计算 Skill 的未提交差异，工作区合计仍是原 6 个文件；未改 catalog.json、CLI、Service、Runtime 源码、34 列结构或 13 列公式，没有新增 Skill/命令/Tool。
+- 本轮定向验证：`bun test packages/agent/runtime/test/tooling/skills.test.ts packages/agent/runtime/test/tooling/lxeskill-command.test.ts`：`26 passed`、246 assertions；`UV_CACHE_DIR=/private/tmp/pool7-entrance-uv-cache PYTHONDONTWRITEBYTECODE=1 uv run --frozen --no-sync pytest -p no:cacheprovider python/lxeskill_cli/tests/lxeskill/test_final_restock_skill.py -q --tb=short`：`19 passed`。复用现有测试补查六步顺序、AG/AH/T 职责、Listing 语义及成功/诊断交付边界，入口选择和普通命令归属断言仍通过。
+- 本轮仅本地契约验证，遵循用户明确选择，不再尝试外部 DeepSeek 验证，不调用生产 ERP、不生成新的业务 Excel。模型实际理解/执行、Desktop 实际入口及生产交付仍 **NOT VERIFIED**。这是已有行为的文档说明，不能据此扩大接口能力或宣称线上验证成功。
+- 已检查完整 diff、Markdown 表格、命令参数与 catalog 对应关系及 `git diff --check`；未暂存/commit/push/merge，HEAD 仍为 `03af76b0`，三 PR 依赖不变。
+
+## 2026-10-16 意图入口最小修正（当前契约）
+
+- 核查结果：Runtime 的 `tooling/skills.ts` 将 Skill 描述和文件路径交给模型，要求先读取再执行；`engine/runtime.ts` 支持显式 Skill 调用及激活，没有特定店铺名/中文关键词组合校验。catalog 仅约束命令归属与参数，不约束自然语言店铺或备货关键词。此前三字符串条件仅存在于本层未提交文案和测试，不是独立 Runtime 契约；本轮用户明确授权取消该限制，没有修改 Runtime 或前序 PR。
+- 入口最小变更：明确要求“最终备货建议”即进入最终 Skill，店铺由现有解析能力确认；明确普通备货走旧流程。只有备货类型不明或要求冲突才选择流程，店铺歧义不改变已明确类型，只展示解析返回的真实候选；不猜别名，不要求额外中文关键词，也不因更换店铺重复确认类型。缺店铺名时只补问店铺名。
+- 六步接口说明与具体命令保留，仅把货件步骤的“避免建议重复备货”改为现有统计输入。补明 T 的状态覆盖及与 FBA 在途是否重叠尚待业务验收，不能宣称已消除重复扣减或备货；不改变数量、去重或公式。AG/AH、绑定保护、自动取数与交付边界不变。
+- 修改仍限原 6 个文件：最终 Skill、备货导航、普通计算 Skill 的入口说明、目录、`skills.test.ts` 及本 handoff。Runtime/CLI/Service/catalog.json、34 列和 13 列公式均未改，没有新增 Skill、路由或框架。完整工作区包含上一轮雅仓结构优化，未丢弃已有差异；本轮修改前文件快照位于 `/private/tmp/pool7-skill-intent-before-9bx_nm4w`。
+- 新验证：Bun `skills.test.ts` + `lxeskill-command.test.ts` **30 passed、272 assertions**；Python `test_final_restock_skill.py` + `test_mabang_fba_store_resolver.py` **32 passed**。新增四类自然语言示例契约（明确最终、明确普通、类型歧义、店铺歧义），从实际 SkillCatalog 加载文案检查；既有解析测试验证精确/唯一匹配、歧义拒绝及真实候选。没有编写关键词分类器来模拟模型理解。
+- 命令：`bun test packages/agent/runtime/test/tooling/skills.test.ts packages/agent/runtime/test/tooling/lxeskill-command.test.ts`；`UV_CACHE_DIR=/private/tmp/pool7-entrance-uv-cache PYTHONDONTWRITEBYTECODE=1 uv run --frozen --no-sync pytest -p no:cacheprovider python/lxeskill_cli/tests/lxeskill/test_final_restock_skill.py python/lxeskill_cli/tests/mabang/test_mabang_fba_store_resolver.py -q --tb=short`。本地契约不再要求不必要的备货类型重复确认，但模型是否实际遵守仍 **NOT VERIFIED**；按用户选择，不调用外部模型或生产 ERP，不重跑业务 Excel。
+- 已检查本轮相对修改前快照的差异及完整 Git diff、`git diff --check`、状态与范围。HEAD 仍为 `03af76b0`，6 个文件未暂存，未 commit/push/merge，三 PR 依赖不变。
+
+## 2026-10-16 平台边界与库存文案收敛（补充当前契约）
+
+- 现有发现机制把各 Skill 的描述交给模型，东南亚导航已区分越南计算与指定 ERP 导出；无需新增路由。Amazon 三个入口的泛称“最终备货建议”仍可能跨业务误选，因此仅在描述/入口补充 Amazon 业务已明确的前提，明确其他 ERP/东南亚请求沿用既有能力；只有平台业务真正不明确才澄清，已有上下文不重复询问。不限制店铺或恢复关键词组合匹配。
+- 业务用途改为准确区分：R“FBA总库存”由现有公式计算，AG 来自 MSKU `uq122`，T 来自货件快照。六步用途表、命令示例、数据映射、失败停止和交付规则均原样保留。
+- 本轮仅调整原 6 个未提交文件：最终 Skill、导航、普通计算 Skill 入口、目录、Bun 契约测试及本 handoff。改前快照 `/private/tmp/pool7-platform-wording-before-tvlx2qhg`；未触及 CLI、Service、Runtime、公式或 catalog.json，未新增 Skill/硬编码路由。
+- 本轮验证：Bun `skills.test.ts` + `lxeskill-command.test.ts` **33 passed、291 assertions**；Python `test_final_restock_skill.py` **19 passed**。增加越南、指定其他 ERP 导出及平台歧义的自然语言文案契约，保留明确 Amazon、普通备货、类型歧义和店铺歧义覆盖；检查三入口索引的平台边界以及用途中的 R/AG/T 来源。文案样例不等于真实模型路由验收，按用户选择不调用外部模型或生产 ERP。
+- 对照改前快照核对完整本轮差异，并检查 Git diff、`git diff --check` 和状态；仍为 6 个文件未暂存，HEAD `03af76b0`，未 commit/push/merge。未发现本轮新增阻塞，真实模型执行效果及 T 与 FBA 在途的业务边界仍 **NOT VERIFIED**。
+
+## 2026-10-16 Skill 语义优化本地提交收口
+
+- 完整 diff 仅含三个既有 Skill、当前目录、Bun 契约测试和本 handoff；业务背景、六步用途/输入输出、平台/类型分流及文案验证属于同一模块。没有 CLI、ERP Service、Runtime、算法、数据映射或 catalog 参数变更；一个最终 Skill、一个最终计算命令，没有硬编码路由。店铺名称只作为自然语言示例，不作为启动白名单。
+- 最小收敛发现：普通计算 Skill 重复维护了完整流程选择卡片，且压缩了原调用场景。恢复其原有“备货量、补货量、运输方式、链接备货汇总”等调用条件，明确已有同源输入重算直接计算；歧义统一委托既有导航，不再维护第二份问答规则。普通计算从“完整备货请求先读”起的调用、参数、取数、前置校验和结果交付正文与提交前 HEAD 逐字一致；普通算法及服务未改。真正不明确的完整请求仍按用户批准的导航规则确认，不把该交互收敛描述成所有自然语言行为完全不变。
+- 最终入口仍按明确 Amazon 最终备货意图进入，其他 ERP/东南亚业务分流，平台/类型/店铺真实歧义分别澄清；不会要求特定店铺或三个字符串组合。六步自动取数、三文件内部接口、AG/AH/T、绑定保护及失败停止均保留，T 的业务边界仍未验收。
+- 本次收敛后新验证：Bun Skill/命令契约 **34 passed、286 assertions**；Python 最终 CLI 与普通备货 CLI **26 passed**（分别 19 + 7）。命令为 `bun test packages/agent/runtime/test/tooling/skills.test.ts packages/agent/runtime/test/tooling/lxeskill-command.test.ts` 及 `UV_CACHE_DIR=/private/tmp/pool7-entrance-uv-cache PYTHONDONTWRITEBYTECODE=1 uv run --frozen --no-sync pytest -p no:cacheprovider python/lxeskill_cli/tests/lxeskill/test_final_restock_skill.py python/lxeskill_cli/tests/mabang/test_mabang_store_msku_replenishment_cli.py -q --tb=short`。没有重复运行全量或新增业务文件生成。
+- 本地提交检查包括完整 diff、精确 6 文件暂存范围、`git diff --cached --check`、命令参数与 catalog 对照、敏感值/无关文件复核；提交后由 `git status` 确认工作区。提交说明为 `docs: clarify final restock skill semantics`，不 amend/rebase/push/merge，其他 Pool 不变，三 PR Base/Head 关系不变。
+- 剩余边界：自然语言测试是实际 SkillCatalog 加载文案的契约检查，不能证明模型选择/执行已验收；本次真实模型路由、Desktop 完整交付和 T 与 FBA 在途的业务边界仍 **NOT VERIFIED**。按用户选择，仅本地验证，不调用生产 ERP 或外部模型。
+
 ## 入口与调用链
 
-用户说“帮 Amazon-Test 生成最终备货建议”时，`replenishment-final-restock` 现在默认按本轮取数：
+Amazon 业务已明确且用户明确要求“最终备货建议”时进入 `replenishment-final-restock`，先解析用户给出的店铺名，身份确认后按本轮取数；其他业务沿用对应 Skill，真正的平台或备货类型歧义才澄清：
 
 1. `replenishment-store-resolve` → `lxeskill replenish store resolve`，取得规范店铺、`store_id`、`id_type`。
 2. `mabang-store-msku-export` → `lxeskill mabang store msku export --include-local-inventory`，取得含 `uq122`“本地库存”的本轮 `data.xlsx_path`。
@@ -29,7 +78,7 @@
 4. `mabang-store-unlinked-shipments-export` → `lxeskill mabang store unlinked-shipments export`，取得三个状态完整成功的 `data.snapshot.snapshot_xlsx_path`。有效空快照可用，失败不能当零货件。
 5. `lxeskill replenish final-restock generate`，传入规范店铺和以上三个实际路径；原服务核验文件指纹、店铺、批次、快照、MSKU 覆盖及数值，再生成并重算 34 列 XLSX。仅发送最终 terminal `files`。
 
-底层计算命令继续接收上述文件路径，供本流程及内部离线测试、故障排查使用；它不作为用户手动提供文件的对外入口。普通备货继续进入旧流程；不为新流程运行旧销量分析或旧 `replenish calculate`。失败保留真实诊断，不寻找历史文件，不要求用户自行准备三个路径。
+底层计算命令继续接收上述文件路径，供本流程及内部离线测试、故障排查使用；它不作为用户手动提供文件的对外入口。用户选定普通备货后进入旧流程；不为新流程运行旧销量分析或旧 `replenish calculate`。失败保留真实诊断，不寻找历史文件，不要求用户自行准备三个路径。
 
 ## 验证与限制
 

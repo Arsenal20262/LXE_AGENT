@@ -1,6 +1,6 @@
 ---
 name: replenishment-calculate
-description: 基于本地销量分析报告、真实库存（深圳仓库）报告和同日未关联货件快照生成马帮 Amazon 店铺 MSKU 普通备货建议。用户要求计算某个店铺的备货量、补货量、运输方式、链接备货汇总或“xxx店铺备货建议/补货建议”时使用。明确要求“最终备货建议”或“将原始备货建议量表转换成新表”时改用 replenishment-final-restock；普通备货的模糊店铺名先使用 replenishment-store-resolve 获取规范 store_name。
+description: 基于本地销量分析报告、真实库存（深圳仓库）报告和同日未关联货件快照生成马帮 Amazon 店铺 MSKU 普通备货建议。用户要求计算某个店铺的备货量、补货量、运输方式、链接备货汇总或“xxx店铺备货建议/补货建议”时使用。完整任务及类型歧义先读 replenishment-workflow-map；明确只用已有输入重算时执行本步骤。Amazon 业务明确且要求最终备货建议时改用 replenishment-final-restock，不限定店铺或关键词组合；明确其他 ERP 或东南亚请求沿用对应 Skill。店铺歧义由 replenishment-store-resolve 确认。
 type: replenishment
 commands:
   - lxeskill replenish calculate
@@ -23,7 +23,7 @@ references:
 
 ## 使用与命令
 
-明确要求“最终备货建议”或“将原始备货建议量表转换成新表”时读取 `replenishment-final-restock`，不执行本计算命令。普通备货继续使用本 Skill；仅交付本流程的最终文件不代表切换到新规则。
+Amazon 业务明确且要求最终备货建议时读取 `replenishment-final-restock`，不执行本计算命令。普通备货继续使用本 Skill；仅交付本流程的最终文件不代表切换到新规则。备货类型或平台业务不明确时先读 `replenishment-workflow-map`，沿用其选择规则；明确普通备货或明确只用已有输入重算时不重复询问流程。店铺歧义由 `replenishment-store-resolve` 获取真实候选，不改变已明确的备货类型。
 
 完整备货请求先读 `replenishment-workflow-map`，自动完成本轮数据采集；明确只用已有输入重算时执行本步骤。参数方案默认“默认”，用户指定时沿用。
 
