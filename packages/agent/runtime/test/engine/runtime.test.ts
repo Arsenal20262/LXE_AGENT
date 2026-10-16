@@ -157,6 +157,139 @@ const lxeSkillInvocationError = (details: JsonObject = {
 );
 
 describe("TypeScriptAgentRuntime", () => {
+  test.each(["question-first", "exec-first"])("review TMS mixed question/exec must not export on skip: %s", async order => {
+    const trace: string[] = [];
+    const questions = new UserQuestionService(() => {});
+    const tools = new ToolRegistry();
+    registerUserQuestionTool(tools, questions);
+    tools.register({ name: "exec", description: "Offline fixture; no process execution", input_schema: { type: "object" },
+      execute: async input => { trace.push(String(input.command)); return { content: [] }; } });
+    let calls = 0;
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy, store: new MemoryStore(), tools, systemPrompt: "Ask before TMS export",
+      logger: createLogger("test.tms.adversarial", { write: () => {} }),
+      emitter: { emit: async () => {}, typing: async () => {} }, provider: { summarize, turn: async () => {
+        if (++calls > 1) return messageFixture({ content: [{ type: "text", text: "Done" }] });
+        const question = { type: "tool_call" as const, id: "mixed-question", name: "ask_user_question",
+          arguments: { questions: [{ id: "warehouse", question: "Which warehouse?", options: [{ label: "全部" }, { label: "越南" }] }] } };
+        const exec = { type: "tool_call" as const, id: "mixed-exec", name: "exec",
+          arguments: { command: "lxeskill mabang-tms products export --warehouse all" } };
+        return messageFixture({ stopReason: "toolUse", content: order === "question-first" ? [question, exec] : [exec, question] });
+      } },
+    });
+    const controller = new AbortController();
+    await runtime.start();
+    const turn = runtime.runTurn(job({ source: { platform: "desktop" } }), { ...handle(), signal: controller.signal });
+    try {
+      for (let n = 0; n < 100 && !questions.snapshot().length; n++) await Bun.sleep(5);
+      expect(questions.snapshot()).toHaveLength(1);
+      const beforeAnswer = [...trace];
+      questions.submit({ session_id: "s1", request_id: questions.snapshot()[0]!.request_id,
+        answers: [{ id: "warehouse", selected: [] }] });
+      await turn;
+      expect(beforeAnswer).toEqual([]);
+      expect(trace).toEqual([]);
+    } finally { controller.abort(); await turn; await runtime.stop(); }
+  });
+
+  test.each(["first", "middle", "last"].flatMap(order =>
+    ["answer", "skip", "cancel", "answer-cancel", "invalid", "failure"].map(action => [order, action] as const),
+  ))("question batch blocks parallel actions with question %s on %s", async (order, action) => {
+    const store = new MemoryStore();
+    const trace: string[] = [];
+    const questions = new UserQuestionService(() => {});
+    const tools = new ToolRegistry();
+    registerUserQuestionTool(tools, action === "failure" ? {
+      ask: async () => { throw new Error("question interaction fixture failed"); },
+    } : questions);
+    tools.register({
+      name: "action", description: "Offline action; no process execution", input_schema: { type: "object" },
+      supportsParallelCalls: true,
+      execute: async input => {
+        await Promise.resolve();
+        trace.push(String(input.label));
+        return { content: [{ type: "text", text: "action completed" }] };
+      },
+    });
+    const question = { type: "tool_call" as const, id: "question", name: "ask_user_question",
+      arguments: action === "invalid" ? {} : {
+        questions: [{ id: "choice", question: "Choose?", options: [{ label: "A" }] }],
+      } };
+    const oldActions = ["old-a", "old-b"].map(id => ({
+      type: "tool_call" as const, id, name: "action", arguments: { label: id },
+    }));
+    const batch: Array<(typeof oldActions)[number] | typeof question> = [...oldActions];
+    batch.splice(order === "first" ? 0 : order === "middle" ? 1 : 2, 0, question);
+    let modelCalls = 0;
+    const runtime = new TypeScriptAgentRuntime({
+      permissionPolicy, store, tools, systemPrompt: "test",
+      emitter: { emit: async () => {}, typing: async () => {} },
+      provider: { summarize, turn: async request => {
+        modelCalls++;
+        if (modelCalls === 1) return messageFixture({ stopReason: "toolUse", content: batch });
+        if (modelCalls === 2) {
+          // The model must observe all original calls closed before deciding on any fresh action.
+          expect(trace).toEqual([]);
+          const results = request.messages.flatMap(m => Array.isArray(m.content) ? m.content : [])
+            .filter(b => b.type === "tool_result");
+          expect(results.map(b => b.tool_call_id)).toEqual(batch.map(b => b.id));
+          for (const id of ["old-a", "old-b"]) {
+            expect(results.find(b => b.tool_call_id === id)).toMatchObject({ is_error: true });
+          }
+          const answer = results.find(b => b.tool_call_id === "question")!;
+          if (action !== "answer-cancel") {
+            expect(answer.is_error ?? false).toBe(["invalid", "failure", "cancel"].includes(action));
+          }
+          if (action === "failure") expect(JSON.stringify(answer.content)).toContain("question interaction fixture failed");
+          if (action === "invalid") expect(JSON.stringify(answer.content)).toContain("invalid_argument");
+          if (action === "answer") {
+            expect(JSON.stringify(answer.content)).toContain("A");
+            return messageFixture({ stopReason: "toolUse", content: [
+              { type: "tool_call", id: "fresh", name: "action", arguments: { label: "fresh-A" } },
+            ] });
+          }
+        }
+        return messageFixture({ content: [{ type: "text", text: "Done" }] });
+      } },
+    });
+    const controller = new AbortController();
+    await runtime.start();
+    const turn = runtime.runTurn(job({ source: { platform: "desktop" } }), {
+      ...handle(), signal: controller.signal, get cancelled() { return controller.signal.aborted; },
+    });
+    try {
+      if (!["invalid", "failure"].includes(action)) {
+        for (let n = 0; n < 100 && !questions.snapshot().length; n++) await Bun.sleep(5);
+        expect(questions.snapshot()).toHaveLength(1);
+        expect(trace).toEqual([]);
+        expect(modelCalls).toBe(1);
+        const pending = questions.snapshot()[0]!;
+        if (action === "cancel") controller.abort();
+        else {
+          const submission = { session_id: "s1", request_id: pending.request_id,
+            answers: [{ id: "choice", selected: action === "skip" ? [] : ["A"] }] };
+          questions.submit(submission);
+          if (action === "answer-cancel") controller.abort();
+          else expect(questions.submit(submission).accepted).toBe(true);
+        }
+      }
+      const cancelled = ["cancel", "answer-cancel"].includes(action);
+      expect((await turn).status).toBe(cancelled ? "cancelled" : "completed");
+      expect(trace).toEqual(action === "answer" ? ["fresh-A"] : []);
+      expect(questions.snapshot()).toEqual([]);
+      const results = store.messages.flatMap(m => Array.isArray(m.content) ? m.content : [])
+        .filter(b => b.type === "tool_result");
+      expect(results.map(b => b.tool_call_id)).toEqual([...batch.map(b => b.id), ...(action === "answer" ? ["fresh"] : [])]);
+      for (const id of ["old-a", "old-b"]) expect(results.find(b => b.tool_call_id === id)?.is_error).toBe(true);
+      expect(modelCalls).toBe(cancelled ? 1 : action === "answer" ? 3 : 2);
+      if (cancelled) {
+        // A later user turn must not revive the cancelled batch either.
+        expect((await runtime.runTurn(job({ job_id: "j2", source: { platform: "desktop" } }), handle())).status).toBe("completed");
+        expect(trace).toEqual([]);
+        expect(modelCalls).toBe(2);
+      }
+    } finally { controller.abort(); await turn; await runtime.stop(); }
+  });
+
   test.each(["read-only", "workspace-write"] as const)("describes %s before contacting the model", async mode => {
     const store = new MemoryStore();
     store.permissionMode = mode;
