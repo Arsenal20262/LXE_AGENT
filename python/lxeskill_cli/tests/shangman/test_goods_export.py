@@ -305,6 +305,57 @@ def test_filter_requires_one_to_one_code_and_create_time_mapping(tmp_path):
             {**identity_record("id", "DUP", "2026-01-01 00:00:00"), "goodsNo": "OTHER"}])
 
 
+@pytest.mark.parametrize("column_count", [len(exports.REQUIRED_HEADERS), 36])
+@pytest.mark.parametrize("read_only", [False, True])
+@pytest.mark.parametrize("empty", [False, True])
+def test_filtered_dimension_uses_retained_cells(tmp_path, column_count, read_only, empty):
+    from openpyxl import load_workbook
+
+    headers = sorted(exports.REQUIRED_HEADERS)
+    headers += [f"业务字段{i}" for i in range(column_count - len(headers))]
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(headers)
+    created = "2026-01-02 00:00:00"
+    for sku in ("DISABLED", "ENABLED"):
+        values = {"SKU": sku, "创建时间": created, "有效库存": 17,
+                  "7天销量": 3, "15天销量": 5, "30天销量": 8}
+        sheet.append([values.get(header, f"{sku}:{header}") for header in headers])
+    sheet.cell(2, column_count + 2, "disabled-only")
+    sheet.cell(3, headers.index("有效库存") + 1).number_format = "0.00"
+    original = io.BytesIO()
+    workbook.save(original)
+    workbook.close()
+
+    source, target = tmp_path / "source.xlsx", tmp_path / "filtered.xlsx"
+    # The official export declares A1 even though its cells span many columns.
+    with ZipFile(original) as archive, ZipFile(source, "w") as rewritten:
+        for item in archive.infolist():
+            content = archive.read(item.filename)
+            if item.filename == "xl/worksheets/sheet1.xml":
+                content = re.sub(rb'<dimension ref="[^"]+"', b'<dimension ref="A1"', content)
+            rewritten.writestr(item, content)
+
+    records = [] if empty else [identity_record("enabled-id", "ENABLED", created)]
+    result = exports.filter_enabled_rows(source, target, records)
+    assert result["row_count"] == (0 if empty else 1)
+    output = load_workbook(target, read_only=read_only, data_only=False)
+    try:
+        sheet = output.worksheets[0]
+        assert sheet.max_column == column_count
+        assert sheet.max_row == (1 if empty else 2)
+        rows = list(sheet.iter_rows(values_only=True))
+        assert rows[0] == tuple(headers)
+        assert len(rows) == (1 if empty else 2)
+        if not empty:
+            expected = {"SKU": "ENABLED", "创建时间": created, "有效库存": 17,
+                        "7天销量": 3, "15天销量": 5, "30天销量": 8}
+            assert rows[1] == tuple(expected.get(header, f"ENABLED:{header}") for header in headers)
+            assert sheet.cell(2, headers.index("有效库存") + 1).number_format == "0.00"
+    finally:
+        output.close()
+
+
 @pytest.mark.parametrize(("enabled_code", "workbook_code", "enabled_time", "workbook_time"), [
     ("SKU A", "SKUA", "2026-01-01 00:00:00", "2026-01-01 00:00:00"),
     ("SKU-A", "ＳＫＵ-A", "2026-01-01 00:00:00", "2026-01-01 00:00:00"),

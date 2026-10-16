@@ -17,6 +17,7 @@ from zoneinfo import ZoneInfo
 
 import aiohttp
 from openpyxl import load_workbook
+from openpyxl.utils.cell import column_index_from_string, get_column_letter
 
 from shared.datasets import dataset_dir
 from .auth import BASE_URL, AuthError, Credentials
@@ -164,6 +165,7 @@ def _write_filtered_workbook(source: Path, target: Path, sheet_name: str,
 
         row_map = {row: row for row in range(1, header_row + 1)}
         row_map.update({old: header_row + index for index, old in enumerate(sorted(keep_rows), start=1)})
+        bounds: tuple[int, int, int, int] | None = None
         for row in list(sheet_data):
             old_row = int(row.attrib.get("r", "0"))
             new_row = row_map.get(old_row)
@@ -176,16 +178,17 @@ def _write_filtered_workbook(source: Path, target: Path, sheet_name: str,
                 match = re.fullmatch(r"([A-Z]+)\d+", reference)
                 if match:
                     cell.attrib["r"] = f"{match.group(1)}{new_row}"
+                    column = column_index_from_string(match.group(1))
+                    bounds = ((column, new_row, column, new_row) if bounds is None else
+                              (min(bounds[0], column), min(bounds[1], new_row),
+                               max(bounds[2], column), max(bounds[3], new_row)))
 
         final_row = header_row + len(keep_rows)
         dimension = sheet_xml.find(f"{{{main_ns}}}dimension")
-        if dimension is not None:
-            reference = dimension.attrib.get("ref", "")
-            match = re.fullmatch(r"(\$?[A-Z]+\$?\d+)(?::(\$?[A-Z]+)\$?\d+)?", reference)
-            if match:
-                last_column = match.group(2) or re.match(r"\$?([A-Z]+)", match.group(1)).group(1)
-                first_cell = match.group(1).replace("$", "")
-                dimension.attrib["ref"] = f"{first_cell}:{last_column}{final_row}"
+        if dimension is not None and bounds is not None:
+            min_column, min_row, max_column, max_row = bounds
+            dimension.attrib["ref"] = (f"{get_column_letter(min_column)}{min_row}:"
+                                      f"{get_column_letter(max_column)}{max_row}")
         auto_filter = sheet_xml.find(f"{{{main_ns}}}autoFilter")
         if auto_filter is not None and "ref" in auto_filter.attrib:
             match = re.fullmatch(r"([A-Z]+\d+):([A-Z]+)\d+", auto_filter.attrib["ref"])
