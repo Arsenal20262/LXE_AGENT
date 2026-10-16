@@ -6468,6 +6468,90 @@ code {
   color: #8e2726;
 }
 
+/* Pixel-checked dark chat colours. Keep the palette local: the sidebar,
+   composer, user bubbles, tool output and other Markdown viewers retain theirs. */
+:root[data-theme="dark"] :is(.conversation-scroll-area, .conversation-feed) {
+  background-color: #151515;
+}
+
+:root[data-theme="dark"] .conversation-scroll-area::before {
+  background: linear-gradient(to bottom, #151515 30%, transparent);
+}
+
+:root[data-theme="dark"] .conversation-scroll-area::after {
+  background: linear-gradient(to top, #151515 30%, transparent);
+}
+
+:root[data-theme="dark"] .conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown {
+  color: #f0efec;
+}
+
+:root[data-theme="dark"] .conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown :is(h1, h2, h3, h4, h5, h6) {
+  color: #f0efec;
+}
+
+:root[data-theme="dark"] .conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown code:not(pre code) {
+  color: #ed7e7e;
+  background: #212121;
+  /* An inset stroke preserves the existing inline box size and line wrapping. */
+  box-shadow: inset 0 0 0 1px #373737;
+}
+
+:root[data-theme="dark"] .conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown pre.code-block {
+  background: #1a1a19;
+  border-color: #2c2c2c;
+  color: #d3d7df;
+}
+
+:root[data-theme="dark"] .conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown hr {
+  background: #2d2d2d;
+}
+
+:root[data-theme="dark"] .conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown :is(th, td) {
+  color: #f0efec;
+  border-color: #373737;
+}
+
+:root[data-theme="dark"] .conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown th {
+  background: #212121;
+}
+
+:root[data-theme="dark"] .conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown td {
+  background: transparent;
+}
+
+:root[data-theme="dark"] .conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown .code-block .hljs-keyword {
+  color: #cc7bf4;
+}
+
+:root[data-theme="dark"] .conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown .code-block :is(.hljs-title, .hljs-built_in) {
+  color: #70b8ff;
+}
+
+:root[data-theme="dark"] .conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown .code-block :is(.hljs-type, .hljs-params) {
+  color: #fbae60;
+}
+
+:root[data-theme="dark"] .conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown .code-block.language-typescript :is(.hljs-built_in, .hljs-params .hljs-attr) {
+  color: #fbae60;
+}
+
+:root[data-theme="dark"] .conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown .code-block :is(.hljs-string, .hljs-addition) {
+  color: #9ce963;
+}
+
+:root[data-theme="dark"] .conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown .code-block .hljs-number {
+  color: #5eedee;
+}
+
+:root[data-theme="dark"] .conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown .code-block.language-json .hljs-attr {
+  color: #ebecf0;
+}
+
+:root[data-theme="dark"] .conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown .code-block .hljs-deletion {
+  color: #f57b85;
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;
