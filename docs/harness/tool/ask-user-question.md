@@ -12,6 +12,8 @@
 
 `UserQuestionService` 是 Bun 运行时内的唯一属主。每个请求生成新的 UUID，绑定 session、turn 和 tool call；同一 session 最多有一个待回答请求。工具没有普通短超时，也不参与并行工具组。等待中没有新的模型请求。
 
+提问沿用普通串行工具调度，不要求独占模型响应。等待答案期间不分派后续调用；回答或跳过后继续同一响应的剩余调用。是否把调用放在同一响应中由模型编排，运行时不因出现提问而丢弃其他调用。
+
 桌面经现有 preload IPC → Gateway → Agent JSON-RPC 调用：
 
 - `sessions.questions` 查询全部当前请求，供卡片和侧栏使用。
