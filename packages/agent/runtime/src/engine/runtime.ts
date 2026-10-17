@@ -660,11 +660,14 @@ export class TypeScriptAgentRuntime implements AgentRuntime {
                 titleRequested = true;
                 this.options.sessionTitles?.onMainRequest(job.session_id, job.message_id || job.job_id, providerSnapshot, userIdentity);
               }
-              const response = structuredClone(await provider.turn(request));
+              let requestImagesOmitted = false;
+              const response = structuredClone(await provider.turn({ ...request,
+                onRequestImagesOmitted: () => { requestImagesOmitted = true; },
+              }));
               delete response.contextTokenAnchor;
               const usage = response.usage;
               const actualInput = usage.input_tokens + (usage.cache_read_input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0);
-              if (!isCancelled(handle) && ["stop", "length", "toolUse"].includes(response.stopReason) &&
+              if (!requestImagesOmitted && !isCancelled(handle) && ["stop", "length", "toolUse"].includes(response.stopReason) &&
                 usage.status === "complete" && [usage.input_tokens, usage.output_tokens, usage.cache_read_input_tokens ?? 0, usage.cache_creation_input_tokens ?? 0]
                   .every(value => Number.isSafeInteger(value) && value >= 0) && Number.isSafeInteger(actualInput) && actualInput > 0 &&
                 (!response.responseModel || response.responseModel === systemPromptContext.model)) {

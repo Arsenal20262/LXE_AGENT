@@ -116,6 +116,8 @@ export interface RuntimeProviderRequest {
   userIdentity?: RuntimeProviderUserIdentity;
   onEvent?: (event: AssistantMessageEvent) => Promise<void> | void;
   wireTrace?: RuntimeWireTraceAttempt;
+  /** A provider-local image projection cannot calibrate the unmodified shared context. */
+  onRequestImagesOmitted?: (count: number) => void;
 }
 
 export interface RuntimeProvider {
