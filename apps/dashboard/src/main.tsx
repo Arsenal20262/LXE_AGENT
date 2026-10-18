@@ -24,6 +24,8 @@ import {
 
 import "./styles.css";
 import "./features/capabilities/theme.css";
+import "./features/stats/theme.css";
+import "./features/workbench/index-theme.css";
 import "./desktop/update-control.css";
 import "./shared/navigation-rail.css";
 import { SidebarStatus } from "./desktop/sidebar-status";
@@ -221,7 +223,13 @@ function App({
               </div>
             </header>
           ) : null}
-          <section className={activeSection === "sessions" ? "content-panel content-panel-fill" : activeSection === "capabilities" ? "content-panel capabilities-theme" : "content-panel"}>
+          <section className={[
+            "content-panel",
+            activeSection === "sessions" ? "content-panel-fill" : "",
+            activeSection === "capabilities" ? "capabilities-theme" : "",
+            activeSection === "activity" ? "activity-theme" : "",
+            activeSection === "workbench" && workbenchView === "index" ? "workbench-theme" : "",
+          ].filter(Boolean).join(" ")}>
             {visibleError ? (
               <div className="dashboard-query-notice" role="status">
                 {t.common.errorPrefix(t.errors.api, visibleError)}
@@ -297,7 +305,8 @@ function App({
             {activeSection === "activity" ? (
               <section className="workspace-view">
                 <header className="workspace-view-header">
-                  <h2>{t.nav.activity}</h2>
+                  <h1>{t.nav.activity}</h1>
+                  <p>{t.usage.description}</p>
                 </header>
                 <div className="workspace-view-content">
                   <StatsView enabled={dashboardRuntimeReady} />

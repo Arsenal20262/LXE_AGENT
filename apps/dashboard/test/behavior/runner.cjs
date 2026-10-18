@@ -10,8 +10,8 @@ const passed = [];
 const errors = [];
 
 app.whenReady().then(async () => {
-  // Native caption selection restoration depends on real document blur events.
-  const nativeFocus = suite === 'windows-menu';
+  // Caption restoration and chart focus tooltips need native document focus.
+  const nativeFocus = suite === 'windows-menu' || suite === 'overview-pages';
   const win = new BrowserWindow({ width: 1200, height: 900, show: nativeFocus, alwaysOnTop: nativeFocus,
     webPreferences: { offscreen: !nativeFocus, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false } });
   // Do not permit accidental external requests from fixtures or production UI.
@@ -80,6 +80,8 @@ app.whenReady().then(async () => {
       await require("./conversation-contracts.cjs")({suite, win, url, js, step, load, waitFor, click, key, focus, settle, state});
     } else if (suite === "dashboard-pages") {
       await require("./dashboard-pages.cjs")({win, js, step, load, waitFor, click, key, focus, settle, state});
+    } else if (suite === "overview-pages") {
+      await require("./overview-pages.cjs")({win, js, step, load, waitFor, click, key, focus, settle, state});
     } else if (suite === "session-workspace") {
       await require("./session-workspace.cjs")({js, step, settle, load, state, waitFor});
     } else if (suite === "app-actions" || suite === "conversation-events") {

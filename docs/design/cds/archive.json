@@ -41,5 +41,13 @@
     "Documents distinguish original rules, static implementation evidence, LXE adaptations and unverified claims.",
     "No new skill installed or created. No production code changed.",
     "SHA256SUMS.txt covers every archived file except itself."
+  ],
+  "supplements": [
+    {
+      "date": "2026-10-19",
+      "document": "examples/activity-workbench.md",
+      "screenshots": 8,
+      "scope": "LXE activity and workbench index adaptation; original sources and historical CSS snapshots unchanged"
+    }
   ]
 }

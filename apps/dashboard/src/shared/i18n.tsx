@@ -528,6 +528,7 @@ export const ZH_TEXT = {
   },
   usage: {
     title: "使用统计",
+    description: "查看回合、技能和工具的使用情况。",
     rangeAria: "统计时间范围",
     rangeDays: (days: string) => `${days} 天`,
     loading: "正在加载统计...",
@@ -1444,6 +1445,7 @@ export const UI_TEXT: Record<Language, UiText> = {
     },
     usage: {
       title: "Usage Stats",
+      description: "Review activity across turns, skills and tools.",
       rangeAria: "Stats time range",
       rangeDays: (days: string) => `${days} days`,
       loading: "Loading stats...",
