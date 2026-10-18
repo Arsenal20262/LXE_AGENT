@@ -13,11 +13,13 @@ module.exports = async ({ win, js, step, load, waitFor, click, settle, state }) 
     const sizes = await js("Array.from(document.querySelectorAll('.content-panel,.workbench-detail,.vietnam-parameter-grid,.asset-slot')).map(e=>({width:e.clientWidth,scroll:e.scrollWidth}))");
     assert.ok(sizes.length >= 2);
     assert.ok(sizes.every(s => s.width > 0 && s.scroll <= s.width + 1), JSON.stringify(sizes));
+    assert.equal(await js("getComputedStyle(document.querySelector('.content-panel')).overflowY"), "auto", "long pages must scroll within the themed surface");
   };
   const capture = async (name, end = false) => {
     await noOverflow();
     if (!process.env.LXE_WORKBENCH_SCREENSHOTS) return;
-    await js(`document.activeElement?.blur(); document.querySelector('.content-panel').scrollTop = ${end ? "document.querySelector('.content-panel').scrollHeight" : "0"}; document.fonts.ready`);
+    // Narrow layouts may scroll the main panel rather than the content panel.
+    await js(`document.activeElement?.blur(); (() => { let element = document.querySelector('.workbench-detail'); while (element) { element.scrollTop = ${end ? "element.scrollHeight" : "0"}; element = element.parentElement; } })(); document.fonts.ready`);
     await settle();
     await waitFor("document.getAnimations().every(a => a.effect?.getComputedTiming().endTime === Infinity || a.playState !== 'running')", "animation settled");
     mkdirSync(process.env.LXE_WORKBENCH_SCREENSHOTS, { recursive: true });

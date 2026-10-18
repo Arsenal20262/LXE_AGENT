@@ -35,7 +35,7 @@
 
 ## 实现与检查
 
-- [共享页面标题](../../../../apps/dashboard/src/features/workbench/page-header.tsx)和[三个子页面的主题样式](../../../../apps/dashboard/src/features/workbench/detail-theme.css)。`.workbench-theme` 从目录扩展到全部工作台页面；目录徽章样式收窄，避免误影响保存提示。
+- [共享页面标题](../../../../apps/dashboard/src/features/workbench/page-header.tsx)和[三个子页面的主题样式](../../../../apps/dashboard/src/features/workbench/detail-theme.css)。`.workbench-theme` 从目录扩展到全部工作台页面；目录徽章样式收窄，避免误影响保存提示。窄窗口也由内容面板滚动，防止长页面越过底色和圆角边界。
 - [设置页](../../../../apps/dashboard/src/features/workbench/vietnam-settings-view.tsx)、[媒体流程](../../../../apps/dashboard/src/features/workbench/view.tsx)、[文件版本页](../../../../apps/dashboard/src/features/workbench/input-assets-view.tsx)。数据读写接口、参数换算、媒体任务与取消机制保持原有实现。
 - [新增 Electron 检查](../../../../apps/dashboard/test/behavior/workbench-details.cjs)：深浅主题、480px 英文布局、局部表格滚动、进度与任务状态、资产刷新等待／失败／恢复、按文件标识打开目录。原有设置与媒体流程测试继续覆盖保存、导出、扫描、取消和输出。
 

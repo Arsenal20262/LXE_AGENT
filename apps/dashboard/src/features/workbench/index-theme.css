@@ -5,6 +5,8 @@
 .content-panel.workbench-theme {
   padding: 32px 36px 80px;
   background: var(--cds-surface-panel);
+  /* Keep long workflows inside their surface at narrow window widths too. */
+  overflow: auto;
 }
 .workbench-theme .workbench-index { width: min(1160px, 100%); gap: 32px; }
 .workbench-theme .workbench-index-header {
