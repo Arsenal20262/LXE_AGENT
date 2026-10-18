@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 
 import "./styles.css";
+import "./features/capabilities/theme.css";
 import "./desktop/update-control.css";
 import "./shared/navigation-rail.css";
 import { SidebarStatus } from "./desktop/sidebar-status";
@@ -218,7 +219,7 @@ function App({
               </div>
             </header>
           ) : null}
-          <section className={activeSection === "sessions" ? "content-panel content-panel-fill" : "content-panel"}>
+          <section className={activeSection === "sessions" ? "content-panel content-panel-fill" : activeSection === "capabilities" ? "content-panel capabilities-theme" : "content-panel"}>
             {visibleError ? (
               <div className="dashboard-query-notice" role="status">
                 {t.common.errorPrefix(t.errors.api, visibleError)}
@@ -305,6 +306,7 @@ function App({
         </section>
 
         <DetailModal
+          themeClassName={capabilitiesOpen ? "capabilities-theme" : undefined}
           enabled={dashboardRuntimeReady}
           target={detailTarget}
           onClose={() => setDetailTarget(null)}

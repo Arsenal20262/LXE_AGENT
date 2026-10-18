@@ -69,7 +69,7 @@ module.exports = async ({ win, js, step, load, waitFor, click, key, focus, settl
     try {
       await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }] });
       await settle();
-      assert.notEqual(await js("getComputedStyle(document.querySelector('.model-card[data-provider=\"kimi_coding\"].item-active'), '::after').animationName"), 'none', 'the tested card really animates without reduced motion');
+      assert.equal(await js("getComputedStyle(document.querySelector('.model-card[data-provider=\"kimi_coding\"].item-active'), '::after').animationName"), 'none', 'catalog model metadata stays still even without reduced motion');
       await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
       await settle();
       assert.equal(await js("matchMedia('(prefers-reduced-motion: reduce)').matches"), true);
