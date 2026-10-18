@@ -253,7 +253,7 @@ export class TypeScriptAgentRuntime implements AgentRuntime {
     }
     const workspace = assertWorkspaceAvailable(session.workspace);
     const executionPaths = this.options.executionPaths ?? new ExecutionPaths(join(process.cwd(), "var"));
-    const configuredProvider = this.options.providerManager?.acquire();
+    const configuredProvider = this.options.providerManager?.acquire(session.model_selection);
     const providerSnapshot = configuredProvider ? { ...configuredProvider, provider: configuredProvider.provider.captureForTurn?.() ?? configuredProvider.provider } : undefined;
     let titleRequested = false;
     const provider = providerSnapshot?.provider ?? this.options.provider;
@@ -473,6 +473,7 @@ export class TypeScriptAgentRuntime implements AgentRuntime {
           system: systemPrompt, tools: toolSchemas, toolChoice: heartbeat || isLastStep ? "none" : "auto",
         });
       const turnContext: RuntimeTurnContextRecord = {
+        ...(session.model_selection_version === undefined ? {} : { model_selection_version: session.model_selection_version }),
         turn_id: job.job_id,
         job_kind: heartbeat ? "heartbeat" : "turn",
         provider: descriptor?.name ?? "custom",

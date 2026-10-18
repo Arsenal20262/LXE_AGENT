@@ -34,6 +34,8 @@ export type ModelOptionPayload = {
 };
 
 export type ModelPayload = {
+  session_id?: string;
+  selection_version?: number;
   provider: string;
   credential_source: "local" | "cloud";
   label: string;
@@ -577,12 +579,12 @@ export interface DashboardRpcSpec {
   "stats.skills.detail": { input: { name: string; days?: number }; result: SkillUsageDetailPayload };
   "stats.tools.list": { input: { days?: number }; result: ApiList<ToolStatPayload> & { days: number } };
   "models.list": { input: DashboardRpcEmptyInput; result: ApiList<ModelPayload> };
-  "models.current": { input: DashboardRpcEmptyInput; result: ModelPayload };
+  "models.current": { input: { session_id?: string }; result: ModelPayload };
   "models.update": {
-    input: { provider: string; model?: string; credential_source?: "local" | "cloud" };
+    input: { provider: string; model?: string; credential_source?: "local" | "cloud"; session_id?: string; selection_version?: number };
     result: ModelMutationPayload;
   };
-  "models.thinking.update": { input: { level: string }; result: ModelMutationPayload };
+  "models.thinking.update": { input: { level: string; session_id?: string; selection_version?: number }; result: ModelMutationPayload };
 }
 
 export type DashboardRpcOperation = keyof DashboardRpcSpec;
@@ -702,6 +704,17 @@ const attachmentIdsValue = (value: unknown, label: string): string[] | undefined
 const emptyInput = (input: Record<string, unknown>, operation: string): DashboardRpcEmptyInput => {
   exactKeys(input, [], `${operation}.input`);
   return {};
+};
+
+const modelSelectionScope = (input: Record<string, unknown>, operation: string) => {
+  if (input.selection_version !== undefined && (input.session_id === undefined
+    || !Number.isSafeInteger(input.selection_version) || Number(input.selection_version) < 0)) {
+    throw new DashboardRpcError("invalid_request", `${operation}.selection_version requires a session and a nonnegative integer`);
+  }
+  return {
+    ...(input.session_id === undefined ? {} : { session_id: textValue(input.session_id, `${operation}.session_id`)! }),
+    ...(input.selection_version === undefined ? {} : { selection_version: Number(input.selection_version) }),
+  };
 };
 
 export function parseDashboardRpcCall(value: unknown): DashboardRpcCall {
@@ -856,6 +869,7 @@ export function parseDashboardRpcCall(value: unknown): DashboardRpcCall {
       if (typeof input.query !== "string" || input.query.length > 8192) throw new DashboardRpcError("invalid_request", "Invalid file query");
       return { operation, input: { session_id: textValue(input.session_id, `${operation}.session_id`)!, query: input.query } };
     case "skills.list":
+    case "models.current":
       exactKeys(input, ["session_id"], `${operation}.input`);
       return { operation, input: input.session_id === undefined ? {} : { session_id: textValue(input.session_id, `${operation}.session_id`)! } };
     case "skills.user.list":
@@ -864,7 +878,6 @@ export function parseDashboardRpcCall(value: unknown): DashboardRpcCall {
     case "mcp.servers.list":
     case "channels.health":
     case "models.list":
-    case "models.current":
       return { operation, input: emptyInput(input, operation) } as DashboardRpcCall;
     case "skills.user.content":
       exactKeys(input, ["id", "path"], `${operation}.input`);
@@ -904,7 +917,7 @@ export function parseDashboardRpcCall(value: unknown): DashboardRpcCall {
         days: integerValue(input.days, `${operation}.days`, 30, 1, 365),
       } };
     case "models.update":
-      exactKeys(input, ["provider", "model", "credential_source"], `${operation}.input`);
+      exactKeys(input, ["provider", "model", "credential_source", "session_id", "selection_version"], `${operation}.input`);
       if (input.credential_source !== undefined
         && input.credential_source !== "local"
         && input.credential_source !== "cloud") {
@@ -912,12 +925,13 @@ export function parseDashboardRpcCall(value: unknown): DashboardRpcCall {
       }
       return { operation, input: {
         provider: textValue(input.provider, `${operation}.provider`)!,
+        ...modelSelectionScope(input, operation),
         ...(input.model === undefined ? {} : { model: textValue(input.model, `${operation}.model`, { allowEmpty: true })! }),
         ...(input.credential_source === undefined ? {} : { credential_source: input.credential_source }),
       } };
     case "models.thinking.update":
-      exactKeys(input, ["level"], `${operation}.input`);
-      return { operation, input: { level: textValue(input.level, `${operation}.level`)! } };
+      exactKeys(input, ["level", "session_id", "selection_version"], `${operation}.input`);
+      return { operation, input: { level: textValue(input.level, `${operation}.level`)!, ...modelSelectionScope(input, operation) } };
     default:
       return rpcError(`unsupported Dashboard RPC operation: ${operation}`);
   }

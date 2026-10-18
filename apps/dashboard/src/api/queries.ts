@@ -432,10 +432,15 @@ export function useModelsQuery(enabled = true) {
   });
 }
 
-export function useCurrentModelQuery(enabled = true) {
+export function useCurrentModelQuery(enabled = true, sessionId?: string) {
   return useQuery({
-    queryKey: dashboardQueryKeys.models.current,
-    queryFn: () => callDashboard({ operation: "models.current", input: {} }),
+    queryKey: sessionId ? dashboardQueryKeys.models.session(sessionId) : dashboardQueryKeys.models.current,
+    queryFn: () => callDashboard({ operation: "models.current", input: sessionId ? { session_id: sessionId } : {} }),
+    structuralSharing: (previous, next) => {
+      const before = previous as ModelPayload | undefined, after = next as ModelPayload;
+      return before?.session_id && before.session_id === after.session_id
+        && (before.selection_version ?? 0) > (after.selection_version ?? 0) ? before : after;
+    },
     enabled,
     staleTime: CATALOG_STALE_TIME_MS,
   });

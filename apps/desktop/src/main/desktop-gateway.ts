@@ -25,7 +25,7 @@ import type {
   SessionWorkspaceRequest,
   WorkspaceContext,
 } from "@lxe/protocol";
-import { resolveWorkspaceContext } from "@lxe/core";
+import { createLogger, resolveWorkspaceContext } from "@lxe/core";
 import {
   createDirectGatewayComposition,
   loadFeishuConfig,
@@ -576,12 +576,13 @@ export class DesktopGateway {
         credential_source: import("@lxe/desktop-protocol").CredentialSource;
         thinking_state: { level: string };
       };
-      this.options.config.saveRuntimePreference(
-        model.provider,
-        model.model,
-        model.thinking_state.level,
-        model.credential_source,
-      );
+      try {
+        this.options.config.saveRuntimePreference(model.provider, model.model, model.thinking_state.level, model.credential_source);
+      } catch (error) {
+        if (!call.input.session_id) throw error;
+        // The runtime has committed the conversation choice; a default-save failure cannot undo it.
+        createLogger("desktop.models").warn("default_model_save_failed", { session_id: call.input.session_id, error: String(error) });
+      }
     }
     return result;
   }

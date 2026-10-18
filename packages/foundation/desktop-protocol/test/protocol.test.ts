@@ -433,6 +433,23 @@ describe("desktop agent protocol", () => {
     });
   });
 
+  test("validates conversation model scopes and optimistic versions", () => {
+    expect(parseDashboardRpcCall({ operation: "models.current", input: { session_id: " a " } }))
+      .toEqual({ operation: "models.current", input: { session_id: "a" } });
+    expect(parseDashboardRpcCall({ operation: "models.current", input: {} }).input).toEqual({});
+    for (const [operation, fields] of [
+      ["models.update", { provider: "deepseek", model: "deepseek-v4-flash", credential_source: "local" }],
+      ["models.thinking.update", { level: "high" }],
+    ] as const) {
+      expect(parseDashboardRpcCall({ operation, input: { ...fields, session_id: "a", selection_version: 0 } }).input)
+        .toEqual({ ...fields, session_id: "a", selection_version: 0 });
+      for (const scope of [
+        { selection_version: 1 }, { session_id: "" }, { session_id: null },
+        ...[-1, 0.5, "1", NaN, Number.MAX_SAFE_INTEGER + 1].map(selection_version => ({ session_id: "a", selection_version })),
+      ]) expect(() => parseDashboardRpcCall({ operation, input: { ...fields, ...scope } })).toThrow();
+    }
+  });
+
   test("rejects malformed and agent-local Dashboard RPC calls", () => {
     expect(() => parseDashboardRpcCall({ operation: "backgroundTasks.list", input: {} }))
       .toThrow("unsupported Dashboard RPC operation");

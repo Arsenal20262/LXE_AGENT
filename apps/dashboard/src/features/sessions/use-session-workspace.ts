@@ -208,6 +208,7 @@ export function useSessionWorkspace({ activeSection, runtimeReady: dashboardRunt
     forgetConversationAttachments(session.session_id);
     queryClient.removeQueries({ queryKey: dashboardQueryKeys.sessions.detailSession(session.session_id) });
     queryClient.removeQueries({ queryKey: dashboardQueryKeys.sessions.activity(session.session_id) });
+    queryClient.removeQueries({ queryKey: dashboardQueryKeys.models.session(session.session_id) });
     if (selectedSessionId === session.session_id) startNewConversation();
     await queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.sessions.lists });
   }

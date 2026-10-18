@@ -135,11 +135,22 @@ export interface RuntimeHandle {
   registerProcess(process: { kill(): void | Promise<void>; forceKill(): void | Promise<void> }): () => void;
 }
 
+/** Complete, credential-free selection persisted for one conversation. */
+export interface RuntimeModelSelection extends JsonObject {
+  provider: string;
+  model: string;
+  credential_source: "local" | "cloud";
+  effort: string;
+  thinking_enabled: boolean;
+}
+
 export interface RuntimeSessionRecord {
   session_id: string;
   permission_mode: PermissionMode;
   source: JsonObject;
   workspace: WorkspaceContext;
+  model_selection?: RuntimeModelSelection;
+  model_selection_version?: number;
 }
 
 export interface ToolTurnUsage extends JsonObject {
@@ -185,6 +196,7 @@ export interface RuntimeTurnUsageRecord extends JsonObject {
 }
 
 export interface RuntimeTurnContextRecord extends JsonObject {
+  model_selection_version?: number;
   turn_id: string;
   job_kind: "turn" | "heartbeat";
   provider: string;

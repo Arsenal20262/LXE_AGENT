@@ -43,6 +43,7 @@ Runtime package 提供执行核心，但不提供产品 composition root。真�
 - [Runtime Flow](runtime_flow.md)：从平台消息到最终 delivery 的端到端边界。
 - [Agent CLI exec](agent_cli_exec.md)：一次性脚本调用、输出、会话与安全边界。
 - [Turn Execution](turn_execution.md)：turn snapshot、provider、tool 和 final outcome。
+- [会话模型与 effort](session-models.md)：独立保存、重启恢复和下一轮生效。
 - [Turn Step Lifecycle](turn_step_lifecycle.md)：单个 step 的固定顺序。
 - [会话权限与工作区目录](permission-policy.md)：权限状态、统一策略、产物与临时目录。
 - [Workspace Instance](workspace_instances.md)：会话工作区、AGENTS 指令、缓存刷新和回收。

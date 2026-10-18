@@ -379,9 +379,9 @@ function reset() {
   root = createRoot(document.getElementById("root")!);
   calls.length = 0; sends.length = 0; stops = 0; releaseSend = undefined;
 }
-function renderActions(subscribed = true) {
+function renderActions(subscribed = true, sessionId?: string) {
   flushSync(() => root!.render(<I18nContext.Provider value={UI_TEXT.en}><QueryClientProvider client={queryClient!}>
-    <AppActionsFixture subscribed={subscribed} />
+    <AppActionsFixture subscribed={subscribed} sessionId={sessionId} />
   </QueryClientProvider></I18nContext.Provider>));
 }
 const fixture = {
@@ -402,6 +402,8 @@ const fixture = {
   releaseCreation(index: number) { pendingCreations.splice(index, 1)[0]?.(); },
   actions: actionFixture,
   mountActions() { reset(); actionFixture.reset(); renderActions(); },
+  openModelSession(id: string) { renderActions(true, id); },
+  reloadModelSession(id: string) { reset(); renderActions(true, id); },
   subscribeActions(value: boolean) { renderActions(value); },
   invalidateActions() { void queryClient?.invalidateQueries({ queryKey: ["models"] }); },
   seedEventCaches() { queryClient!.setQueryData(["sessions","list",""], {}); queryClient!.setQueryData(["sessions","detail","event-session","latest"], {}); },

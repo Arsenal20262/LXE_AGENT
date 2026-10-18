@@ -29,6 +29,7 @@ export const dashboardQueryKeys = {
     all: ["models"] as const,
     list: ["models", "list"] as const,
     current: ["models", "current"] as const,
+    session: (sessionId: string) => ["models", "session", sessionId] as const,
   },
   skills: {
     all: ["skills"] as const,

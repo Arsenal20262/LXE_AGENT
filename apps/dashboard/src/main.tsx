@@ -112,6 +112,7 @@ function App({
       && (activeSection === "sessions" || (capabilitiesOpen && capabilityView === "models")),
   );
   const currentModelQuery = useCurrentModelQuery(dashboardRuntimeReady);
+  const sessionModelQuery = useCurrentModelQuery(dashboardRuntimeReady && Boolean(selectedSessionId), selectedSessionId || undefined);
   const skillsQuery = useSkillsQuery(
     dashboardRuntimeReady && capabilitiesOpen && capabilityView === "skills",
   );
@@ -130,7 +131,8 @@ function App({
   }, [dashboardRuntimeReady]);
 
   const { setCurrentModel, setCurrentThinkingLevel, modelSaving, thinkingSaving } = useModelActions({
-    current: currentModelQuery.data, models: modelsQuery.data?.items ?? [], onError: setError,
+    current: sessionModelQuery.data, sessionId: selectedSessionId || undefined,
+    models: modelsQuery.data?.items ?? [], onError: setError,
   });
   const { toggleMcpServer, savingId: mcpSavingId } = useMcpActions(setError);
 
@@ -140,7 +142,7 @@ function App({
     || activeSection === "workbench"
     || activeSection === "sessions";
   const activeQueries = activeSection === "sessions"
-    ? [...workspace.queryStatus, modelsQuery, currentModelQuery]
+    ? [...workspace.queryStatus, modelsQuery, sessionModelQuery]
     : activeSection === "capabilities" && capabilityView === "models"
       ? [modelsQuery, currentModelQuery]
       : activeSection === "capabilities" && capabilityView === "tools"
@@ -233,9 +235,9 @@ function App({
                 actions={workspace.actions}
                 setupComplete={setupComplete}
                 model={{
-                  currentModel: currentModelQuery.data ?? null,
+                  currentModel: selectedSessionId ? sessionModelQuery.data ?? null : null,
                   models: modelsQuery.data?.items ?? [],
-                  modelLoading: dashboardRuntimeReady && (modelsQuery.isPending || currentModelQuery.isPending),
+                  modelLoading: dashboardRuntimeReady && (!selectedSessionId || modelsQuery.isPending || sessionModelQuery.isPending),
                   modelSaving, thinkingSaving,
                   onModelChange: setCurrentModel,
                   onThinkingLevelChange: setCurrentThinkingLevel,

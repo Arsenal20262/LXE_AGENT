@@ -1,4 +1,5 @@
 import { fallbackSessionTitle, type SessionTitleState, type SessionTitleSource } from "./session-title";
+import { parseModelSelection } from "./model-selection";
 import { omitImageData } from "../messages/image-content";
 import { DEFAULT_PERMISSION_MODE, parsePermissionMode, type PermissionMode } from "@lxe/protocol";
 import { validContextDisplaySnapshot, type ContextDisplaySnapshot } from "@lxe/protocol";
@@ -11,6 +12,7 @@ import type { SQLQueryBindings } from "bun:sqlite";
 import type { JsonObject, JsonValue, SessionWorkspaceRequest, WorkspaceContext } from "@lxe/protocol";
 import type {
   RuntimeMessage,
+  RuntimeModelSelection,
   RuntimeArtifactRecord,
   RuntimeImageViewRecord,
   RuntimeAttachmentRecord,
@@ -534,6 +536,8 @@ export class SqliteRuntimeStore implements RuntimeStore {
         // Only sessions admitted after this migration opt into automatic naming.
         ["title_automatic", "INTEGER NOT NULL DEFAULT 0"],
         ["context_display", "TEXT"],
+        ["pending_model_selection", "TEXT"],
+        ["model_selection_version", "INTEGER NOT NULL DEFAULT 0"],
         ["workspace_directory", "TEXT NOT NULL DEFAULT ''"],
         ["workspace_worktree", "TEXT NOT NULL DEFAULT ''"],
         ["permission_mode", "TEXT NOT NULL DEFAULT 'danger-full-access'"],
@@ -651,21 +655,60 @@ export class SqliteRuntimeStore implements RuntimeStore {
   }
 
   async getSession(sessionId: string): Promise<RuntimeSessionRecord | undefined> {
+    await this.waitForSessionWrites(sessionId);
+    await this.enqueueIndexSync(sessionId, this.transcriptPath(sessionId));
     const row = this.getPrepared<{
       session_id: string;
       permission_mode: string;
       source: string;
       workspace_directory: string;
       workspace_worktree: string;
+      pending_model_selection: string | null;
+      model_selection_version: number;
+      model: string;
+      reasoning_effort: string;
+      model_config: string;
     }>(
-      `SELECT session_id, permission_mode, source, workspace_directory, workspace_worktree
+      `SELECT session_id, permission_mode, source, workspace_directory, workspace_worktree,
+              pending_model_selection, model_selection_version, model, reasoning_effort, model_config
        FROM agent_sessions WHERE session_id = ?`,
       text(sessionId),
     );
     if (!row) return undefined;
     const workspace = this.workspaceFromRow(row);
     if (!workspace) throw new Error(`session workspace is missing: ${row.session_id}`);
-    return { session_id: row.session_id, permission_mode: parsePermissionMode(row.permission_mode), source: parseObject(row.source), workspace };
+    const config = parseObject(row.model_config);
+    const selected = row.pending_model_selection ? parseModelSelection(JSON.parse(row.pending_model_selection))
+      : row.model && text(config.provider) ? parseModelSelection({
+        provider: text(config.provider), model: row.model, effort: row.reasoning_effort,
+        credential_source: config.credential_source === "cloud" ? "cloud" : "local",
+        thinking_enabled: config.thinking_enabled === true,
+      }) : undefined;
+    return { session_id: row.session_id, permission_mode: parsePermissionMode(row.permission_mode), source: parseObject(row.source), workspace,
+      ...(selected ? { model_selection: selected } : {}), model_selection_version: row.model_selection_version };
+  }
+
+  /** Commit selection intent before publishing its rebuildable SQLite projection. */
+  async setSessionModelSelection(sessionId: string, selection: RuntimeModelSelection, expectedVersion?: number): Promise<number> {
+    const selected = parseModelSelection(selection);
+    return this.enqueueSessionWrite(sessionId, async () => {
+      const path = this.transcriptPath(sessionId);
+      await this.enqueueIndexSync(sessionId, path);
+      const row = this.getPrepared<{ model_selection_version: number }>(
+        "SELECT model_selection_version FROM agent_sessions WHERE session_id = ?", sessionId);
+      if (!row) throw new Error(`session not found: ${sessionId}`);
+      if (expectedVersion !== undefined && expectedVersion !== row.model_selection_version) {
+        throw new Error(`session model selection changed: expected version ${expectedVersion}, current ${row.model_selection_version}`);
+      }
+      const version = row.model_selection_version + 1;
+      await this.appendTranscriptEvent(sessionId, { kind: "model_selection", selection: selected, version, ts: Date.now() / 1_000 });
+      // Selection acknowledgements survive process exit without relying on a later turn.
+      const file = await open(path, "r+");
+      try { await file.sync(); } finally { await file.close(); }
+      this.removeReplayCacheEntry(sessionId);
+      await this.enqueueIndexSync(sessionId, path);
+      return version;
+    });
   }
 
   /** Explicit session setting; never accepted via source metadata or tool state patches. */
@@ -684,7 +727,7 @@ export class SqliteRuntimeStore implements RuntimeStore {
 
   async appendApprovalEvent(sessionId: string, event: JsonObject): Promise<void> {
     await this.enqueueSessionWrite(sessionId, async () => {
-      if (!await this.getSession(sessionId)) throw new Error(`session not found: ${sessionId}`);
+      if (!this.sessionMetadata(sessionId)) throw new Error(`session not found: ${sessionId}`);
       await this.appendTranscriptEvent(sessionId, event);
       this.replayCache.delete(sessionId);
       await this.enqueueIndexSync(sessionId, this.transcriptPath(sessionId));
@@ -904,6 +947,7 @@ export class SqliteRuntimeStore implements RuntimeStore {
         effort: text(context.effort),
         thinking_enabled: context.thinking_enabled === true,
         provider_generation: Math.max(0, Math.trunc(Number(context.provider_generation ?? 0))),
+        ...(context.model_selection_version === undefined ? {} : { model_selection_version: context.model_selection_version }),
         context_window_tokens: Math.max(0, Math.trunc(Number(context.context_window_tokens ?? 0))),
         ts: Number(context.ts ?? Date.now() / 1_000),
       });
@@ -1715,7 +1759,8 @@ export class SqliteRuntimeStore implements RuntimeStore {
       this.db().query("DELETE FROM transcript_attachments WHERE session_id = ?").run(sessionId);
       this.db().query("DELETE FROM transcript_file_state WHERE session_id = ?").run(sessionId);
       this.db().query(`
-        UPDATE agent_sessions SET model = '', reasoning_effort = '', model_config = '{}'
+        UPDATE agent_sessions SET model = '', reasoning_effort = '', model_config = '{}',
+          pending_model_selection = NULL, model_selection_version = 0
         WHERE session_id = ?
       `).run(sessionId);
     })();
@@ -1792,7 +1837,8 @@ export class SqliteRuntimeStore implements RuntimeStore {
         this.db().query("DELETE FROM transcript_artifacts WHERE session_id = ?").run(sessionId);
         this.db().query("DELETE FROM transcript_attachments WHERE session_id = ?").run(sessionId);
         this.db().query(`
-          UPDATE agent_sessions SET model = '', reasoning_effort = '', model_config = '{}'
+          UPDATE agent_sessions SET model = '', reasoning_effort = '', model_config = '{}',
+            pending_model_selection = NULL, model_selection_version = 0
           WHERE session_id = ?
         `).run(sessionId);
       }
@@ -1800,6 +1846,16 @@ export class SqliteRuntimeStore implements RuntimeStore {
         const event = line.event;
         eventCount += 1;
         if (text(event.kind) === "turn_context") latestContext = event;
+        if (event.kind === "model_selection") {
+          if (!Number.isSafeInteger(event.version) || Number(event.version) < 1) throw new Error("invalid session model selection version");
+          const selected = parseModelSelection(event.selection);
+          this.db().query(`UPDATE agent_sessions SET pending_model_selection = ?, model_selection_version = ?
+            WHERE session_id = ?`).run(JSON.stringify(selected), Number(event.version), sessionId);
+        }
+        if (event.kind === "turn_context" && Number.isSafeInteger(event.model_selection_version)) {
+          this.db().query(`UPDATE agent_sessions SET pending_model_selection = NULL
+            WHERE session_id = ? AND model_selection_version = ?`).run(sessionId, Number(event.model_selection_version));
+        }
         if (event.kind === "session_title" && typeof event.title === "string" && Number.isSafeInteger(event.version)) {
           this.db().query(`UPDATE agent_sessions SET title = ?, title_source = ?, title_version = ?,
             title_input = CASE WHEN ? <> '' THEN ? ELSE title_input END
