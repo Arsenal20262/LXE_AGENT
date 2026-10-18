@@ -22,17 +22,17 @@ describe("desktop agent protocol", () => {
   test("validates workspace registration and display-only rename inputs", () => {
     expect(parseDashboardRpcCall({ operation: "workspaces.register", input: { directory: "/work" } }))
       .toEqual({ operation: "workspaces.register", input: { directory: "/work" } });
-    expect(parseDashboardRpcCall({ operation: "workspaces.rename", input: { directory: "/work", display_name: "  " } }).input)
-      .toEqual({ directory: "/work", display_name: "" });
+    expect(parseDashboardRpcCall({ operation: "workspaces.rename", input: { workspace_id: "work", display_name: "  " } }).input)
+      .toEqual({ workspace_id: "work", display_name: "" });
     for (const input of [{}, { directory: "" }, { directory: 3 }, { directory: "/work", sessionIds: [] }])
       expect(() => parseDashboardRpcCall({ operation: "workspaces.register", input })).toThrow();
-    for (const input of [{ directory: "/work" }, { directory: "/work", display_name: null },
-      { directory: "/work", display_name: 7 }, { directory: "/work", display_name: "name", worktree: "/new" }])
+    for (const input of [{ workspace_id: "work" }, { workspace_id: "work", display_name: null },
+      { workspace_id: "work", display_name: 7 }, { workspace_id: "work", display_name: "name", worktree: "/new" }])
       expect(() => parseDashboardRpcCall({ operation: "workspaces.rename", input })).toThrow();
   });
-  test("accepts workspace summaries and new-chat directories but rejects rebinding existing chats", () => {
+  test("accepts workspace summaries and workspace membership but rejects rebinding existing chats", () => {
     expect(parseDashboardRpcCall({ operation: "sessions.workspaces", input: {} })).toEqual({ operation: "sessions.workspaces", input: {} });
-    expect(parseDashboardRpcCall({ operation: "sessions.list", input: { directory: "D:\\work" } }).input).toMatchObject({ directory: "D:\\work" });
+    expect(parseDashboardRpcCall({ operation: "sessions.list", input: { workspace_id: "work" } }).input).toMatchObject({ workspace_id: "work" });
     expect(parseDashboardRpcCall({ operation: "sessions.send", input: { text: "hi", directory: "/work/demo" } }).input).toMatchObject({ directory: "/work/demo" });
     expect(() => parseDashboardRpcCall({ operation: "sessions.send", input: { session_id: "s", directory: "/work", text: "hi" } })).toThrow("cannot change workspace");
     expect(() => parseDashboardRpcCall({ operation: "sessions.send", input: { directory: "", text: "hi" } })).toThrow();
@@ -570,5 +570,15 @@ test("session rename RPC preserves the title for runtime validation and rejects 
     .toEqual({ operation: "sessions.rename", input: { session_id: "s", title: "中文\n标题" } });
   for (const input of [{ session_id: "s", title: " " }, { session_id: "s", title: 12 }, { session_id: "s", title: "Name", force: true }]) {
     expect(() => parseDashboardRpcCall({ operation: "sessions.rename", input })).toThrow();
+  }
+});
+
+test("workspace deletion and grouping selectors use stable ids, including an explicit ungrouped selector", () => {
+  expect(parseDashboardRpcCall({ operation: "workspaces.delete", input: { workspace_id: "w" } })).toEqual({ operation: "workspaces.delete", input: { workspace_id: "w" } });
+  expect(parseDashboardRpcCall({ operation: "sessions.list", input: { workspace_id: null } }).input).toMatchObject({ workspace_id: null });
+  expect(parseDashboardRpcCall({ operation: "sessions.list", input: {} }).input).not.toHaveProperty("workspace_id");
+  for (const input of [{}, { workspace_id: "" }, { workspace_id: null }, { workspace_id: "w", directory: "/old" }]) {
+    expect(() => parseDashboardRpcCall({ operation: "workspaces.delete", input })).toThrow();
+    expect(() => parseDashboardRpcCall({ operation: "sessions.create", input })).toThrow();
   }
 });

@@ -79,6 +79,7 @@ export type SessionPayload = {
   source: Record<string, unknown>;
   source_summary: SourceSummary;
   workspace: WorkspacePayload;
+  workspace_id: string | null;
   model: string;
   reasoning_effort: string;
   model_config: Record<string, unknown>;
@@ -470,6 +471,7 @@ export type StatsOverviewPayload = {
 export type DashboardRpcEmptyInput = Record<string, never>;
 
 export interface WorkspaceSummaryPayload {
+  workspace_id: string;
   directory: string;
   display_name: string | null;
   created_at: number;
@@ -479,7 +481,7 @@ export interface WorkspaceSummaryPayload {
 
 export interface DashboardRpcSpec {
   "sessions.create": {
-    input: { directory: string };
+    input: { workspace_id: string };
     result: SessionPayload;
   };
   "sessions.workspaces": {
@@ -491,16 +493,17 @@ export interface DashboardRpcSpec {
     result: WorkspaceSummaryPayload;
   };
   "workspaces.rename": {
-    input: { directory: string; display_name: string };
+    input: { workspace_id: string; display_name: string };
     result: WorkspaceSummaryPayload;
   };
+  "workspaces.delete": { input: { workspace_id: string }; result: { deleted: true } };
   "sessions.permission.set": { input: { session_id: string; permission_mode: PermissionMode }; result: { session_id: string; permission_mode: PermissionMode } };
   "sessions.approvals": { input: DashboardRpcEmptyInput; result: { items: PendingApproval[] } };
   "sessions.approval.decide": { input: ApprovalDecision; result: { accepted: true; request_id: string } };
   "sessions.questions": { input: DashboardRpcEmptyInput; result: { items: PendingUserQuestion[] } };
   "sessions.answer": { input: SubmitUserQuestionAnswer; result: { accepted: true; request_id: string } };
   "sessions.list": {
-    input: { query?: string; limit?: number; offset?: number; directory?: string };
+    input: { query?: string; limit?: number; offset?: number; workspace_id?: string | null };
     result: SessionListPayload;
   };
   "sessions.detail": {
@@ -735,15 +738,16 @@ export function parseDashboardRpcCall(value: unknown): DashboardRpcCall {
 
   switch (operation) {
     case "sessions.create":
-      exactKeys(input, ["directory"], `${operation}.input`);
-      return { operation, input: { directory: textValue(input.directory, `${operation}.directory`)! } };
+    case "workspaces.delete":
+      exactKeys(input, ["workspace_id"], `${operation}.input`);
+      return { operation, input: { workspace_id: textValue(input.workspace_id, `${operation}.workspace_id`)! } };
     case "workspaces.register":
       exactKeys(input, ["directory"], `${operation}.input`);
       return { operation, input: { directory: textValue(input.directory, `${operation}.directory`)! } };
     case "workspaces.rename":
-      exactKeys(input, ["directory", "display_name"], `${operation}.input`);
+      exactKeys(input, ["workspace_id", "display_name"], `${operation}.input`);
       return { operation, input: {
-        directory: textValue(input.directory, `${operation}.directory`)!,
+        workspace_id: textValue(input.workspace_id, `${operation}.workspace_id`)!,
         display_name: textValue(input.display_name, `${operation}.display_name`, { allowEmpty: true })!,
       } };
     case "sessions.workspaces":
@@ -764,9 +768,9 @@ export function parseDashboardRpcCall(value: unknown): DashboardRpcCall {
       try { return { operation, input: parseUserQuestionSubmission(input) }; }
       catch (error) { return rpcError(error instanceof Error ? error.message : String(error)); }
     case "sessions.list":
-      exactKeys(input, ["query", "limit", "offset", "directory"], `${operation}.input`);
+      exactKeys(input, ["query", "limit", "offset", "workspace_id"], `${operation}.input`);
       return { operation, input: {
-        ...(input.directory === undefined ? {} : { directory: textValue(input.directory, `${operation}.directory`)! }),
+        ...(input.workspace_id === undefined ? {} : { workspace_id: input.workspace_id === null ? null : textValue(input.workspace_id, `${operation}.workspace_id`)! }),
         query: textValue(input.query, `${operation}.query`, { optional: true, allowEmpty: true }) ?? "",
         limit: integerValue(input.limit, `${operation}.limit`, 50, 1, 200),
         offset: integerValue(input.offset, `${operation}.offset`, 0, 0, Number.MAX_SAFE_INTEGER),

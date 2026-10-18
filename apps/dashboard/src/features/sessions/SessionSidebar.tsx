@@ -9,7 +9,7 @@ import { WorkspacesIndex } from "./workspaces";
 type Props = Readonly<{
   sidebar: ReturnType<typeof useThreeStateSidebar>;
   data: SessionWorkspace["sidebar"];
-  actions: Pick<SessionWorkspace["actions"], "openSearch" | "expandWorkspace" | "renameWorkspace" | "retryWorkspaces" | "chooseNewWorkspace" | "changeSearch" | "sessionIndex" | "renameSession" | "cancelSessionRename">;
+  actions: Pick<SessionWorkspace["actions"], "openSearch" | "expandWorkspace" | "renameWorkspace" | "deleteWorkspace" | "retryWorkspaces" | "chooseNewWorkspace" | "changeSearch" | "sessionIndex" | "renameSession" | "cancelSessionRename">;
 }>;
 
 export function SessionSidebar({ sidebar, data, actions }: Props) {
@@ -83,6 +83,7 @@ export function SessionSidebar({ sidebar, data, actions }: Props) {
           {...data}
           onExpandedChange={actions.expandWorkspace}
           onRename={actions.renameWorkspace}
+          onDeleteWorkspace={actions.deleteWorkspace}
           onRetryWorkspaces={actions.retryWorkspaces}
           onChoose={actions.chooseNewWorkspace}
           onQueryChange={actions.changeSearch}

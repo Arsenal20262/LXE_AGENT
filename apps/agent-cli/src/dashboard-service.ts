@@ -236,9 +236,10 @@ export class DashboardService {
   private readonly userSkillFiles: UserSkillFiles;
   private readonly handlers: AgentDashboardRpcHandlers = {
     "sessions.create": input => {
-      const workspace = resolveWorkspaceContext(input.directory);
+      const registration = this.options.store.getWorkspace(input.workspace_id) ?? rpcError("not_found", "workspace not found");
+      const workspace = resolveWorkspaceContext(registration.directory);
       accessSync(workspace.directory, constants.R_OK | constants.W_OK | constants.X_OK);
-      return this.options.store.createBlankSession(workspace) as DashboardRpcResult<"sessions.create">;
+      return this.options.store.createBlankSession(workspace, input.workspace_id) as DashboardRpcResult<"sessions.create">;
     },
     "sessions.workspaces": () => this.options.store.listSessionWorkspaces(),
     "workspaces.register": input => {
@@ -246,8 +247,12 @@ export class DashboardService {
       accessSync(directory, constants.R_OK | constants.W_OK | constants.X_OK);
       return this.options.store.registerWorkspace(directory);
     },
-    "workspaces.rename": input => this.options.store.renameWorkspace(input.directory, input.display_name)
+    "workspaces.rename": input => this.options.store.renameWorkspace(input.workspace_id, input.display_name)
       ?? rpcError("not_found", "workspace not found"),
+    "workspaces.delete": input => {
+      if (!this.options.store.deleteWorkspace(input.workspace_id)) rpcError("not_found", "workspace not found");
+      return { deleted: true };
+    },
     "sessions.permission.set": async input => {
       this.options.store.setSessionPermissionMode(input.session_id, input.permission_mode);
       const permission_mode = this.options.store.getSessionPermissionMode(input.session_id);
@@ -344,7 +349,7 @@ export class DashboardService {
       limit: integer(input.limit, 50, 1, 200),
       offset: integer(input.offset, 0, 0, Number.MAX_SAFE_INTEGER),
       query: input.query ?? "",
-      ...(input.directory === undefined ? {} : { directory: input.directory }),
+      ...(input.workspace_id === undefined ? {} : { workspace_id: input.workspace_id }),
     });
   }
 

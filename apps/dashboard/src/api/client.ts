@@ -1,3 +1,4 @@
+import { clearWorkspaceMembership, forgetWorkspace, projectWorkspaceData } from "./workspace-membership";
 import { clearSessionTitles, projectSessionData } from "./session-titles";
 // Desktop-only helpers shared by every Renderer view. Electron injects the
 // sole transport through the narrow preload bridge.
@@ -14,6 +15,7 @@ let testTransport: DashboardTransport | undefined;
 export function setDashboardTransportForTests(transport?: DashboardTransport): void {
   testTransport = transport;
   clearSessionTitles();
+  clearWorkspaceMembership();
 }
 
 export interface DashboardRuntimeTransport {
@@ -37,5 +39,6 @@ export async function callDashboard<O extends DashboardRpcOperation>(
   call: DashboardRpcCall<O>,
 ): Promise<DashboardRpcResult<O>> {
   const result = await dashboardTransport().call(call);
-  return call.operation.startsWith("sessions.") ? projectSessionData(result) : result;
+  if (call.operation === "workspaces.delete") forgetWorkspace((call.input as { workspace_id: string }).workspace_id);
+  return projectWorkspaceData(call.operation.startsWith("sessions.") ? projectSessionData(result) : result);
 }

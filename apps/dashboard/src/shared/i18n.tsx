@@ -311,6 +311,13 @@ export const ZH_TEXT = {
     tokenSuffix: "Token"
   },
   workspaces: {
+    delete: "删除工作区",
+    deletePrompt: (name: string) => "将把“" + name + "”从工作区列表中移除。文件夹与会话记录会保留，其会话将显示在“未分组”下。",
+    deleting: "正在删除工作区…",
+    ungrouped: "未分组",
+    required: "请先选择工作区。",
+    notFound: "工作区不存在。",
+
     title: "工作区", defaultName: "默认工作区", choose: "选择工作区", open: "打开文件夹",
     newIn: (name: string) => `在“${name}”中新建对话`,
     loadMore: "加载更多对话", retry: "重试", empty: "暂无对话",
@@ -1213,6 +1220,13 @@ export const UI_TEXT: Record<Language, UiText> = {
       tokenSuffix: "Token"
     },
     workspaces: {
+      delete: "Delete workspace",
+      deletePrompt: (name: string) => "This removes “" + name + "” from the workspace list. The folder and session logs will be kept. Its sessions will appear under Ungrouped.",
+      deleting: "Deleting workspace…",
+      ungrouped: "Ungrouped",
+      required: "Select a workspace first.",
+      notFound: "Workspace not found.",
+
       title: "Workspaces", defaultName: "Default workspace", choose: "Choose workspace", open: "Open folder",
       newIn: (name: string) => `New chat in “${name}”`,
       loadMore: "Load more chats", retry: "Retry", empty: "No conversations yet",

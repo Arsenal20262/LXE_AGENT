@@ -20,11 +20,11 @@ test("dashboard mode and approval RPCs persist audit data, preserve pending targ
   const service = new DashboardService({ stateRoot: root, llmConfigRoot: root, skillsRoot: root, userSkillsRoot: root,
     environment: {}, store, tools, approvals, mcpConfig: { servers: [] }, onPermissionChanged: id => { events.push(`mode:${id}`); } });
   try {
-    const blank = await service.call({ operation: "sessions.create", input: { directory } });
+    const blank = await service.call({ operation: "sessions.create", input: { workspace_id: store.registerWorkspace(directory).workspace_id } });
     expect(blank.permission_mode).toBe("workspace-write");
     const id = blank.session_id;
     await service.call({ operation: "sessions.permission.set", input: { session_id: id, permission_mode: "read-only" } });
-    expect((await service.call({ operation: "sessions.create", input: { directory } })).permission_mode).toBe("read-only");
+    expect((await service.call({ operation: "sessions.create", input: { workspace_id: store.registerWorkspace(directory).workspace_id } })).permission_mode).toBe("read-only");
     const context = { session_id: id, turn_id: "turn", tool_call_id: "call", platform: "desktop", workspace,
       executionPolicy: new PermissionPolicyService().resolve((await store.getSession(id))!),
       handle: { signal: new AbortController().signal, cancelled: false, drainSteering: () => [], registerProcess: () => () => {} } };

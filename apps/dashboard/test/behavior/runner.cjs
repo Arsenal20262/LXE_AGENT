@@ -70,7 +70,9 @@ app.whenReady().then(async () => {
   };
   try {
     await load();
-    if (suite === "session-titles") {
+    if (suite === "workspace-deletion") {
+      await require("./workspace-deletion.cjs")({win,js,step,load,waitFor,click,key,focus,settle,state});
+    } else if (suite === "session-titles") {
       await require("./session-titles.cjs")({win,js,step,load,waitFor,click,key,focus,settle,state});
     } else if (suite === "markdown") {
       await require("./markdown.cjs")({win, js, step, settle});
@@ -887,7 +889,7 @@ app.whenReady().then(async () => {
       };
       await step("all workspaces are discoverable and expanded groups page independently", async () => {
         assert.match(await js("document.querySelector('.workspace-index').textContent"), /archive/);
-        assert.equal((await state()).calls.some(call => call.operation === "sessions.list" && call.input.directory === "/fixture/shop"), false);
+        assert.equal((await state()).calls.some(call => call.operation === "sessions.list" && call.input.workspace_id === "/fixture/shop"), false);
         await click(shop + " .workspace-group-toggle");
         await waitFor(`document.querySelectorAll('${shop} .session-index-item').length === 10`, "first shop page");
         assert.match(await js(`document.querySelector('${shop}').textContent`), /Pinned/);
@@ -928,7 +930,7 @@ app.whenReady().then(async () => {
         assert.equal(await js("document.querySelector('.conversation-workspace select').disabled"), false);
       });
       await step("pending first send locks its directory and a late reply cannot switch a newer draft", async () => {
-        await click(".session-new-button");
+        await click(group("/fixture/default") + " .workspace-group-header > button:last-child");
         await js("behavior.failWorkspaceSend(false); behavior.holdWorkspaceSend(true)");
         await type("Shared default task"); await key("Enter");
         await waitFor("document.querySelector('.conversation-workspace select').disabled", "directory locked");
@@ -1022,7 +1024,7 @@ app.whenReady().then(async () => {
         assert.equal(await expanded('/fixture/archive'), 'true');
         await click(shop + ' .workspace-group-header > button:last-child');
         assert.equal(await expanded('/fixture/shop'), 'true');
-        assert.equal(await js('JSON.parse(localStorage.getItem("lxe.window.main.workspaces.expanded.v1"))["/fixture/shop"]'), true);
+        assert.equal(await js('JSON.parse(localStorage.getItem("lxe.window.main.workspaces.expanded.v2"))["/fixture/shop"]'), true);
       });
       await step('registration cancel and failure retain the draft and retry registers without sending', async () => {
         await type('Keep my draft');
@@ -1090,7 +1092,7 @@ app.whenReady().then(async () => {
         assert.equal((await state()).sessions.filter(row => row.blank && row.workspace.directory === '/fixture/shop').length, 1);
       });
       await step('corrupt preferences and blocked local storage still allow toggling', async () => {
-        await js('localStorage.setItem("lxe.window.main.workspaces.expanded.v1", "{")');
+        await js('localStorage.setItem("lxe.window.main.workspaces.expanded.v2", "{")');
         await load('?app=1&workspaces=1&section=sessions');
         await waitFor('Boolean(document.querySelector(' + JSON.stringify(shop) + '))', 'groups after corrupt preferences');
         assert.equal(await expanded('/fixture/default'), 'true');

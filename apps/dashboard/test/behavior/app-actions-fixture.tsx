@@ -36,6 +36,7 @@ export const actionFixture = {
   thinking(level: string) { controls!.setCurrentThinkingLevel(level); },
   state() { return { sends, activityListeners: activityListeners.size, streamListeners: streamListeners.size }; },
   onActivity(listener: (event: DesktopConversationEvent) => void) { activityListeners.add(listener); return () => { activityListeners.delete(listener); }; },
+  activity(activity: DesktopConversationActivityPayload) { activityListeners.forEach(listener => listener({ activity: structuredClone(activity) })); },
   onStream(listener: (event: DesktopConversationStreamEvent) => void) { streamListeners.add(listener); return () => { streamListeners.delete(listener); }; },
   snapshot(id = "event-session", seq = 1, text = "a") {
     const activity: DesktopConversationActivityPayload = {

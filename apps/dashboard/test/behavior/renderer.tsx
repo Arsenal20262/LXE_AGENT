@@ -1,3 +1,4 @@
+import { dashboardQueryKeys } from "../../src/api/query-keys";
 import { ConversationContentFixture } from "./conversation-content-fixture";
 import { RendererFailureView } from "../../src/root-error-boundary";
 import { SessionWorkspaceFixture, sessionFixture } from "./session-workspace-fixture";
@@ -7,7 +8,7 @@ import { createDashboardContractFixture } from "./dashboard-contract-fixture";
 import type { DesktopVietnamSettingsState } from "@lxe/desktop-protocol";
 import { VietnamSettingsWorkbench } from "../../src/features/workbench/vietnam-settings-view";
 import { useApprovalsQuery } from "../../src/api/queries";
-import type { PendingApproval, PendingUserQuestion, PermissionMode } from "@lxe/desktop-protocol";
+import type { DesktopConversationActivityPayload, PendingApproval, PendingUserQuestion, PermissionMode } from "@lxe/desktop-protocol";
 import { FilePreviewLayout } from "../../src/features/file-preview/Sidebar";
 import { UpdateControl } from "../../src/desktop/update-control";
 import type { DesktopUpdateState, DesktopUpdateRelease } from "@lxe/desktop-protocol";
@@ -58,13 +59,20 @@ let holdCreation = false;
 const pendingCreations: (() => void)[] = [];
 let registrationFailure = false;
 let renameFailure = false;
+const busySessions = new Set<string>();
+let holdWorkspaceResponses = false;
+const pendingWorkspaceResponses: (() => void)[] = [];
+let deleteFailure = false;
+let holdDeletion = false;
+let releaseDeletion: (() => void) | undefined;
+const retiredWorkspaceIds = new Set<string>();
 let holdSessionRename = false;
 let releaseSessionRename: (() => void) | undefined;
 let holdRegistration = false;
 let releaseRegistration: (() => void) | undefined;
 let invalidateDashboard: (() => void) | undefined;
 function workspaceSession(id: string, directory: string, pinned = false): SessionPayload {
-  return { session_id: id, permission_mode: "workspace-write", title: id, workspace: { directory, worktree: directory },
+  return { session_id: id, permission_mode: "workspace-write", title: id, workspace_id: directory, workspace: { directory, worktree: directory },
     pinned_at: pinned ? 1 : 0, created_at: 1, last_active_at: 100, source: { platform: "desktop" },
     source_summary: { platform: "desktop", chat_type: "p2p" }, model: "fixture-model", reasoning_effort: "",
     model_config: {}, message_count: 0, tool_call_count: 0, input_tokens: 0, output_tokens: 0, api_call_count: 0 };
@@ -75,19 +83,20 @@ const workspaceSessions = [
   workspaceSession("Archived project chat", "/fixture/archive"),
 ];
 const workspaceRegistry: WorkspaceSummaryPayload[] = [...new Set(workspaceSessions.map(row => row.workspace.directory))]
-  .map(directory => ({ directory, display_name: null, created_at: 1, session_count: 0, last_active_at: 0 }));
+  .map(directory => ({ workspace_id: directory, directory, display_name: null, created_at: 1, session_count: 0, last_active_at: 0 }));
 if (workspaceMode && sessionStorage.getItem("workspaceFixture")) {
   const saved = JSON.parse(sessionStorage.getItem("workspaceFixture")!);
+  for (const id of saved.retired ?? []) retiredWorkspaceIds.add(id);
   workspaceSessions.splice(0, workspaceSessions.length, ...saved.sessions);
   workspaceRegistry.splice(0, workspaceRegistry.length, ...saved.registry);
 }
 function persistWorkspaces() {
-  sessionStorage.setItem("workspaceFixture", JSON.stringify({ sessions: workspaceSessions, registry: workspaceRegistry }));
+  sessionStorage.setItem("workspaceFixture", JSON.stringify({ sessions: workspaceSessions, registry: workspaceRegistry, retired: [...retiredWorkspaceIds] }));
 }
 function registerWorkspace(directory: string) {
   let row = workspaceRegistry.find(row => row.directory === directory);
   if (!row) {
-    row = { directory, display_name: null, created_at: Date.now() / 1000, session_count: 0, last_active_at: 0 };
+    row = { workspace_id: retiredWorkspaceIds.has(directory) ? `${directory}:${crypto.randomUUID()}` : directory, directory, display_name: null, created_at: Date.now() / 1000, session_count: 0, last_active_at: 0 };
     workspaceRegistry.push(row);
   }
   persistWorkspaces();
@@ -99,15 +108,17 @@ function workspaceRpc(call: { operation: string; input: Record<string, unknown> 
     case "sessions.create": return (async () => {
       if (creationFailure) throw new Error("SQLITE_FULL: fixture session creation failed");
       if (holdCreation) await new Promise<void>(resolve => pendingCreations.push(resolve));
-      const directory = String(input.directory);
-      let session = workspaceSessions.find(row => row.blank && row.workspace.directory === directory);
-      if (!session) { session = { ...workspaceSession(`Blank ${crypto.randomUUID()}`, directory), blank: true }; workspaceSessions.push(session); }
-      registerWorkspace(directory);
+      const registration = workspaceRegistry.find(row => row.workspace_id === input.workspace_id);
+      if (!registration) throw new Error("workspace not found");
+      const directory = registration.directory;
+      let session = workspaceSessions.find(row => row.blank && row.workspace_id === registration.workspace_id);
+      if (!session) { session = { ...workspaceSession(`Blank ${crypto.randomUUID()}`, directory), workspace_id: registration.workspace_id, blank: true }; workspaceSessions.push(session); }
+      persistWorkspaces();
       return { ...session };
     })();
     case "sessions.workspaces": return { items: workspaceRegistry.map(row => ({
-      ...row, session_count: workspaceSessions.filter(session => !session.blank && session.workspace.directory === row.directory).length,
-      last_active_at: workspaceSessions.some(session => !session.blank && session.workspace.directory === row.directory) ? 100 : 0,
+      ...row, session_count: workspaceSessions.filter(session => !session.blank && session.workspace_id === row.workspace_id).length,
+      last_active_at: workspaceSessions.some(session => !session.blank && session.workspace_id === row.workspace_id) ? 100 : 0,
     })) };
     case "workspaces.register": return (async () => {
       if (registrationFailure) throw new Error("SQLITE_FULL: fixture registry is full");
@@ -116,13 +127,24 @@ function workspaceRpc(call: { operation: string; input: Record<string, unknown> 
     })();
     case "workspaces.rename": {
       if (renameFailure) throw new Error("SQLITE_READONLY: fixture rename denied");
-      const row = workspaceRegistry.find(row => row.directory === input.directory)!;
+      const row = workspaceRegistry.find(row => row.workspace_id === input.workspace_id)!;
       row.display_name = String(input.display_name).trim() || null;
       persistWorkspaces();
       return { ...row };
     }
+    case "workspaces.delete": return (async () => {
+      if (holdDeletion) await new Promise<void>(resolve => { releaseDeletion = resolve; });
+      if (deleteFailure) throw new Error("SQLITE_READONLY: fixture workspace deletion denied");
+      const index = workspaceRegistry.findIndex(row => row.workspace_id === input.workspace_id);
+      if (index < 0) throw new Error("workspace not found");
+      const [registration] = workspaceRegistry.splice(index, 1);
+      retiredWorkspaceIds.add(registration!.workspace_id);
+      for (const session of workspaceSessions) if (session.workspace_id === input.workspace_id) session.workspace_id = null;
+      persistWorkspaces();
+      return { deleted: true };
+    })();
     case "sessions.list": {
-      const rows = workspaceSessions.filter(row => !row.blank && (!input.directory || row.workspace.directory === input.directory)
+      const rows = workspaceSessions.filter(row => !row.blank && (input.workspace_id === undefined || row.workspace_id === input.workspace_id)
         && (!input.query || row.title.toLowerCase().includes(String(input.query).toLowerCase())));
       const offset = Number(input.offset ?? 0), limit = Number(input.limit ?? 10);
       return { items: rows.slice(offset, offset + limit), total: rows.length, offset, limit };
@@ -130,7 +152,9 @@ function workspaceRpc(call: { operation: string; input: Record<string, unknown> 
     case "sessions.detail": return { session: workspaceSessions.find(row => row.session_id === input.session_id),
       messages: [], messages_page: { group_cursors: [], total: 0, raw_message_total: 0, limit: 10, fetched_at: 1,
         oldest_cursor: null, newest_cursor: null, previous_cursor: null, next_cursor: null, has_previous: false, has_next: false } };
-    case "sessions.activity": return { session_id: input.session_id, active: null, latest: null, queued: [] };
+    case "sessions.activity": return { session_id: input.session_id,
+      active: busySessions.has(String(input.session_id)) ? { turn_id: "active", message_id: "active-input", text: "Running task", state: "running", started_at: 1, user_persisted_at: 1, settled_at: 0 } : null,
+      latest: null, queued: busySessions.has(String(input.session_id)) ? [{ turn_id: "queued", message_id: "queued-input", text: "Next task", state: "queued", started_at: 0, user_persisted_at: 0, settled_at: 0 }] : [] };
     case "sessions.execTasks": return { items: [] };
     case "sessions.status.list": return { items: (input.session_ids as string[]).map(session_id => ({
       session_id, version: 1, state: "idle", queue_count: 0, result: null, updated_at: 1,
@@ -287,10 +311,17 @@ const dashboard = {
     if (call.operation === "sessions.stop" && !workspaceMode) { stops++; approvalRequests = []; return { stopped: true }; }
     if (workspaceMode || ["sessions.create", "sessions.detail", "sessions.activity", "sessions.execTasks", "sessions.status.list"].includes(call.operation)) {
       const result = workspaceRpc(call);
-      if (result !== undefined) return result;
+      if (result !== undefined) {
+        if (holdWorkspaceResponses && ["sessions.create", "workspaces.rename", "sessions.workspaces"].includes(call.operation)) {
+          const snapshot = structuredClone(await result);
+          await new Promise<void>(resolve => pendingWorkspaceResponses.push(resolve));
+          return snapshot;
+        }
+        return result;
+      }
     }
     switch (call.operation) {
-      case "sessions.workspaces": return { items: [] };
+      case "sessions.workspaces": return { items: [registerWorkspace("/fixture")] };
       case "sessions.list": return { items: [], total: 0, offset: 0, limit: 10 };
       case "sessions.questions": return { items: [] };
       case "models.current": return currentModel;
@@ -462,7 +493,7 @@ const fixture = {
   releaseSessionRename() { holdSessionRename = false; releaseSessionRename?.(); },
   holdRegistration(value: boolean) { holdRegistration = value; },
   releaseRegistration() { releaseRegistration?.(); },
-  refreshWorkspaces() { invalidateDashboard?.(); },
+  refreshWorkspaces() { invalidateDashboard?.(); void queryClient?.invalidateQueries({ queryKey: dashboardQueryKeys.sessions.workspaces }); },
   chooseDirectory(directory: string | null) { chosenDirectory = directory; },
   failWorkspaceSend(value: boolean) { sendFailure = value; },
   holdWorkspaceSend(value: boolean) { holdWorkspaceSend = value; },
@@ -478,7 +509,22 @@ const fixture = {
   },
   updateComposer(options: ComposerOptions) { Object.assign(composerOptions, options); renderComposer(); },
   releaseSend() { releaseSend?.(); },
-  state() { return { calls, sends, stops, sessions: workspaceSessions, active: document.activeElement?.id,
+  busySession(id: string) {
+    busySessions.add(id);
+    actionFixture.activity(workspaceRpc({ operation: "sessions.activity", input: { session_id: id } }) as DesktopConversationActivityPayload);
+  },
+  holdWorkspaceResponses(value: boolean) { holdWorkspaceResponses = value; },
+  pendingWorkspaceResponses() { return pendingWorkspaceResponses.length; },
+  releaseWorkspaceResponses() { holdWorkspaceResponses = false; pendingWorkspaceResponses.splice(0).forEach(resolve => resolve()); },
+  failWorkspaceDelete(value: boolean) { deleteFailure = value; },
+  holdWorkspaceDelete(value: boolean) { holdDeletion = value; },
+  releaseWorkspaceDelete() { releaseDeletion?.(); releaseDeletion = undefined; },
+  registerWorkspace(directory: string) {
+    const workspace = registerWorkspace(directory);
+    queryClient?.setQueryData(dashboardQueryKeys.sessions.workspaces, { items: [...workspaceRegistry] });
+    return workspace.workspace_id;
+  },
+  state() { return { calls, sends, stops, workspaces: workspaceRegistry, sessions: workspaceSessions, active: document.activeElement?.id,
     dialogs: [...document.querySelectorAll('[role="dialog"]')].map(el => el.getAttribute("aria-label")) }; },
   setHealth(patch: Partial<DesktopHealth>) {
     if (workspaceMode && patch.workspace_root) registerWorkspace(patch.workspace_root);

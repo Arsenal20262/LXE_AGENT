@@ -56,6 +56,7 @@ describe("SqliteRuntimeStore dashboard queries", () => {
     const store = new SqliteRuntimeStore(join(root, "agent.sqlite3"));
     await store.start();
     const a = join(root, "repository", "a"), b = join(root, "repository", "b");
+    const aId = store.registerWorkspace(a).workspace_id, bId = store.registerWorkspace(b).workspace_id;
     try {
       for (let index = 0; index < 24; index++) {
         await store.ensureSession({ session_id: `a-${String(index).padStart(2, "0")}`, source: { platform: "desktop" },
@@ -66,14 +67,14 @@ describe("SqliteRuntimeStore dashboard queries", () => {
       expect(store.listSessions({ limit: 10, offset: 0 }).items).toHaveLength(10);
       expect(store.listSessionWorkspaces().items.map(item => [item.directory, item.session_count]).sort())
         .toEqual([[a, 24], [b, 1]].sort());
-      const first = store.listSessions({ directory: a, limit: 10, offset: 0 });
-      const second = store.listSessions({ directory: a, limit: 10, offset: 10 });
+      const first = store.listSessions({ workspace_id: aId, limit: 10, offset: 0 });
+      const second = store.listSessions({ workspace_id: aId, limit: 10, offset: 10 });
       expect(first.total).toBe(24);
       expect(first.items[0]?.session_id).toBe("a-00");
       expect(second.items).toHaveLength(10);
       expect(new Set([...first.items, ...second.items].map(item => item.session_id)).size).toBe(20);
-      expect(store.listSessions({ directory: b, query: "desktop", limit: 10, offset: 0 }).items.map(item => item.session_id)).toEqual(["b"]);
-      expect(store.listSessions({ directory: b, query: "a-00", limit: 10, offset: 0 }).total).toBe(0);
+      expect(store.listSessions({ workspace_id: bId, query: "desktop", limit: 10, offset: 0 }).items.map(item => item.session_id)).toEqual(["b"]);
+      expect(store.listSessions({ workspace_id: bId, query: "a-00", limit: 10, offset: 0 }).total).toBe(0);
       // These directories deliberately do not exist: reading history needs no filesystem lookup.
       await store.deleteSession("b");
       expect(store.listSessionWorkspaces().items.find(item => item.directory === b)?.session_count).toBe(0);

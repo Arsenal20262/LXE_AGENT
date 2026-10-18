@@ -96,6 +96,7 @@ test("manual title pins during generation even if provider ignores abort; identi
   await f.service.rename("s1", "手动 标题");
   expect((await f.store.titleState("s1"))?.version).toBe(3);
   await expect(f.service.rename("s1", "\u200b")).rejects.toThrow("visible text");
+  f.store.registerWorkspace(testWorkspace.directory);
   const blank = f.store.createBlankSession(testWorkspace);
   await expect(f.service.rename(String(blank.session_id), "Name")).rejects.toThrow("empty session");
   await f.store.ensureSession({ session_id: "s2", workspace: testWorkspace, source: {} });

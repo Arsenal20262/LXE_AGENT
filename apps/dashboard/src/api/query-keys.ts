@@ -5,9 +5,9 @@ export const dashboardQueryKeys = {
     questions: ["sessions", "questions"] as const,
     all: ["sessions"] as const,
     lists: ["sessions", "list"] as const,
-    list: (query: string, directory?: string) => directory === undefined
+    list: (query: string, workspace_id?: string | null) => workspace_id === undefined
       ? ["sessions", "list", query.trim()] as const
-      : ["sessions", "list", query.trim(), { directory }] as const,
+      : ["sessions", "list", query.trim(), { workspace_id }] as const,
     workspaces: ["sessions", "list", { kind: "workspaces" }] as const,
     details: ["sessions", "detail"] as const,
     detail: (sessionId: string, cursor: string | "latest") =>
