@@ -2057,6 +2057,7 @@ button {
   --app-navigation-width: 53.2px;
   --app-titlebar-height: 41.8px;
   --app-sidebar-width: 256px;
+  --app-panel-radius: 14px;
   --sidebar-control-left: calc(var(--app-navigation-width) + 8px);
   --navigation-bg: var(--bg);
   --sidebar-bg: var(--bg);
@@ -2086,6 +2087,11 @@ button {
 .app-shell.sidebar-collapsed,
 .app-shell.sidebar-unavailable {
   grid-template-columns: var(--app-navigation-width) 0 minmax(0, 1fr);
+}
+
+/* When the session list is absent, the page owns the same leading corner. */
+.app-shell.sidebar-unavailable > .main-panel > .content-panel {
+  border-top-left-radius: var(--app-panel-radius);
 }
 
 /* Keep the list mounted for scroll/search state, but remove all off-page chrome. */
@@ -2263,7 +2269,7 @@ button {
   margin-top: var(--app-titlebar-height);
   padding-top: 8px;
   border-top: 1px solid var(--sidebar-border);
-  border-radius: 14px 0 0 0;
+  border-radius: var(--app-panel-radius) 0 0 0;
   opacity: 1;
   transform: translateX(0);
   visibility: visible;
