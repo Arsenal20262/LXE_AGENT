@@ -750,6 +750,7 @@ app.whenReady().then(async () => {
         await click(".tab-sessions");
         assert.equal(await expanded(), true);
       });
+      await require("./sidebar-context.cjs")({win, js, step, load, waitFor, click, delay, rect, move, railWidth});
       await step("collapsing only hides the list; navigation and settings remain usable", async () => {
         await click(".sidebar-toggle-button"); await delay(220);
         assert.equal(await js("document.querySelector('.app-sidebar').inert"), true);
@@ -864,6 +865,13 @@ app.whenReady().then(async () => {
           await click(".sidebar-toggle-button"); await delay(220);
           await js("document.documentElement.dataset.theme='dark'");
           require("node:fs").writeFileSync(process.env.LXE_SIDEBAR_SCREENSHOT.replace(/\.png$/, "-collapsed.png"), (await win.webContents.capturePage()).toPNG());
+          await click(".sidebar-toggle-button");
+          await click(".tab-capabilities"); await delay(250);
+          require("node:fs").writeFileSync(process.env.LXE_SIDEBAR_SCREENSHOT.replace(/\.png$/, "-capabilities.png"), (await win.webContents.capturePage()).toPNG());
+          await js("document.documentElement.dataset.theme='light'"); await delay(250);
+          require("node:fs").writeFileSync(process.env.LXE_SIDEBAR_SCREENSHOT.replace(/\.png$/, "-capabilities-light.png"), (await win.webContents.capturePage()).toPNG());
+          await click(".tab-home"); await delay(250);
+          require("node:fs").writeFileSync(process.env.LXE_SIDEBAR_SCREENSHOT.replace(/\.png$/, "-home.png"), (await win.webContents.capturePage()).toPNG());
         }
       });
     } else if (suite === "windows-titlebar" || suite === "windows-menu") {

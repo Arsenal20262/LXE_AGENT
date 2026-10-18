@@ -25,6 +25,7 @@ export function SessionSidebar({ sidebar, data, actions }: Props) {
   return <>
     {data.renamingSession ? <SessionRenameDialog key={data.renamingSession.session_id} session={data.renamingSession} onClose={actions.cancelSessionRename} onRename={actions.renameSession} /> : null}
     <div
+      hidden={!sidebar.available}
       className={sidebarVisible ? "sidebar-window-controls sidebar-visible" : "sidebar-window-controls"}
       {...sidebar.controlProps}
     >
@@ -45,7 +46,7 @@ export function SessionSidebar({ sidebar, data, actions }: Props) {
         {sessionSidebarExpanded ? <PanelLeftClose size={17} /> : <PanelLeftOpen size={17} />}
       </button>
     </div>
-    {sessionSidebarExpanded ? <button
+    {sidebar.available && sessionSidebarExpanded ? <button
       className="sidebar-dismiss"
       type="button"
       aria-label={t.sidebar.collapse}
@@ -53,6 +54,7 @@ export function SessionSidebar({ sidebar, data, actions }: Props) {
       tabIndex={-1}
     /> : null}
     <aside
+      hidden={!sidebar.available}
       aria-hidden={!sidebarVisible}
       aria-label={t.workspaces.title}
       className={`app-sidebar is-${sidebarMode}`}

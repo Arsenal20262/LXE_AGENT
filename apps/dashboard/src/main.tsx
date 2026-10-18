@@ -97,7 +97,8 @@ function App({
     : "";
   const [error, setError] = useState("");
   const [detailTarget, setDetailTarget] = useState<DetailTarget>(null);
-  const sidebar = useThreeStateSidebar(browserStorage());
+  const sidebarAvailable = activeSection === "home" || activeSection === "sessions";
+  const sidebar = useThreeStateSidebar(browserStorage(), sidebarAvailable);
   const dashboardRuntimeReady = desktopHealth.gateway === "ready"
     && desktopHealth.agent_cli === "ready";
 
@@ -193,6 +194,7 @@ function App({
   );
   const shellClassName = [
     "app-shell",
+    sidebarAvailable ? "" : "sidebar-unavailable",
     sidebar.collapsed ? "sidebar-collapsed" : "",
     sidebar.peekOpen ? "sidebar-peeking" : "",
     activeSection === "sessions" ? "sessions-focus" : "",
@@ -311,7 +313,7 @@ function App({
           target={detailTarget}
           onClose={() => setDetailTarget(null)}
         />
-        <SidebarResizer expanded={sidebar.expanded} storage={browserStorage()} />
+        <SidebarResizer expanded={sidebarAvailable && sidebar.expanded} storage={browserStorage()} />
       </main>
       <div className={activeSection === "sessions" ? "runtime-status-host sessions-focus" : "runtime-status-host"}>
         {runtimeStatusPopover}
