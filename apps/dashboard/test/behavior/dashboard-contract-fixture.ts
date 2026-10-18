@@ -50,6 +50,7 @@ export function createDashboardContractFixture(calls: Call[]) {
     cloud(patch: Partial<DesktopCloudState>) { cloud = { ...cloud, ...patch }; cloudListeners.forEach(listener => listener(structuredClone(cloud))); },
     listeners() { return { cloud: cloudListeners.size, task: taskListeners.size }; },
     completeTask() { if (task) { task = { ...task, state: "completed", stage: "done", processed: 1 }; taskListeners.forEach(listener => listener(structuredClone(task!))); } },
+    task(value: DesktopSyntheticPerformerTask) { task = structuredClone(value); taskListeners.forEach(listener => listener(structuredClone(task!))); },
     clearCalls() { calls.length = 0; },
   };
   const desktop = {

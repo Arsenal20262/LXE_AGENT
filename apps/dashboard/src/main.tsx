@@ -26,6 +26,7 @@ import "./styles.css";
 import "./features/capabilities/theme.css";
 import "./features/stats/theme.css";
 import "./features/workbench/index-theme.css";
+import "./features/workbench/detail-theme.css";
 import "./desktop/update-control.css";
 import "./shared/navigation-rail.css";
 import { SidebarStatus } from "./desktop/sidebar-status";
@@ -228,7 +229,7 @@ function App({
             activeSection === "sessions" ? "content-panel-fill" : "",
             activeSection === "capabilities" ? "capabilities-theme" : "",
             activeSection === "activity" ? "activity-theme" : "",
-            activeSection === "workbench" && workbenchView === "index" ? "workbench-theme" : "",
+            activeSection === "workbench" ? "workbench-theme" : "",
           ].filter(Boolean).join(" ")}>
             {visibleError ? (
               <div className="dashboard-query-notice" role="status">

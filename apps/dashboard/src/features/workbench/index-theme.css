@@ -1,7 +1,7 @@
 @import "../../shared/cds-theme.css";
 
 /* CDS-inspired directory: one surface, semantic ink and alpha separators.
-   The row layout is an LXE adaptation; tool workflows keep their own layouts. */
+   The row layout is an LXE adaptation; detail workflows use the same purpose tokens. */
 .content-panel.workbench-theme {
   padding: 32px 36px 80px;
   background: var(--cds-surface-panel);
@@ -41,7 +41,7 @@
 .workbench-theme .workbench-tool-body { gap: 6px; }
 .workbench-theme .workbench-tool-name { font-size: .9375rem; font-weight: 500; line-height: 1.5; }
 .workbench-theme .workbench-tool-summary { max-width: 64ch; font-size: .8125rem; color: var(--text-soft); }
-.workbench-theme .workbench-tool-status {
+.workbench-theme .workbench-tool-card .workbench-tool-status {
   grid-column: 3; margin: 0; padding: 4px 8px; border-radius: 6px;
   background: var(--cds-alpha-1); color: var(--text-soft);
   font-size: .75rem; font-weight: 400; white-space: nowrap;
@@ -55,7 +55,7 @@
   .workbench-theme .workbench-tool-card { grid-template-columns: 32px minmax(0, 1fr) 16px; }
   .workbench-theme .workbench-tool-icon { align-self: start; width: 32px; height: 32px; }
   .workbench-theme .workbench-tool-chevron { grid-column: 3; grid-row: 1; }
-  .workbench-theme .workbench-tool-status { grid-column: 2; justify-self: start; }
+  .workbench-theme .workbench-tool-card .workbench-tool-status { grid-column: 2; justify-self: start; }
 }
 @media (max-width: 480px) {
   .content-panel.workbench-theme { padding: 20px 12px 72px; }

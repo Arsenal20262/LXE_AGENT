@@ -6,6 +6,7 @@ import { AppActionsFixture, actionFixture } from "./app-actions-fixture";
 import { MarkdownFixture, type MarkdownSurface } from "./markdown-fixture";
 import { createDashboardContractFixture } from "./dashboard-contract-fixture";
 import { activityFixture } from "./activity-fixture";
+import { createWorkbenchDetailsFixture, workbenchMediaTask } from "./workbench-details-fixture";
 import type { DesktopVietnamSettingsState } from "@lxe/desktop-protocol";
 import { VietnamSettingsWorkbench } from "../../src/features/workbench/vietnam-settings-view";
 import { useApprovalsQuery } from "../../src/api/queries";
@@ -33,6 +34,8 @@ import "../../src/styles.css";
 const calls: { operation: string; input?: unknown }[] = [];
 const contractMode = new URLSearchParams(location.search).has("contracts");
 const activityMode = new URLSearchParams(location.search).has("stats");
+const workbenchDetailsMode = new URLSearchParams(location.search).has("workbench-fixture");
+const workbenchDetailsFixture = createWorkbenchDetailsFixture(calls);
 const contractFixture = createDashboardContractFixture(calls);
 const updateRelease: DesktopUpdateRelease = {version:"0.2.0",build_id:"renderer-build",file_name:"fixture.exe",size:100,sha512:"fixture",notes:"Renderer update"};
 let updateState: DesktopUpdateState = {phase:"unsupported"};
@@ -266,6 +269,7 @@ const desktop = {
   stagePastedConversationFiles: async () => { calls.push({ operation: "pasteFiles" }); return []; },
   discardConversationFiles: async () => {},
   ...(contractMode ? contractFixture.desktop : {}),
+  ...(workbenchDetailsMode ? workbenchDetailsFixture.desktop : {}),
 } satisfies Partial<LxeDesktopBridge["desktop"]>;
 const permissionModes = new Map<string, PermissionMode>();
 let approvalRequests: PendingApproval[] = [];
@@ -474,6 +478,8 @@ const fixture = {
     </div>));
   },
   vietnamUploadFailure(value: boolean | string) { vietnamUploadError = value; },
+  assets: workbenchDetailsFixture.controls,
+  workbenchMedia(mode: "scan" | "running" | "apply") { contractFixture.controls.task(workbenchMediaTask(mode)); },
   vietnamExportMode(value: typeof vietnamExportMode) { vietnamExportMode = value; },
   releaseVietnamExport() { releaseVietnamExport?.(); },
   vietnamReadFailure(value: boolean) { vietnamReadError = value; },

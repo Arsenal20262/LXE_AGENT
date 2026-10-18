@@ -48,6 +48,12 @@
       "document": "examples/activity-workbench.md",
       "screenshots": 8,
       "scope": "LXE activity and workbench index adaptation; original sources and historical CSS snapshots unchanged"
+    },
+    {
+      "date": "2026-10-19",
+      "document": "examples/workbench-details.md",
+      "screenshots": 16,
+      "scope": "LXE workbench detail adaptation; original sources and historical CSS snapshots unchanged"
     }
   ]
 }

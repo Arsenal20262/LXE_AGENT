@@ -185,8 +185,8 @@ export const ZH_TEXT = {
   },
   workbenchIndex: {
     eyebrow: "工作台",
-    title: "工具",
-    subtitle: "选一个工具开始。",
+    title: "功能",
+    subtitle: "选择一项功能开始。",
     back: "返回工作台",
     tools: {
       syntheticPerformer: {
@@ -204,6 +204,7 @@ export const ZH_TEXT = {
     title: "模板与数据源",
     subtitle: "技能会自动记住这些文件的当前版本。上传新版本时会自动升档，上一版保留一份备用。",
     slotSummary: (filled: number, total: number) => `${filled} / ${total} 已就绪`,
+    noSlots: "暂无可用的模板与数据源。",
     empty: "还没有存过",
     emptyHint: "第一次在对话里上传后，这里就会显示当前版本。",
     current: "当前版本",
@@ -1102,8 +1103,8 @@ export const UI_TEXT: Record<Language, UiText> = {
     },
     workbenchIndex: {
       eyebrow: "Workbench",
-      title: "Tools",
-      subtitle: "Pick a tool to get started.",
+      title: "Features",
+      subtitle: "Choose a feature to get started.",
       back: "Back to workbench",
       tools: {
         syntheticPerformer: {
@@ -1121,6 +1122,7 @@ export const UI_TEXT: Record<Language, UiText> = {
       title: "Templates & data sources",
       subtitle: "Skills remember the current version of these files. Uploading a new one promotes it automatically and keeps the previous version as a spare.",
       slotSummary: (filled: number, total: number) => `${filled} / ${total} ready`,
+      noSlots: "No templates or data sources are available yet.",
       empty: "Nothing stored yet",
       emptyHint: "The current version appears here after your first upload in a conversation.",
       current: "Current",
