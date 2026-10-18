@@ -609,6 +609,11 @@ export const ZH_TEXT = {
     closeNotice: "关闭提示",
     interfaceLanguage: "界面语言",
     integrationsGroup: "业务集成",
+    preferencesGroup: "偏好与账户",
+    computerGroup: "这台电脑",
+    searchSettings: "搜索设置",
+    clearSearch: "清除搜索",
+    noSettingsFound: "没有匹配的设置项",
     cancel: "取消",
     listSeparator: "、",
     keepBlankSuffix: "（留空则保持不变）",
@@ -702,7 +707,9 @@ export const ZH_TEXT = {
       workspaceRoot: "新会话默认工作区"
     },
     appearance: {
-      description: "调整整个界面的文字大小，选择后立即生效。",
+      description: "让界面适合你的阅读习惯。更改会立即生效。",
+      themeHint: "选择浅色、深色，或跟随系统外观。",
+      fontSizeHint: "调整界面和对话中的文字大小。",
       fontSizeAria: "字体大小",
       themeAria: "外观主题"
     },
@@ -1518,6 +1525,11 @@ export const UI_TEXT: Record<Language, UiText> = {
       closeNotice: "Dismiss notice",
       interfaceLanguage: "Interface language",
       integrationsGroup: "Integrations",
+      preferencesGroup: "Preferences & account",
+      computerGroup: "This computer",
+      searchSettings: "Search settings",
+      clearSearch: "Clear search",
+      noSettingsFound: "No matching settings",
       cancel: "Cancel",
       listSeparator: ", ",
       keepBlankSuffix: " (leave blank to keep it unchanged)",
@@ -1611,7 +1623,9 @@ export const UI_TEXT: Record<Language, UiText> = {
         workspaceRoot: "Default workspace for new sessions"
       },
       appearance: {
-        description: "Adjust the text size across the interface; changes apply immediately.",
+        description: "Make the interface comfortable to read. Changes apply immediately.",
+        themeHint: "Choose a light or dark appearance, or follow your system.",
+        fontSizeHint: "Adjust text size across the interface and conversations.",
         fontSizeAria: "Font size",
         themeAria: "Appearance theme"
       },

@@ -118,8 +118,8 @@ module.exports = async ({ win, js, step, load, waitFor, click, key, focus, settl
     }
     await textClick('Model settings', '.desktop-settings-nav');
     await win.setSize(960,640); await settle();
-    const geometry = await js(`(() => { const el=document.querySelector('.desktop-settings-content'); const header=document.querySelector('.desktop-settings-modal > header');
-      const top=header.getBoundingClientRect().top; el.scrollTop=el.scrollHeight; return {scroll:el.scrollTop,top,after:header.getBoundingClientRect().top,overflow:getComputedStyle(el).overflowY}; })()`);
+    const geometry = await js(`(() => { const el=document.querySelector('.desktop-settings-content'); const close=document.querySelector('.desktop-settings-dismiss');
+      const top=close.getBoundingClientRect().top; el.scrollTop=el.scrollHeight; return {scroll:el.scrollTop,top,after:close.getBoundingClientRect().top,overflow:getComputedStyle(el).overflowY}; })()`);
     assert.ok(['auto','scroll'].includes(geometry.overflow));
     assert.ok(geometry.scroll>0,'settings body actually scrolls');
     assert.equal(geometry.top, geometry.after);
