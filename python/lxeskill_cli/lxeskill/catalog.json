@@ -80,6 +80,28 @@
       "input_schema": {"type": "object", "properties": {}, "additionalProperties": false}
     },
     {
+      "name": "vietnam_replenishment_settings",
+      "command_path": ["vietnam", "replenishment", "settings"],
+      "visibility": "internal",
+      "session_mode": "none",
+      "module": "services.agent_cli.vietnam_replenishment.settings",
+      "owner_skills": [],
+      "timeout_ms": 180000,
+      "exposed": false,
+      "input_modes": ["flags"],
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "action": {"type": "string", "enum": ["read", "save", "upload", "export"]},
+          "parameters": {"type": "object"},
+          "path": {"type": "string", "minLength": 1},
+          "kind": {"type": "string", "enum": ["template", "current"]}
+        },
+        "required": ["action"],
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "assets_inspect",
       "command_path": ["assets", "list"],
       "legacy_aliases": ["assets_inspect"],

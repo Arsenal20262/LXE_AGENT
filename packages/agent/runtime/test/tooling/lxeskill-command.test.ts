@@ -155,7 +155,7 @@ test("Vietnam calculation requires three local reports and an optional map", () 
   const path = join(process.cwd(), "python/lxeskill_cli/lxeskill/catalog.json");
   const document = JSON.parse(readFileSync(path, "utf8"));
   expect(document.entries.filter((entry: any) => entry.managed_execution !== undefined)).toEqual([]);
-  expect(document.entries.filter((entry: any) => entry.name.startsWith("vietnam_replenishment_")).map((entry: any) => entry.name)).toEqual(["vietnam_replenishment_generate"]);
+  expect(document.entries.filter((entry: any) => entry.name.startsWith("vietnam_replenishment_") && entry.visibility !== "internal").map((entry: any) => entry.name)).toEqual(["vietnam_replenishment_generate"]);
   expect(document.entries.find((entry: any) => entry.name === "vietnam_replenishment_generate").input_schema).toEqual({
     type: "object",
     properties: {
@@ -163,6 +163,16 @@ test("Vietnam calculation requires three local reports and an optional map", () 
       products_file: { type: "string", minLength: 1 }, sku_map_file: { type: "string", minLength: 1 },
     },
     required: ["sales_file", "inventory_file", "products_file"], additionalProperties: false,
+  });
+});
+
+test("Vietnam settings is an internal CLI command without a model skill owner", () => {
+  const path = join(process.cwd(), "python/lxeskill_cli/lxeskill/catalog.json");
+  expect(loadLxeSkillCommandCatalog(path).find(entry => entry.name === "vietnam_replenishment_settings")).toMatchObject({
+    command: "lxeskill vietnam replenishment settings",
+    visibility: "internal",
+    ownerSkills: [],
+    module: "services.agent_cli.vietnam_replenishment.settings",
   });
 });
 
@@ -193,12 +203,12 @@ test("Mabang Brazil delivers original batches through a separate ERP skill", () 
 });
 
 
-test("flags-only export contracts have matching skill ownership and reject invalid modes", () => {
+test("flags-only command contracts have matching skill ownership and reject invalid modes", () => {
   const path = join(process.cwd(), "python/lxeskill_cli/lxeskill/catalog.json");
   const document = JSON.parse(readFileSync(path, "utf8"));
   const entries = loadLxeSkillCommandCatalog(path);
   const scoped = document.entries.filter((entry: any) => entry.input_modes !== undefined);
-  expect(scoped).toHaveLength(12);
+  expect(scoped).toHaveLength(13);
   const known = new Map(entries.map(entry => [entry.command, entry.ownerSkills]));
   for (const raw of scoped) {
     expect(raw.input_modes).toEqual(["flags"]);

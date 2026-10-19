@@ -12,20 +12,23 @@ function service(execute?: DesktopInputAssetsOptions["execute"]) {
   const root = mkdtempSync(join(tmpdir(), "vietnam-settings-")); roots.push(root);
   return new DesktopVietnamSettingsService({ dataRoot: root, pythonPath: join(process.cwd(), process.platform === "win32" ? ".venv/Scripts/python.exe" : ".venv/bin/python"), managedPath: "", platform: process.platform, execute });
 }
-test("native settings use a private fixed Python module and pass the selection as one argument", async () => {
+test("settings use the lxeskill entrypoint and pass parameters and selections as single arguments", async () => {
   const calls: string[][] = [];
   const store = service(async (args, options) => {
     calls.push(args);
     expect(options.env?.LXE_DATA_ROOT).toContain("vietnam-settings-");
-    return { stdout: JSON.stringify({ success: true, data: args[6] === "export" ? { path: args[8] } : state }), stderr: "", error: null };
+    expect(options.env?.LXE_SQLITE_DB_PATH).toEndWith("lxeskill.sqlite3");
+    return { stdout: JSON.stringify({ type: "result", ok: true, data: { success: true, data: args[10] === "export" ? { path: args[14] } : state } }), stderr: "", error: null };
   });
   await store.read();
+  await store.save({ exchange_rate: "4200" });
   await store.upload("/selected/中文 map.xlsx");
   expect(await store.exportMap("current", "D:\\中文 map\\导出.xlsx")).toEqual({ path: "D:\\中文 map\\导出.xlsx" });
   expect(calls).toEqual([
-    ["-I", "-B", "-X", "utf8", "-m", "services.vietnam_replenishment.settings", "read"],
-    ["-I", "-B", "-X", "utf8", "-m", "services.vietnam_replenishment.settings", "upload", "/selected/中文 map.xlsx"],
-    ["-I", "-B", "-X", "utf8", "-m", "services.vietnam_replenishment.settings", "export", "current", "D:\\中文 map\\导出.xlsx"],
+    ["-I", "-B", "-X", "utf8", "-m", "lxeskill", "vietnam", "replenishment", "settings", "--action", "read"],
+    ["-I", "-B", "-X", "utf8", "-m", "lxeskill", "vietnam", "replenishment", "settings", "--action", "save", "--parameters", '{"exchange_rate":"4200"}'],
+    ["-I", "-B", "-X", "utf8", "-m", "lxeskill", "vietnam", "replenishment", "settings", "--action", "upload", "--path", "/selected/中文 map.xlsx"],
+    ["-I", "-B", "-X", "utf8", "-m", "lxeskill", "vietnam", "replenishment", "settings", "--action", "export", "--kind", "current", "--path", "D:\\中文 map\\导出.xlsx"],
   ]);
 });
 test("actual Python template export needs no saved settings and empty templates cannot be uploaded", async () => {
@@ -51,8 +54,16 @@ test("actual Python settings survive new service instances without changing ERP 
   expect((await first.read()).parameters?.exchange_rate).toBe("4200");
 });
 test("native settings preserve real structured errors and observed process failures", async () => {
-  await expect(service(async () => ({ stdout: JSON.stringify({ success: false, error: "BadZipFile: synthetic map failure" }), stderr: "", error: new Error("exit 1") })).read()).rejects.toThrow("BadZipFile: synthetic map failure");
+  await expect(service(async () => ({ stdout: JSON.stringify({ type: "result", ok: false, error: { message: "BadZipFile: synthetic map failure" } }), stderr: "", error: new Error("exit 4") })).read()).rejects.toThrow("BadZipFile: synthetic map failure");
   await expect(service(async () => ({ stdout: "", stderr: "PermissionError: /app/parameters.json", error: new Error("exit 1") })).read()).rejects.toThrow("PermissionError: /app/parameters.json");
+});
+
+test("settings require a successful CLI result and tolerate preceding progress events", async () => {
+  const result = { type: "result", ok: true, data: { success: true, data: state } };
+  expect(await service(async () => ({ stdout: JSON.stringify({ type: "progress" }) + "\n" + JSON.stringify(result), stderr: "", error: null })).read()).toEqual(state);
+  for (const record of [{ success: true, data: state }, { ...result, ok: false }, { ...result, type: "progress" }]) {
+    await expect(service(async () => ({ stdout: JSON.stringify(record), stderr: "", error: null })).read()).rejects.toThrow("Invalid lxeskill settings result");
+  }
 });
 
 test("native upload preserves aggregate findings and the complete report beyond message limits", async () => {
