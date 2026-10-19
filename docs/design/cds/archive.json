@@ -97,6 +97,12 @@
       "document": "examples/conversation-colors.md",
       "screenshots": 5,
       "scope": "LXE user message bubble color adaptation; neutral mixed surface, subtle border and semantic text/reference colors; geometry preserved across light, dark and narrow states"
+    },
+    {
+      "date": "2026-10-19",
+      "document": "examples/runtime-status.md",
+      "screenshots": 6,
+      "scope": "LXE runtime status popover and trigger color adaptation; neutral surfaces, semantic status colors and preserved provider marks; layout, status classification and navigation unchanged"
     }
   ]
 }
