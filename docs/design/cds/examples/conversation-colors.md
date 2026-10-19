@@ -1,0 +1,49 @@
+# 对话输入框与文件块配色
+
+2026-10-19，将输入框、待发送附件、已发送文件和产出文件块接入共享 CDS 适配主题。按用户要求保留原有布局、尺寸、间距、圆角、字体和控件顺序。
+
+## 原规则与 LXE 适配
+
+来源仍是已归档的 [CDS tokens — vanilla](../sources/cds-tokens-vanilla.original.md)，没有新增官方资料。以下是 LXE 的实现，不代表 Claude 对话页的官方样式。
+
+| CDS 原规则 | 这次的使用方式 | LXE 的具体决定 |
+| --- | --- | --- |
+| Token rule / Purpose：按背景、文字、边框用途引用变量 | 输入框和文件块复用共享语义变量，亮暗主题一起切换 | 输入框使用 raised surface，文件块使用 panel；具体色值沿用 LXE 已有主题 |
+| Muted text rule：说明用 secondary；占位和元信息用 muted | 输入文字和文件名保持高对比，辅助控件与占位文字分级 | 文件类型、应用和模型图标保留原色 |
+| Accent rule：一个视图最多一个强调色填充按钮 | 可发送时突出发送按钮；焦点边框、引用使用强调色，其余控件保持中性 | 发送按钮用现有蓝色主题。这是 LXE 的选择；原文另有 clay/brand 用于 send、generate 等动作的说明，不应把蓝色发送按钮说成 CDS 强制规则 |
+| Restraint / Elevation：保持克制，区分表面层次 | 中性底色、透明边框和轻阴影；悬停略微增强边界 | 保留原卡片结构与阴影尺寸；这次不应用任何会改变布局的规则，也保留原来的禁用行为 |
+
+## 主要色值
+
+这些是 **LXE 适配值**，生产来源为[共享主题](../../../../apps/dashboard/src/shared/cds-theme.css)和[对话局部主题](../../../../apps/dashboard/src/features/sessions/conversation-theme.css)。
+
+| 用途 | 亮色 | 暗色 |
+| --- | --- | --- |
+| 输入框底色 | `#ffffff` | `#232322` |
+| 文件块底色 | `#ffffff` | `#1a1a19` |
+| 主文字 | `#0b0b0b` | `#f5f4ed` |
+| 次级文字 | `#52514e` | `#bfbdb5` |
+| 占位／元信息 | `#898781` | `#9c9a92` |
+| 默认边框 | 主墨色 10% | 白色 10% |
+| 文件悬停底色／边框 | 主墨色 5%／20% | 白色 5%／20% |
+| 发送／焦点强调色 | `#184f95` | `#6da7ec` |
+
+错误仍使用红色语义变量。发送不可用时使用中性底色；正在运行时保留停止按钮的原有交互。
+
+## 截图与验证
+
+截图来自本地 Electron 中的生产组件与示例数据，不读取真实业务会话。这里只保存组件裁剪图，周围页面保持原主题。
+
+| 状态 | 亮色 | 暗色 |
+| --- | --- | --- |
+| 空输入框 | [截图](conversation/composer-empty-light.png) | [截图](conversation/composer-empty-dark.png) |
+| 输入聚焦／可发送 | [截图](conversation/composer-focused-light.png) | [截图](conversation/composer-focused-dark.png) |
+| 运行中／停止按钮 | [截图](conversation/composer-running-light.png) | [截图](conversation/composer-running-dark.png) |
+| 产出文件 | [截图](conversation/artifact-light.png) | [截图](conversation/artifact-dark.png) |
+| 文件悬停 | [截图](conversation/artifact-hover-light.png) | [截图](conversation/artifact-hover-dark.png) |
+| 已发送文件 | [截图](conversation/sent-file-light.png) | [截图](conversation/sent-file-dark.png) |
+| 窄窗口输入框 | — | [截图](conversation/composer-narrow-dark.png) |
+
+通过临时移除／重新添加局部主题类，对比亮暗主题及窄窗口下共 40 组元素测量：坐标、宽高、padding、字体、边框宽度和圆角均一致。[实测颜色及测量数量](conversation/geometry-and-colors.json)保留供核对。它只证明这些采样元素的布局未变，不代表穷举了全部内容与窗口尺寸。
+
+验证还包括 dashboard 类型检查，以及既有 composer、references、conversation-content、permissions 四组 Electron 行为测试。文件截图使用测试文件与文件夹定位按钮，未单独保存每一种系统默认应用菜单的截图。

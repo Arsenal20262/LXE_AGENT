@@ -222,6 +222,11 @@ def run_inputs(sku_map: str | None = None):
 
 def main() -> int:
     import sys
+    # This JSON bridge also runs directly under -I, which ignores PYTHON* variables.
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            reconfigure(encoding="utf-8", errors="replace")
     try:
         action = sys.argv[1]
         if action == "read" and len(sys.argv) == 2:

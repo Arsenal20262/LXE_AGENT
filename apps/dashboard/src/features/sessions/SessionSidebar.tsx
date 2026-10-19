@@ -1,3 +1,5 @@
+import { useEffect } from "react";
+import { SessionRenameDialog } from "./session-rename";
 import { PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
 import { useUiText } from "../../shared/i18n";
 import type { useThreeStateSidebar } from "../../shared/use-three-state-sidebar";
@@ -7,7 +9,7 @@ import { WorkspacesIndex } from "./workspaces";
 type Props = Readonly<{
   sidebar: ReturnType<typeof useThreeStateSidebar>;
   data: SessionWorkspace["sidebar"];
-  actions: Pick<SessionWorkspace["actions"], "openSearch" | "expandWorkspace" | "renameWorkspace" | "retryWorkspaces" | "chooseNewWorkspace" | "changeSearch" | "sessionIndex">;
+  actions: Pick<SessionWorkspace["actions"], "openSearch" | "expandWorkspace" | "renameWorkspace" | "deleteWorkspace" | "retryWorkspaces" | "chooseNewWorkspace" | "changeSearch" | "sessionIndex" | "renameSession" | "cancelSessionRename">;
 }>;
 
 export function SessionSidebar({ sidebar, data, actions }: Props) {
@@ -15,8 +17,15 @@ export function SessionSidebar({ sidebar, data, actions }: Props) {
   const sessionSidebarExpanded = sidebar.expanded;
   const sidebarMode = sidebar.mode;
   const sidebarVisible = sidebar.visible;
+  useEffect(() => {
+    if (!data.renamingSession) return;
+    sidebar.onTransientInteractionChange(true);
+    return () => sidebar.onTransientInteractionChange(false);
+  }, [Boolean(data.renamingSession), sidebar.onTransientInteractionChange]);
   return <>
+    {data.renamingSession ? <SessionRenameDialog key={data.renamingSession.session_id} session={data.renamingSession} onClose={actions.cancelSessionRename} onRename={actions.renameSession} /> : null}
     <div
+      hidden={!sidebar.available}
       className={sidebarVisible ? "sidebar-window-controls sidebar-visible" : "sidebar-window-controls"}
       {...sidebar.controlProps}
     >
@@ -37,7 +46,7 @@ export function SessionSidebar({ sidebar, data, actions }: Props) {
         {sessionSidebarExpanded ? <PanelLeftClose size={17} /> : <PanelLeftOpen size={17} />}
       </button>
     </div>
-    {sessionSidebarExpanded ? <button
+    {sidebar.available && sessionSidebarExpanded ? <button
       className="sidebar-dismiss"
       type="button"
       aria-label={t.sidebar.collapse}
@@ -45,6 +54,7 @@ export function SessionSidebar({ sidebar, data, actions }: Props) {
       tabIndex={-1}
     /> : null}
     <aside
+      hidden={!sidebar.available}
       aria-hidden={!sidebarVisible}
       aria-label={t.workspaces.title}
       className={`app-sidebar is-${sidebarMode}`}
@@ -75,6 +85,7 @@ export function SessionSidebar({ sidebar, data, actions }: Props) {
           {...data}
           onExpandedChange={actions.expandWorkspace}
           onRename={actions.renameWorkspace}
+          onDeleteWorkspace={actions.deleteWorkspace}
           onRetryWorkspaces={actions.retryWorkspaces}
           onChoose={actions.chooseNewWorkspace}
           onQueryChange={actions.changeSearch}

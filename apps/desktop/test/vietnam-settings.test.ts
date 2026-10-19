@@ -17,15 +17,15 @@ test("native settings use a private fixed Python module and pass the selection a
   const store = service(async (args, options) => {
     calls.push(args);
     expect(options.env?.LXE_DATA_ROOT).toContain("vietnam-settings-");
-    return { stdout: JSON.stringify({ success: true, data: args[4] === "export" ? { path: args[6] } : state }), stderr: "", error: null };
+    return { stdout: JSON.stringify({ success: true, data: args[6] === "export" ? { path: args[8] } : state }), stderr: "", error: null };
   });
   await store.read();
   await store.upload("/selected/中文 map.xlsx");
   expect(await store.exportMap("current", "D:\\中文 map\\导出.xlsx")).toEqual({ path: "D:\\中文 map\\导出.xlsx" });
   expect(calls).toEqual([
-    ["-I", "-B", "-m", "services.vietnam_replenishment.settings", "read"],
-    ["-I", "-B", "-m", "services.vietnam_replenishment.settings", "upload", "/selected/中文 map.xlsx"],
-    ["-I", "-B", "-m", "services.vietnam_replenishment.settings", "export", "current", "D:\\中文 map\\导出.xlsx"],
+    ["-I", "-B", "-X", "utf8", "-m", "services.vietnam_replenishment.settings", "read"],
+    ["-I", "-B", "-X", "utf8", "-m", "services.vietnam_replenishment.settings", "upload", "/selected/中文 map.xlsx"],
+    ["-I", "-B", "-X", "utf8", "-m", "services.vietnam_replenishment.settings", "export", "current", "D:\\中文 map\\导出.xlsx"],
   ]);
 });
 test("actual Python template export needs no saved settings and empty templates cannot be uploaded", async () => {

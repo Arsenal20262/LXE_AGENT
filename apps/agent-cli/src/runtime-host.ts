@@ -1,3 +1,4 @@
+import { SessionTitleService } from "@lxe/runtime";
 import { withManagedModels, managedCredentialFor, managedTargetKey, singleManagedState, loadLlmProviderCatalog, type ManagedLlmState } from "@lxe/core";
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -22,6 +23,7 @@ import {
   buildSystemPrompt,
   configureRuntimeWireTracing,
   createRuntimeProvider,
+  DeepSeekFilesService,
   ExecShellAdapter,
   loadLxeSkillCommandCatalog,
   loadLxeSkillDatasets,
@@ -123,12 +125,17 @@ export function createAgentRuntimeHost(
   const databasePath = String(environment.LXE_AGENT_SQLITE_DB_PATH ?? "").trim()
     || join(options.dataRoot, "db", "agent.sqlite3");
   const store = new SqliteRuntimeStore(databasePath, { legacyWorkspace: options.legacyWorkspace });
+  const sessionTitles = new SessionTitleService({ store, onChanged: sessionId => options.onSessionChanged?.(sessionId, "title"), logger });
   const permissionPolicy = new PermissionPolicyService();
   const executionPaths = new ExecutionPaths(options.dataRoot);
+  const deepseekFiles = new DeepSeekFilesService({
+    cachePath: join(options.dataRoot, "cache", "deepseek-files.json"),
+    imageDirectory: join(options.dataRoot, "cache", "deepseek-images"),
+  });
   const providerManager = new AtomicRuntimeProviderManager(
     options.dataRoot,
     environment,
-    createRuntimeProvider,
+    descriptor => createRuntimeProvider(descriptor, deepseekFiles),
     options.llmConfigRoot,
     join(options.dataRoot, "config", "auth.json"),
     () => managedLlmState,
@@ -244,7 +251,7 @@ export function createAgentRuntimeHost(
   runtimeServices.push(mcpManager);
   let workspaceInstances!: WorkspaceInstanceManager;
   const dashboardService = new DashboardService({
-    questions, approvals,
+    questions, approvals, sessionTitles,
     onPermissionChanged: sessionId => options.onSessionChanged?.(sessionId, "permission"),
     stateRoot: options.dataRoot,
     llmConfigRoot: options.llmConfigRoot,
@@ -282,7 +289,7 @@ export function createAgentRuntimeHost(
   const providerDescriptor = providerManager.acquire().descriptor;
   const runtime = new TypeScriptAgentRuntime({
     permissionPolicy, executionPaths, approvalAvailable: true,
-    store,
+    store, sessionTitles,
     providerManager,
     environment,
     wireTraceController: configureRuntimeWireTracing({
@@ -332,7 +339,7 @@ export function createAgentRuntimeHost(
     stop: async () => {
       const errors: unknown[] = [];
       // Audit failures must not leave processes or temporary grants alive.
-      for (const stop of [() => approvals.stop(), () => questions.stop(), () => runtime.stop()]) {
+      for (const stop of [() => approvals.stop(), () => questions.stop(), () => runtime.stop(), () => deepseekFiles.close()]) {
         try { await stop(); } catch (error) { errors.push(error); }
       }
       started = false;
