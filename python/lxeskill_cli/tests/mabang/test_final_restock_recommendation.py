@@ -22,6 +22,55 @@ def test_formula_contract():
     assert formulas["AC"] == '=IF(OR(AB2="",AD2=""),"",AB2*AD2)'
 
 
+def test_seasonal_boost_is_on_by_default_and_can_be_disabled():
+    enabled = final_restock_formulas(2)
+    disabled = final_restock_formulas(2, peak_boost_enabled=False)
+    assert enabled["V"] == final_restock_formulas(2, peak_boost_enabled=True)["V"]
+    assert 'SEARCH("热销",AF2)' in enabled["V"]
+    assert 'SEARCH("热销",AF2)' not in disabled["V"]
+    assert "+0,120" in disabled["V"] and "+0,120" in disabled["W"]
+    assert {column: enabled[column] for column in ("I", "J", "R", "S", "U", "X", "Y", "Z", "AA", "AB", "AC")} == {
+        column: disabled[column] for column in ("I", "J", "R", "S", "U", "X", "Y", "Z", "AA", "AB", "AC")
+    }
+
+
+def test_seasonal_boost_setting_requires_a_boolean():
+    with pytest.raises(ValueError, match="peak_boost_enabled"):
+        final_restock_formulas(2, peak_boost_enabled=1)
+
+
+def test_disabled_seasonal_boost_excel_recalculation(tmp_path):
+    executable = shutil.which("soffice") or shutil.which("libreoffice")
+    if executable is None:
+        pytest.skip("NOT VERIFIED: LibreOffice is unavailable for formula evaluation")
+    source = tmp_path / "seasonal-off.xlsx"
+    book = Workbook()
+    sheet = book.active
+    sheet["I2"] = "平稳"
+    sheet["J2"] = 11
+    sheet["S2"] = 80
+    sheet["AF2"] = "热销"
+    formulas = final_restock_formulas(2, peak_boost_enabled=False)
+    sheet["V2"] = formulas["V"]
+    sheet["W2"] = formulas["W"]
+    book.save(source)
+    book.close()
+    output = tmp_path / "recalculated"
+    output.mkdir()
+    result = subprocess.run(
+        [executable, f"-env:UserInstallation={(tmp_path / 'profile').as_uri()}", "--headless",
+         "--convert-to", "xlsx", "--outdir", str(output), str(source)],
+        capture_output=True, text=True, timeout=60,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    calculated = load_workbook(output / source.name, data_only=True)
+    try:
+        assert calculated.active["V2"].value == 90
+        assert calculated.active["W2"].value == 95
+    finally:
+        calculated.close()
+
+
 @pytest.mark.parametrize("row", [3, 2004, 1_048_576])
 def test_all_relative_references_follow_the_requested_row(row):
     reference = final_restock_formulas(2)

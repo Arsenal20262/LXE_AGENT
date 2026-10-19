@@ -6,6 +6,7 @@ import { MarkdownFixture, type MarkdownSurface } from "./markdown-fixture";
 import { createDashboardContractFixture } from "./dashboard-contract-fixture";
 import type { DesktopVietnamSettingsState } from "@lxe/desktop-protocol";
 import { VietnamSettingsWorkbench } from "../../src/features/workbench/vietnam-settings-view";
+import { AmazonFinalRestockSettingsWorkbench } from "../../src/features/workbench/amazon-final-restock-settings-view";
 import { useApprovalsQuery } from "../../src/api/queries";
 import type { PendingApproval, PendingUserQuestion, PermissionMode } from "@lxe/desktop-protocol";
 import { FilePreviewLayout } from "../../src/features/file-preview/Sidebar";
@@ -41,6 +42,10 @@ let candidateOverride: { path: string; kind: "file" | "directory" }[] | undefine
 const pendingCandidates: (() => void)[] = [];
 const referenceSkills = ["office-xlsx", "office-docx", "office-pptx"].map(name => ({ name, description: "Office fixture skill", type: "default", commands: [], references: [], location: "/skills/" + name + "/SKILL.md" }));
 let vietnamUploadError: boolean | string = false;
+let amazonSettings = { peak_boost_enabled: true };
+let amazonReadError = false;
+let amazonSaveMode: "success" | "hold" | "error" = "success";
+let releaseAmazonSave: (() => void) | undefined;
 let vietnamReadError = false;
 let vietnamExportMode: "success" | "cancel" | "error" | "hold" = "success";
 let releaseVietnamExport: (() => void) | undefined;
@@ -190,6 +195,18 @@ const desktop = {
   installUpdate: async target => { calls.push({operation:"update.install",input:target}); return updateState={phase:"ready",release:updateRelease}; },
   applyAppearance: async () => {},
   listInputAssets: async () => [],
+  getAmazonFinalRestockSettings: async () => {
+    calls.push({ operation: "amazon.read" });
+    if (amazonReadError) throw new Error("ValueError: Amazon 最终备货设置格式无效");
+    return { ...amazonSettings };
+  },
+  saveAmazonFinalRestockSettings: async input => {
+    calls.push({ operation: "amazon.save", input });
+    if (amazonSaveMode === "hold") await new Promise<void>(resolve => { releaseAmazonSave = resolve; });
+    if (amazonSaveMode === "error") throw new Error("PermissionError: fixture settings denied");
+    amazonSettings = { ...input };
+    return { ...amazonSettings };
+  },
   getVietnamSettings: async () => {
     if (vietnamReadError) throw new Error("PermissionError: fixture settings denied");
     return structuredClone(vietnamState);
@@ -426,6 +443,15 @@ const fixture = {
     </div>));
   },
   vietnamUploadFailure(value: boolean | string) { vietnamUploadError = value; },
+  amazonReadFailure(value: boolean) { amazonReadError = value; },
+  amazonSaveMode(value: typeof amazonSaveMode) { amazonSaveMode = value; },
+  releaseAmazonSave() { releaseAmazonSave?.(); },
+  mountAmazonSettings(language: "en" | "zh") {
+    reset();
+    flushSync(() => root!.render(<I18nContext.Provider value={UI_TEXT[language]}>
+      <AmazonFinalRestockSettingsWorkbench onBack={() => {}} />
+    </I18nContext.Provider>));
+  },
   vietnamExportMode(value: typeof vietnamExportMode) { vietnamExportMode = value; },
   releaseVietnamExport() { releaseVietnamExport?.(); },
   vietnamReadFailure(value: boolean) { vietnamReadError = value; },

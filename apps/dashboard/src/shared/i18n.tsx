@@ -183,6 +183,12 @@ export const ZH_TEXT = {
     save: "保存参数", saving: "正在保存…", saved: "参数已保存，下一次计算生效。", appliesNextRun: "保存后下一次计算生效，正在进行的计算不受影响。",
     loading: "正在读取设置…", retry: "重试", unavailable: "请在桌面应用中打开越南备货设置。",
   },
+  amazonFinalRestockSettings: {
+    title: "亚马逊最终备货设置", subtitle: "控制旺季备货天数加成；设置会保存并用于后续生成。",
+    toggle: "启用旺季加成（+30天，最多120天）", toggleHint: "开启时按运营备注和销量趋势规则增加空运或海运备货天数；关闭时不增加旺季天数。",
+    saved: "旺季设置已保存。", saving: "正在保存…", appliesNextRun: "保存后下一次最终备货建议生成时生效，正在进行的计算不受影响。",
+    loading: "正在读取设置…", retry: "重试", unavailable: "请在桌面应用工作台中打开亚马逊最终备货设置。",
+  },
   workbenchIndex: {
     eyebrow: "工作台",
     title: "工具",
@@ -1082,6 +1088,12 @@ export const UI_TEXT: Record<Language, UiText> = {
       adjustment: (day: number) => `${day}-day adjustment`, adjustmentHint: "Daily sales = period sales ÷ (period days + adjustment). Defaults for 7, 15 and 30 days: 0, 0.8 and 0.8.",
       save: "Save parameters", saving: "Saving…", saved: "Parameters saved for the next run.", appliesNextRun: "Changes apply to the next calculation. Running calculations keep their original inputs.",
       loading: "Loading settings…", retry: "Retry", unavailable: "Open these settings in the desktop app.",
+    },
+    amazonFinalRestockSettings: {
+      title: "Amazon final-restock settings", subtitle: "Control the seasonal restock-day boost. The setting is saved for future workbooks.",
+      toggle: "Enable seasonal boost (+30 days, capped at 120)", toggleHint: "When enabled, air or sea restock days follow the existing operations-note and sales-trend rules. When disabled, no seasonal days are added.",
+      saved: "Seasonal setting saved.", saving: "Saving…", appliesNextRun: "Changes apply to the next final-restock workbook. Running calculations keep their current inputs.",
+      loading: "Loading settings…", retry: "Retry", unavailable: "Open Amazon final-restock settings in the desktop workbench.",
     },
     workbenchIndex: {
       eyebrow: "Workbench",

@@ -678,6 +678,10 @@ export interface DesktopVietnamSettingsState {
   sku_map_error: string | null;
 }
 
+export interface DesktopAmazonFinalRestockSettings {
+  peak_boost_enabled: boolean;
+}
+
 export interface DesktopUsageBalance {
   status: "ready" | "error" | "unconfigured";
   source: CredentialSource | null;
@@ -746,6 +750,8 @@ export interface LxeDesktopBridge {
     saveVietnamParameters(input: DesktopVietnamParameters): Promise<DesktopVietnamSettingsState>;
     uploadVietnamSkuMap(): Promise<DesktopVietnamSettingsState | null>;
     exportVietnamSkuMap(kind: DesktopVietnamMapExportKind): Promise<DesktopVietnamMapExportResult | null>;
+    getAmazonFinalRestockSettings(): Promise<DesktopAmazonFinalRestockSettings>;
+    saveAmazonFinalRestockSettings(input: DesktopAmazonFinalRestockSettings): Promise<DesktopAmazonFinalRestockSettings>;
     onSyntheticPerformerTaskChanged(
       listener: (task: DesktopSyntheticPerformerTask) => void,
     ): () => void;

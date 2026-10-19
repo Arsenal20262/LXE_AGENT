@@ -10,6 +10,7 @@ import pytest
 from openpyxl import Workbook, load_workbook
 
 from services.mabang.amazon.fba import final_restock_workbook as final_workbook
+from services.mabang.amazon.fba import final_restock_settings as settings
 from services.mabang.amazon.fba import source_verification
 from services.mabang.amazon.fba import store_msku_actual_inventory as inventory
 from services.mabang.amazon.fba import unlinked_shipments as shipments
@@ -23,6 +24,25 @@ from services.mabang.amazon.fba.final_restock_workbook import (
 
 
 STORE = "Amazon-Test"
+
+
+@pytest.fixture(autouse=True)
+def isolated_settings(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("LXE_DATA_ROOT", str(tmp_path / "app"))
+
+
+def test_workbook_writes_formulas_using_persisted_boost_choice(tmp_path: Path) -> None:
+    path = tmp_path / "formula-setting.xlsx"
+    final_workbook._write_workbook(path, [{"_binding_verified": True}], peak_boost_enabled=False)
+    book = load_workbook(path, data_only=False)
+    try:
+        sheet = book[final_workbook.WORKSHEET_NAME]
+        assert 'SEARCH("热销",AF2)' not in sheet["V2"].value
+        assert "+0,120" in sheet["V2"].value
+        assert "+0,120" in sheet["W2"].value
+        assert sheet["I2"].value == final_restock_formulas(2)["I"]
+    finally:
+        book.close()
 SOURCE_HEADERS = (
     "店铺名称", "MSKU", "父ASIN", "ASIN", "本地SKU", "本地SKU名称", "商品名称", "备注",
     "7天销量", "14天销量", "30天销量", "90天销量", "可售", "待入库", "预留",
@@ -141,6 +161,52 @@ def _generate(tmp_path: Path, *, source_path: Path | None = None, inventory_path
         unlinked_shipments_snapshot_path=snapshot_path,
         output_dir=tmp_path / "out",
     )
+
+
+def test_generation_snapshots_setting_and_next_generation_reads_saved_value(tmp_path: Path, monkeypatch) -> None:
+    settings.save_parameters({"peak_boost_enabled": False})
+    original_rows = final_workbook._rows_for_workbook
+
+    def change_setting_during_generation(*args, **kwargs):
+        settings.save_parameters({"peak_boost_enabled": True})
+        return original_rows(*args, **kwargs)
+
+    # This test checks the generation boundary; actual Office evaluation is tested separately.
+    monkeypatch.setattr(final_workbook, "_rows_for_workbook", change_setting_during_generation)
+    monkeypatch.setattr(final_workbook, "_recalculate", copyfile)
+    monkeypatch.setattr(final_workbook, "_inspect_recalculated", lambda *args, **kwargs: (0, ()))
+    first = _generate(tmp_path / "first")
+    second = _generate(tmp_path / "next")
+    first_book = load_workbook(first.output_xlsx_path, data_only=False)
+    second_book = load_workbook(second.output_xlsx_path, data_only=False)
+    try:
+        before, after = first_book.active, second_book.active
+        assert before.max_column == after.max_column == 34
+        assert before["AD1"].value == after["AD1"].value == "单件重量(g)"
+        for row in range(2, 6):
+            for column in range(1, 35):
+                if row < 5 and column in (22, 23):
+                    assert before.cell(row, column).value != after.cell(row, column).value
+                else:
+                    assert before.cell(row, column).value == after.cell(row, column).value
+        assert before["V2"].value == final_restock_formulas(2, peak_boost_enabled=False)["V"]
+        assert after["V2"].value == final_restock_formulas(2)["V"]
+        assert before["AG2"].value == after["AG2"].value == 15
+        assert before["AH2"].value == after["AH2"].value == "SKU-SEA"
+        for sheet in (before, after):
+            assert all(sheet.cell(5, col).value is None for col in range(21, 30))
+            assert all(sheet[f"{col}5"].data_type == "f" for col in ("I", "J", "R", "S"))
+    finally:
+        first_book.close()
+        second_book.close()
+
+
+def test_corrupt_setting_stops_before_reading_inputs_or_publishing(tmp_path: Path) -> None:
+    settings.read_state()
+    (settings.data_directory() / "parameters.json").write_text('{"peak_boost_enabled":0}', encoding="utf-8")
+    with pytest.raises(ValueError, match="格式无效"):
+        _generate(tmp_path)
+    assert not (tmp_path / "out").exists()
 
 
 @pytest.mark.parametrize("unbound_sales", [0, 7])

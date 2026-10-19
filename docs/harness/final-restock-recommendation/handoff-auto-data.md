@@ -1,9 +1,37 @@
 # 最终备货建议：自动取数衔接交接
 
+## 2026-10-19 本地提交收口
+
+- 本轮按职责提交 AD 克数表头修正（`9f38bb7c`）与持久旺季设置；后者包含 Dashboard、Desktop、私有设置模块、V/W 配置传递、Windows UTF-8 输出及对应测试，不拆散互相依赖的界面和服务。26 个文件已与全局审核快照逐文件核对，没有新增业务范围；除本 handoff 收口记录外没有追加实现。旺季设置提交号以本分支 `git log` 为准。
+- 本次重新 fetch 后 `origin/main` 仍是 `5af6a40ec116daa098e626459213341d5d5fec7b`，本地 main 是 `9f36647a434d5bb5c90e983666662aed9110e18d`，没有比上一轮兼容性验证更新的基线。pool-7 不正式合入 main；隔离合并树 `87a86f52a0f79ae95677cd5a4a1a599b2dc4b880`、三处测试冲突解决和原备份继续保留。
+- 本次补跑 pool-7 和上述隔离副本：各 Python **198 passed、5 skipped**，Desktop 设置/桥接各 **9 passed**；隔离副本额外复跑主线 overview-pages、workbench-details 与 Amazon 设置的 Chromium **3 组通过**。复用代码哈希一致的全局回归、类型检查及构建证据，不重复全量审计。Office Kit 五项仍 **NOT VERIFIED**；原生 Windows/Excel、真实模型路由及新配置下生产交付尚未验证，不把模拟或独立 LibreOffice 验证当作这些验收。
+- 正式提审仍为 PR1 公式 → PR2 生成引擎 → 最终功能 PR（原 PR3＋pool-7）；原 PR3 不单独部署或创建远端 PR。仅本地提交，不 push、merge 或调用生产 ERP，其他 Pool 和既有 stash 保持原状。以下“当前未提交”等用语为当时开发记录，以本节和最终 Git 状态为准。
+
 ## 2026-10-19 AD 克数表头修正
 
 - AD 输出表头及内部行映射键统一为“单件重量(g)”，仍直接使用源表解析的克数；不改重量值、列位置、34 列结构或任何公式。同步现有布局/零重量断言与最终 Skill 交付说明，离线布局和数值回归通过。
 - 此项只涉及工作簿生成、其定向测试、最终 Skill 与本 handoff；不依赖旺季设置、Desktop、CLI 或普通备货修改。外部按旧表头读取的自建消费者尚未验证。
+
+## 2026-10-19 全局回归及最新 main 隔离兼容验证
+
+- 正式分支仍为 pool-7 `codex/final-restock-auto-data`，HEAD `1a464532aaa5e50d851adca85f189295bf0b9923`。本轮 fetch 得到 `origin/main=5af6a40ec116daa098e626459213341d5d5fec7b`；共同基线 `9f36647a434d5bb5c90e983666662aed9110e18d`，本分支 26 个独有提交、main 65 个。main 的相关变化包括隔离 Python UTF-8 修复、普通备货销量天数、工作台 CDS/模板入口调整、附件草稿保留与 Runtime/会话能力；没有改本功能的来源核验或最终表引擎。其他主线变化无需搬入本功能。
+- 最小实修：复现新增 Amazon 设置模块在 cp1252 stdout 下无法返回中文 JSON 错误，沿用主线越南设置的修复，在 Desktop 隔离 Python 参数加 `-X utf8`，私有模块显式配置 stdout/stderr UTF-8。没有修改共享设置框架、CLI、Runtime 或 ERP。补充真实 Python 子进程持久化/重新创建服务、中文错误、生成期间保存设置、损坏设置停止，以及既有 Chromium 回归框架中的四个开关场景；原 22 文件工作区合计增为 26 文件，仅多出四个界面测试文件（其中三个为已有测试框架文件）。
+- 读取链：工作台 → 受信任 IPC/preload → 私有 Python 设置模块 → `LXE_DATA_ROOT/skill-data/amazon-final-restock/parameters.json`；最终计算 CLI 调用生成服务，服务从相同持久根读取。快照边界是最终表生成函数入口，不是更早的 Agent 取数阶段；该次计算内不再读取设置，下一次生成使用保存值。默认开启的 13 个公式文本与提交版本在第 2/2003/1048576 行完全一致；关闭仅改变 V/W 公式中的加成项，下游引用 V/W 的建议数量随之正常变化，其他 11 个公式文本不变。34 列、AG/AH、未核验行 U–AC 留空及 I/J/R/S 保留均有定向回归。AD 仅将表头改成“单件重量(g)”，单位和列位置不变，未发现仓库内按旧表头读取本最终表的其他消费者；外部自建表头消费者未验证。
+- 备份：`/private/tmp/final-restock-main-audit-6d9v41sx` 保留全部 refs 的 bundle、各工作区 HEAD/状态、两条原 stash、原 22 文件二进制差异及哈希，已在独立克隆逐文件恢复验证；收口补充 `review-final/` 保存最终 26 文件及恢复证据。原备份与 stash 不动。隔离副本 `compatibility/` 使用自己的 `uv sync --frozen --offline` 虚拟环境和锁定 Bun 依赖，没有共享 `.venv`，未接生产 ERP。
+- 在隔离副本用两个明确 SHA 进行 merge-tree，再叠加本轮工作区改动。实际文本冲突仅三个测试文件：`test_lxeskill_cli.py`（合并后 doctor 为 47/41/39/31/41）、`renderer.test.ts` 和 `renderer.tsx`（保留 main 场景并追加 Amazon 场景）。另适配 main 新增的 `overview-pages.cjs`、`workbench-details.cjs`，工作台由三张卡片变四张，原越南/媒体/FBA 模板入口全部保留。生产代码自动合并，无业务规则冲突。解决结果及针对明确 main SHA 的补丁保留在备份目录；未把这些仅 main 存在的测试文件加入 pool-7。
+- 验证：pool-7 的 mabang/lxeskill/infra/vietnam/yacang 影响回归最终 **2102 passed、18 skipped**；隔离合并同范围 **2133 passed、18 skipped**。首次沙箱中 67 failed/36 errors 均由禁止本地 HTTP 监听触发，相关 10 个模块在允许本地模拟监听后各 **185 passed**，通过数已扣除重复。18 个 skip 为 Amazon Office Kit 5、越南 Office Kit 8、Windows 专属 5。Office Kit 旧临时目录缺少 `lib/cli.js`，未安装或修改宿主环境；五项 Amazon Kit 端到端检查仍 **NOT VERIFIED**。现有独立 LibreOffice 公式测试（含关闭时 V=90/W=95）实际通过，不能替代 Kit 端到端验收。
+- Bun 边界/设置/附件/导航/Skill 测试：pool-7 **89 passed**；隔离合并 **90 passed**（合并组首次真实子进程测试遇 5 秒测试预算不足，调整该测试预算至 15 秒后通过，生产超时仍 30 秒）。Runtime Skill 加载两组各 **7 passed**。Chromium：pool-7 三组 **21 场景**，隔离合并六组 **30 场景**通过；隔离测试适配初次遗漏的旧工具位置和过宽循环调整已修正并重跑，不作为业务缺陷。两组 Dashboard/Desktop typecheck、生产构建及 TS 生产边界检查通过，构建有既存大 chunk 警告。
+- Git 检查：pool-7 `git diff --check` 通过，暂存区为空；最终无无关生产代码、敏感值或依赖版本改动。隔离差异中 main 自身两个 CSS 文件的 EOF 空行警告保留，不跨范围修主线。未同步任何正式分支、未 commit/push/rebase/merge/创建 PR；没有证据要求现在把 main 混入 pool-7。已提交依赖仍是 PR1(pool-3,2 commits) → PR2(pool-4,9 commits) → 最终功能 PR(pool-7,15 commits 加本轮未提交工作)，pool-6 阶段不单独发布；提审按顺序串行，轮到对应 PR 后再基于届时 main 复核，并应用已验证的必要测试适配。
+- 结论：未发现尚未解决的新增 P0–P2 或已确认功能丧失；Windows 中文错误风险已修复。具备将本轮自属修改申请本地 Commit 的条件；正式发布验收仍需可用宿主 Office Kit 五项、原生 Windows/Excel、真实模型店铺名路由和本轮生产交付验证。既有线上 Session 性能收益仍只作业务观察，不在本轮追加优化。此处离线/模拟证据不等于新一轮 2002 行生产交付。
+
+## 2026-10-19 旺季设置与重量表头调整（当前未提交工作）
+
+- Pool-7 分支 `codex/final-restock-auto-data`。用户确认旺季配置应为持久前端设置，默认开启；不需要用户每次运行指定，也不影响正在进行的计算。当前工作区尚未提交，本节记录本轮改动与待验证项。
+- 桌面工作台新增“亚马逊最终备货设置”入口，持久保存 `peak_boost_enabled`；默认创建为 `true`。最终备货生成服务每轮读取同一 `LXE_DATA_ROOT/skill-data/amazon-final-restock/parameters.json`，仅将该设置传入公式生成：关闭仅把 V/W 加成项设为 0，保留原旺季备注判断、基础天数与 120 天封顶逻辑。设置读取损坏时按错误停止，不静默退回默认值。
+- Desktop 通过受信任 IPC 调用私有 Python 设置模块，不增加 catalog 命令、Skill、Runtime 路由或 ERP 接口。保存后从下一次生成生效；桌面重启及其他工作区仍复用相同持久目录。
+- AD 表头和映射键调整为“单件重量(g)”，数值仍为克；没有改列序、34列结构、公式定义或普通备货行为。
+- 本轮文件涉及 Python 设置/公式/工作簿及定向测试、Desktop 私有服务/IPC/桥接、Dashboard 工作台入口/页面/文案/样式、最终 Skill 与本 handoff。Python 最终建议定向回归 `195 passed, 5 skipped`；Desktop 桥接及私有设置服务测试 `8 passed`；Desktop 和 Dashboard TypeScript 检查通过，Dashboard 生产构建通过；`git diff --check` 通过。关闭旺季加成的独立 LibreOffice Excel 重算测试通过。构建仅有现存大 chunk 警告；生产 ERP 未调用。
+- 离线已验证默认开启、持久读写、损坏设置停止、关闭时 V/W 重算结果不增加旺季天数且其他公式列保持不变，并验证 AD 表头/映射键。未做桌面应用内的人工视觉验收，也未在真实 Amazon 工作簿或生产任务中测试切换后的最终结果；线上旺季规则最终行为仍由运营确认，本文实现按现有 YHQUS 转换规则。
 
 ## 范围与工作区
 

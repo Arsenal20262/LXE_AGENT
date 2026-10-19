@@ -14,6 +14,7 @@ import type {
   DesktopHealth,
   DesktopInputAssetSlot,
   DesktopVietnamSettingsState,
+  DesktopAmazonFinalRestockSettings,
   DesktopVietnamMapExportKind,
   DesktopVietnamMapExportResult,
   DesktopInputAttachmentPayload,
@@ -89,6 +90,8 @@ export interface DesktopIpcApplication {
   inputAssetSlotDirectory(slot: string): Promise<string>;
   getVietnamSettings(): Promise<DesktopVietnamSettingsState>;
   saveVietnamParameters(input: unknown): Promise<DesktopVietnamSettingsState>;
+  getAmazonFinalRestockSettings(): Promise<DesktopAmazonFinalRestockSettings>;
+  saveAmazonFinalRestockSettings(input: unknown): Promise<DesktopAmazonFinalRestockSettings>;
   installVietnamSkuMap(sourcePath: string): Promise<DesktopVietnamSettingsState>;
   exportVietnamSkuMap(kind: DesktopVietnamMapExportKind, path: string): Promise<DesktopVietnamMapExportResult>;
   registerConversationFiles(paths: string[]): DesktopInputAttachmentPayload[];
@@ -273,6 +276,19 @@ export function registerDesktopIpc(application: DesktopIpcApplication): () => vo
   ipcMain.handle(IPC_CHANNELS.saveVietnamParameters, (event, input: unknown) => {
     trustedWorkspaceSender(event);
     return application.saveVietnamParameters(input);
+  });
+  ipcMain.handle(IPC_CHANNELS.getAmazonFinalRestockSettings, (event) => {
+    trustedWorkspaceSender(event);
+    return application.getAmazonFinalRestockSettings();
+  });
+  ipcMain.handle(IPC_CHANNELS.saveAmazonFinalRestockSettings, (event, input: unknown) => {
+    trustedWorkspaceSender(event);
+    if (!input || typeof input !== "object" || Array.isArray(input)
+      || Object.keys(input as object).length !== 1
+      || typeof (input as Record<string, unknown>).peak_boost_enabled !== "boolean") {
+      throw new Error("peak_boost_enabled must be a boolean");
+    }
+    return application.saveAmazonFinalRestockSettings(input);
   });
   ipcMain.handle(IPC_CHANNELS.uploadVietnamSkuMap, async (event) => {
     trustedWorkspaceSender(event);
