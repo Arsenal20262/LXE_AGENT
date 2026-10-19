@@ -61,6 +61,12 @@
       "document": "examples/home.md",
       "screenshots": 8,
       "scope": "LXE home overview adaptation; original sources and historical CSS snapshots unchanged"
+    },
+    {
+      "date": "2026-10-19",
+      "document": "examples/home.md",
+      "screenshots": 2,
+      "scope": "Restore the original compact home card layout at user request while retaining CDS colors and restrained elevation; earlier screenshots retained"
     }
   ]
 }

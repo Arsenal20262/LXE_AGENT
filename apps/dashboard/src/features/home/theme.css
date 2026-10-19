@@ -1,9 +1,9 @@
 @import "../../shared/cds-theme.css";
 
 /* CDS: purpose colors, secondary text and restrained elevation.
-   The overview strip and two-column reading layout are LXE adaptations. */
+   Preserve LXE's compact card layout; color and elevation follow the shared theme. */
 .content-panel.home-theme {
-  padding: 40px 36px 80px;
+  padding: 24px 28px 92px;
   background: var(--cds-surface-panel);
   overflow: auto;
   --rate-warn: var(--warning);
@@ -11,7 +11,7 @@
 }
 .app-shell.sidebar-collapsed .content-panel.home-theme { border-top-left-radius: var(--app-panel-radius); }
 .home-theme .home-page {
-  width: min(1120px, 100%); padding: 0; gap: 32px;
+  width: min(920px, 100%); padding: 18px 0 0; gap: 22px;
   container: home-content / inline-size;
 }
 .home-theme .home-hero h1 {
@@ -22,31 +22,28 @@
   margin: 8px 0 0; color: var(--text-soft); font-size: .875rem; line-height: 1.6;
 }
 .home-theme .home-tiles {
-  grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0;
-  padding: 8px 0 24px; border-bottom: 1px solid var(--border);
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;
 }
 .home-theme .home-tile {
-  min-width: 0; padding: 12px 20px; gap: 8px; border: 0;
-  border-left: 1px solid var(--border); border-radius: 0;
+  min-width: 0; padding: 16px 18px; gap: 3px;
+  border: 1px solid var(--border); border-radius: 14px;
   background: transparent; box-shadow: none; transition: background .14s ease;
 }
-.home-theme .home-tile:first-child { border-left: 0; padding-left: 12px; }
 .home-theme .home-tile:hover { background: var(--row-hover); transform: none; }
 .home-theme .home-tile-value {
-  color: var(--text); font-size: clamp(1.375rem, 2.6cqi, 1.75rem);
+  color: var(--text); font-size: 1.625rem;
   font-weight: 500; line-height: 1.2; font-variant-numeric: tabular-nums;
 }
 .home-theme .home-tile-label { color: var(--text-soft); font-size: .8125rem; }
 .home-theme .home-tile.tone-danger .home-tile-value { color: var(--danger); }
 .home-theme .home-tile.tone-zero .home-tile-value { color: var(--text-soft); }
-.home-theme .home-columns { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 40px; }
+.home-theme .home-columns { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .home-theme .home-panel {
-  min-width: 0; padding: 0; border: 0; border-radius: 0;
+  min-width: 0; padding: 16px 18px; border: 1px solid var(--border); border-radius: 14px;
   background: transparent; box-shadow: none;
 }
 .home-theme .home-panel-heading {
-  align-items: baseline; gap: 12px; margin: 0; padding: 0 0 16px;
-  border-bottom: 1px solid var(--border);
+  align-items: center; gap: 10px; margin: 0 0 8px; padding: 0;
 }
 .home-theme .home-panel-heading h2 {
   margin: 0; font-size: .9375rem; line-height: 1.5; font-weight: 600;
@@ -59,8 +56,8 @@
 .home-theme .home-panel-link:hover { color: var(--cds-accent-hover); background: var(--row-hover); }
 .home-theme button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .home-theme .home-session-row {
-  min-width: 0; margin: 0; padding: 16px 8px; gap: 6px;
-  border-bottom: 1px solid var(--border); border-radius: 0;
+  min-width: 0; margin: 0 -8px; padding: 9px 8px; gap: 2px;
+  border-bottom: 1px solid var(--border); border-radius: 8px;
   transition: background .14s ease;
 }
 .home-theme .home-session-row:hover { background: var(--row-hover); }
@@ -68,13 +65,16 @@
 .home-theme .home-session-title { font-size: .875rem; font-weight: 500; line-height: 1.5; }
 .home-theme .home-session-meta { color: var(--cds-muted); font-size: .75rem; line-height: 1.5; }
 .home-theme .home-skill-row {
-  display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 16px 8px; border-bottom: 1px solid var(--border);
+  display: flex; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--border);
 }
-.home-theme .home-skill-row:last-child { border-bottom: 1px solid var(--border); }
+.home-theme :is(.home-session-row, .home-skill-row):last-child { border-bottom: 0; }
 .home-theme .home-skill-name { min-width: 0; font-size: .875rem; line-height: 1.5; font-weight: 500; }
-.home-theme .home-skill-meta { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; }
+.home-theme .home-skill-meta { display: inline-flex; flex-wrap: nowrap; gap: 12px; }
 .home-theme .home-skill-rate { display: inline-flex; align-items: center; gap: 10px; }
-.home-theme .home-skill-rate-label { color: var(--cds-muted); font-size: .75rem; }
+.home-theme .home-skill-rate-label {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip-path: inset(50%); white-space: nowrap;
+}
 .home-theme .rate-cell { color: var(--text-soft); font-variant-numeric: tabular-nums; }
 .home-theme .rate-cell-track { width: 48px; height: 4px; background: var(--cds-alpha-2); }
 .home-theme .rate-cell-text { font-size: .75rem; }
@@ -86,19 +86,11 @@
 }
 .home-theme .home-query-state.is-error { color: var(--danger); }
 .home-theme .home-tiles + .home-query-state { padding-block: 0; }
-@container home-content (max-width: 800px) {
-  .home-theme .home-columns { grid-template-columns: minmax(0, 1fr); gap: 32px; }
+@container dashboard-main (max-width: 700px) {
+  .home-theme .home-columns { grid-template-columns: minmax(0, 1fr); }
 }
-@container home-content (max-width: 560px) {
-  .home-theme .home-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 20px; }
-  .home-theme .home-tile:nth-child(odd) { border-left: 0; padding-left: 12px; }
-  .home-theme .home-tile-value { font-size: 1.375rem; }
-}
-@media (max-width: 800px) {
-  .content-panel.home-theme { padding: 28px 20px 72px; }
-}
-@media (max-width: 480px) {
-  .content-panel.home-theme { padding: 24px 12px 72px; }
+@media (max-width: 620px) {
+  .content-panel.home-theme { padding: 12px 12px 88px; }
   .home-theme .home-panel-heading { gap: 6px; }
 }
 @media (prefers-reduced-motion: reduce) {
