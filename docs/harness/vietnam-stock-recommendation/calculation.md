@@ -10,6 +10,8 @@
 
 应用数据目录 `skill-data/vietnam-stock-recommendation/` 保存 `parameters.json` 和 `sku-map.xlsx`。参数由脚本自动读取，显式指定的映射表仅用于本轮，不覆盖保存的文件。
 
+桌面设置页通过 `lxeskill vietnam replenishment settings --action read|save|upload|export` 读写配置，使用统一 CLI 的结果和错误格式。该命令是桌面内部入口，不出现在模型命令列表；Electron 不引用 Python 内部业务模块路径。
+
 [设置模块](../../../python/lxeskill_cli/services/vietnam_replenishment/settings.py)使用进程锁和原子替换：上传先校验，失败保留原文件；计算在锁内固定参数和映射表副本后释放锁。三份 ERP 报表也各自复制为本轮快照，后续修改不影响已固定的输入。文件哈希用于复核内容，不证明报表同批次或数据新鲜度。
 
 下载模板生成空白五列表头；导出当前表复制经过校验的完整文件，保留格式和附加工作表。两者独立于参数有效性，不改变保存的文件或更新时间；取消保存或写入失败不覆盖目标文件。

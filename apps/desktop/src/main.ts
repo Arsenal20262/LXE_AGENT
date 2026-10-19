@@ -328,7 +328,7 @@ async function bootstrap(): Promise<void> {
   logging.configure();
   const invalidations = new DashboardInvalidationBatcher(broadcastInvalidation);
   activeInvalidationBatcher = invalidations;
-  const conversationAttachments = new DesktopConversationAttachmentService(undefined, undefined, {
+  const conversationAttachments = new DesktopConversationAttachmentService({
     directory: join(paths.dataRoot, "attachments", "screenshots"),
     prepare: prepareClipboardScreenshot,
   });

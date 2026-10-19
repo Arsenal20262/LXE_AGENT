@@ -233,7 +233,7 @@ export type AgentSuccessResponse = JsonRpcSuccess;
 export type AgentErrorResponse = JsonRpcFailure;
 export type AgentResponse = JsonRpcResponse;
 
-export type AgentSessionChange = "messages" | "usage" | "artifacts" | "attachments" | "questions" | "permission" | "approvals";
+export type AgentSessionChange = "title" | "messages" | "usage" | "artifacts" | "attachments" | "questions" | "permission" | "approvals";
 
 export type AgentSessionChangedPayload = {
   changes: AgentSessionChange[];
@@ -1011,7 +1011,7 @@ export function decodeAgentEvent(notification: AgentNotification): AgentEvent {
         throw new Error("agent protocol session.changed.changes must be a non-empty array");
       }
       const changes = [...new Set(payload.changes)];
-      if (changes.some((change) => change !== "messages" && change !== "usage"
+      if (changes.some((change) => change !== "title" && change !== "messages" && change !== "usage"
         && change !== "artifacts" && change !== "attachments" && change !== "questions" && change !== "permission" && change !== "approvals")) {
         throw new Error("agent protocol session.changed.changes contains an unsupported change type");
       }

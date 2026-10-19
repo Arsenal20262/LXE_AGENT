@@ -1,6 +1,6 @@
 """App-wide Vietnam inputs, shared by Desktop and the ordinary lxeskill command.
 
-The module entrypoint is a private Desktop bridge, not a model command. All
+Desktop accesses this storage through lxeskill's internal settings command. All
 writes are atomic and serialized; the calculation keeps its own input snapshot.
 """
 from __future__ import annotations
@@ -218,31 +218,3 @@ def run_inputs(sku_map: str | None = None):
                 raise SkuMapStoreError("请在越南备货设置上传 SKU 映射表，或用 --sku-map 指定文件")
             _copy_validated(source, snapshot)
         yield snapshot, config, str(root / "parameters.json"), str(source)
-
-
-def main() -> int:
-    import sys
-    try:
-        action = sys.argv[1]
-        if action == "read" and len(sys.argv) == 2:
-            result = read_state()
-        elif action == "save" and len(sys.argv) == 3:
-            result = save_parameters(json.loads(sys.argv[2]))
-        elif action == "upload" and len(sys.argv) == 3:
-            source = Path(sys.argv[2])
-            if not source.is_absolute():
-                raise ValueError("上传文件必须是绝对路径")
-            result = upload_map(source)
-        elif action == "export" and len(sys.argv) == 4:
-            result = export_map(sys.argv[2], Path(sys.argv[3]))
-        else:
-            raise ValueError("无效的桌面设置操作")
-        print(json.dumps({"success": True, "data": result}, ensure_ascii=False))
-        return 0
-    except Exception as exc:
-        print(json.dumps({"success": False, "error": validation_diagnostic(exc)}, ensure_ascii=False))
-        return 1
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
