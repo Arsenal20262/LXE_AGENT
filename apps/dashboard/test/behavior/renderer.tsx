@@ -6,6 +6,7 @@ import { AppActionsFixture, actionFixture } from "./app-actions-fixture";
 import { MarkdownFixture, type MarkdownSurface } from "./markdown-fixture";
 import { createDashboardContractFixture } from "./dashboard-contract-fixture";
 import { activityFixture } from "./activity-fixture";
+import { createHomeFixture } from "./home-fixture";
 import { createWorkbenchDetailsFixture, workbenchMediaTask } from "./workbench-details-fixture";
 import type { DesktopVietnamSettingsState } from "@lxe/desktop-protocol";
 import { VietnamSettingsWorkbench } from "../../src/features/workbench/vietnam-settings-view";
@@ -34,6 +35,8 @@ import "../../src/styles.css";
 const calls: { operation: string; input?: unknown }[] = [];
 const contractMode = new URLSearchParams(location.search).has("contracts");
 const activityMode = new URLSearchParams(location.search).has("stats");
+const homeMode = new URLSearchParams(location.search).has("home-fixture");
+const homeFixture = createHomeFixture(new URLSearchParams(location.search).get("home-state") ?? "ready");
 const workbenchDetailsMode = new URLSearchParams(location.search).has("workbench-fixture");
 const workbenchDetailsFixture = createWorkbenchDetailsFixture(calls);
 const contractFixture = createDashboardContractFixture(calls);
@@ -282,6 +285,10 @@ let composerLanguage: "en" | "zh" = "en";
 const dashboard = {
   async call(call: { operation: string; input: Record<string, unknown> }) {
     calls.push(structuredClone(call));
+    if (homeMode) {
+      const result = homeFixture.rpc(call.operation, call.input, workspaceSessions);
+      if (result !== undefined) return result;
+    }
     if (activityMode) {
       const result = activityFixture(call.operation, Number(call.input.days ?? 30));
       if (result !== undefined) return result;
@@ -479,6 +486,7 @@ const fixture = {
   },
   vietnamUploadFailure(value: boolean | string) { vietnamUploadError = value; },
   assets: workbenchDetailsFixture.controls,
+  homeReady() { homeFixture.ready(); },
   workbenchMedia(mode: "scan" | "running" | "apply") { contractFixture.controls.task(workbenchMediaTask(mode)); },
   vietnamExportMode(value: typeof vietnamExportMode) { vietnamExportMode = value; },
   releaseVietnamExport() { releaseVietnamExport?.(); },

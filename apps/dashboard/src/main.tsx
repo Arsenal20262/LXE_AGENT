@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 
 import "./styles.css";
+import "./features/home/theme.css";
 import "./features/capabilities/theme.css";
 import "./features/stats/theme.css";
 import "./features/workbench/index-theme.css";
@@ -227,6 +228,7 @@ function App({
           <section className={[
             "content-panel",
             activeSection === "sessions" ? "content-panel-fill" : "",
+            activeSection === "home" ? "home-theme" : "",
             activeSection === "capabilities" ? "capabilities-theme" : "",
             activeSection === "activity" ? "activity-theme" : "",
             activeSection === "workbench" ? "workbench-theme" : "",

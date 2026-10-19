@@ -116,6 +116,7 @@ export const ZH_TEXT = {
     viewStats: "查看统计",
     noSessions: "暂无会话记录",
     noSkills: "近 7 天暂无技能使用",
+    retry: "重试",
     executionsUnit: (count: string) => `${count} 次执行`,
     loadError: "总览数据加载失败"
   },
@@ -1034,6 +1035,7 @@ export const UI_TEXT: Record<Language, UiText> = {
       viewStats: "Open stats",
       noSessions: "No sessions yet",
       noSkills: "No skill usage in the last 7 days",
+      retry: "Retry",
       executionsUnit: (count: string) => `${count} runs`,
       loadError: "Failed to load overview"
     },

@@ -82,6 +82,8 @@ app.whenReady().then(async () => {
       await require("./dashboard-pages.cjs")({win, js, step, load, waitFor, click, key, focus, settle, state});
     } else if (suite === "overview-pages") {
       await require("./overview-pages.cjs")({win, js, step, load, waitFor, click, key, focus, settle, state});
+    } else if (suite === "home-page") {
+      await require("./home-page.cjs")({win, js, step, load, waitFor, click, key, focus, settle, state});
     } else if (suite === "workbench-details") {
       await require("./workbench-details.cjs")({win, js, step, load, waitFor, click, key, focus, settle, state});
     } else if (suite === "session-workspace") {

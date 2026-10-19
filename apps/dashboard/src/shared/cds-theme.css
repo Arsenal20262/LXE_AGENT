@@ -1,8 +1,8 @@
-/* CDS-inspired purpose tokens. Shared by settings, capabilities, activity and workbench.
+/* CDS-inspired purpose tokens. Shared by settings, capabilities, activity, workbench and home.
    The conversation and onboarding retain their existing themes.
    Rules: surface hierarchy, semantic ink, alpha borders, shared field states.
    Source: CDS tokens — vanilla, Rules / Theme ramps / Elevation / Purpose. */
-:is(.desktop-settings-theme, .capabilities-theme, .activity-theme, .workbench-theme) {
+:is(.desktop-settings-theme, .capabilities-theme, .activity-theme, .workbench-theme, .home-theme) {
   --cds-surface-nav: #fcfcfb;
   --cds-surface-panel: #ffffff;
   --cds-surface-popover: #ffffff;
@@ -65,7 +65,7 @@
   color-scheme: light;
 }
 
-:root[data-theme="dark"] :is(.desktop-settings-theme, .capabilities-theme, .activity-theme, .workbench-theme) {
+:root[data-theme="dark"] :is(.desktop-settings-theme, .capabilities-theme, .activity-theme, .workbench-theme, .home-theme) {
   --cds-surface-nav: #151515;
   --cds-surface-panel: #1a1a19;
   --cds-surface-popover: #232322;
