@@ -103,6 +103,12 @@
       "document": "examples/runtime-status.md",
       "screenshots": 6,
       "scope": "LXE runtime status popover and trigger color adaptation; neutral surfaces, semantic status colors and preserved provider marks; layout, status classification and navigation unchanged"
+    },
+    {
+      "date": "2026-10-19",
+      "document": "examples/conversation-colors.md",
+      "screenshots": 5,
+      "scope": "Match dark tool-row hover to the existing light-theme text-contrast behavior; background, layout, status colors and keyboard focus outline preserved"
     }
   ]
 }

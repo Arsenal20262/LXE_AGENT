@@ -67,3 +67,11 @@
 宽度、右对齐、内边距、圆角、字体与换行保持不变。复制按钮沿用原有显隐行为，文件／技能引用补充蓝色焦点轮廓。普通文本、多段文本、排队消息与带附件消息统一应用；助手正文保持原有配色。
 
 保存了[亮色](conversation-bubble/bubble-light.png)、[暗色](conversation-bubble/bubble-dark.png)、[引用焦点](conversation-bubble/bubble-references-dark.png)、[带附件](conversation-bubble/bubble-attachment-dark.png)和[窄窗口](conversation-bubble/bubble-narrow-dark.png)截图，使用生产组件与临时示例数据渲染。亮暗主题及窄窗口共 224 组元素测量与移除局部主题时一致，复制内容完整，助手正文的采样颜色未变；详见[测量结果](conversation-bubble/geometry-and-colors.json)。类型检查及既有 conversation-content、references 两组行为测试通过。预览服务与 Electron 已退出。
+
+## 补充：工具调用条目的悬停一致性
+
+此前只有浅色对话页覆盖了旧的整行背景高亮，采用“背景不变、文字加深”的悬停效果；暗色仍使用旧背景高亮。这次将相同交互方式应用到两种主题，浅色原有效果不变。暗色悬停时操作名称使用 `#bfbdb5`，命令参数使用 `#f5f4ed`；它们沿用 LXE 的 CDS 适配文字色，不代表 CDS 对 tool use 的专门规定。
+
+错误名称及状态图标保留原色，默认样式、布局和键盘焦点边框不变。禁用条目不提亮。截图：[浅色正常](conversation-tool-hover/tool-success-hover-light.png)、[暗色正常](conversation-tool-hover/tool-success-hover-dark.png)、[浅色错误](conversation-tool-hover/tool-error-hover-light.png)、[暗色错误](conversation-tool-hover/tool-error-hover-dark.png)、[暗色键盘焦点](conversation-tool-hover/tool-focus-dark.png)。
+
+使用生产组件检查亮暗两种主题的 success、error、running、pending、unconfirmed 五类状态，核对悬停、焦点、展开／收起与禁用表现，250 组悬停前后的元素布局测量一致；[记录](conversation-tool-hover/hover-checks.json)保留实测颜色。既有 conversation-content 行为测试通过，临时预览进程已清理。
