@@ -1,5 +1,14 @@
 # 最终备货建议：自动取数衔接交接
 
+## 2026-10-19 本地提交收口 3/3：货件失败定位与最终状态
+
+- 前两组分别为 `f01118f9`（旺季自定义天数及 getter 清理，19 文件）和 `ce2f0968`（显式 MSKU 源表，10 文件）。本组仅剩 4 文件：货件 Service、CLI、CLI 定向测试及本 handoff；原 30 个未提交文件按职责全部覆盖，不将其他 Pool 或 main 改动混入。下文的“未提交”和 NOT VERIFIED 是各次检查的历史状态，本节记录最终增量结果。
+- `_download_status_file` 复用原异常备注，加入三状态及查询数量/创建任务/轮询/获取下载地址/下载文件阶段；CLI 将备注与实际异常合并后使用既有脱敏和标准终态。保留异常对象和认证类型、失败停止、取消传播及原三状态顺序，不增加重试、并发或恢复系统。测试覆盖三状态各阶段失败、脱敏、原异常传播及后续不继续；不修改数量、来源核验或普通备货算法。
+- 本轮新定向结果为 Python 设置/公式/工作簿 **223 passed、5 skipped**，库存/Skill/货件 **133 passed**（132 + 精确补跑 1 项本机监听受阻测试），Bun 桥接/Skill/catalog **71 passed**，Electron Amazon/越南设置界面 **2 passed**；Desktop 与 Dashboard typecheck 通过。各组源码未变的 catalog Python lxeskill/infra 使用前轮匹配证据，不重复全量验证。
+- 原先跳过的 Office Kit 5 项已用本 checkout 现有 `sourceRuntimePaths` 约定下的 darwin-arm64 Node/Office CLI 资源补齐：仅对测试命令临时注入 `LXE_OFFICE_NODE`、`LXE_OFFICE_CLI`，未安装依赖、修改宿主配置或启动生产流程。两项工作簿重算测试的参数组合共 **5 passed**，覆盖核验失败时建议留空及正常公式；日志 `/private/tmp/pool7-local-closeout-office.log`。因此本轮所选 Python 用例合计 **361 项通过**，初轮 5 项跳过已补齐；不能把 Office Kit 结果等同于原生 Microsoft Excel/Windows 验收。原生 Windows 4 项仍 NOT VERIFIED，当前主机为 macOS。
+- 本组完成后本功能整链为 32 个非 merge 的功能/修复/文档提交 + 1 个 main 同步 merge，共 33 个；pool-7 本层为 14 + 1，最终功能相对 PR2 为 21 + 1 = 22 个。当前旧 PR2 到最终 HEAD 原始范围含另 73 个 main 提交，合计 95，不计为本功能成果。提交号、文件范围及工作区干净状态在提交后用 Git 实际核对；备份/stash保留，运行代码与本轮起始快照逐文件对照，本轮只新增提交收口说明。
+- 正式仍是 PR1 公式 → PR2 生成/核验 → 最终功能（原 PR3 + pool-7）三个 PR。正式轮到下层时复核当时 main、实际祖先和 diff，不为消除范围噪声擅自重写旧分支。当前仅获本地提交授权，push、创建 PR、merge 仍需分别明确授权；本轮均不执行。未调用生产 ERP、变更 main/其他 Pool 或开启新的性能/架构任务，至此收口。
+
 ## 2026-10-19 本地提交收口 2/3：显式 MSKU 源表
 
 - 第 1 组已提交为 `f01118f9`，工作树完整保留后续改动。本组仅提交现有深圳库存可选源表参数及贯通：最终 Skill → catalog/CLI → 库存 Service 读取 MSKU 步骤返回的指定源表；缺失、损坏、错店/来源不符即停止，不回退历史。省略参数的旧调用继续按店铺选最新源表，不影响普通备货。
@@ -15,6 +24,58 @@
 - 本次新验证：Python 设置/CLI/公式/工作簿 **223 passed、5 skipped**；Bun Desktop Amazon/越南、input-assets、preload、Skill/catalog **71 passed**；Electron 模拟设置界面 Amazon/越南 **2 passed**（共 14 个场景）；Desktop、Dashboard typecheck 均通过。日志为 `/private/tmp/pool7-local-closeout-settings-python.log`、`pool7-local-closeout-bun.log`、`pool7-local-closeout-renderer.log`、`pool7-local-closeout-desktop-ts.log`、`pool7-local-closeout-dashboard-ts.log`。5 项为 Office Kit 未配置，原生 Windows 与本轮 Office 实际重算仍 NOT VERIFIED，不改宿主环境；复用此前未变代码的有效回归证据，不重跑全量。
 - 每组提交前核对完整暂存 diff、文件/内容范围及 `git diff --cached --check`；提交号以本分支 Git log 为准。三个正式 PR 及串行顺序不变，原 PR3 不单独提审；本组提交后仍应保留未完成暂存的后两组，不能以中间 HEAD 作为最终发布版本。
 
+## 2026-10-19 删除旧旺季布尔 getter（P3 最小修复，未提交）
+
+- pool-7 / `codex/final-restock-auto-data`，HEAD 仍为 `2d89e50f`。修改前原 30 个未提交文件已逐文件备份并校验，`pool7-remove-peak-getter-ddo_35ed` 保存完整 patch、1711 个跟踪文件哈希及 HEAD/index/refs/stash。本轮不修改 main、其他 Pool 或 Git 历史，不调用生产 ERP，不暂存/提交。
+- 删除 `final_restock_settings.peak_boost_enabled()`；当前工作簿已使用 `read_state()` 一次读取开关和天数快照，旧 getter 没有生产消费者。原测试的 3 处 getter 调用改为 `read_state()`，保留默认开启、保存后读取和配置损坏报错场景，不删除测试。运行代码只删除该函数，没有新接口、协议或抽象；其他设置/公式/CLI/取数实现不变。删除应与既有工作簿快照改动一起提交，不能仅将删除独立提交到仍使用旧 getter 的 HEAD。
+- 本轮仅追加修改 3 个既有脏文件：设置模块、其存储测试、本 handoff；其他 27 个脏文件完整保留。定向回归 **42 passed，无 skip**：设置存储、标准设置 CLI，以及工作簿开关公式写入、生成中更改设置与下一次生效、配置损坏时停止。日志为 `/private/tmp/pool7-remove-peak-getter-tests-20261019.log`；没有重跑全量、Office 实际重算或生产流程，原生 Windows/Office Kit 的既有 NOT VERIFIED 边界保持。
+- Git 只读统计：PR1 `70bc0568` 独有 2 个非 merge 提交；PR2 `894a413e` 相对 PR1 为 9 个；原 PR3 `5361155f` 相对 PR2 为 7 个；pool-7 `2d89e50f` 相对原 PR3 为 11 个功能/修复/文档提交及 1 个 main 同步 merge。整链不重复计数为 29 个非 merge 提交 + 1 个同步 merge；最终功能相对 PR2 为 18 + 1 = 19 个，不把继承的 73 个 main 提交计为本功能。未提交内容不计入数量。
+- 正式保持三个 PR 串行：PR1 公式 → PR2 生成/核验引擎 → 最终功能（原 PR3 + pool-7），原 PR3 不单独提审。前层合入后，下层基于当时最新 main 复核；当前旧 PR2 为 Base 时，pool-7 原始范围为 92 个提交（19 + 73），不能将公共 main 历史冒充最终功能。最终正式提审以已含前两层的 main 为目标，届时核对实际祖先和 diff，不能只切换 Base 就假定范围干净。本轮保留全部原提交，不重写历史，到此收口。
+
+## 2026-10-19 组合 SKU 4/6/8 路离线对照（保留生产 4 Worker）
+
+- pool-7 HEAD 仍为 `2d89e50f`，本地 `origin/main=88a30338`。`COMBO_WORKERS=4` 沿用主线 `combo_sku.py`，blame 来源为 `7ae69a632`，不是本轮新增限制；`sku_catalog.py` 复用该值。远端 main 本轮查询因本机代理端口不可达而未再次确认，不宣称已核实新远端版本；未同步或修改 main。开始时原 30 个脏文件及完整 diff、1711 文件哈希、HEAD/index/refs/stash 已备份并校验，目录为临时根下 `pool7-combo-concurrency-wd06vbpk`。
+- 仅测试进程内替换 `catalog.COMBO_WORKERS`，真实执行既有目录查询、`official_api` 重试和 `AsyncCloudClient`；复用 `test_sku_catalog_session.py` 的响应 fixture 及 `test_source_verification.py` 的源表构造/核验。所有请求强制限定 `127.0.0.1`，每轮新建并关闭一个 Session，不接触生产 ERP。模拟响应延迟 12～24 毫秒、请求超时 100 毫秒、既有重试 sleep 按 0.02 倍缩放；尝试次数、错误判断和 `Retry-After` 分支未另实现。以下秒数不是线上收益预测。
+
+| 模拟场景 | Worker | 三次组合请求阶段中位秒数（范围） | 每轮组合 HTTP / 重试 | 结果 |
+| --- | --- | --- | --- | --- |
+| 稳定延迟 | 4 | 2.465（2.461～2.478） | 503 / 0 | 503/503 完成 |
+| 稳定延迟 | 6 | 1.603（1.602～1.608） | 503 / 0 | 503/503 完成 |
+| 稳定延迟 | 8 | 1.208（1.183～1.227） | 503 / 0 | 503/503 完成 |
+| 固定 32 次可恢复故障 | 4 | 2.882（2.881～2.890） | 535 / 32 | 503/503 完成 |
+| 固定 32 次可恢复故障 | 6 | 1.897（1.888～1.909） | 535 / 32 | 503/503 完成 |
+| 固定 32 次可恢复故障 | 8 | 1.407（1.404～1.440） | 535 / 32 | 503/503 完成 |
+| 首波容量受限（模拟限制 4 个） | 4 | 2.430（2.426～2.445） | 503 / 0 | 503/503 完成 |
+| 同上 | 6 | 失败，不作为提速成绩 | 已开始 14 个 SKU，18 次 HTTP / 4 次重试 | 三轮均出现 6 次 429，耗尽既有尝试次数后停止；4 个在途请求取消 |
+| 同上 | 8 | 未运行 | — | 6 路已增加错误，停止上调 |
+
+- 每轮另有 39 次库存批查。21 个完整样本均覆盖相同 503 个候选（固定 500 个组合、3 个未匹配），不会把未匹配伪装成通过；来源样本为 2002 行、1978 行通过、24 行不参与计算。均经真实 `annotate_source` / `load_verified_source` 写回校验，分类指纹 `576a30f9512678573b2ce68aad028afca964a9de67345a2bc1ca00175cfce6c1`，来源指纹 `2afe4c4be766650fc84e3deb1d45124aad9bb48333c055d25f11302885bb2c02`。测试固定了采集时间，因此同一离线样本的 `snapshot_id` 也一致；线上不同采集时间的快照不要求同 ID。容量失败及错误注入轮输入仍含全部 503 个候选，但按失败停止契约提前终止，不能记作完成覆盖或成功产物。
+- 固定故障包含 6 次超时、6 次 429、5 次 502、5 次 503、5 次 504、5 次连接中断，各只在指定首次尝试触发；这不是对真实 32 次重试原因的还原。真实日志目前没有这些原因分类，不能由重试数认定限流。三档客户端请求峰值为 4/6/8；可恢复超时场景模拟服务端峰值为 5/7/9，说明超时后旧后台处理可能与新请求重叠，不能把 Worker 数当作远端绝对负载上限。未观察到连接池等待，所有样本结束后 Worker、客户端及模拟服务端活动请求归零，关闭 Session 前检查 Worker 已退出；既有 DummyCookieJar 和每轮生命周期保留。
+- 定向回归 **166 passed**，覆盖目录/Session、官方组合接口、来源核验、共享传输及普通备货 CLI。初版对照为 **1 failed、15 passed**：失败是容量场景 6 路被 429 拒绝，原始日志完整保留，没有放宽 mock 限制或生产错误判断来消除失败。随后只将实验验收改为确认这种拒绝必须停止并清理：三轮拒绝清理加完整样本校验 **4 passed**；另 15 项已通过的异常/取消注入覆盖 4/6/8 路的 403、业务失败、非法 JSON、重试耗尽及主动取消。容量拒绝不能算作性能或全覆盖成功。
+- 复现脚本 `/private/tmp/test_pool7_combo_concurrency_20261019.py` 明确为临时离线实验；先运行完整脚本会生成完整对照数据，`-k 'recorded_completed_comparison_integrity or burst_limit_rejects_six'` 可核查本轮保存的成功样本与容量退出。原始日志为 `/private/tmp/pool7-combo-concurrency-experiment-20261019.log`，容量验收为 `/private/tmp/pool7-combo-concurrency-capacity-20261019.log`，回归为 `/private/tmp/pool7-combo-concurrency-regression-20261019.log`；汇总为 `/private/tmp/pool7-combo-concurrency-results-20261019.json`。临时实验不加入产品依赖、CLI、Worker/重试框架或配置入口。
+- 结论：仅本 handoff 追加证据，生产默认仍为 4；未发现可据此修复的局部代码缺陷。模拟服务无容量约束时 6/8 路可缩短等待，但不能证明马帮线上允许该负载；模拟首波限额为测试条件，不代表已确认马帮最多 4 路。若后续另行授权真实 4/6 对照，应串行各运行一次 MSKU 导出（不跑其他三表/最终流程），每轮目录逻辑请求约 39+503=542 次，不含解析/导出；目录 HTTP 最坏上限 1626 次/轮，两轮最多 3252 次，正常会因失败停止而少于此值。必须先能查看实际脱敏状态/超时类别，遇 403/429/风控、终态失败或取消立即停止，不上调 8、不追加轮次；动态数据差异单独核对。本轮不申请或执行在线验证，不承诺真实耗时下降。
+- 可删减性复审：不新增可配置 Worker、公共抽象或永久性能测试框架；不删减必要核验、重试安全或来源校验。34 列、公式、AG/AH/T、旺季设置、普通备货、深圳库存、三状态货件及 Runtime 没有本轮运行代码差异。原有未提交改动保留，未 add/commit/push/merge；实验至此收口，不追加调查。
+
+## 2026-10-19 店铺解析与性能优化边界收口
+
+- pool-7 / `codex/final-restock-auto-data`，HEAD=`2d89e50f0c2c6148a359d5b97535149113a66cbc`；本地与只读查询到的远端 `origin/main` 均为 `88a303386826e560ec6e45c692f93ee0f20311de`，PR2 依赖仍为 `894a413e`。未同步 main、修改其他 Pool 或执行 Git 写操作。开始时原 30 个未提交文件已逐文件备份并校验，`pool7-redundancy-closeout-04tfcrf2` 保存文件、完整 patch、1711 个跟踪文件哈希及 refs/stash。
+- 仅回看已有日志，未调用生产 ERP。首次解析命令约 88 秒：17:25:27 发起，17:25:55.372 已取得认证材料，17:26:55 超时；约 28 秒为等待账号锁及完整认证恢复，随后约 60 秒对应公共 ERP HTTP 客户端既有总超时。此前强制刷新未取得 FBA token 后，现有 `ensure` 才重新获取完整认证，未发现可安全省略的认证步骤。日志不足以区分该次 HTTP 等待中的连接、服务端处理或响应读取，不把它断言为认证衔接缺陷；不缩短超时或新增解析重试。
+- 复用现有 `auth.get_auth_context`、账号锁/`ensure`、`erp_http_session`、`official_api.post_json`、单轮 Session 作用域及三状态下载能力。既有组合日志为 503 次逻辑查询、535 次 HTTP 尝试、32 次额外尝试，最终逻辑失败 0，阶段经过 242.582 秒；累计请求 968.926 秒、累计 HTTP 936.866 秒，不能当作串行耗时相加。统计没有各次失败状态码或连接异常原因，不能据此认定限流或连接池排队，也不能以减少重试换取不完整核验。保持 4 Worker、最多 3 次 HTTP 尝试、认证和完整分页。
+- 只读核对现有数据服务组合查询文档与 schema：只声明单个 `comboSku` 或不超过 30 天的创建时间范围，没有可用于全覆盖的批量 SKU 契约。货件仍按各自 taskId/hash 下载，但现有契约未证明同账号后台任务并行限制、搜索隔离及跨状态一致性；保留三状态串行与 10 秒最小轮询，不新增并发、缓存、重试、Tool 或工作流。
+- 本轮定向回归 **198 passed**：认证锁/合并等待与客户端、马帮认证、店铺解析/CLI、商品分类/Session/重试及货件/CLI。首次 196 passed，另两项仅因沙箱禁止监听 `127.0.0.1` 失败；精确解除本机监听限制后两项通过（6 deselected），没有跳过该覆盖。日志：`/private/tmp/pool7-bounded-perf-regression-20261019.log`、`/private/tmp/pool7-bounded-perf-loopback-20261019.log`。
+- 临时目录离线异常注入另 **4 passed**：HTTP 超时原异常传播且不刷新/重复请求；CLI 超时仅调用一次并返回失败；HTTP 取消退出请求上下文且无残留 asyncio 任务；第二次仍被拒绝时认证恢复不超过一次。脚本 `/private/tmp/test_pool7_perf_safety_20261019.py`，日志 `/private/tmp/pool7-bounded-perf-probes-20261019.log`。这是模拟边界验证，不证明真实浏览器子进程取消或生产耗时改善。
+- 本次仅追加本 handoff，运行代码/测试文件逐字保留，因此没有优化前后不同实现可做性能对照；确认减少请求 **0**、减少等待 **0**。未重新生成生产 Excel 或宣称新的来源指纹、货件统计和公式结果已线上验收；保留既有 2002 行、公式错误 0 的历史证据。原生 Windows、Office Kit、真实认证/限流根因和新线上性能结果均未在本轮验证。没有可删减的新实现层；移除现有必要核验/失败停止会改变契约，故不实施。既定三 PR 方案不变，本轮到此收口。
+
+## 2026-10-19 两处 P3 最小模块化收敛（未提交）
+
+- pool-7 / `codex/final-restock-auto-data`，HEAD 保持 `2d89e50f`。本轮仅修复深圳库存隐式源表依赖及货件失败终态缺上下文；不拆分架构、不新增命令、Tool、Workflow、缓存或重试。既有 19 文件已逐文件备份并校验，备份位于临时目录 `pool7-p3-module-bnt2cvq5`；原 refs/stash 和文件哈希均留存。
+- 深圳库存现有 Service/CLI 增加可选 `msku_source_xlsx_path` / `--msku-source-xlsx-path`，省略时保留原按店铺最新文件调用。显式提供时复用原文件名时间解析及 `load_verified_source` 核验，仅读取该文件；缺失、损坏、错店或来源被改则失败，不回退历史。最终 Skill 将步骤 2 返回的 `xlsx_path` 传入步骤 3，并保留返回路径一致性及最终三文件批次核验。
+- `_download_status_file` 以 Python 原生异常备注补充状态及查询数量、创建任务、轮询、获取下载地址、下载文件阶段；原异常对象、类型及原文不变，原样抛出。CLI 将备注和实际异常合并后复用既有 `diagnostic` 脱敏/截断并进入标准终态。认证刷新边界、三状态顺序、统计和取消传播不变。
+- 本轮 13 文件：catalog；两项 Service、两个 CLI 适配；深圳库存及最终 Skill；库存 Service 测试、库存 CLI 测试、货件 CLI 测试、Python 最终 Skill 契约、Bun Skill 契约；本 handoff。仅最终 Skill 与 handoff 叠加本轮内容，其余 17 个原有脏文件保持逐字不变，旺季天数等旧差异完整保留；未暂存、未提交。
+- 先验证新增 25 项复现失败，再修复；本轮定向 Python **796 passed / 9 skipped**（catalog 要求的 lxeskill/infra 加受影响业务；736 项先通过，60 项仅因沙箱本地监听受阻，解除限制后精确补跑全部通过），Bun **37 passed**。覆盖显式源表成功/失败不回退、旧调用、错批停止、三状态五阶段失败的终态/脱敏/原异常、取消、原有认证恢复、34 列/AG/AH/T/绑定保护/旺季设置和普通备货；独立文件交付测试通过。
+- 9 项跳过为 4 项原生 Windows、5 项 Office Kit 未配置，仍 **NOT VERIFIED**；本轮未做生产 ERP、真实模型路由或 Office 实际重算验收。无需新增环境变量，仍沿用原路径、认证和输出契约。Git diff/check、原改动保全与 refs/stash 在收口时核对；既定 PR1 → PR2 → 最终功能 PR 依赖不变。下一步仅按用户另行授权处理本轮局部差异，不自动提交或继续模块化。
+- 2026-10-19 文档收口仅核对已有日志，未新增或重跑测试：Python 证据为 `/private/tmp/pool7-p3-regression.log`（736 passed / 9 skipped，另 60 项本地监听受阻）及 `/private/tmp/pool7-p3-retry.log`（受阻 60 项全部通过），合计 **796 passed / 9 skipped**；Bun 证据为 `/private/tmp/pool7-p3-bun.log`（36 passed）及 `/private/tmp/pool7-p3-delivery.log`（1 passed），合计 **37 passed**。原生 Windows 4 项、Office Kit 5 项仍为 **NOT VERIFIED**。
+
 ## 2026-10-19 CLI 统一精确本地提交收口
 
 - 用户授权仅提交 Amazon 设置 CLI 统一。基线为 pool-7 `9a82c6ba`，分支 `codex/final-restock-auto-data`；提交号以本分支 Git log 为准。当前工作区、原 patch、refs/stash 与 1709 文件哈希已保存在临时目录 `pool7-cli-commit-5ksv67gh`，既有备份/stash 不删除。
@@ -22,6 +83,66 @@
 - 与此前 19 文件的自定义旺季天数存在 5 文件重叠，采用按内容暂存：提交候选保持 HEAD 的布尔开关契约，未夹带 `peak_boost_days`、Dashboard、IPC、共享类型或公式变更；工作区仍完整保留自定义天数。新 CLI 测试只检验调用与存储透传，不复制字段规则，可同时验证两个版本。
 - 已从 HEAD 导出并覆盖精确候选内容，在独立临时副本验证（自行离线冻结安装依赖，不共享 .venv）：Python **24 passed**、Bun **49 passed**、Desktop `tsc --noEmit` 通过；覆盖标准成功/失败、持久化/损坏配置、UTF-8、秘密脱敏、旧桥接、生成快照和 V/W 开关。实际工作区通用 CLI 测试再验证 **10 passed**；复用上一轮整合回归 Python **746 passed / 9 skipped**、Bun **71 passed**，不重复大范围审核。
 - 上轮 9 项跳过仍是 4 项原生 Windows、5 项 Office Kit；生产 ERP、完整原生 Windows/Excel 及新版本 GUI 运行仍为 **NOT VERIFIED**。不调用 ERP、不重启服务、不 push/merge；main 和其他 Pool 不动。正式 PR 仍按 PR1 → PR2 → 最终功能 PR 顺序，余下旺季天数修改未包含在本提交，以下“未提交”等表述为各轮历史记录。
+
+## 2026-10-19 设置接入现有 lxeskill 体系（当前契约）
+
+- 本节替代下文上一轮“保留私有进程协议”的处理决定。已 fetch 核对组长最新 `origin/main=88a303386826e560ec6e45c692f93ee0f20311de`；pool-7 HEAD 保持 `9a82c6ba`，没有同步 main、修改其他 Pool 或 Git 历史。开始时原 19 个未提交文件已逐文件备份并校验，`pool7-settings-cli-e9w75mjz` 临时目录保存原 patch、文件副本、refs 及 1709 个跟踪文件哈希。
+- 现行调用链：Dashboard/原 IPC → `DesktopAmazonFinalRestockSettingsService` → 私有 Python 的 `-I -B -X utf8 -m lxeskill replenish final-restock settings --action read|save [--parameters <json>]` → catalog 既有分发 → 薄 `run(arguments)` 适配 → 原 Python 设置存储。标准 `type=result / ok / data / error`、退出码及 UTF-8 由已有 CLI 生成；Desktop 按越南设置惯例读取最后一条终态，并保留数据类型检查及既有 `redactAndBound`。继续复用 `DesktopInputAssetsOptions`、`AssetCommandExecution`，没有公开既有私有 helper 或增加公共执行框架。
+- catalog 只增加一个必要内部命令 `mabang_final_restock_settings`，`visibility=internal`、`exposed=false`、`owner_skills=[]`；不在模型命令列表中新增设置入口，不新增 Skill、Runtime Tool 或业务路由。总命令 48→49、模块 42→43、flags-only 14→15；业务命令仍 41、Skill 仍 39。原越南设置、input-assets、CLI 分发/错误封装实现不变。
+- 删除设置模块的私有 `main()`、独立 JSON 成功/失败输出、重复 stdio 配置和 Desktop 对旧协议的整段 stdout 解析；不兼容保留第二套协议。新增适配只校验 read/save 动作与字段组合、调用原函数、返回既有业务 payload，异常文本复用现有 `exception_text`，由 CLI 包装实际失败。原 9 个配置业务定义经 AST 比对完全一致；路径、格式、原子锁/替换、默认/旧格式读取、损坏报错均保留，公式及生成入口一次快照未改。
+- 本轮增量为 10 文件：Desktop 桥接及测试；catalog；新 `services/agent_cli/mabang/final_restock_settings.py`；原设置模块及其存储测试；新 `tests/lxeskill/test_final_restock_settings_cli.py`；CLI 数量断言、Bun 命令契约测试、本 handoff。原 19 文件中的自定义旺季天数、Dashboard、IPC、公式和其他既有改动保留；不得把它们全部记为本轮新增。
+- 验证先在旧实现复现标准终态/命令映射失败，接入后定向通过；扩展回归发现两处旧总数断言，依据真实 catalog 更新后最终同组 **746 passed、9 skipped**。范围包含 Python `tests/lxeskill`、`tests/infra`、最终设置/公式/工作簿和普通备货 CLI；覆盖真实子进程读写/重启、旧文件格式、开关/天数、非法参数/JSON、损坏配置不覆盖、标准失败退出/真实错误传播及 Windows 旧 stdout 编码模拟。Bun Desktop/原越南/input-assets/preload/命令契约 **49 passed**，Skill 发现 **22 passed**；Desktop `tsc --noEmit` 通过。日志为 `/private/tmp/pool7-settings-cli-python-final-20261019.log` 和 `/private/tmp/pool7-settings-cli-skills-20261019.log`。
+- 9 项跳过为 4 项原生 Windows 路径/进程所有权和 5 项未配置 Office Kit 的重算；原 8 组旺季 LibreOffice 重算通过，不能代替这些检查或 Microsoft Excel 原生验收。未调用生产 ERP，未重启正在运行的桌面；本版完整 GUI/生产任务及原生 Windows 为 **NOT VERIFIED**，不修改宿主环境补齐。
+- 未发现本轮新增 P0～P3 阻塞，具备本地提交技术条件；仍未 add/commit/push/merge，原 3 PR 提审顺序不变。正式暂存需区分本轮命令收敛与此前旺季改动，不能遗漏新 handler/CLI 测试或覆盖既有修改；开发到此结束。
+
+## 2026-10-19 Amazon 设置桥接最小收敛
+
+- 基于 pool-7 `9a82c6ba`，开始时原有 19 个未提交文件已逐文件备份并校验，目录为临时根下 `pool7-settings-bridge-hdbxbc2w`，含原始 patch 和 1709 个跟踪文件哈希；未暂存、提交或同步 main。实际本地 `origin/main=88a30338` 的越南设置已改用 `lxeskill` 标准终态，Amazon 仍使用私有模块的 `success/data/error`；两者不能混作同一协议。
+- 已有 `DesktopInputAssetsOptions`、`redactAndBound`、受信任 IPC、Desktop 类型及 `-I -B -X utf8` 继续复用，本轮进一步借用公开的 `AssetCommandExecution`，替换重复声明的进程结果类型。`input-assets` 的执行/终态解析方法是私有的，且读取 `type=result`；不公开这些方法、不新增设置 CLI 或通用框架。前轮提出的协议差异本身不足以要求迁移：按本轮约束保留必要的 Amazon 薄适配和原 Python 输出，不强求形式统一。
+- 新增失败测试先复现 3 项失败：对象/数字 `error` 导致共享脱敏函数报 `trim` 类型错误，空白 `error` 遮蔽实际 stderr。只在桥接边界确认错误为非空字符串，否则沿原进程诊断/原始非法响应路径并统一脱敏、截断；没有将非法返回当成功，没有新增错误映射或兼容另一套终态。
+- 本轮增量仅 3 个既有文件：`apps/desktop/src/main/amazon-final-restock-settings.ts`、对应 `apps/desktop/test/amazon-final-restock-settings.test.ts`、本 handoff。Python 配置/输出、Dashboard、IPC、CLI/catalog、越南模块、公式及原有未提交旺季修改均保留。设置路径、默认开启、空白默认 30、关闭/重开持久化、一次读取快照、仅 V/W 旺季加成和总 120 上限不变；没有处理范围外的旧单字段 getter。
+- 本轮验证：Bun Amazon/越南设置、input-assets、preload 桥接 **31 passed**；Python 设置、公式和工作簿 **215 passed、5 skipped**；Desktop `tsc --noEmit` 通过。覆盖读取/保存、跨服务实例持久化、损坏设置、失败/非法 JSON/进程错误、非法成功数据、协议不混用、已知敏感值脱敏和截断、Windows 旧 stdout 编码模拟及原 8 组旺季 LibreOffice 重算。5 项因 Office Kit 未配置而跳过，原生 Windows 完整运行及生产 ERP **NOT VERIFIED**；不安装或改动宿主环境。
+- 本轮修复后未发现新增 P0～P3 问题，具备该桥接修改的本地提交技术条件；当前 19 文件仍包含此前自定义旺季天数，后续须按实际完整范围暂存，不能把旧修改都计入本轮。三个 PR 方案、Base/Head 依赖不变，未调用生产 ERP、commit/push/merge；到此结束，不追加公共执行器改造。
+
+## 2026-10-19 有边界的性能优化可行性核查
+
+- 用户重新授权只依据现有契约评估组合批查与货件重叠等待；本轮不访问生产 ERP。核对 pool-7 `9a82c6ba`，保留原 19 个未暂存文件，没有修改性能实现、其他 Pool 或 main，也没有 Git 状态/历史操作。
+- 只读核对本机数据服务仓库 `LXE_AGENT_DATA_SERVER/docs/mabang/combo-sku-search.md`、`lxe_agent_data_server/integrations/mabang/schemas.py` 和 catalog：现有请求只支持单个 `comboSku` 或最长 30 天的创建时间区间，未声明批量 SKU 参数，禁止额外字段。不能猜测逗号/数组请求，也不能以时间范围代替覆盖全部目标 SKU。当前库存 50 个一批已使用；组合按相似搜索结果完整分页精确匹配，不能遇到首个命中就结束或直接借用其他搜索的部分结果。
+- 当前权威核验快照已在后续深圳库存阶段复用；历史文件、旧 Listing 类型或 MSKU 库存数值不具备替代本轮完整组合定义核验的等价证据，不新增缓存或回退。
+- 货件 `reportParams` 明确包含各自状态和店铺，原生文件名包含状态/taskId，下载按 taskId/hash 定位；这证明已有客户端按任务区分，不证明平台允许同账号任务安全重叠。轮询读取最近 20 条任务，现有证据未确认后台队列隔离、同账号并行限制、限流和跨状态快照一致性，因此保留原三状态串行、10 秒最小轮询、失败停止及认证处理，不增加任务调度或取消框架。
+- 本轮货件 API、分页、快照及 CLI 定向离线回归 **84 passed，无 skip**；上轮未变代码的商品核验/传输/取消/普通备货 **185 passed** 证据继续有效，不重复运行。没有可实施的等价优化候选，故没有“优化后”版本或模拟提速数字；本轮减少请求 **0**、减少等待 **0**，不把假设并行的模拟时间当作可用收益。未修改 34 列、AG/AH/T、13 列公式、旺季配置或普通备货。
+- 结论：现有证据下无可安全落地的新提速路径，保留稳定实现；仅本 handoff 追加核查结果，性能评估到此结束。没有新线上性能结果，不追加生产测试或新的排查轮次；既定三个 PR 的边界与提审顺序不变。
+
+## 2026-10-19 性能问题最终收口（停止追加改造）
+
+- 按《反过度开发》做限定复核。实际 Git 状态：阶段日志、查询统计和单轮 Session 复用已随 `1a464532` 提交；三个服务文件及四份自属测试与该提交逐字节一致，本轮无未提交性能代码。当前 HEAD 为 `9a82c6ba`，19 个未提交文件仍属自定义旺季天数及本 handoff，不能重复包装为性能 Commit。
+- 结论为“复用已有能力，保留原有层的最小扩展”。计时沿用既有 logger，查询统计仅为单轮内存数字；Session 作用域借用已有 `AsyncCloudClient`，仅覆盖两个商品目录 endpoint，同轮结束即清理。没有新增 Tool、Skill、CLI、Runtime 路由、持久化状态、客户端实现、并发/缓存/重试框架。原 4 Worker、完整分页、核验范围和失败停止规则保留，非核验调用仍走原传输路径。
+- 可删减性复核：删除阶段计时或计数会失去已明确要求的分段/请求数证据；删除作用域会恢复逐请求创建客户端，已有离线构造对照证明存在重复初始化成本。未发现可安全删除而不损失当前明确职责的重复入口或状态框架，因此本轮不删改实现，也不把这些内部 helper 泛化为公共框架。新增日志仅记录阶段、状态、耗时、数量及异常类型，不记录异常原文、凭证、下载 URL 或 SKU 明细。
+- 本轮直接离线回归 **185 passed，无 skip**：包含 Session/Cookie 隔离、跨店铺/任务和地址变化、原有重试/业务错误、完整分页、分类结果、日志脱敏、取消继续传播以及先清理 Worker 再关闭 Session；共享传输非核验调用和普通备货 CLI 亦覆盖。只使用本机模拟服务，未调用生产 ERP，未做新的性能对照或生产测试。工作区 `git diff --check` 通过，暂存区为空。
+- 性能专项未发现 P0～P2 阻塞。保留既定三个 PR 串行提审方案，性能问题不阻塞当前提审；既有 PR Base 复核及旺季配置的独立提交收口仍按前述安排执行。本轮不 add/commit/push/merge，不改运行中的服务或取数行为。
+- 独立 Follow-up（均不实施、不阻塞当前三个 PR）：① 在既有接口契约有证据支持时，评估批量组合查询能否保持精确匹配、分页、冲突检查和核验覆盖等价；② 评估三类货件任务合并或重叠等待/有限并行的可行性，先确认账号/任务隔离、平台限制及失败清理。两项均需独立需求、范围和验证授权，不预设收益，不新增机制或安排生产测试。
+- 采用已完成的本轮测量作为验收边界：595.063 秒任务成功交付，503 个组合逻辑查询、三类后台导出等待为主要耗时，Session 复用生效。不能将模拟收益当作线上提速承诺；不继续为当前任务追加性能诊断或优化。
+
+## 2026-10-19 同步最新 main 并重启（本地集成）
+
+- 用户明确授权同步 pool-7 后重启。本地合并提交 `9a82c6ba1320a80ff1a02e969b9e923d9e3158cf` 的父提交依次为原 pool-7 `ee59353921f130941feedbfe5006b852c117b549` 和最新 main `88a303386826e560ec6e45c692f93ee0f20311de`；未 rebase 或重写原提交，其他 Pool、PR1/PR2/原 PR3 分支不变，未 push 或创建远端 PR。
+- 生产代码自动合并，保留主线列表式工作台、会话/模型/侧栏及越南内部 CLI 等新能力，同时保留 Amazon 自动取数和旺季设置。新版工作台有原三项及“亚马逊最终备货设置”，共四项。仅人工解决三个测试文件冲突，并适配六份测试：保留双方界面测试、四入口对应位置、CLI 实测统计及 flags 命令数；没有手工覆盖主线业务实现。合并索引与隔离验证基线树完全一致。
+- 备份位于 `/private/tmp/pool7-main-integration-20261019-av14pjg_`：完整 refs bundle 已验证，原 19 文件补丁/归档已恢复并逐文件校验。专用 stash `c223ae6114ccc379e21025b54e788f778081a48e` 及原两条 stash 均保留；19 文件按隔离验证后的内容恢复为未暂存修改，未将自定义旺季天数提交进合并提交。实际 1709 个文件与隔离测试版本 SHA-256 一致（本 handoff 后续追加记录除外）。已停止旧服务并备份 app 数据，agent/gateway 数据库副本完整性检查均为 `ok`，配置也已备份。
+- 隔离回归 Python **867 passed、9 skipped**；首轮 59 项因沙箱拒绝 localhost 测试端口失败，允许本机模拟服务后同组通过。Bun 首轮仅一个自动合并后的数量断言过期，依据真实 catalog 从 13 调整为 14 后通过。实际 pool-7 再验证 Python **234 passed、5 skipped**、Bun **93 passed**；八个工作区类型检查、TS 边界及 Desktop 构建通过。Chromium 六组（工作台目录/详情、Dashboard、侧栏、越南设置、Amazon 设置）通过，已查看四入口工作台截图。Office Kit 五项与四项原生 Windows 用例仍 **NOT VERIFIED**；无新增生产备货取数、外部模型路由或真实 Excel 交付验收。
+- 当前工作区差异检查通过；合并暂存区相对 main 的差异检查通过。相对旧 pool-7 的完整合并检查包含 main 已有两处 EOF 空行提示（`cds-theme.css` 与主题快照），未顺手格式化上游文件。主线样式变化不改变 34 列、AG/AH、来源核验、绑定保护或旺季配置规则。
+- 三 PR 串行提审方案不变。由于本轮只给 pool-7 继承 main，最终分支相对旧 PR2 的比较会包含 main 提交，不能直接作为功能范围；待 PR1/PR2 按序合入后，以当时最新 main 核对最终 PR 的 Base/Head 和净功能差异，不自动同步其他 Pool 或改写旧 Stack。
+- 14:14:21（上海时间）重新启动 pool-7 桌面和 Agent，`gateway_ready` 的 boot ID 为 `c1a36fc930814dcbb5736bc7abfd12bd`，实际加载 39 个 Skill、无发现诊断。通过真实桌面 UI 确认列表式工作台显示四个入口；未改用户持久配置。设置页的额外人工读取遇到 UI 工具超时，未把它算作成功；离线设置回归已通过。随后观察到 14:16 新备货任务正在运行，未中断或再次启动任务。启动仍有网络 DNS/SSL 告警，不据此认定 ERP 导出失败；本次代理未主动发起生产备货请求。
+
+## 2026-10-19 旺季加成天数配置（离线完成，未提交）
+
+- Pool-7 / `codex/final-restock-auto-data`，基线 HEAD `ee59353921f130941feedbfe5006b852c117b549`。按用户批准的最小方案，在现有持久开关旁增加“旺季加成天数”：开启且留空用默认 30 天，填写 0～120 的整数用该值，关闭不加成但保留天数。输入无效时明确报错，不保存，不静默改成默认值。
+- 沿用工作台 → 既有 Desktop IPC/preload → 私有 Python 设置模块 → 最终计算的链路，同一 `LXE_DATA_ROOT/skill-data/amazon-final-restock/parameters.json` 增加 `peak_boost_days`（空值为 `null`，明确 0 为零天）。旧版仅有布尔开关的文件保持兼容读取，保留原开关值并使用默认天数，不在读取时改写旧文件；新版保存同时校验并原子写入两字段。损坏配置停止，未新增环境变量、catalog 命令、Skill、Runtime 路由或配置框架。
+- 最终表生成函数入口一次读取开关与天数，计算过程中保存设置只影响下一次生成。只替换 V/W 原旺季加成项，商品触发条件、基础天数、备注优先级及总天数 120 上限保持不变；默认空值/30 天的 13 列公式与 HEAD 一致，关闭状态公式与 HEAD 一致，自定义值不改变其他 11 个公式文本（下游引用 V/W 的计算结果可随天数正常变化）。34 列、AD 克数、AG/AH、来源核验及未核验商品建议留空均保留；普通备货、ERP 取数及 CLI 参数未改。
+- 修改共 19 个既有文件：Dashboard 设置页面、样式、双语文案及四个界面测试文件；Desktop 设置服务、IPC 及两份测试；共享 Desktop 设置类型；Python 设置、公式、工作簿服务及三份定向测试；最终 Skill 和本 handoff。未新增文件，完整 diff 已逐项检查，未混入其他 Pool 或主线同步。
+- 本轮验证：Python 设置/公式/工作簿/最终 Skill **234 passed、5 skipped**；普通备货模板/公式及最终 CLI **61 passed**。八个独立 LibreOffice 重算用例通过，覆盖默认、关闭、自定义 20/0/120 天、未触发、禁止加成及清货。生成期间修改配置的快照测试通过；对第 2/2003/1048576 行与 HEAD 完成 **312 项公式文本比较**，默认及非目标公式未退化。
+- Desktop 桥接/真实 Python 子进程持久化 **10 passed**；Runtime Skill 发现与自然语言入口契约 **22 passed**；Chromium 设置/工作台/越南设置 **3 组、23 个场景通过**，含天数保存、重新挂载、开关保留数值、非法输入、0 与空值区分。Dashboard/Desktop 类型检查、TS 生产边界及 Desktop 构建通过；构建仅有既存大 chunk 警告。
+- 验收边界：Office Kit 五项因环境未配置仍 **NOT VERIFIED**，独立 LibreOffice 不等于 Office Kit 或 Microsoft Excel 验收。未调用生产 ERP，未验证新天数下的生产附件交付、原生 Windows/Excel 或真实模型路由。已构建新版但未重启当前旧版桌面进程，手工界面验收须重启后使用一致版本的 Dashboard/Desktop/Python。既有仅开关的配置可直接沿用。
+- Git：未 add/commit/push/merge，工作区保留本轮 19 文件差异，暂存区为空。正式依赖仍为 PR1 公式 → PR2 生成引擎 → 最终功能 PR（原 PR3＋pool-7）；只在最终功能分支新增配置能力，未改写上游分支或历史。下一步为用户本地界面验收与独立批准提交，以下章节为历史记录。
 
 ## 2026-10-19 本地提交收口
 
