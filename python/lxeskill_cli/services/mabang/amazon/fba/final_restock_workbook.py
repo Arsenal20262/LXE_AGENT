@@ -51,7 +51,7 @@ HEADERS = (
     "销量趋势", "加权日销", "可售", "待入库", "预留", "计划入库", "在途", "运营中心转运",
     "运营中心处理中", "FBA总库存（马帮）", "可销售天数", "未发出货件总计", "建议运输方式",
     "空运补货天数", "海运补货天数", "空运计划", "空运实际", "空运总重", "海运计划",
-    "海运实际", "海运总重", "单件重量", "本地SKU名称", "备注", "本地库存", "本地SKU",
+    "海运实际", "海运总重", "单件重量(g)", "本地SKU名称", "备注", "本地库存", "本地SKU",
 )
 
 SOURCE_NUMBER_COLUMNS = (
@@ -322,7 +322,7 @@ def _rows_for_workbook(
             raise FinalRestockWorkbookError(
                 f"MSKU 源表第 {source_row_number} 行 单品重量(g)(cm) 无法解析为克数: {raw_weight!r}"
             )
-        out["单件重量"] = parsed_weight
+        out["单件重量(g)"] = parsed_weight
         out["未发出货件总计"] = shipment_by_key.get(key, 0)
         report_local_sku = inventory_by_key[key]
         source_local_sku = _text(record.get("本地SKU"))

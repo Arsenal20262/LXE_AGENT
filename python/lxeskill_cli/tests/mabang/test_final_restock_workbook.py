@@ -185,7 +185,7 @@ def test_generates_all_source_rows_without_formula_errors(tmp_path: Path, unboun
             "销量趋势", "加权日销", "可售", "待入库", "预留", "计划入库", "在途", "运营中心转运",
             "运营中心处理中", "FBA总库存（马帮）", "可销售天数", "未发出货件总计", "建议运输方式",
             "空运补货天数", "海运补货天数", "空运计划", "空运实际", "空运总重", "海运计划",
-            "海运实际", "海运总重", "单件重量", "本地SKU名称", "备注", "本地库存", "本地SKU",
+            "海运实际", "海运总重", "单件重量(g)", "本地SKU名称", "备注", "本地库存", "本地SKU",
         ]
         assert sheet.freeze_panes == "A2"
         assert sheet.auto_filter.ref == "A1:AH5"
@@ -323,7 +323,7 @@ def test_workbook_layout_mapping_and_pr1_formulas_before_office(tmp_path: Path) 
             "销量趋势", "加权日销", "可售", "待入库", "预留", "计划入库", "在途", "运营中心转运",
             "运营中心处理中", "FBA总库存（马帮）", "可销售天数", "未发出货件总计", "建议运输方式",
             "空运补货天数", "海运补货天数", "空运计划", "空运实际", "空运总重", "海运计划",
-            "海运实际", "海运总重", "单件重量", "本地SKU名称", "备注", "本地库存", "本地SKU",
+            "海运实际", "海运总重", "单件重量(g)", "本地SKU名称", "备注", "本地库存", "本地SKU",
         )
         assert sheet["AH4"].value == "SKU-COMBO"
         assert sheet["AH3"].value == "SKU-CLEAR"
@@ -350,7 +350,7 @@ def test_workbook_layout_mapping_and_pr1_formulas_before_office(tmp_path: Path) 
             assert actual == expected
         assert all(sheet[f"{column}5"].value is None for column in ("U", "V", "W", "X", "Y", "Z", "AA", "AB", "AC"))
         assert [sheet.cell(row, 2).value for row in range(2, 6)] == ["SEA-1", "CLEAR-1", "COMBO-1", "UNBOUND-1"]
-        assert [sheet.cell(1, column).value for column in range(1, 35)][29] == "单件重量"
+        assert [sheet.cell(1, column).value for column in range(1, 35)][29] == "单件重量(g)"
         assert sheet["AD2"].value == 50  # Header changes; numeric values remain grams.
     finally:
         workbook.close()
@@ -619,7 +619,7 @@ def test_explicit_zero_weight_is_preserved_without_accepting_invalid_weight(tmp_
         inventory_by_key=final_workbook._load_shenzhen_rows(report, expected_keys=set(source_by_key)),
         shipment_by_key={},
     )
-    assert mapped[0]["单件重量"] == 0
+    assert mapped[0]["单件重量(g)"] == 0
     rows[0]["单品重量(g)(cm)"] = "invalid"
     with pytest.raises(FinalRestockWorkbookError, match="无法解析为克数"):
         final_workbook._rows_for_workbook(

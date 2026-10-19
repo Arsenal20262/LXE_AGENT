@@ -82,5 +82,5 @@ T 的状态覆盖及与 FBA 在途是否重叠尚待业务验收，不能据此�
 
 - 最终计算服务负责 Office Kit 重算及工作表、行列、公式存在性、未核验行建议留空和错误单元格检查。仅当最终 terminal `ok=true`、`data.formula_error_count=0` 且 `files` 有文件时，调用 `send_files(paths=<terminal.files>)`；该工具检查文件存在可读并发送，不负责 Excel 业务校验。发送成功后说明店铺、`source_data_time`、`row_count`；没有附件时不猜路径，发送失败只重试交付，不重跑生成。
 - `ok=false` 时保留 `error.message` 及相关 `data`。若包含 `formula_error_count` / `formula_error_examples`，呈现真实单元格坐标和错误值；terminal `files` 可作为**失败诊断文件**发送，明确尚未通过验收，不作为正式可执行备货建议。
-- 按已确认的 XLSX 规则，AA 在 V 或 W 为空时留空；AC 在 AB 或 AD 为空时留空，否则相乘。AD 表头为“单件重量”，输入及总重单位仍为克。出现其他真实公式错误仍须报告，不通过 IFERROR、填零、删行或隐藏错误来声称零错误验收通过。
+- 按已确认的 XLSX 规则，AA 在 V 或 W 为空时留空；AC 在 AB 或 AD 为空时留空，否则相乘。AD 表头为“单件重量(g)”，输入及总重单位为克。出现其他真实公式错误仍须报告，不通过 IFERROR、填零、删行或隐藏错误来声称零错误验收通过。
 - Office 未配置（如 `LXE_OFFICE_NODE`）、重算失败或结果无法核验时，报告实际诊断并标记 **NOT VERIFIED**；不宣称真实重算、Microsoft Excel 原生验证或完整交付成功，也不自行修改宿主环境或安装依赖。
