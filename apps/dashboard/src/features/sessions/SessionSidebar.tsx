@@ -5,6 +5,7 @@ import { useUiText } from "../../shared/i18n";
 import type { useThreeStateSidebar } from "../../shared/use-three-state-sidebar";
 import type { SessionWorkspace } from "./use-session-workspace";
 import { WorkspacesIndex } from "./workspaces";
+import "./sidebar-theme.css";
 
 type Props = Readonly<{
   sidebar: ReturnType<typeof useThreeStateSidebar>;
@@ -57,7 +58,7 @@ export function SessionSidebar({ sidebar, data, actions }: Props) {
       hidden={!sidebar.available}
       aria-hidden={!sidebarVisible}
       aria-label={t.workspaces.title}
-      className={`app-sidebar is-${sidebarMode}`}
+      className={`app-sidebar conversation-chrome-theme is-${sidebarMode}`}
       id="app-sidebar"
       inert={!sidebarVisible}
       ref={sidebar.panelRef}

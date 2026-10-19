@@ -14,6 +14,8 @@
 
 2026-10-19 追加：[对话欢迎页统计卡片](conversation-statistics.md)，沿用中性表面与蓝色热力图，保留指标和网格布局，含 4 张截图。
 
+2026-10-19 追加：[对话侧边栏配色](conversation-sidebar.md)，保留会话列表布局，统一导航表面、文字层次和交互状态，含 6 张截图。
+
 ## 设置页
 
 ![设置页亮色](settings/appearance-light.png)

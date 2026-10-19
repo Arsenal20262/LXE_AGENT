@@ -79,6 +79,12 @@
       "document": "examples/conversation-statistics.md",
       "screenshots": 4,
       "scope": "LXE welcome statistics card color adaptation, retaining layout and calculation logic; blue sequential heatmap is an LXE choice"
+    },
+    {
+      "date": "2026-10-19",
+      "document": "examples/conversation-sidebar.md",
+      "screenshots": 6,
+      "scope": "LXE conversation sidebar color adaptation; geometry preserved across light, dark, search, peek and narrow states; temporary preview processes closed after verification"
     }
   ]
 }
