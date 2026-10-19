@@ -29,7 +29,7 @@ import {
   loadLxeSkillDatasets,
   loadMcpConfig,
   LxeSkillRuntimeService,
-  MaintenanceScheduler,
+  TurnUsageSyncService,
   McpManager,
   OfficialMcpConnector,
   OneShotCliRunner,
@@ -207,15 +207,13 @@ export function createAgentRuntimeHost(
     env: lxeSkillEnvironment,
     onStderr: (line) => logger.info("lxeskill", { line }),
   }) : undefined;
-  const maintenance = lxeSkillRunner ? new MaintenanceScheduler({
-    environment: lxeSkillEnvironment,
+  const turnUsageSync = new TurnUsageSyncService({
+    environment,
     store,
     gatewayId: feishu.appId || crypto.randomUUID().replaceAll("-", ""),
-    authRunner: lxeSkillRunner,
-  }) : undefined;
+  });
   const lxeSkillRuntime = new LxeSkillRuntimeService({
     ...(lxeSkillRunner ? { runner: lxeSkillRunner } : {}),
-    ...(maintenance ? { dependentService: maintenance } : {}),
     recovery,
     unavailableMessage: selectedPython
       ? `LXE Skill CLI Python is unavailable: ${selectedPython}`
@@ -237,7 +235,7 @@ export function createAgentRuntimeHost(
   const runtimeServices: Array<{
     start(registry: ToolRegistry): Promise<void>;
     stop(): Promise<void>;
-  }> = [processes, lxeSkillRuntime, {
+  }> = [processes, turnUsageSync, lxeSkillRuntime, {
     async start() {
       await skillCatalog.refreshForUse();
     },

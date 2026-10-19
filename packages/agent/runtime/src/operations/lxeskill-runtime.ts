@@ -1,5 +1,4 @@
 import { createLogger, type Logger } from "@lxe/core";
-import type { ToolRegistry } from "../tooling/registry";
 import type { OneShotCliRunnerPort } from "../tooling/one-shot-cli";
 
 export type LxeSkillRuntimeState = "unchecked" | "ready" | "unavailable";
@@ -11,25 +10,18 @@ export interface LxeSkillRuntimeStatus {
   recovery: string;
 }
 
-export interface LxeSkillDependentService {
-  start(registry: ToolRegistry): Promise<void>;
-  stop(): Promise<void>;
-}
-
 export interface LxeSkillRuntimeServiceOptions {
   runner?: OneShotCliRunnerPort;
-  dependentService?: LxeSkillDependentService;
   recovery: string;
   unavailableMessage?: string;
   probeTimeoutMs?: number;
   logger?: Logger;
 }
 
-export class LxeSkillRuntimeService implements LxeSkillDependentService {
+export class LxeSkillRuntimeService {
   private readonly logger: Logger;
   private status: LxeSkillRuntimeStatus;
   private started = false;
-  private dependentStarted = false;
 
   constructor(private readonly options: LxeSkillRuntimeServiceOptions) {
     this.logger = options.logger ?? createLogger("runtime.lxeskill");
@@ -45,7 +37,7 @@ export class LxeSkillRuntimeService implements LxeSkillDependentService {
     return { ...this.status };
   }
 
-  async start(registry: ToolRegistry): Promise<void> {
+  async start(): Promise<void> {
     if (this.started) return;
     this.started = true;
     const runner = this.options.runner;
@@ -71,24 +63,10 @@ export class LxeSkillRuntimeService implements LxeSkillDependentService {
       this.markUnavailable(error.message);
       return;
     }
-
-    if (this.options.dependentService) {
-      try {
-        await this.options.dependentService.start(registry);
-        this.dependentStarted = true;
-      } catch (cause) {
-        this.started = false;
-        await this.options.dependentService.stop().catch(() => undefined);
-        throw cause;
-      }
-    }
   }
 
   async stop(): Promise<void> {
     this.started = false;
-    if (!this.dependentStarted) return;
-    this.dependentStarted = false;
-    await this.options.dependentService?.stop();
   }
 
   private markUnavailable(reason: string): void {

@@ -363,7 +363,7 @@ describe("DashboardService", () => {
       terminateSession: async (sessionId) => { terminatedSessions.push(sessionId); },
       execSnapshots: sessionId => [{ exec_id: "live-exec", tool_call_id: "live-call", session_id: sessionId,
         origin_turn_id: "live-turn", revision: 3, status: "running", output_tail: "recovered preview" }],
-      cliCommands: [{ command: "lxeskill auth refresh", name: "browser_auth_refresh", visibility: "maintenance", ownerSkills: [] }],
+      cliCommands: [{ command: "lxeskill mabang auth refresh", name: "mabang_auth_refresh", visibility: "maintenance", ownerSkills: [] }],
       providerManager,
       reloadWorkspace: async (sessionId) => {
         workspaceReloads.push(sessionId);
@@ -440,7 +440,7 @@ describe("DashboardService", () => {
       }],
     });
     expect(await call({ operation: "commands.list", input: {} })).toEqual({
-      items: [{ command: "lxeskill auth refresh", name: "browser_auth_refresh", visibility: "maintenance", ownerSkills: [] }],
+      items: [{ command: "lxeskill mabang auth refresh", name: "mabang_auth_refresh", visibility: "maintenance", ownerSkills: [] }],
       total: 1,
     });
     expect(await call({ operation: "skills.content", input: { name: "demo" } }))

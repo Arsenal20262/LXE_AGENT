@@ -28,11 +28,11 @@ describe("OneShotCliRunner", () => {
     const stderr: string[] = [];
     const runner = runnerFor(`
       console.error("diagnostic");
-      console.log(JSON.stringify({protocol_version:"1",type:"progress",command:"auth refresh",step:"login",status:"running"}));
-      console.log(JSON.stringify({protocol_version:"1",type:"result",command:"auth refresh",ok:true,data:{source:"refresh"},files:[]}));
+      console.log(JSON.stringify({protocol_version:"1",type:"progress",command:"mabang auth refresh",step:"login",status:"running"}));
+      console.log(JSON.stringify({protocol_version:"1",type:"result",command:"mabang auth refresh",ok:true,data:{source:"refresh"},files:[]}));
     `, { stderr });
 
-    const result = await runner.execute(["auth", "refresh"], new AbortController().signal);
+    const result = await runner.execute(["mabang", "auth", "refresh"], new AbortController().signal);
 
     expect(result.ok).toBe(true);
     expect(result.data).toEqual({ source: "refresh" });
@@ -42,7 +42,7 @@ describe("OneShotCliRunner", () => {
   test("returns a failed terminal result with a stable nonzero CLI exit", async () => {
     const runner = runnerFor(`
       console.error("diagnostic");
-      console.log(JSON.stringify({protocol_version:"1",type:"result",command:"auth refresh",ok:false,data:{},files:[],error:{code:"auth_failed",message:"failed"}}));
+      console.log(JSON.stringify({protocol_version:"1",type:"result",command:"mabang auth refresh",ok:false,data:{},files:[],error:{code:"auth_failed",message:"failed"}}));
       process.exit(4);
     `);
 

@@ -797,7 +797,7 @@ describe("native coding tools", () => {
     }, { ...context(root), skill_names: ["replenishment-store-resolve"] })).content[0]?.text);
     expect(listed).toContain("replenish store resolve");
     expect(listed).not.toContain("fba customs fill");
-    expect(listed).toContain("auth refresh");
+    expect(listed).toContain("mabang auth refresh");
     expect(receivedSkillNames).toEqual([["replenishment-store-resolve"]]);
     await processes.stop();
   });

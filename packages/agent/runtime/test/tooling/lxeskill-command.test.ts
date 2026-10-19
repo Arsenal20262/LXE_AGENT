@@ -60,12 +60,11 @@ describe("lxeskill command recognition", () => {
     const catalogPath = join(process.cwd(), "python", "lxeskill_cli", "lxeskill", "catalog.json");
     const entries = loadLxeSkillCommandCatalog(catalogPath);
 
-    expect(entries.find((entry) => entry.name === "browser_auth_refresh")).toEqual({
-      command: "lxeskill auth refresh",
-      name: "browser_auth_refresh",
+    expect(entries.find((entry) => entry.name === "mabang_auth_refresh")).toEqual({
+      command: "lxeskill mabang auth refresh",
+      name: "mabang_auth_refresh",
       visibility: "maintenance",
-      ownerSkills: ["ziniao-browser"],
-      attributionSkill: "ziniao-browser",
+      ownerSkills: [],
     });
     expect(entries.find((entry) => entry.name === "mabang_download_fba_delivery_csv"))
       .toMatchObject({
