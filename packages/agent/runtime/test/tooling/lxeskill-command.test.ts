@@ -177,6 +177,26 @@ test("Mabang TMS exposes one export command with its own deliverable dataset", (
     artifactPaths: [{ field: "artifacts[].path", role: "deliverable" }],
   });
   expect(loadLxeSkillDatasets(path).find(entry => entry.id === "mabang_tms_exports")?.dir).toBe("mabang_tms/exports");
+  const raw = JSON.parse(readFileSync(path, "utf8")).entries.find((entry: any) => entry.name === "mabang_tms_export_run");
+  expect(raw.input_schema.properties.warehouse).toMatchObject({ type: "string", enum: ["PH1", "VN1", "all"] });
+  expect(raw.input_schema.required).toBeUndefined(); // Unscoped external CLI compatibility.
+  expect(raw.deliver_artifacts_on_failure).toBe(true);
+  const known = new Map(entries.map(entry => [entry.command, entry.ownerSkills]));
+  for (const warehouse of ["PH1", "VN1", "all"]) {
+    expect(matchLxeSkillInvocation(`lxeskill mabang-tms products export --warehouse ${warehouse}`, known))
+      .toMatchObject({ commandId: "mabang-tms products export", ownerSkills: ["mabang-tms-products-export"] });
+  }
+});
+
+test.each([
+  ["mabang-tms products export", "PH1", "mabang-tms-products-export"],
+  ["mabang-tms products export", "VN1", "mabang-tms-products-export"],
+  ["yacang reports export --report inventory-sales", "PH8805", "yacang-reports-export"],
+  ["yacang reports export --report inventory-sales", "VN8806", "yacang-reports-export"],
+])("country export command keeps ERP ownership: %s --warehouse %s", (command, warehouse, owner) => {
+  const entries = loadLxeSkillCommandCatalog(join(process.cwd(), "python/lxeskill_cli/lxeskill/catalog.json"));
+  const known = new Map(entries.map(entry => [entry.command, entry.ownerSkills]));
+  expect(matchLxeSkillInvocation(`lxeskill ${command} --warehouse ${warehouse}`, known)?.ownerSkills).toEqual([owner]);
 });
 
 test("Mabang Brazil delivers original batches through a separate ERP skill", () => {

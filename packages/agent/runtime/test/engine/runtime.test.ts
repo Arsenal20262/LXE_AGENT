@@ -3,7 +3,7 @@ import { messageFixture, eventFixture } from "../message-fixtures";
 import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
 import { buildSystemPrompt } from "../../src/engine/system-prompt";
 import { join } from "node:path";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { registerCodingTools } from "../../src/tooling/coding-tools";
 import { ExecShellAdapter } from "../../src/tooling/exec-shell";
@@ -19,6 +19,7 @@ import {
 } from "../../src/providers/provider";
 import { ToolExecutionError, ToolRegistry } from "../../src/tooling/registry";
 import { UserQuestionService, registerUserQuestionTool } from "../../src/tooling/user-questions";
+import { loadLxeSkillCommandCatalog, matchLxeSkillInvocation } from "../../src/tooling/lxeskill-command";
 import { WorkspaceSearchService } from "../../src/tooling/workspace-search";
 import type {
   RuntimeHandle,
@@ -157,6 +158,149 @@ const lxeSkillInvocationError = (details: JsonObject = {
 );
 
 describe("TypeScriptAgentRuntime", () => {
+  // Scripted model/exec fixtures exercise real Runtime and question tool traces;
+  // they do not claim to verify live-model natural-language inference.
+  test.each([
+    ["导出马帮 TMS 菲律宾仓数据", "tms", "PH1", ""],
+    ["导出马帮 TMS 越南仓数据", "tms", "VN1", ""],
+    ["导出雅仓菲律宾仓数据", "yacang", "PH8805", ""],
+    ["导出雅仓越南仓数据", "yacang", "VN8806", ""],
+    ["导出马帮 TMS 全部仓库", "tms", "all", ""],
+    ["导出马帮 TMS 数据：选择 PH1", "tms", "PH1", "warehouse"],
+    ["导出马帮 TMS 数据：选择 VN1", "tms", "VN1", "warehouse"],
+    ["导出马帮 TMS 数据：选择全部", "tms", "all", "warehouse"],
+    ["导出马帮 TMS 数据：跳过", "tms", "", "warehouse"],
+    ["导出马帮 TMS 数据：取消", "tms", "cancel", "warehouse"],
+    ["导出马帮 TMS 数据：无效选择", "tms", "incomplete", "warehouse"],
+    ["导出菲律宾仓数据：选择 TMS", "tms", "PH1", "erp"],
+    ["导出越南仓数据：选择 TMS", "tms", "VN1", "erp"],
+    ["导出菲律宾仓数据：选择雅仓", "yacang", "PH8805", "erp"],
+    ["导出越南仓数据：选择雅仓", "yacang", "VN8806", "erp"],
+    ["导出菲律宾仓数据：跳过来源", "", "", "erp"],
+    ["导出越南仓数据：跳过来源", "", "", "erp"],
+    ["导出越南仓数据：取消来源", "", "cancel", "erp"],
+    ["导出菲律宾仓数据：无效来源", "", "incomplete", "erp"],
+  ] as const)("TMS / Yacang runtime scope trace: %s", async (requestText, erp, scope, questionKind) => {
+    const skill = readFileSync(join(workspace.directory, "skills/mabang-tms-products-export/SKILL.md"), "utf8");
+    const yacang = readFileSync(join(workspace.directory, "skills/yacang-reports-export/SKILL.md"), "utf8");
+    const map = readFileSync(join(workspace.directory, "skills/southeast-asia-replenishment-workflow-map/SKILL.md"), "utf8");
+    const question = JSON.parse((questionKind === "erp" ? map : skill).match(/```json\n([\s\S]*?)\n```/)![1]!);
+    const labels: Record<string, string> = { PH1: "菲律宾 PH1", VN1: "越南 VN1", all: "当前账号全部仓库" };
+    const erpLabels: Record<string, string> = { tms: "马帮 TMS", yacang: "雅仓" };
+    const command = erp === "yacang" ? `lxeskill yacang reports export --report inventory-sales --warehouse ${scope}`
+      : `lxeskill mabang-tms products export --warehouse ${scope}`;
+    const known = new Map(loadLxeSkillCommandCatalog(join(workspace.directory, "python/lxeskill_cli/lxeskill/catalog.json"))
+      .map(entry => [entry.command, entry.ownerSkills]));
+    const trace: string[] = [];
+    const store = new MemoryStore();
+    const tools = new ToolRegistry();
+    const questions = new UserQuestionService(() => {});
+    registerUserQuestionTool(tools, { ask: (input, context) => {
+      trace.push("ask_user_question"); return questions.ask(input, context);
+    } });
+    tools.register({ name: "exec", description: "Offline command trace; never executes a process",
+      input_schema: { type: "object", properties: { command: { type: "string" } }, required: ["command"] },
+      execute: async input => {
+        expect(matchLxeSkillInvocation(String(input.command), known)?.ownerSkills)
+          .toEqual([erp === "yacang" ? "yacang-reports-export" : "mabang-tms-products-export"]);
+        trace.push(String(input.command)); return { content: [{ type: "text", text: "fixture completed" }] };
+      },
+    });
+    let modelCalls = 0;
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy, store, tools, systemPrompt: [skill, yacang, map].join("\n"),
+      logger: createLogger("test.tms.trace", { write: () => {} }),
+      emitter: { emit: async () => {}, typing: async () => {} }, provider: { summarize, turn: async request => {
+        modelCalls++;
+        if (questionKind && modelCalls === 1) return messageFixture({ stopReason: "toolUse", content: [
+          { type: "tool_call", id: "scope-question", name: "ask_user_question", arguments: question },
+        ] });
+        const results = request.messages.flatMap(m => Array.isArray(m.content) ? m.content : [])
+          .filter(b => b.type === "tool_result");
+        if (results.some(b => b.tool_call_id === "scope-exec")) return messageFixture({ content: [{ type: "text", text: "Done" }] });
+        let selected: string = scope;
+        if (questionKind) {
+          const answer = results.find(b => b.tool_call_id === "scope-question");
+          if (!answer) throw new Error("Missing question result");
+          const blocks = Array.isArray(answer.content) ? answer.content : [];
+          const answerText = typeof answer.content === "string" ? answer.content : blocks.map(block =>
+            block && typeof block === "object" && !Array.isArray(block) && block.type === "text"
+              ? String(block.text ?? "") : "").join("\n");
+          const label = JSON.parse(answerText).answers[0].selected[0];
+          selected = questionKind === "erp" ? (label === erpLabels[erp] ? scope : "")
+            : Object.keys(labels).find(key => labels[key] === label) ?? "";
+        }
+        if (!selected) return messageFixture({ content: [{ type: "text", text: "No scope selected; no export" }] });
+        return messageFixture({ stopReason: "toolUse", content: [
+          { type: "tool_call", id: "scope-exec", name: "exec",
+            arguments: { command } },
+        ] });
+      } },
+    });
+    const controller = new AbortController();
+    await runtime.start();
+    const turn = runtime.runTurn(job({ source: { platform: "desktop" }, user_input: requestText.split("：")[0]! }), {
+      ...handle(), signal: controller.signal, get cancelled() { return controller.signal.aborted; },
+    });
+    try {
+      if (questionKind) {
+        for (let n = 0; n < 100 && !questions.snapshot().length; n++) await Bun.sleep(5);
+        expect(questions.snapshot()).toHaveLength(1);
+        expect(trace).toEqual(["ask_user_question"]);
+        expect(modelCalls).toBe(1);
+        const request = { session_id: "s1", request_id: questions.snapshot()[0]!.request_id,
+          answers: [{ id: questionKind, selected: scope ? [questionKind === "erp" ? erpLabels[erp]! : labels[scope]!] : [] }] };
+        if (scope === "cancel") controller.abort();
+        else if (scope === "incomplete") {
+          expect(() => questions.submit({ ...request, answers: [{ id: questionKind, selected: ["unknown"] }] })).toThrow();
+          await Bun.sleep(0);
+          expect(modelCalls).toBe(1);
+          expect(trace).toEqual(["ask_user_question"]);
+          controller.abort();
+        } else questions.submit(request);
+      }
+      expect((await turn).status).toBe(scope === "cancel" || scope === "incomplete" ? "cancelled" : "completed");
+      expect(trace).toEqual([
+        ...(questionKind ? ["ask_user_question"] : []),
+        ...(scope && scope !== "cancel" && scope !== "incomplete" ? [command] : []),
+      ]);
+    } finally { controller.abort(); await turn; await runtime.stop(); }
+  });
+
+  // Known base-branch blocker: Runtime PR #9 (313cd8bf) fixes these regressions,
+  // but that separate change has not been integrated into this TMS worktree.
+  test.each(["question-first", "exec-first"])("review TMS mixed question/exec must not export on skip: %s", async order => {
+    const trace: string[] = [];
+    const questions = new UserQuestionService(() => {});
+    const tools = new ToolRegistry();
+    registerUserQuestionTool(tools, questions);
+    tools.register({ name: "exec", description: "Offline fixture; no process execution", input_schema: { type: "object" },
+      execute: async input => { trace.push(String(input.command)); return { content: [] }; } });
+    let calls = 0;
+    const runtime = new TypeScriptAgentRuntime({ permissionPolicy, store: new MemoryStore(), tools, systemPrompt: "Ask before TMS export",
+      logger: createLogger("test.tms.adversarial", { write: () => {} }),
+      emitter: { emit: async () => {}, typing: async () => {} }, provider: { summarize, turn: async () => {
+        if (++calls > 1) return messageFixture({ content: [{ type: "text", text: "Done" }] });
+        const question = { type: "tool_call" as const, id: "mixed-question", name: "ask_user_question",
+          arguments: { questions: [{ id: "warehouse", question: "Which warehouse?", options: [{ label: "全部" }, { label: "越南" }] }] } };
+        const exec = { type: "tool_call" as const, id: "mixed-exec", name: "exec",
+          arguments: { command: "lxeskill mabang-tms products export --warehouse all" } };
+        return messageFixture({ stopReason: "toolUse", content: order === "question-first" ? [question, exec] : [exec, question] });
+      } },
+    });
+    const controller = new AbortController();
+    await runtime.start();
+    const turn = runtime.runTurn(job({ source: { platform: "desktop" } }), { ...handle(), signal: controller.signal });
+    try {
+      for (let n = 0; n < 100 && !questions.snapshot().length; n++) await Bun.sleep(5);
+      const beforeAnswer = [...trace];
+      questions.submit({ session_id: "s1", request_id: questions.snapshot()[0]!.request_id,
+        answers: [{ id: "warehouse", selected: [] }] });
+      await turn;
+      console.log(JSON.stringify({ reviewCase: order, beforeAnswer, afterSkip: trace }));
+      expect(trace).toEqual([]);
+    } finally { controller.abort(); await turn; await runtime.stop(); }
+  });
+
   test.each(["read-only", "workspace-write"] as const)("describes %s before contacting the model", async mode => {
     const store = new MemoryStore();
     store.permissionMode = mode;
@@ -2043,7 +2187,11 @@ describe("TypeScriptAgentRuntime", () => {
     await runtime.stop();
   });
 
-  test("persists tool state patches and records emitted files as artifacts", async () => {
+  test.each(["report.xlsx", "马帮TMS-商品-菲律宾PH1仓-20261016-120000.xlsx",
+    "马帮TMS-商品-越南VN1仓-20261016-120000.xlsx", "马帮TMS-商品-全部仓库-20261016-120000.xlsx",
+    "马帮TMS-商品-越南VN1仓-部分导出-20261016-120000.xlsx",
+  ])("persists tool state patches and records emitted files as artifacts: %s", async filename => {
+    const filePath = join(tmpdir(), filename);
     const responses: AssistantMessage[] = [
       messageFixture({
         content: [{ type: "tool_call", id: "tool-1", name: "bridge", arguments: {} }],
@@ -2065,7 +2213,7 @@ describe("TypeScriptAgentRuntime", () => {
       execute: async () => ({
         content: [{ type: "text", text: "created" }],
         state_patch: { browser: { session_id: "remote-1" } },
-        files: ["/tmp/report.xlsx"],
+        files: [filePath],
       }),
     });
     const emitted: EmitRequest[] = [];
@@ -2087,14 +2235,14 @@ describe("TypeScriptAgentRuntime", () => {
       session_id: "s1",
       response_route_id: "r1",
       emit_kind: "tool",
-      files: ["/tmp/report.xlsx"],
+      files: [filePath],
     }));
     expect(store.artifacts).toEqual([
       expect.objectContaining({
         turn_id: "j1",
         tool_call_id: "tool-1",
-        path: "/tmp/report.xlsx",
-        name: "report.xlsx",
+        path: filePath,
+        name: filename,
       }),
     ]);
     expect(changes).toContain("artifacts");
