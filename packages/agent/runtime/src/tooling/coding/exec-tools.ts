@@ -143,7 +143,7 @@ export interface ExecToolDependencies {
   maxOutputBytes: number;
   options: Pick<
     CodingToolOptions,
-    "businessCommands" | "businessCommandCatalog" | "execEnv" | "lxeSkillStatus" | "approvals"
+    "businessCommands" | "businessCommandCatalog" | "execEnv" | "approvals"
   >;
 }
 
@@ -225,21 +225,6 @@ export function createExecTools(dependencies: ExecToolDependencies): ToolDefinit
         const invocationError = lxeSkillInvocationError(rawCommand, recoveryCommands, recoveryCatalog);
         if (invocationError) throw invocationError;
 
-        if (/^lxeskill(?:\.cmd)?(?:\s|$)/iu.test(rawCommand.trim())) {
-          const status = options.lxeSkillStatus?.();
-          if (status && !status.available) {
-            throw new ToolExecutionError(
-              "environment_unavailable",
-              status.message || "LXE Skill CLI is unavailable",
-              {
-                type: "lxeskill_runtime_unavailable",
-                retryable: false,
-                next_action: "report_environment_failure_without_retrying_shell_variations",
-                operator_recovery: status.recovery,
-              },
-            );
-          }
-        }
         const yieldMs = Number(input["yield-time-ms"] ?? DEFAULT_EXEC_YIELD_MS);
         if (!Number.isFinite(yieldMs) || yieldMs < MIN_EXEC_YIELD_MS || yieldMs > MAX_EXEC_YIELD_MS) {
           throw new Error(`yield-time-ms must be between ${MIN_EXEC_YIELD_MS} and ${MAX_EXEC_YIELD_MS} milliseconds`);

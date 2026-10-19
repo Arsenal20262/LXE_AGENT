@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { repositoryRoot } from "@lxe/core";
-import { ExecShellAdapter, OneShotCliRunner, TurnUsageSyncService } from "@lxe/runtime";
+import { ExecShellAdapter, TurnUsageSyncService } from "@lxe/runtime";
 import { createAgentRuntimeHost } from "../src/runtime-host";
 
 for (const cliState of ["missing", "failed", "ready"] as const) {
@@ -18,33 +18,31 @@ for (const cliState of ["missing", "failed", "ready"] as const) {
       await originalStart.call(this);
     });
     const stop = spyOn(TurnUsageSyncService.prototype, "stop");
-    const argv = spyOn(ExecShellAdapter.prototype, "lxeSkillArgv")
-      .mockReturnValue(cliState === "missing" ? undefined : ["fixture-python", "-m", "lxeskill"]);
-    const commands: string[][] = [];
-    const execute = spyOn(OneShotCliRunner.prototype, "execute").mockImplementation(async (args) => {
-      commands.push(args); order.push("probe");
-      if (cliState === "failed") throw new Error("fixture CLI unavailable");
-      return { protocol_version: "1", type: "result", command: "list", ok: true, data: {}, files: [] };
-    });
+    const argv = spyOn(ExecShellAdapter.prototype, "lxeSkillArgv");
+    const python = cliState === "missing" ? join(root, "missing-python")
+      : cliState === "failed" ? process.execPath
+      : join(repositoryRoot(import.meta.dir), ".venv", process.platform === "win32" ? "Scripts/python.exe" : "bin/python");
     const host = createAgentRuntimeHost({
       dataRoot: root, legacyWorkspace: { directory: root, worktree: root },
       agentSoulPath: soul, skillsRoot: skills, userSkillsRoot: join(root, "user"),
       llmConfigRoot: join(repositoryRoot(import.meta.dir), "config", "llm"),
       lxeskillCatalogPath: join(root, "missing-catalog.json"),
-      environment: { LOCAL_LOGS_ENABLED: "0", LXE_DATA_SERVER_ENABLED: "1", LXE_DATA_SERVER_URL: "https://fixture.invalid" },
+      environment: { LOCAL_LOGS_ENABLED: "0", LXE_MANAGED_PYTHON: python, LXE_DATA_SERVER_ENABLED: "1", LXE_DATA_SERVER_URL: "https://fixture.invalid" },
       emitter: { emit: async () => {}, typing: async () => {} },
     });
     try {
       await host.start();
       expect(host.health().ready).toBe(true);
       expect(start).toHaveBeenCalledTimes(1);
-      expect(order).toEqual(cliState === "missing" ? ["usage"] : ["usage", "probe"]);
-      expect(commands).toEqual(cliState === "missing" ? [] : [["list"]]);
+      expect(order).toEqual(["usage"]);
+      expect(argv).not.toHaveBeenCalled();
+      expect(host.health()).not.toHaveProperty("lxeskill_available");
+      expect(host.health()).not.toHaveProperty("lxeskill_message");
       await host.stop();
       expect(stop).toHaveBeenCalledTimes(1);
     } finally {
       await host.stop();
-      start.mockRestore(); stop.mockRestore(); argv.mockRestore(); execute.mockRestore();
+      start.mockRestore(); stop.mockRestore(); argv.mockRestore();
       rmSync(root, { recursive: true, force: true });
     }
   });

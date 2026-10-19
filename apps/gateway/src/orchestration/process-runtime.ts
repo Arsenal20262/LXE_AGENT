@@ -44,8 +44,6 @@ export interface AgentProcessStatus {
   state: ProcessState;
   pid: number;
   message: string;
-  lxeskillAvailable?: boolean;
-  lxeskillMessage?: string;
   logging?: DesktopLoggingSinkStatus;
 }
 
@@ -162,17 +160,11 @@ export class ProcessAgentRuntime implements DirectAgentRuntime {
   }
 
   status(): AgentProcessStatus {
-    const lxeSkillAvailable = this.remoteHealthSnapshot.lxeskill_available;
-    const lxeSkillMessage = String(this.remoteHealthSnapshot.lxeskill_message ?? "").trim();
     const logging = loggingStatus(this.remoteHealthSnapshot.logging);
     return {
       state: this.state,
       pid: this.child?.pid ?? this.treeTermination?.pid ?? 0,
       message: this.statusMessage,
-      ...(typeof lxeSkillAvailable === "boolean"
-        ? { lxeskillAvailable: lxeSkillAvailable }
-        : {}),
-      ...(lxeSkillMessage ? { lxeskillMessage: lxeSkillMessage } : {}),
       ...(logging ? { logging } : {}),
     };
   }

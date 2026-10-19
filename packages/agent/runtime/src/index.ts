@@ -8,8 +8,6 @@ export { buildExecOutputStep, sanitizeToolDisplayText } from "./tooling/tool-dis
 export * from "./tooling/exec-shell";
 export * from "./tooling/mcp";
 export * from "./operations/turn-usage-sync";
-export * from "./operations/lxeskill-runtime";
-export * from "./tooling/one-shot-cli";
 export * from "./tooling/lxeskill-command";
 export * from "./providers/model-image";
 export * from "./providers/config-paths";

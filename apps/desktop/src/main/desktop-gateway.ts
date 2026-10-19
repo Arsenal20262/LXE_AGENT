@@ -4,7 +4,6 @@ import type { DesktopFileCall, DesktopFileOperations } from "@lxe/desktop-protoc
 import { imageBytesThumbnail } from "./attachment-thumbnail";
 import { UpdateBusyError } from "./update-service";
 import { prepareConversationAttachments } from "./conversation-submission";
-import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { shell } from "electron";
 import { DashboardRpcError } from "@lxe/desktop-protocol";
@@ -45,7 +44,7 @@ import {
   dashboardInvalidationForAgentEvent,
 } from "./dashboard-invalidation";
 import { publicDashboardChannelHealth } from "./dashboard-channel-health";
-import { desktopLxeSkillState } from "./lxeskill-health";
+import { DesktopLxeSkillHealth } from "./lxeskill-health";
 import {
   previewConversationAttachment,
   previewConversationImageView,
@@ -137,6 +136,7 @@ export class DesktopGateway {
   private gatewayState: DesktopHealth["gateway"] = "stopped";
   private dashboardObservedRuntimeReady = false;
   private lastError = "";
+  private lxeskillHealth: DesktopLxeSkillHealth | undefined;
 
   private files: FilePreviewService | undefined;
   constructor(private readonly options: DesktopGatewayOptions) {}
@@ -231,6 +231,15 @@ export class DesktopGateway {
         machineIdentityPath: join(this.options.paths.dataRoot, "db", "machine_identity.json"),
       }),
     };
+    void this.lxeskillHealth?.stop();
+    this.lxeskillHealth = new DesktopLxeSkillHealth({
+      pythonPath: this.options.paths.managedPythonPath,
+      dataRoot: this.options.paths.dataRoot,
+      environment,
+      recovery: this.options.packaged ? "Reinstall or rebuild LXE Agent"
+        : `Run uv sync --frozen --all-groups --python 3.12.10 in ${this.options.paths.sourceRoot}`,
+      onChanged: () => this.publishHealth(),
+    });
     const feishu = loadFeishuConfig(environment);
     const allowedSkillTypes = this.options.allowedSkillTypes();
     let composition: DirectGatewayComposition | undefined;
@@ -328,6 +337,7 @@ export class DesktopGateway {
     this.store = store;
     this.composition = composition;
     try {
+      void this.lxeskillHealth.check();
       await composition.start();
       this.gatewayState = "ready";
       this.lastError = "";
@@ -362,6 +372,7 @@ export class DesktopGateway {
   }
 
   async stop(strict = false): Promise<void> {
+    await this.lxeskillHealth?.stop();
     await this.files?.dispose(); this.files = undefined;
     const composition = this.composition;
     if (composition) await composition.stop();
@@ -398,6 +409,8 @@ export class DesktopGateway {
       return this.health();
     }
     this.gatewayState = "starting";
+    await this.lxeskillHealth?.stop();
+    void this.lxeskillHealth?.check();
     this.publishHealth();
     try {
       await this.runtime.restart();
@@ -590,13 +603,12 @@ export class DesktopGateway {
   health(): DesktopHealth {
     const setup = this.options.config.state();
     const agentStatus = this.runtime?.status();
-    const runtimeFilesReady = existsSync(this.options.paths.managedPythonPath)
-      && existsSync(this.options.paths.lxeskillModulePath);
+    const lxeskill = this.lxeskillHealth?.snapshot();
     return {
       gateway: this.gatewayState,
       agent_cli: agentStatus?.state ?? "stopped",
-      lxeskill: runtimeFilesReady ? desktopLxeSkillState(agentStatus) : "error",
-      message: this.lastError || agentStatus?.lxeskillMessage || agentStatus?.message || "",
+      lxeskill: lxeskill?.state ?? "stopped",
+      message: this.lastError || lxeskill?.message || agentStatus?.message || "",
       version: this.options.version,
       resource_root: this.options.paths.resourceRoot,
       data_root: this.options.paths.dataRoot,

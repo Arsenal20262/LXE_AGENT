@@ -9,6 +9,7 @@ import { deflateSync } from "node:zlib";
 import type { JsonObject } from "@lxe/protocol";
 import { repositoryRoot } from "@lxe/core";
 import { registerCodingTools } from "../../src/tooling/coding-tools";
+import { ExecShellAdapter } from "../../src/tooling/exec-shell";
 import { ToolExecutionError, ToolRegistry } from "../../src/tooling/registry";
 import { registerToolSearch } from "../../src/tooling/tool-search";
 import type { WorkspaceSearchService } from "../../src/tooling/workspace-search";
@@ -386,37 +387,31 @@ describe("native coding tools", () => {
     }
   });
 
-  test("rejects unavailable lxeskill commands before spawning without blocking other exec work", async () => {
-    const root = mkdtempSync(join(tmpdir(), "lxe-coding-lxeskill-unavailable-"));
+  test("executes lxeskill with current environment and can retry after a failed command", async () => {
+    const root = mkdtempSync(join(tmpdir(), "lxe-coding-lxeskill-retry-"));
     roots.push(root);
     const registry = new ToolRegistry();
-    const processes = registerCodingTools(registry, {
-      lxeSkillStatus: () => ({
-        state: "unavailable",
-        available: false,
-        message: "LXE Skill CLI is unavailable: No module named lxeskill",
-        recovery: "run uv sync",
-      }),
-    });
-
-    const ordinary = String((await registry.execute("exec", {
-      command: "echo ordinary",
-    }, context(root))).content[0]?.text);
-    expect(ordinary).toContain("status: completed");
-    expect(ordinary).toContain("ordinary");
-
-    let failure: ToolExecutionError | undefined;
-    try {
-      await registry.execute("exec", { command: "lxeskill list" }, context(root));
-    } catch (cause) {
-      if (cause instanceof ToolExecutionError) failure = cause;
-      else throw cause;
+    let command = evalCommand("console.error('fixture CLI failure');process.exit(7)");
+    class FixtureShell extends ExecShellAdapter {
+      override normalizeCommand(cwd: string, input: string): string {
+        return input === "lxeskill list" ? command : super.normalizeCommand(cwd, input);
+      }
     }
-    expect(failure?.code).toBe("environment_unavailable");
-    expect(failure?.modelContent()).toContain('"retryable": false');
-    expect(failure?.modelContent()).toContain("report_environment_failure_without_retrying_shell_variations");
-    expect(processes.snapshots()).toHaveLength(1);
-    await processes.stop();
+    const processes = registerCodingTools(registry, {
+      execShell: new FixtureShell(),
+    });
+    try {
+      const failed = String((await registry.execute("exec", { command: "lxeskill list" }, context(root))).content[0]?.text);
+      expect(failed).toContain("fixture CLI failure");
+      expect(failed).toContain("exit_code: 7");
+      command = evalCommand("console.log('fixture CLI repaired')");
+      const repaired = String((await registry.execute("exec", { command: "lxeskill list" }, context(root))).content[0]?.text);
+      expect(repaired).toContain("status: completed");
+      expect(repaired).toContain("fixture CLI repaired");
+      expect(processes.snapshots()).toHaveLength(2);
+    } finally {
+      await processes.stop();
+    }
   });
 
   test("exec yields to a session-owned wait and emits one UI-only completion snapshot", async () => {

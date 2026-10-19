@@ -2,7 +2,6 @@ import type { ExecutionPaths } from "../../permissions/execution-paths";
 import type { PermissionApprovalService } from "../../permissions/approvals";
 import type { JsonObject } from "@lxe/protocol";
 import type { ExecShellAdapter } from "../exec-shell";
-import type { LxeSkillRuntimeStatus } from "../../operations/lxeskill-runtime";
 
 export interface LxeSkillRecoveryCommand {
   command: string;
@@ -31,5 +30,4 @@ export interface CodingToolOptions {
   businessCommandCatalog?: readonly LxeSkillRecoveryCommand[];
   execShell?: ExecShellAdapter;
   execEnv?: (context: { skillNames: readonly string[] }) => Record<string, string>;
-  lxeSkillStatus?: () => LxeSkillRuntimeStatus;
 }

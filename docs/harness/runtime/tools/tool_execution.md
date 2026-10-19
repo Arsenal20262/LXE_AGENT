@@ -47,6 +47,7 @@ Tool call 使用 server-specific timeout 和 turn abort signal。调用失败更
 - Desktop 下发服务器验证的业务权限决定允许的 skill types；`AgentRuntimeHost` 生成实际 skill scope，Runtime exec adapter 注入 `LXESKILL_SKILL_SCOPE`。CLI 负责命令授权、参数校验和业务 dispatch。
 - Desktop 优先使用 `LXE_MANAGED_PYTHON` 指向的应用私有 Python；源码开发才回退到项目 `.venv`。cwd、yield observation、output limit、Session ownership 和 Windows process tree 由 native process manager 处理。
 - CLI 保留版本化 JSONL/result/artifact 合同，Runtime 将 stdout/stderr 作为受控 process output 返回。
+- agentcli 不执行 lxeskill 启动探测，也不缓存可用性来拦截调用。每次 `exec` 使用当时的执行环境并返回实际结果；桌面的 CLI 状态检查由 Electron 独立负责。
 
 Skill 只能调用自己声明且由 catalog 归属的命令；生成文件和其它可读普通文件都可直接通过 `send_files` 发送。
 

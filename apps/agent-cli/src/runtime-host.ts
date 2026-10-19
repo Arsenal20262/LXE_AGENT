@@ -1,7 +1,7 @@
 import { SessionTitleService } from "@lxe/runtime";
 import { withManagedModels, managedCredentialFor, managedTargetKey, singleManagedState, loadLlmProviderCatalog, type ManagedLlmState } from "@lxe/core";
 import { existsSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import type {
   EmitRequest,
   JsonObject,
@@ -28,11 +28,9 @@ import {
   loadLxeSkillCommandCatalog,
   loadLxeSkillDatasets,
   loadMcpConfig,
-  LxeSkillRuntimeService,
   TurnUsageSyncService,
   McpManager,
   OfficialMcpConnector,
-  OneShotCliRunner,
   PermissionPolicyService,
   PermissionApprovalService,
   ExecutionPaths,
@@ -187,38 +185,10 @@ export function createAgentRuntimeHost(
   ) : "";
   const managedPython = String(environment.LXE_MANAGED_PYTHON ?? "").trim();
   if (!managedPython && sourcePython) environment.LXE_MANAGED_PYTHON = sourcePython;
-  const lxeSkillArgv = execShell.lxeSkillArgv(options.dataRoot);
-  const selectedPython = String(lxeSkillArgv?.[0] ?? (managedPython || sourcePython)).trim();
-  const sourceRuntime = Boolean(sourcePython) && !managedPython && resolve(selectedPython) === resolve(sourcePython);
-  const recovery = sourceRuntime
-    ? `Run uv sync --frozen --all-groups --python 3.12.10 in ${sourceRoot}`
-    : "Reinstall or rebuild LXE Agent";
-  const {
-    LXE_AGENT_SOUL_PATH: _agentSoulPath,
-    LXE_USER_SKILLS_ROOT: _userSkillsRoot,
-    LXE_AGENT_SQLITE_DB_PATH: _agentDatabasePath,
-    ...lxeSkillEnvironment
-  } = environment;
-  const lxeSkillRunner = lxeSkillArgv ? new OneShotCliRunner({
-    command: lxeSkillArgv,
-    cwd: options.dataRoot,
-    timeoutMs: 3 * 60_000,
-    maxOutputBytes: 10 * 1024 * 1024,
-    env: lxeSkillEnvironment,
-    onStderr: (line) => logger.info("lxeskill", { line }),
-  }) : undefined;
   const turnUsageSync = new TurnUsageSyncService({
     environment,
     store,
     gatewayId: feishu.appId || crypto.randomUUID().replaceAll("-", ""),
-  });
-  const lxeSkillRuntime = new LxeSkillRuntimeService({
-    ...(lxeSkillRunner ? { runner: lxeSkillRunner } : {}),
-    recovery,
-    unavailableMessage: selectedPython
-      ? `LXE Skill CLI Python is unavailable: ${selectedPython}`
-      : "LXE Skill CLI Python is not configured",
-    logger,
   });
   const processes = registerCodingTools(tools, {
     executionPaths, approvals,
@@ -228,14 +198,13 @@ export function createAgentRuntimeHost(
     businessCommands,
     businessCommandCatalog: cliCommands,
     execShell,
-    lxeSkillStatus: () => lxeSkillRuntime.snapshot(),
     execEnv: ({ skillNames }) => ({ LXESKILL_SKILL_SCOPE: skillNames.join(",") }),
     ...(options.onBackgroundTaskChanged ? { onExecUpdate: options.onBackgroundTaskChanged } : {}),
   });
   const runtimeServices: Array<{
     start(registry: ToolRegistry): Promise<void>;
     stop(): Promise<void>;
-  }> = [processes, turnUsageSync, lxeSkillRuntime, {
+  }> = [processes, turnUsageSync, {
     async start() {
       await skillCatalog.refreshForUse();
     },
@@ -394,14 +363,11 @@ export function createAgentRuntimeHost(
       return { cancelActiveTurns: false };
     },
     health: () => {
-      const lxeSkillStatus = lxeSkillRuntime.snapshot();
       return {
         ready: started,
         database_path: databasePath,
         provider: providerManager.acquire().descriptor.name,
         model: providerManager.acquire().descriptor.model,
-        lxeskill_available: lxeSkillStatus.available,
-        lxeskill_message: lxeSkillStatus.message,
         skill_diagnostics: skillCatalog.diagnostics(),
         workspace_instances: workspaceInstances.diagnostics(),
       };
