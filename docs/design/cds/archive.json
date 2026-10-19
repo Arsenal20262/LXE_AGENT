@@ -9,7 +9,8 @@
   "separateArtifactTemplateBinaryVersion": "2.1.299",
   "implementationCommits": {
     "settings": "d40cc1b8",
-    "capabilitiesAndSharedTheme": "7e2bef2d"
+    "capabilitiesAndSharedTheme": "7e2bef2d",
+    "home": "cfd0172d"
   },
   "snapshotMappings": [
     {
@@ -54,6 +55,12 @@
       "document": "examples/workbench-details.md",
       "screenshots": 16,
       "scope": "LXE workbench detail adaptation; original sources and historical CSS snapshots unchanged"
+    },
+    {
+      "date": "2026-10-19",
+      "document": "examples/home.md",
+      "screenshots": 8,
+      "scope": "LXE home overview adaptation; original sources and historical CSS snapshots unchanged"
     }
   ]
 }

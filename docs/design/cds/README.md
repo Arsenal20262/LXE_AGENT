@@ -1,6 +1,6 @@
 # CDS 设计资料库
 
-这里收藏 Claude Design System（CDS）的已取得资料，以及 LXE Agent 设置页和能力页的落地案例。重点保存的是**颜色的用途、搭配和交互状态**，而不只是色号。
+这里收藏 Claude Design System（CDS）的已取得资料，以及 LXE Agent 设置、能力、首页、活动和工作台的落地案例。重点保存的是**颜色的用途、搭配和交互状态**，而不只是色号。
 
 这是一份研究与适配归档，不是 Anthropic 官方发布的完整设计规范，也不是可直接安装的 Skill。
 
@@ -12,7 +12,7 @@
 | 查看 LXE 具体用了哪些规则、改了哪些数值 | [LXE 适配说明](lxe-adaptation.md) |
 | 查原话、来源版本、证据边界和 Skill 线索 | [来源与证据](evidence.md) |
 | 复制或核对当前采用的色彩变量 | [变量说明与完整表](tokens/README.md)、[CSS 快照](tokens/lxe-theme.snapshot.css) |
-| 看设置页、技能、工具、MCP、模型和详情页 | [案例索引](examples/README.md) |
+| 看首页、设置、能力、活动和工作台的实现案例 | [案例索引](examples/README.md) |
 | 阅读完整 CDS 原文 | [CDS tokens — vanilla](sources/cds-tokens-vanilla.original.md) |
 
 ## 四种标记
@@ -37,7 +37,7 @@ cds/
 ├── sources/                     原始提取包、派生色表、桌面实现资源
 │   └── ion-settings/             设置界面资源、出处与可定位片段
 ├── tokens/                      LXE 变量快照及完整亮暗变量表
-├── examples/                    22 张案例截图与两份页面样式快照
+├── examples/                    历史样式快照、页面案例和验证截图
 └── history/                     早期中文 Word 整理稿
 ```
 
