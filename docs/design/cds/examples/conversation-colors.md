@@ -47,3 +47,13 @@
 通过临时移除／重新添加局部主题类，对比亮暗主题及窄窗口下共 40 组元素测量：坐标、宽高、padding、字体、边框宽度和圆角均一致。[实测颜色及测量数量](conversation/geometry-and-colors.json)保留供核对。它只证明这些采样元素的布局未变，不代表穷举了全部内容与窗口尺寸。
 
 验证还包括 dashboard 类型检查，以及既有 composer、references、conversation-content、permissions 四组 Electron 行为测试。文件截图使用测试文件与文件夹定位按钮，未单独保存每一种系统默认应用菜单的截图。
+
+## 补充：跳到最新按钮
+
+同日将浮动的“跳到最新”按钮接入同一主题。这是 LXE 对语义变量与克制用色规则的适配，没有发现 CDS 对此按钮的专门规定。
+
+- 底色使用不透明的 popover surface（亮色 `#ffffff`，暗色 `#232322`），避免下方正文透出。
+- 主文字保持清晰；边框默认使用 10% 墨色，悬停增加到 20%，底色混入少量墨色。
+- 键盘焦点使用蓝色轮廓。位置、尺寸、间距、字体、圆角与跳转逻辑保持原样。
+
+保存了[亮色](conversation-jump/jump-light.png)、[暗色](conversation-jump/jump-dark.png)、[暗色悬停](conversation-jump/jump-hover-dark.png)和[键盘焦点](conversation-jump/jump-focus-dark.png)截图。四种状态的采样布局测量均与移除局部主题时一致，[测量结果](conversation-jump/geometry-and-colors.json)同时记录了实测颜色与跳转结果。类型检查和既有 conversation-window 行为测试通过；测试所用预览服务与 Electron 已退出。

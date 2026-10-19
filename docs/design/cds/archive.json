@@ -85,6 +85,12 @@
       "document": "examples/conversation-sidebar.md",
       "screenshots": 6,
       "scope": "LXE conversation sidebar color adaptation; geometry preserved across light, dark, search, peek and narrow states; temporary preview processes closed after verification"
+    },
+    {
+      "date": "2026-10-19",
+      "document": "examples/conversation-colors.md",
+      "screenshots": 4,
+      "scope": "LXE jump-to-latest button color adaptation; opaque neutral surface, subtle border and blue keyboard focus; geometry and scrolling behavior preserved"
     }
   ]
 }

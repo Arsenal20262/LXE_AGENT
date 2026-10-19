@@ -30,6 +30,21 @@
 .conversation-chrome-theme .input-attachment-chip { background: var(--cds-alpha-1); }
 .conversation-drop-hint.conversation-chrome-theme { color: var(--accent); }
 
+/* The floating jump control stays opaque over transcript text. */
+.conversation-jump-latest.conversation-chrome-theme {
+  background: var(--cds-surface-popover);
+  border-color: var(--cds-alpha-2);
+  color: var(--cds-ink);
+}
+.conversation-jump-latest.conversation-chrome-theme:hover {
+  background: color-mix(in srgb, var(--cds-surface-popover) 95%, var(--cds-ink));
+  border-color: var(--cds-alpha-3);
+}
+.conversation-jump-latest.conversation-chrome-theme:focus-visible {
+  outline: 2px solid var(--cds-accent);
+  outline-offset: 2px;
+}
+
 /* Extra specificity wins over the legacy light-theme card overrides, without
    changing the transcript palette or the file preview sidebar. */
 :root .conversation-feed :is(.turn-file-grid, .sent-file-list) :is(.turn-file-item, .sent-file-with-actions).conversation-chrome-theme {
