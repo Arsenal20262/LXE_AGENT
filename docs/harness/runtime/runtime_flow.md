@@ -11,7 +11,7 @@ Feishu event
   -> FeishuAdapter / InboundEvent
   -> SessionRouter / permission + binding + route
   -> SessionScheduler / RunHandle
-  -> AgentRuntimeHost / NDJSON host boundary
+  -> AgentRuntimeHost / JSON-RPC 2.0 over stdin/stdout (JSONL framing)
   -> TypeScriptAgentRuntime.runTurn()
   -> ContextPipeline.prepare()
   -> RuntimeProvider.turn()
@@ -21,7 +21,7 @@ Feishu event
   -> Feishu CardKit / message / file
 ```
 
-Gateway 位于 Electron Main，Runtime 位于 Electron 管理的私有 `agent-cli` 子进程；两者通过版本化 agent protocol 通信。平台 callback、session 排队和 turn 执行仍以接口隔离职责。桌面任务从 preload IPC 进入 Main 的会话控制面，再经过同一 Scheduler 和 Runtime；实时展示回到 Renderer，具体入口见 [Gateway](../gateway/README.md)。
+Gateway 位于 Electron Main，Runtime 位于 Electron 管理的私有 `agent-cli` 子进程；两者通过 JSON-RPC 2.0 通信，使用 stdin/stdout 传输和 JSONL（NDJSON）分帧，业务协议版本在 `initialize` 中校验。平台 callback、session 排队和 turn 执行仍以接口隔离职责。桌面任务从 preload IPC 进入 Main 的会话控制面，再经过同一 Scheduler 和 Runtime；实时展示回到 Renderer，具体入口见 [Gateway](../gateway/README.md)。
 
 ## 边界地图
 

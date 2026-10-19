@@ -6,7 +6,7 @@
 
 1. `apps/desktop/src/main.ts` 是 macOS/Windows 唯一产品入口。
 2. Electron Main 直接装配 Gateway 的 channel、router、scheduler 和 lifecycle。
-3. Gateway 通过版本化 JSON-RPC / NDJSON 管理私有 `agent-cli serve` 子进程；同一程序的独立终端入口见 [Agent CLI exec](harness/runtime/agent_cli_exec.md)。
+3. Gateway 通过 JSON-RPC 2.0 管理私有 `agent-cli serve` 子进程，使用 stdin/stdout 传输和 JSONL（NDJSON）分帧，业务协议版本在 `initialize` 中校验；同一程序的独立终端入口见 [Agent CLI exec](harness/runtime/agent_cli_exec.md)。
 4. 同一 session 串行执行，不同 session 没有全局并发数量门槛；Runtime 必须 ready 才能调度。
 5. turn 取消会中止模型请求、MCP 调用、问题等待和当前 exec/wait 观察。已创建的 exec 属于 Session，继续运行；显式 terminate、删除 Session 或关闭 Runtime 才终止进程树。
 6. 模型通过 native exec 启动独立 `lxeskill ...` 命令；桌面媒体工作台则由 Main 直接启动一次性 Python CLI。
