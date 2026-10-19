@@ -67,7 +67,7 @@
   --message-tool-text: #826238;
   --message-system-soft: #f7f6f4;
   --message-system-text: #6c635a;
-  --assistant-content-width: 760px;
+  --assistant-content-width: 722px;
   --danger: #a34d3d;
   --danger-soft: #fff5f2;
   --danger-border: #ecc7bf;
@@ -8859,9 +8859,8 @@ pre {
   background-color: rgba(180, 106, 77, 0.72);
 }
 
-/* One content column for everything. The feed used to be 820px while assistant
-   content capped at --assistant-content-width (760px), so user bubbles, tool
-   traces and replies each ended on a different right edge. */
+/* One centered column for user bubbles, tool traces, replies and the composer.
+   The shared cap leaves room on both sides without shrinking narrow windows. */
 .conversation-feed {
   display: flex;
   width: min(var(--assistant-content-width), calc(100% - 48px));
