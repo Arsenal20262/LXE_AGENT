@@ -1,4 +1,5 @@
 import { projectSessionTitle } from "../../api/session-titles";
+import "./conversation-theme.css";
 import { Pencil } from "lucide-react";
 import { ApprovalGate, PermissionPicker } from "./permissions";
 import { ReferenceComposer } from "./ReferenceComposer";
@@ -583,7 +584,7 @@ function TurnFileList({
           const isOpening = opening.has(file.artifact_id);
           const error = errors.get(file.artifact_id) ?? "";
           return (
-            <div className={error ? "turn-file-item has-error" : "turn-file-item"} key={file.artifact_id}>
+            <div className={`turn-file-item conversation-chrome-theme${error ? " has-error" : ""}`} key={file.artifact_id}>
               <button
                 aria-busy={isOpening}
                 aria-label={t.conversation.openFile(file.name)}
@@ -1279,8 +1280,8 @@ export function ConversationComposer({
   return (
     <div className={`conversation-composer ${dragActive ? "drag-active" : ""}`}>
       <ApprovalGate key={conversationKey} requests={approvals} ready={runtimeReady} onChanged={onApprovalChanged}>
-      {dragActive ? <div className="conversation-drop-hint">{t.conversation.dropFiles}</div> : null}
-      <div className="conversation-compose-box">
+      {dragActive ? <div className="conversation-drop-hint conversation-chrome-theme">{t.conversation.dropFiles}</div> : null}
+      <div className="conversation-compose-box conversation-chrome-theme">
         <UserQuestionGate request={runtimeReady ? question : undefined} conversationKey={runtimeReady ? conversationKey : "offline"} onAnswered={onQuestionAnswered}>
         {attachments.length ? (
           <InputAttachmentList draft attachments={attachments} onRemove={sending ? undefined : removeAttachment} />

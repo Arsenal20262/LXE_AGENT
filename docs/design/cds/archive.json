@@ -67,6 +67,12 @@
       "document": "examples/home.md",
       "screenshots": 2,
       "scope": "Restore the original compact home card layout at user request while retaining CDS colors and restrained elevation; earlier screenshots retained"
+    },
+    {
+      "date": "2026-10-19",
+      "document": "examples/conversation-colors.md",
+      "screenshots": 13,
+      "scope": "LXE conversation composer and file color adaptation, preserving layout; original CDS rules and LXE choices distinguished; 40 geometry comparisons and light/dark state checks"
     }
   ]
 }
