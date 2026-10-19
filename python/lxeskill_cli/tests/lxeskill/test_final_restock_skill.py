@@ -76,6 +76,18 @@ def test_store_only_acquisition_reuses_exposed_existing_commands(name, owner, fi
     assert fields <= set(entry["input_schema"]["properties"])
 
 
+def test_shenzhen_source_is_optional_for_legacy_and_explicit_in_final_skill() -> None:
+    entry = load_catalog()["mabang_export_store_msku_actual_inventory"]
+    schema = entry["input_schema"]
+    assert schema["required"] == ["store_name"]
+    assert schema["properties"]["msku_source_xlsx_path"]["type"] == "string"
+    assert schema["properties"]["msku_source_xlsx_path"]["minLength"] == 1
+    skill = (Path(__file__).resolve().parents[4] / "skills" / SKILL / "SKILL.md").read_text(encoding="utf-8")
+    assert '--msku-source-xlsx-path "<步骤2返回的xlsx_path>"' in skill
+    assert "不回退历史文件或省略参数重试" in skill
+    assert "库存导出自身会查找该店铺本地最新源表" not in skill
+
+
 def test_final_restock_opts_in_to_native_msku_local_inventory() -> None:
     entry = load_catalog()["mabang_download_store_msku_excel"]
     assert entry["input_schema"]["properties"]["include_local_inventory"]["type"] == "boolean"

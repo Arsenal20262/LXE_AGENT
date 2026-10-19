@@ -300,6 +300,18 @@ def _resolve_output_dir(output_dir: str | Path | None = None) -> Path:
     return path
 
 
+def _parse_source_file(path: Path) -> SourceMskuFile | None:
+    match = SOURCE_FILE_RE.match(path.name)
+    if not match:
+        return None
+    source_data_time = match.group("source_time")
+    try:
+        source_datetime = datetime.strptime(source_data_time, "%Y%m%d%H%M")
+    except ValueError:
+        return None
+    return SourceMskuFile(path=path, source_data_time=source_data_time, source_datetime=source_datetime)
+
+
 def find_latest_store_msku_file(store_name: str, *, input_dir: str | Path | None = None) -> SourceMskuFile:
     clean_store_name = normalize_store_name(store_name)
     directory = _resolve_store_msku_dir(input_dir)
@@ -309,15 +321,9 @@ def find_latest_store_msku_file(store_name: str, *, input_dir: str | Path | None
 
     candidates: list[SourceMskuFile] = []
     for path in directory.glob(f"*-{safe_store_name}_*.xlsx"):
-        match = SOURCE_FILE_RE.match(path.name)
-        if not match:
-            continue
-        source_data_time = match.group("source_time")
-        try:
-            source_datetime = datetime.strptime(source_data_time, "%Y%m%d%H%M")
-        except ValueError:
-            continue
-        candidates.append(SourceMskuFile(path=path, source_data_time=source_data_time, source_datetime=source_datetime))
+        source = _parse_source_file(path)
+        if source is not None:
+            candidates.append(source)
     if not candidates:
         raise StoreMskuActualInventoryError(f"未找到本地店铺MSKU数据文件: {clean_store_name}")
     return max(candidates, key=lambda item: (item.source_datetime, item.path.name))
@@ -935,11 +941,20 @@ def write_actual_inventory_xlsx(rows: list[ActualInventoryRow], output_path: str
 async def _export_store_msku_actual_inventory_once(
     store_name: str,
     *,
+    msku_source_xlsx_path: str | Path | None = None,
     input_dir: str | Path | None = None,
     output_dir: str | Path | None = None,
 ) -> ActualInventoryResult:
     clean_store_name = normalize_store_name(store_name)
-    source = find_latest_store_msku_file(clean_store_name, input_dir=input_dir)
+    if msku_source_xlsx_path is None:
+        source = find_latest_store_msku_file(clean_store_name, input_dir=input_dir)
+    else:
+        source_path = Path(msku_source_xlsx_path)
+        if not source_path.is_file():
+            raise FileNotFoundError(f"店铺MSKU数据Excel不存在: {source_path}")
+        source = _parse_source_file(source_path)
+        if source is None:
+            raise StoreMskuActualInventoryError(f"MSKU 源文件名无法识别源数据时间: {source_path.name}")
     verified_source = load_verified_source(source.path, store_name=clean_store_name)
     msku_rows = load_store_msku_rows(source.path, records=verified_source.records)
     unverified = unverified_reasons(verified_source.metadata)
@@ -996,11 +1011,12 @@ async def _export_store_msku_actual_inventory_once(
 async def export_store_msku_actual_inventory(
     store_name: str,
     *,
+    msku_source_xlsx_path: str | Path | None = None,
     input_dir: str | Path | None = None,
     output_dir: str | Path | None = None,
 ) -> ActualInventoryResult:
     return await _export_store_msku_actual_inventory_once(
-        store_name, input_dir=input_dir, output_dir=output_dir,
+        store_name, msku_source_xlsx_path=msku_source_xlsx_path, input_dir=input_dir, output_dir=output_dir,
     )
 
 

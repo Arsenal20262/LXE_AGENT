@@ -1,5 +1,12 @@
 # 最终备货建议：自动取数衔接交接
 
+## 2026-10-19 本地提交收口 2/3：显式 MSKU 源表
+
+- 第 1 组已提交为 `f01118f9`，工作树完整保留后续改动。本组仅提交现有深圳库存可选源表参数及贯通：最终 Skill → catalog/CLI → 库存 Service 读取 MSKU 步骤返回的指定源表；缺失、损坏、错店/来源不符即停止，不回退历史。省略参数的旧调用继续按店铺选最新源表，不影响普通备货。
+- 范围为 10 文件：库存 Service/CLI、catalog、其两份测试、Python/Bun Skill 契约、深圳库存及最终 Skill、本 handoff。最终 Skill 继承第 1 组旺季文案，本组只新增显式源表传递；货件诊断的 3 个实现/测试文件继续留给第 3 组，不混入本提交。原 searchToken CLI 脱敏保持，复用原来源核验、路径解析和异常边界，不新增框架、命令或环境变量。
+- 本次库存/Skill/货件定向 Python 共 **133 passed，无 skip**：首次 132 passed，另 1 项仅因沙箱禁止本机监听失败，解除限制后精确补跑通过；日志 `/private/tmp/pool7-local-closeout-source-shipments-python.log` 与 `/private/tmp/pool7-local-closeout-source-loopback.log`。复用上一组 Bun **71 passed** 中的 catalog/Skill 验证，及此前代码一致的 lxeskill/infra 回归证据；本轮不重跑全量、不访问 ERP。原生 Windows 及 Office Kit 尚未补齐的边界如实保留。
+- 暂存候选必须同时包含 CLI/catalog 参数和 Skill 使用方式，逐文件核对暂存内容与工作树、执行 cached diff/check 后本地提交；不改 main/其他 Pool、push/merge 或创建 PR。正式依赖仍为 PR1 → PR2 → 最终功能 PR。
+
 ## 2026-10-19 本地提交收口 1/3：旺季自定义天数
 
 - 本轮从 pool-7 `2d89e50f` 开始，用户授权继续完成本地提交；仅操作 `codex/final-restock-auto-data`，不 push、创建 PR、merge 或调用生产 ERP。原 30 文件、HEAD/index/refs/stash 和完整 patch 已备份校验到临时根下 `pool7-final-local-commits-blmvj2ku`，不清理既有备份/stash。

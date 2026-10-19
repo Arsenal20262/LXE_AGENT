@@ -42,12 +42,12 @@ commands:
 |---|---|---|
 | 1 店铺解析：`replenishment-store-resolve` / `lxeskill replenish store resolve --store-name "<用户店铺名>"` | 入口确认后，把运营名称解析成马帮下载入口的真实店铺和查询标识；不是紫鸟店铺 ID。 | `data.store_name`、`store_id`、`id_type` 传给步骤 2。歧义时展示真实候选；整组须选择单站点，不猜 ID 或自动拆任务。 |
 | 2 MSKU 源表：`mabang-store-msku-export` / `lxeskill mabang store msku export --store-id "<store_id>" --id-type "<id_type>" --store-name "<规范店铺名>" --include-local-inventory` | 按步骤 1 的标识下载本轮商品行、销量、FBA 库存和重量，启用本地库存列；导出同时保存既有本地 SKU 商品类型核验结果。 | `data.xlsx_path`、`store_name` 及原始/核验通过/未通过行数。源表供步骤 3 查深圳库存，供步骤 5 取基础数据和 AG；缺本地库存列或接口失败停止，不用深圳数量替代。 |
-| 3 深圳库存报告：`mabang-store-shenzhen-inventory-export` / `lxeskill mabang store shenzhen-inventory export --store-name "<规范店铺名>"` | 源表成功后，复用其本地 SKU 类型及组合组件查询深圳仓库可用库存，生成覆盖源表的报告；本流程用它核对来源和商品编码。 | `data.shenzhen_warehouse_inventory_report_xlsx_path`、`source_msku_xlsx_path`、`source_msku_data_time`。先核对同源，再进入步骤 4；报告供步骤 5 校验及填 AH，不作为 AG 来源。 |
+| 3 深圳库存报告：`mabang-store-shenzhen-inventory-export` / `lxeskill mabang store shenzhen-inventory export --store-name "<规范店铺名>" --msku-source-xlsx-path "<步骤2返回的xlsx_path>"` | 源表成功后，显式传入其实际返回路径，复用本地 SKU 类型及组合组件查询深圳仓库可用库存，生成覆盖该源表的报告；本流程用它核对来源和商品编码。 | `data.shenzhen_warehouse_inventory_report_xlsx_path`、`source_msku_xlsx_path`、`source_msku_data_time`。先核对同源，再进入步骤 4；报告供步骤 5 校验及填 AH，不作为 AG 来源。 |
 | 4 货件快照：`mabang-store-unlinked-shipments-export` / `lxeskill mabang store unlinked-shipments export --store-name "<规范店铺名>"` | 同源检查通过后，查询 WMS待配货、WMS待装箱、待关联货件三个状态，自动下载原生文件并按 MSKU 汇总商品件数，作为 T 的现有统计输入。 | `data.status_results` 及 `data.snapshot.snapshot_xlsx_path`、布尔值 `confirmed_empty`。快照供步骤 5 填 T；发货单张数不等于商品件数。状态缺失或快照失败停止。 |
 | 5 最终计算：本 Skill / `lxeskill replenish final-restock generate` | 三份本轮产物齐全后，传规范店铺名和它们的路径；校验店铺、来源批次、覆盖及数值，生成 Excel，经 Office Kit 重算并检查。 | `data.output_xlsx_path`、`source_data_time`、`row_count`、`formula_error_count` / `formula_error_examples`；仅合法成功结果交给步骤 6，错误结果按诊断处理。 |
 | 6 文件交付：`send_files` | 计算检查通过后，使用最终 terminal 的 `files`，不发中间报表，不自行猜路径。 | 发送工具确认成功才算交付；失败只重试交付，不重新取数或生成。 |
 
-- 步骤 2 返回的店铺名须与规范店铺名一致。**在调用步骤 4 之前**核对：步骤 3 的 `source_msku_xlsx_path` 必须指向步骤 2 本轮返回的 `xlsx_path`；不一致就结束本轮，不得继续取货件或调用最终计算。库存导出自身会查找该店铺本地最新源表；即使时间相近也不能拿旧文件继续计算或手改路径。底层计算仍会核验文件指纹、店铺、批次、快照及 MSKU 覆盖。
+- 步骤 2 返回的店铺名须与规范店铺名一致。步骤 3 必须通过 `--msku-source-xlsx-path` 使用步骤 2 本轮返回的 `xlsx_path`；指定文件不存在、损坏或核验不通过时停止，不回退历史文件或省略参数重试。**在调用步骤 4 之前**仍核对：步骤 3 的 `source_msku_xlsx_path` 必须指向步骤 2 本轮返回的 `xlsx_path`；不一致就结束本轮，不得继续取货件或调用最终计算。底层计算仍会核验文件指纹、店铺、批次、快照及 MSKU 覆盖。
 - 步骤 4 只有三个状态完整成功且快照存在才可继续；`confirmed_empty=true` 是有效空快照，查询失败或缺快照不能当作零货件。不要再运行旧销量分析或 `replenish calculate`。
 
 ## 输入与调用

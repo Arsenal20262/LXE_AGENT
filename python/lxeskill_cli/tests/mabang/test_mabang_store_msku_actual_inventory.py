@@ -6,6 +6,7 @@ from decimal import Decimal
 from http.cookies import SimpleCookie
 from io import BytesIO
 from pathlib import Path
+from unittest.mock import AsyncMock, Mock
 from yarl import URL
 
 import pytest
@@ -1000,7 +1001,8 @@ def test_write_actual_inventory_xlsx_splits_rows_by_inventory_state(tmp_path) ->
     assert _column_fill_colors(output_path, "无库存数据", "真实库存（深圳仓库）数量") == ["00000000", "00000000", "00000000"]
 
 
-def test_export_store_msku_actual_inventory_success_with_fake_network(monkeypatch, tmp_path) -> None:
+@pytest.mark.parametrize("explicit_source", [False, True])
+def test_export_store_msku_actual_inventory_success_with_fake_network(monkeypatch, tmp_path, explicit_source) -> None:
     source_path = tmp_path / "input" / "202605251530-Amazon-Lerxiuer-FR_店铺MSKU数据.xlsx"
     _write_xlsx(
         source_path,
@@ -1097,11 +1099,17 @@ def test_export_store_msku_actual_inventory_success_with_fake_network(monkeypatc
 
     monkeypatch.setattr(asyncio, "sleep", fake_sleep)
 
+    source_kwargs = {}
+    if explicit_source:
+        source_path.with_name("202605261530-Amazon-Lerxiuer-FR_店铺MSKU数据.xlsx").write_bytes(source_path.read_bytes())
+        monkeypatch.setattr(inv, "find_latest_store_msku_file", Mock(side_effect=AssertionError("显式源表不得选择历史最新文件")))
+        source_kwargs["msku_source_xlsx_path"] = source_path
     result = asyncio.run(
         inv.export_store_msku_actual_inventory(
             "Amazon-Lerxiuer-FR",
             input_dir=tmp_path / "input",
             output_dir=tmp_path / "output",
+            **source_kwargs,
         )
     )
 
@@ -1150,3 +1158,55 @@ def test_export_store_msku_actual_inventory_success_with_fake_network(monkeypatc
     assert sleep_calls == []
     assert _form_value(post_calls[0], "stockSkuStr") == "SKU-A\r\nSTOCK-A\r\nSTOCK-B\r\n"
     assert _form_value(post_calls[0], "warehouseIds[]") == "1014318"
+
+
+@pytest.mark.parametrize("invalid,expected", [
+    ("missing", "不存在"), ("empty", "不存在"), ("directory", "不存在"),
+    ("filename", "源数据时间"), ("date", "源数据时间"),
+    ("corrupt", "zip"), ("store", "店铺不一致"),
+    ("fingerprint", "发生变化"), ("unverified", "缺少源数据核验信息"),
+])
+def test_explicit_source_failure_never_uses_latest_or_queries_warehouse(monkeypatch, tmp_path, invalid, expected):
+    from openpyxl import load_workbook
+    from test_source_verification import source, row
+
+    records = [row(**dict.fromkeys((*inv.SALES_COLUMNS, *inv.FBA_STOCK_COLUMNS), 0))]
+    source(tmp_path / "history/202610141000-shop_店铺MSKU数据.xlsx", records)
+    selected = source(tmp_path / "selected/202610141100-shop_店铺MSKU数据.xlsx", records)
+    store_name = "shop"
+    if invalid == "missing":
+        selected.unlink()
+    elif invalid == "empty":
+        selected = ""
+    elif invalid == "directory":
+        selected = selected.parent
+    elif invalid in {"filename", "date"}:
+        selected = selected.rename(selected.with_name(
+            "source.xlsx" if invalid == "filename" else "202613141100-shop_店铺MSKU数据.xlsx"
+        ))
+    elif invalid == "corrupt":
+        selected.write_bytes(b"not an xlsx")
+    elif invalid == "store":
+        store_name = "other-shop"
+    elif invalid == "fingerprint":
+        book = load_workbook(selected)
+        book.active["A2"] = "changed-msku"
+        book.save(selected)
+        book.close()
+    elif invalid == "unverified":
+        source(selected, records, bindings=None)
+    latest = Mock(side_effect=AssertionError("不得回退本地历史源表"))
+    search = AsyncMock(side_effect=AssertionError("无效源表不得查询库存"))
+    refresh = AsyncMock(side_effect=AssertionError("无效源表不得刷新认证"))
+    monkeypatch.setattr(inv, "find_latest_store_msku_file", latest)
+    monkeypatch.setattr(inv, "search_warehouse_stock", search)
+    monkeypatch.setattr(inv, "refresh_mabang_auth", refresh)
+    with pytest.raises(Exception, match=expected):
+        asyncio.run(inv.export_store_msku_actual_inventory(
+            store_name, msku_source_xlsx_path=selected,
+            input_dir=tmp_path / "history", output_dir=tmp_path / "out",
+        ))
+    latest.assert_not_called()
+    search.assert_not_called()
+    refresh.assert_not_called()
+    assert not (tmp_path / "out").exists()

@@ -88,6 +88,8 @@ describe("skill context", () => {
     expect(positions.every((position) => position >= 0)).toBe(true);
     expect(positions).toEqual([...positions].sort((left, right) => left - right));
     expect(acquisitionSection).toContain("--include-local-inventory");
+    expect(acquisitionSection).toContain('--msku-source-xlsx-path "<步骤2返回的xlsx_path>"');
+    expect(acquisitionSection).toContain("不回退历史文件或省略参数重试");
     expect(finalPolicy).toContain("## 业务用途");
     expect(finalPolicy).toContain("运营无需上传模板");
     const businessSection = finalPolicy.split("## 业务用途")[1]?.split("## 入口与范围")[0] ?? "";

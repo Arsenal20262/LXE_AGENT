@@ -30,6 +30,14 @@ references:
 lxeskill mabang store shenzhen-inventory export --store-name "<规范店铺名>"
 ```
 
+以上旧调用保留按店铺选择本地最新 MSKU 源表的行为。最终备货等已取得明确源表的任务，使用导出实际返回的路径：
+
+```text
+lxeskill mabang store shenzhen-inventory export --store-name "<规范店铺名>" --msku-source-xlsx-path "<MSKU导出返回的xlsx_path>"
+```
+
+显式路径只读取指定文件，缺失、损坏、文件名时间无效或店铺/来源核验失败时停止，不回退历史最新文件；该路径由 Agent 传递，不要求运营上传文件。
+
 模糊名称先读 `replenishment-store-resolve`。最长 30 分钟，等待最终 terminal。
 
 ## 数据边界与结果
