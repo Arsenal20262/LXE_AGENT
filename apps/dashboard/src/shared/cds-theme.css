@@ -1,5 +1,5 @@
 /* CDS-inspired purpose tokens. Shared by settings, capabilities, activity, workbench,
-   home and selected conversation controls. Transcript and onboarding keep their themes.
+   home, user messages and selected conversation controls. Assistant text and onboarding keep their themes.
    Rules: surface hierarchy, semantic ink, alpha borders, shared field states.
    Source: CDS tokens — vanilla, Rules / Theme ramps / Elevation / Purpose. */
 :is(.desktop-settings-theme, .capabilities-theme, .activity-theme, .workbench-theme, .home-theme, .conversation-chrome-theme) {

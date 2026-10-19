@@ -1455,7 +1455,7 @@ export const UnifiedConversationRow = React.memo(function UnifiedConversationRow
   const role = message.role;
   if (role === "user" && message.attachments?.length) {
     const text = readerFacingMessageText(message);
-    return <div className="message-with-meta role-user has-sent-attachments">
+    return <div className="message-with-meta role-user has-sent-attachments conversation-chrome-theme">
       <SentAttachmentList attachments={message.attachments} sessionId={attachmentSessionId}
         ready={row.status !== "sending" && !row.error} onOpen={onOpenAttachment} />
       {text.trim() ? <article className="message-card role-user"><UserReferenceText text={text} skills={Array.isArray(message.invoked_skills) ? message.invoked_skills : []} /></article> : null}
@@ -1464,7 +1464,7 @@ export const UnifiedConversationRow = React.memo(function UnifiedConversationRow
       <MessageMeta createdAt={Number(message.created_at ?? row.createdAt / 1000)} role={role} text={text} />
     </div>;
   }
-  return <div className={`message-with-meta role-${role}`}>
+  return <div className={`message-with-meta role-${role}${role === "user" ? " conversation-chrome-theme" : ""}`}>
     <article className={`message-card role-${role}${row.presentation === "final" ? " response-final-answer" : ""}${message.attachments?.length ? " has-attachments" : ""}`}>
       <MessageContent content={message.content} message={message} />
       {message.attachments?.length ? <InputAttachmentList attachments={message.attachments} onOpen={onOpenAttachment} /> : null}

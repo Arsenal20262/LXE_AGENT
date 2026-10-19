@@ -91,6 +91,12 @@
       "document": "examples/conversation-colors.md",
       "screenshots": 4,
       "scope": "LXE jump-to-latest button color adaptation; opaque neutral surface, subtle border and blue keyboard focus; geometry and scrolling behavior preserved"
+    },
+    {
+      "date": "2026-10-19",
+      "document": "examples/conversation-colors.md",
+      "screenshots": 5,
+      "scope": "LXE user message bubble color adaptation; neutral mixed surface, subtle border and semantic text/reference colors; geometry preserved across light, dark and narrow states"
     }
   ]
 }

@@ -57,3 +57,13 @@
 - 键盘焦点使用蓝色轮廓。位置、尺寸、间距、字体、圆角与跳转逻辑保持原样。
 
 保存了[亮色](conversation-jump/jump-light.png)、[暗色](conversation-jump/jump-dark.png)、[暗色悬停](conversation-jump/jump-hover-dark.png)和[键盘焦点](conversation-jump/jump-focus-dark.png)截图。四种状态的采样布局测量均与移除局部主题时一致，[测量结果](conversation-jump/geometry-and-colors.json)同时记录了实测颜色与跳转结果。类型检查和既有 conversation-window 行为测试通过；测试所用预览服务与 Electron 已退出。
+
+## 补充：用户消息气泡
+
+“用户消息气泡”指用户已经发送的消息容器；“对话框”通常指弹出的交互窗口。此次只调整气泡与附属控件的配色。
+
+沿用 CDS 的用途变量、文字层级与克制用色原则：正文使用主文字色，时间使用元信息色，文件／技能引用使用强调色。底色取导航表面 94% 与主墨色 6% 的混合，亮色约为 `#eeeeed`、暗色约为 `#222222`；边界使用 5% 墨色，不增加浮起的阴影。混合比例、边界强度和引用的蓝色是 **LXE 适配选择**，并非已确认的 Claude 消息气泡专属规范。
+
+宽度、右对齐、内边距、圆角、字体与换行保持不变。复制按钮沿用原有显隐行为，文件／技能引用补充蓝色焦点轮廓。普通文本、多段文本、排队消息与带附件消息统一应用；助手正文保持原有配色。
+
+保存了[亮色](conversation-bubble/bubble-light.png)、[暗色](conversation-bubble/bubble-dark.png)、[引用焦点](conversation-bubble/bubble-references-dark.png)、[带附件](conversation-bubble/bubble-attachment-dark.png)和[窄窗口](conversation-bubble/bubble-narrow-dark.png)截图，使用生产组件与临时示例数据渲染。亮暗主题及窄窗口共 224 组元素测量与移除局部主题时一致，复制内容完整，助手正文的采样颜色未变；详见[测量结果](conversation-bubble/geometry-and-colors.json)。类型检查及既有 conversation-content、references 两组行为测试通过。预览服务与 Electron 已退出。
