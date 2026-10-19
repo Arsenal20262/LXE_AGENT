@@ -74,6 +74,8 @@ module.exports = async ({ win, js, step, load, waitFor, click, settle, state }) 
   await step("assets show current, previous, empty and error states and preserve refresh and reveal", async () => {
     await open(3);
     await waitFor("document.querySelectorAll('.asset-slot').length===5", "assets ready");
+    assert.equal(await js("document.querySelector('#input-assets-title').textContent"), "FBA模版与数据源");
+    assert.equal(await js("document.querySelector('.input-assets-view').textContent.includes('越南备货设置')"), false);
     assert.equal(await js("document.querySelector('.workbench-detail-meta').textContent"), "3 / 5 已就绪");
     assert.equal(await js("document.querySelectorAll('.asset-slot-previous').length"), 1);
     assert.equal(await js("document.querySelectorAll('.asset-slot-empty').length"), 1);
@@ -96,8 +98,9 @@ module.exports = async ({ win, js, step, load, waitFor, click, settle, state }) 
     assert.equal(await js("document.querySelectorAll('.asset-slot').length"), 0);
     assert.ok(await js("Boolean(document.querySelector('.workbench-empty[role=status]'))"));
     await capture("assets-empty-dark");
-    await click('.workbench-related-link');
-    await waitFor("Boolean(document.querySelector('#vietnam-settings-title'))", "related settings opened");
+    await click('.workbench-back');
+    await waitFor("document.querySelectorAll('.workbench-tool-card').length===3", "directory restored");
+    assert.equal(await js("document.querySelector('.workbench-tool-card:last-child .workbench-tool-name').textContent"), "FBA模版与数据源");
     await win.setContentSize(480, 900); await open(3, "en");
     await waitFor("document.querySelectorAll('.asset-slot').length===5", "narrow assets ready");
     await capture("assets-narrow-en");

@@ -194,14 +194,14 @@ export const ZH_TEXT = {
         summary: "批量给图片和视频添加亚马逊要求的 AI 人物标签。"
       },
       inputAssets: {
-        name: "模板与数据源",
+        name: "FBA模版与数据源",
         summary: "查看技能正在使用的模板和长期数据表。"
       }
     }
   },
   inputAssets: {
-    eyebrow: "工作台 · 模板与数据源",
-    title: "模板与数据源",
+    eyebrow: "工作台 · FBA模版与数据源",
+    title: "FBA模版与数据源",
     subtitle: "技能会自动记住这些文件的当前版本。上传新版本时会自动升档，上一版保留一份备用。",
     slotSummary: (filled: number, total: number) => `${filled} / ${total} 已就绪`,
     noSlots: "暂无可用的模板与数据源。",
@@ -1112,14 +1112,14 @@ export const UI_TEXT: Record<Language, UiText> = {
           summary: "Batch-add Amazon's required AI performer tag to images and videos."
         },
         inputAssets: {
-          name: "Templates & data sources",
+          name: "FBA templates & data sources",
           summary: "See the templates and long-lived tables your skills are using."
         }
       }
     },
     inputAssets: {
-      eyebrow: "Workbench · Templates & data sources",
-      title: "Templates & data sources",
+      eyebrow: "Workbench · FBA templates & data sources",
+      title: "FBA templates & data sources",
       subtitle: "Skills remember the current version of these files. Uploading a new one promotes it automatically and keeps the previous version as a spare.",
       slotSummary: (filled: number, total: number) => `${filled} / ${total} ready`,
       noSlots: "No templates or data sources are available yet.",

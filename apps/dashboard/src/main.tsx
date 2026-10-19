@@ -279,7 +279,6 @@ function App({
             ) : null}
             {activeSection === "workbench" && workbenchView === "input-assets" ? (
               <InputAssetsWorkbench
-                onOpenVietnamSettings={() => openWorkbenchView("vietnam-settings")}
                 error={assetSlots.error}
                 loading={assetSlots.loading}
                 onBack={() => openWorkbenchView("index")}

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ChevronRight, FolderOpen, LoaderCircle, RefreshCw } from "lucide-react";
+import { FolderOpen, LoaderCircle, RefreshCw } from "lucide-react";
 import type { DesktopInputAssetSlot } from "@lxe/desktop-protocol";
 import { useUiText } from "../../shared/i18n";
 import { WorkbenchPageHeader } from "./page-header";
@@ -40,14 +40,12 @@ export function InputAssetsWorkbench({
   error,
   loading,
   onBack,
-  onOpenVietnamSettings,
   refresh,
   slots,
 }: {
   error: string;
   loading: boolean;
   onBack: () => void;
-  onOpenVietnamSettings: () => void;
   refresh: () => Promise<void>;
   slots: DesktopInputAssetSlot[] | null;
 }) {
@@ -75,7 +73,6 @@ export function InputAssetsWorkbench({
       {error ? <p className="workbench-error" role="alert">{copy.loadError}: {error}</p> : null}
       {revealError ? <p className="workbench-error" role="alert">{revealError}</p> : null}
 
-      <button className="workbench-related-link" onClick={onOpenVietnamSettings} type="button">{t.vietnamSettings.title}<ChevronRight size={14} aria-hidden /></button>
       {loading && !slots ? <p className="workbench-loading" role="status"><LoaderCircle className="spin" size={16} />{copy.loading}</p> : null}
       {!loading && !error && slots?.length === 0 ? <p className="workbench-empty" role="status">{copy.noSlots}</p> : null}
       <div className="asset-slot-list" aria-busy={loading}>
