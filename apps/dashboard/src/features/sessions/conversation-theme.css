@@ -50,3 +50,20 @@
 .conversation-chrome-theme .file-open-split button:hover:not(:disabled) { background: var(--cds-alpha-1); }
 .conversation-chrome-theme .file-open-split button:focus-visible { outline-color: var(--cds-accent); }
 .conversation-chrome-theme .file-availability-badge { color: var(--text-soft); background: var(--cds-alpha-1); }
+
+/* Welcome statistics use the same surfaces, without changing the metric grid
+   or the 26-week heatmap. The blue sequential ramp is an LXE data-viz choice. */
+.welcome-panel.conversation-chrome-theme { --focus-ring: var(--cds-accent); }
+.welcome-panel.conversation-chrome-theme .welcome-panel-title { color: var(--text-strong); }
+.welcome-panel.conversation-chrome-theme .welcome-range { background: var(--cds-alpha-1); }
+.welcome-panel.conversation-chrome-theme .welcome-range-button.is-active { background: var(--cds-thumb); }
+.welcome-panel.conversation-chrome-theme .welcome-range-button:hover:not(.is-active) { background: var(--cds-alpha-1); }
+.welcome-panel.conversation-chrome-theme .welcome-range-button:focus-visible { outline-color: var(--cds-accent); }
+:root .welcome-panel.conversation-chrome-theme .welcome-metrics > div { background: var(--cds-alpha-1); }
+:root .welcome-panel.conversation-chrome-theme .welcome-heatmap {
+  --heatmap-empty: var(--cds-alpha-1);
+  --heatmap-level-1: color-mix(in srgb, var(--cds-accent) 28%, var(--cds-surface-panel));
+  --heatmap-level-2: color-mix(in srgb, var(--cds-accent) 52%, var(--cds-surface-panel));
+  --heatmap-level-3: color-mix(in srgb, var(--cds-accent) 76%, var(--cds-surface-panel));
+  --heatmap-level-4: var(--cds-accent);
+}

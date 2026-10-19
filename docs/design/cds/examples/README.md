@@ -12,6 +12,8 @@
 
 2026-10-19 追加：[对话输入框与文件块配色](conversation-colors.md)，保留原布局，记录语义配色、亮暗交互状态和尺寸核对结果，含 13 张组件截图。
 
+2026-10-19 追加：[对话欢迎页统计卡片](conversation-statistics.md)，沿用中性表面与蓝色热力图，保留指标和网格布局，含 4 张截图。
+
 ## 设置页
 
 ![设置页亮色](settings/appearance-light.png)
