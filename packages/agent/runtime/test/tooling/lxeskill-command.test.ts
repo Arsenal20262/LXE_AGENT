@@ -187,6 +187,16 @@ test("Vietnam settings is an internal CLI command without a model skill owner", 
   });
 });
 
+test("Amazon final-restock settings reuses the internal CLI contract without another skill", () => {
+  const path = join(process.cwd(), "python/lxeskill_cli/lxeskill/catalog.json");
+  expect(loadLxeSkillCommandCatalog(path).find(entry => entry.name === "mabang_final_restock_settings")).toMatchObject({
+    command: "lxeskill replenish final-restock settings",
+    visibility: "internal",
+    ownerSkills: [],
+    module: "services.agent_cli.mabang.final_restock_settings",
+  });
+});
+
 test("Mabang TMS exposes one export command with its own deliverable dataset", () => {
   const path = join(process.cwd(), "python/lxeskill_cli/lxeskill/catalog.json");
   const entries = loadLxeSkillCommandCatalog(path).filter(entry => entry.name.startsWith("mabang_tms_"));
@@ -219,7 +229,7 @@ test("flags-only command contracts have matching skill ownership and reject inva
   const document = JSON.parse(readFileSync(path, "utf8"));
   const entries = loadLxeSkillCommandCatalog(path);
   const scoped = document.entries.filter((entry: any) => entry.input_modes !== undefined);
-  expect(scoped).toHaveLength(14);
+  expect(scoped).toHaveLength(15);
   const known = new Map(entries.map(entry => [entry.command, entry.ownerSkills]));
   for (const raw of scoped) {
     expect(raw.input_modes).toEqual(["flags"]);

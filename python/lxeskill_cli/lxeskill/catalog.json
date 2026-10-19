@@ -80,6 +80,26 @@
       "input_schema": {"type": "object", "properties": {}, "additionalProperties": false}
     },
     {
+      "name": "mabang_final_restock_settings",
+      "command_path": ["replenish", "final-restock", "settings"],
+      "visibility": "internal",
+      "session_mode": "none",
+      "module": "services.agent_cli.mabang.final_restock_settings",
+      "owner_skills": [],
+      "timeout_ms": 30000,
+      "exposed": false,
+      "input_modes": ["flags"],
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "action": {"type": "string", "enum": ["read", "save"]},
+          "parameters": {"type": "object"}
+        },
+        "required": ["action"],
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "vietnam_replenishment_settings",
       "command_path": ["vietnam", "replenishment", "settings"],
       "visibility": "internal",

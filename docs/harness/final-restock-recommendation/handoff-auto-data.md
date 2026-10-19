@@ -1,5 +1,13 @@
 # 最终备货建议：自动取数衔接交接
 
+## 2026-10-19 CLI 统一精确本地提交收口
+
+- 用户授权仅提交 Amazon 设置 CLI 统一。基线为 pool-7 `9a82c6ba`，分支 `codex/final-restock-auto-data`；提交号以本分支 Git log 为准。当前工作区、原 patch、refs/stash 与 1709 文件哈希已保存在临时目录 `pool7-cli-commit-5ksv67gh`，既有备份/stash 不删除。
+- 10 文件提交范围：Desktop Amazon 设置桥接及对应测试；catalog；内部 `services/agent_cli/mabang/final_restock_settings.py`；原设置存储模块及其测试；CLI 设置定向测试与总数断言；Bun 命令契约测试；本 handoff。仅使用现有 lxeskill 分发、标准终态/错误及 UTF-8，隐藏内部命令不增加 Skill/Runtime Tool；删除旧私有 main/output，不保留第二套协议。配置路径及原子读写、原有开关与计算快照不变。
+- 与此前 19 文件的自定义旺季天数存在 5 文件重叠，采用按内容暂存：提交候选保持 HEAD 的布尔开关契约，未夹带 `peak_boost_days`、Dashboard、IPC、共享类型或公式变更；工作区仍完整保留自定义天数。新 CLI 测试只检验调用与存储透传，不复制字段规则，可同时验证两个版本。
+- 已从 HEAD 导出并覆盖精确候选内容，在独立临时副本验证（自行离线冻结安装依赖，不共享 .venv）：Python **24 passed**、Bun **49 passed**、Desktop `tsc --noEmit` 通过；覆盖标准成功/失败、持久化/损坏配置、UTF-8、秘密脱敏、旧桥接、生成快照和 V/W 开关。实际工作区通用 CLI 测试再验证 **10 passed**；复用上一轮整合回归 Python **746 passed / 9 skipped**、Bun **71 passed**，不重复大范围审核。
+- 上轮 9 项跳过仍是 4 项原生 Windows、5 项 Office Kit；生产 ERP、完整原生 Windows/Excel 及新版本 GUI 运行仍为 **NOT VERIFIED**。不调用 ERP、不重启服务、不 push/merge；main 和其他 Pool 不动。正式 PR 仍按 PR1 → PR2 → 最终功能 PR 顺序，余下旺季天数修改未包含在本提交，以下“未提交”等表述为各轮历史记录。
+
 ## 2026-10-19 本地提交收口
 
 - 本轮按职责提交 AD 克数表头修正（`9f38bb7c`）与持久旺季设置；后者包含 Dashboard、Desktop、私有设置模块、V/W 配置传递、Windows UTF-8 输出及对应测试，不拆散互相依赖的界面和服务。26 个文件已与全局审核快照逐文件核对，没有新增业务范围；除本 handoff 收口记录外没有追加实现。旺季设置提交号以本分支 `git log` 为准。

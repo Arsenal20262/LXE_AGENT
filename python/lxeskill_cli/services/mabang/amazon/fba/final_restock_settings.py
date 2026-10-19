@@ -4,7 +4,6 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-import sys
 from uuid import uuid4
 
 from shared.process_lock import interprocess_lock
@@ -68,28 +67,3 @@ def save_parameters(raw: object) -> dict[str, bool]:
     with interprocess_lock(root / ".settings.lock"):
         _write_unlocked(raw["peak_boost_enabled"])
     return {"peak_boost_enabled": raw["peak_boost_enabled"]}
-
-
-def main(argv: list[str] | None = None) -> int:
-    args = sys.argv[1:] if argv is None else argv
-    # Isolated Python ignores PYTHONIOENCODING; keep Desktop JSON diagnostics UTF-8.
-    for stream in (sys.stdout, sys.stderr):
-        reconfigure = getattr(stream, "reconfigure", None)
-        if callable(reconfigure):
-            reconfigure(encoding="utf-8", errors="replace")
-    try:
-        if len(args) == 1 and args[0] == "read":
-            data = read_state()
-        elif len(args) == 2 and args[0] == "save":
-            data = save_parameters(json.loads(args[1]))
-        else:
-            raise ValueError("用法: settings read | settings save <json>")
-        print(json.dumps({"success": True, "data": data}, ensure_ascii=False))
-        return 0
-    except Exception as exc:  # noqa: BLE001 - private Desktop bridge returns concrete diagnostics.
-        print(json.dumps({"success": False, "error": f"{type(exc).__name__}: {exc}"}, ensure_ascii=False))
-        return 1
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
