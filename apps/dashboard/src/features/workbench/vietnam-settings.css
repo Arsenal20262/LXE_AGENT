@@ -84,6 +84,8 @@
 .amazon-peak-toggle-copy strong, .amazon-peak-toggle-copy small { display: block; }
 .amazon-peak-toggle-copy small { margin-top: 5px; color: var(--muted); line-height: 1.5; }
 .amazon-peak-toggle input[type="checkbox"] { width: 18px; height: 18px; flex: 0 0 auto; accent-color: var(--accent-strong); }
+.amazon-peak-days { display: flex; align-items: center; gap: 12px; }
+.amazon-peak-days input { width: 88px; }
 .vietnam-exchange { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; }
 .vietnam-exchange input { width: 128px; }
 .vietnam-advanced summary { display: flex; align-items: center; gap: 7px; padding: 15px 0; cursor: pointer; list-style: none; font-size: 13px; font-weight: 500; }

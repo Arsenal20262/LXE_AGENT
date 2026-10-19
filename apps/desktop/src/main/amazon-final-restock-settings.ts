@@ -4,6 +4,14 @@ import { join } from "node:path";
 import type { DesktopAmazonFinalRestockSettings } from "@lxe/desktop-protocol";
 import { redactAndBound, type AssetCommandExecution, type DesktopInputAssetsOptions } from "./input-assets";
 
+export function isAmazonFinalRestockSettings(input: unknown): input is DesktopAmazonFinalRestockSettings {
+  if (!input || typeof input !== "object" || Array.isArray(input) || Object.keys(input).length !== 2) return false;
+  const value = input as Record<string, unknown>;
+  return typeof value.peak_boost_enabled === "boolean" && (value.peak_boost_days === null
+    || (typeof value.peak_boost_days === "number" && Number.isInteger(value.peak_boost_days)
+      && value.peak_boost_days >= 0 && value.peak_boost_days <= 120));
+}
+
 /** Desktop consumes the lxeskill contract; Python owns validation and storage. */
 export class DesktopAmazonFinalRestockSettingsService {
   constructor(private readonly options: DesktopInputAssetsOptions) {}
@@ -24,12 +32,11 @@ export class DesktopAmazonFinalRestockSettingsService {
       : await new Promise<AssetCommandExecution>(resolve => {
         execFile(this.options.pythonPath, args, options, (error, stdout, stderr) => resolve({ error, stdout, stderr }));
       });
-    let result: { type?: unknown; ok?: unknown; data?: { success?: unknown; data?: DesktopAmazonFinalRestockSettings }; error?: { message?: unknown } } | undefined;
+    let result: { type?: unknown; ok?: unknown; data?: { success?: unknown; data?: unknown }; error?: { message?: unknown } } | undefined;
     const terminal = execution.stdout.split(/\r?\n/u).filter(line => line.trim()).at(-1) ?? "";
     try { result = JSON.parse(terminal); } catch { /* Preserve actual process diagnostics below. */ }
     if (execution.error || result?.type !== "result" || result.ok !== true
-      || result.data?.success !== true || !result.data.data
-      || typeof result.data.data.peak_boost_enabled !== "boolean") {
+      || result.data?.success !== true || !isAmazonFinalRestockSettings(result.data.data)) {
       const observed = typeof result?.error?.message === "string" && result.error.message.trim() ? result.error.message : undefined;
       throw new Error(redactAndBound(observed || execution.stderr || execution.error?.message
         || `Invalid lxeskill settings result: ${terminal}`));
@@ -39,9 +46,8 @@ export class DesktopAmazonFinalRestockSettingsService {
 
   read(): Promise<DesktopAmazonFinalRestockSettings> { return this.call("read"); }
   save(input: unknown): Promise<DesktopAmazonFinalRestockSettings> {
-    if (!input || typeof input !== "object" || Array.isArray(input)
-      || Object.keys(input).length !== 1 || typeof (input as Record<string, unknown>).peak_boost_enabled !== "boolean") {
-      throw new Error("peak_boost_enabled must be a boolean");
+    if (!isAmazonFinalRestockSettings(input)) {
+      throw new Error("peak_boost_enabled must be a boolean; peak_boost_days must be null or an integer between 0 and 120");
     }
     const serialized = JSON.stringify(input);
     return this.call("save", serialized);

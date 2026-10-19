@@ -1,5 +1,13 @@
 # 最终备货建议：自动取数衔接交接
 
+## 2026-10-19 本地提交收口 1/3：旺季自定义天数
+
+- 本轮从 pool-7 `2d89e50f` 开始，用户授权继续完成本地提交；仅操作 `codex/final-restock-auto-data`，不 push、创建 PR、merge 或调用生产 ERP。原 30 文件、HEAD/index/refs/stash 和完整 patch 已备份校验到临时根下 `pool7-final-local-commits-blmvj2ku`，不清理既有备份/stash。
+- 本组保持一个完整跨端功能：Dashboard → 原 Desktop IPC/preload → 已有 lxeskill 设置命令 → Python 原子存储 → 最终生成时一次读取配置。开启留空用 30 天，整数 0～120 按实际生效；关闭保留天数而不加成，V/W 总 120 上限及其他规则不变。原单字段配置读取兼容，损坏报错。删除无人再用的旧布尔 getter，与工作簿改读完整快照及 3 处测试调整一起提交，不能拆成破坏旧调用的单独删除。
+- 精确范围为 19 文件：17 个自属 UI/类型/桥接/存储/公式/工作簿及测试文件，最终 Skill 仅旺季段，本 handoff 仅本组记录。深圳库存显式源表与货件阶段诊断留给后两组，不提前写入本组 Skill/CLI 参数。本组新增环境变量为无，原设置路径和普通备货不变。
+- 本次新验证：Python 设置/CLI/公式/工作簿 **223 passed、5 skipped**；Bun Desktop Amazon/越南、input-assets、preload、Skill/catalog **71 passed**；Electron 模拟设置界面 Amazon/越南 **2 passed**（共 14 个场景）；Desktop、Dashboard typecheck 均通过。日志为 `/private/tmp/pool7-local-closeout-settings-python.log`、`pool7-local-closeout-bun.log`、`pool7-local-closeout-renderer.log`、`pool7-local-closeout-desktop-ts.log`、`pool7-local-closeout-dashboard-ts.log`。5 项为 Office Kit 未配置，原生 Windows 与本轮 Office 实际重算仍 NOT VERIFIED，不改宿主环境；复用此前未变代码的有效回归证据，不重跑全量。
+- 每组提交前核对完整暂存 diff、文件/内容范围及 `git diff --cached --check`；提交号以本分支 Git log 为准。三个正式 PR 及串行顺序不变，原 PR3 不单独提审；本组提交后仍应保留未完成暂存的后两组，不能以中间 HEAD 作为最终发布版本。
+
 ## 2026-10-19 CLI 统一精确本地提交收口
 
 - 用户授权仅提交 Amazon 设置 CLI 统一。基线为 pool-7 `9a82c6ba`，分支 `codex/final-restock-auto-data`；提交号以本分支 Git log 为准。当前工作区、原 patch、refs/stash 与 1709 文件哈希已保存在临时目录 `pool7-cli-commit-5ksv67gh`，既有备份/stash 不删除。

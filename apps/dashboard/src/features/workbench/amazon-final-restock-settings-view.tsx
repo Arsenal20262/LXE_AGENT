@@ -14,12 +14,15 @@ export function AmazonFinalRestockSettingsWorkbench({ onBack }: { onBack: () => 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [boostDays, setBoostDays] = useState("");
   const load = useCallback(async () => {
     setLoading(true); setError("");
     try {
       const desktop = window.lxe?.desktop;
       if (!desktop) throw new Error(copy.unavailable);
-      setSettings(await desktop.getAmazonFinalRestockSettings());
+      const next = await desktop.getAmazonFinalRestockSettings();
+      setSettings(next);
+      setBoostDays(next.peak_boost_days === null ? "" : String(next.peak_boost_days));
     } catch (cause) { setError(errorText(cause)); }
     finally { setLoading(false); }
   }, [copy]);
@@ -28,10 +31,16 @@ export function AmazonFinalRestockSettingsWorkbench({ onBack }: { onBack: () => 
   const save = async (peak_boost_enabled: boolean) => {
     const desktop = window.lxe?.desktop;
     if (!desktop || busy) return;
+    const value = boostDays.trim();
+    const days = value === "" ? null : Number(value);
+    if (days !== null && (!/^\d+$/.test(value) || !Number.isInteger(days) || days < 0 || days > 120)) {
+      setError(copy.invalidDays); setNotice(""); return;
+    }
     setBusy(true); setError(""); setNotice("");
     try {
-      const next = await desktop.saveAmazonFinalRestockSettings({ peak_boost_enabled });
-      setSettings(next); setNotice(copy.saved);
+      const next = await desktop.saveAmazonFinalRestockSettings({ peak_boost_enabled, peak_boost_days: days });
+      setSettings(next); setBoostDays(next.peak_boost_days === null ? "" : String(next.peak_boost_days));
+      setNotice(copy.saved);
     } catch (cause) { setError(errorText(cause)); }
     finally { setBusy(false); }
   };
@@ -51,6 +60,16 @@ export function AmazonFinalRestockSettingsWorkbench({ onBack }: { onBack: () => 
         <input type="checkbox" checked={settings.peak_boost_enabled} disabled={busy}
           onChange={event => void save(event.currentTarget.checked)} aria-label={copy.toggle} />
       </label>
+      <form className="vietnam-save" onSubmit={event => { event.preventDefault(); void save(settings.peak_boost_enabled); }}>
+        <label className="amazon-peak-days">{copy.days}
+          <input type="text" inputMode="numeric" placeholder="30" value={boostDays} disabled={busy}
+            aria-label={copy.days} aria-describedby="amazon-peak-days-hint"
+            onChange={event => { setBoostDays(event.currentTarget.value); setNotice(""); setError(""); }} />
+        </label>
+        <button className="workbench-refresh" type="submit"
+          disabled={busy || boostDays === (settings.peak_boost_days === null ? "" : String(settings.peak_boost_days))}>{copy.save}</button>
+      </form>
+      <p id="amazon-peak-days-hint">{copy.daysHint}</p>
       {busy ? <p role="status"><LoaderCircle className="spin" size={14} />{copy.saving}</p> : null}
       <p>{copy.appliesNextRun}</p>
     </article> : null}

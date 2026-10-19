@@ -21,15 +21,15 @@ describe("Amazon final-restock settings bridge", () => {
         expect(options.env?.TMPDIR).toBe(join(dataRoot, "tmp"));
         expect(options.env?.PYTHONUTF8).toBe("1");
         expect(options.env?.PYTHONIOENCODING).toBe("utf-8");
-        const parameters = args[10] === "save" ? JSON.parse(args[12]!) : { peak_boost_enabled: true };
+        const parameters = args[10] === "save" ? JSON.parse(args[12]!) : { peak_boost_enabled: true, peak_boost_days: null };
         return { stdout: JSON.stringify({ type: "result", ok: true, data: { success: true, data: parameters } }), stderr: "", error: null };
       },
     });
-    expect(await service.read()).toEqual({ peak_boost_enabled: true });
-    expect(await service.save({ peak_boost_enabled: false })).toEqual({ peak_boost_enabled: false });
+    expect(await service.read()).toEqual({ peak_boost_enabled: true, peak_boost_days: null });
+    expect(await service.save({ peak_boost_enabled: false, peak_boost_days: 20 })).toEqual({ peak_boost_enabled: false, peak_boost_days: 20 });
     expect(calls).toEqual([
       ["-I", "-B", "-X", "utf8", "-m", "lxeskill", "replenish", "final-restock", "settings", "--action", "read"],
-      ["-I", "-B", "-X", "utf8", "-m", "lxeskill", "replenish", "final-restock", "settings", "--action", "save", "--parameters", '{"peak_boost_enabled":false}'],
+      ["-I", "-B", "-X", "utf8", "-m", "lxeskill", "replenish", "final-restock", "settings", "--action", "save", "--parameters", '{"peak_boost_enabled":false,"peak_boost_days":20}'],
     ]);
     rmSync(dataRoot, { recursive: true, force: true });
   });
@@ -41,14 +41,14 @@ describe("Amazon final-restock settings bridge", () => {
       managedPath: "/managed", dataRoot };
     try {
       const first = new DesktopAmazonFinalRestockSettingsService(options);
-      expect(await first.read()).toEqual({ peak_boost_enabled: true });
+      expect(await first.read()).toEqual({ peak_boost_enabled: true, peak_boost_days: null });
       writeFileSync(join(dataRoot, "skill-data/amazon-final-restock/parameters.json"), '{"peak_boost_enabled":false}');
-      expect(await first.read()).toEqual({ peak_boost_enabled: false });
-      await first.save({ peak_boost_enabled: false });
+      expect(await first.read()).toEqual({ peak_boost_enabled: false, peak_boost_days: null });
+      await first.save({ peak_boost_enabled: false, peak_boost_days: 20 });
       const restarted = new DesktopAmazonFinalRestockSettingsService(options);
-      expect(await restarted.read()).toEqual({ peak_boost_enabled: false });
-      await restarted.save({ peak_boost_enabled: true });
-      expect(await new DesktopAmazonFinalRestockSettingsService(options).read()).toEqual({ peak_boost_enabled: true });
+      expect(await restarted.read()).toEqual({ peak_boost_enabled: false, peak_boost_days: 20 });
+      await restarted.save({ peak_boost_enabled: true, peak_boost_days: 20 });
+      expect(await new DesktopAmazonFinalRestockSettingsService(options).read()).toEqual({ peak_boost_enabled: true, peak_boost_days: 20 });
       writeFileSync(join(dataRoot, "skill-data/amazon-final-restock/parameters.json"), '{"peak_boost_enabled":"false"}');
       await expect(restarted.read()).rejects.toThrow("ValueError: Amazon 最终备货设置格式无效");
     } finally { rmSync(dataRoot, { recursive: true, force: true }); }
@@ -60,14 +60,17 @@ describe("Amazon final-restock settings bridge", () => {
       execute: async () => { throw new Error("must not execute"); },
     });
     expect(() => service.save({ peak_boost_enabled: "false" })).toThrow("must be a boolean");
+    for (const days of [-1, 121, 1.5, true, "20", undefined, NaN, Infinity]) {
+      expect(() => service.save({ peak_boost_enabled: false, peak_boost_days: days })).toThrow("peak_boost_days");
+    }
   });
 
-  test("rejects malformed settings in a CLI success response", async () => {
+  test("rejects malformed days in a CLI success response", async () => {
     const dataRoot = mkdtempSync(join(tmpdir(), "amazon-restock-invalid-response-"));
     try {
       const service = new DesktopAmazonFinalRestockSettingsService({
         platform: "darwin", pythonPath: "/managed/python", managedPath: "/managed", dataRoot,
-        execute: async () => ({ stdout: JSON.stringify({ type: "result", ok: true, data: { success: true, data: { peak_boost_enabled: "true" } } }), stderr: "", error: null }),
+        execute: async () => ({ stdout: JSON.stringify({ type: "result", ok: true, data: { success: true, data: { peak_boost_enabled: true, peak_boost_days: "20" } } }), stderr: "", error: null }),
       });
       await expect(service.read()).rejects.toThrow("Invalid lxeskill settings result");
     } finally { rmSync(dataRoot, { recursive: true, force: true }); }
@@ -82,11 +85,11 @@ describe("Amazon final-restock settings bridge", () => {
     [JSON.stringify({ type: "result", ok: false, error: { message: { detail: "unexpected error shape" } } }), "", null, "unexpected error shape"],
     [JSON.stringify({ type: "result", ok: false, error: { message: 12 } }), "", null, '"message":12'],
     [JSON.stringify({ type: "result", ok: false, error: { message: " " } }), "PermissionError: 实际进程错误", null, "PermissionError: 实际进程错误"],
-    [JSON.stringify({ type: "result", ok: true, data: { success: true, data: { peak_boost_enabled: true } } }), "", new Error("exit 1"), "exit 1"],
-    [JSON.stringify({ success: true, data: { peak_boost_enabled: true } }), "", null, "Invalid lxeskill settings result"],
-    [JSON.stringify({ type: "result", ok: false, data: { success: true, data: { peak_boost_enabled: true } } }), "", null, "Invalid lxeskill settings result"],
-    [JSON.stringify({ type: "progress", ok: true, data: { success: true, data: { peak_boost_enabled: true } } }), "", null, "Invalid lxeskill settings result"],
-    [JSON.stringify({ type: "result", ok: true, data: { success: false, data: { peak_boost_enabled: true } } }), "", null, "Invalid lxeskill settings result"],
+    [JSON.stringify({ type: "result", ok: true, data: { success: true, data: { peak_boost_enabled: true, peak_boost_days: null } } }), "", new Error("exit 1"), "exit 1"],
+    [JSON.stringify({ success: true, data: { peak_boost_enabled: true, peak_boost_days: null } }), "", null, "Invalid lxeskill settings result"],
+    [JSON.stringify({ type: "result", ok: false, data: { success: true, data: { peak_boost_enabled: true, peak_boost_days: null } } }), "", null, "Invalid lxeskill settings result"],
+    [JSON.stringify({ type: "progress", ok: true, data: { success: true, data: { peak_boost_enabled: true, peak_boost_days: null } } }), "", null, "Invalid lxeskill settings result"],
+    [JSON.stringify({ type: "result", ok: true, data: { success: false, data: { peak_boost_enabled: true, peak_boost_days: null } } }), "", null, "Invalid lxeskill settings result"],
   ] as const)("preserves failure diagnostics for response %s", async (stdout, stderr, error, expected) => {
     const dataRoot = mkdtempSync(join(tmpdir(), "amazon-restock-failure-"));
     try {
@@ -100,7 +103,7 @@ describe("Amazon final-restock settings bridge", () => {
 
   test("reads the standard terminal after progress events", async () => {
     const dataRoot = mkdtempSync(join(tmpdir(), "amazon-restock-progress-"));
-    const parameters = { peak_boost_enabled: true };
+    const parameters = { peak_boost_enabled: true, peak_boost_days: 0 };
     try {
       const service = new DesktopAmazonFinalRestockSettingsService({
         platform: "win32", pythonPath: "/managed/python", managedPath: "/managed", dataRoot,

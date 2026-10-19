@@ -18,7 +18,7 @@ from openpyxl.utils import column_index_from_string
 from openpyxl.workbook.properties import CalcProperties
 
 from services.mabang.amazon.fba.final_restock_recommendation import final_restock_formulas
-from services.mabang.amazon.fba.final_restock_settings import peak_boost_enabled as read_peak_boost_setting
+from services.mabang.amazon.fba.final_restock_settings import read_state as read_final_restock_settings
 from services.mabang.amazon.fba.source_verification import (
     SHEET as SOURCE_VERIFICATION_SHEET,
     TAG_COLUMNS,
@@ -342,14 +342,18 @@ def _rows_for_workbook(
     return result
 
 
-def _write_workbook(path: Path, rows: list[dict[str, Any]], *, peak_boost_enabled: bool = True) -> None:
+def _write_workbook(
+    path: Path, rows: list[dict[str, Any]], *, peak_boost_enabled: bool = True, peak_boost_days: int | None = None,
+) -> None:
     workbook = Workbook()
     worksheet = workbook.active
     worksheet.title = WORKSHEET_NAME
     worksheet.append(list(HEADERS))
     for row_index, row in enumerate(rows, start=2):
         worksheet.append([row.get(header) for header in HEADERS])
-        for column, formula in final_restock_formulas(row_index, peak_boost_enabled=peak_boost_enabled).items():
+        for column, formula in final_restock_formulas(
+            row_index, peak_boost_enabled=peak_boost_enabled, peak_boost_days=peak_boost_days,
+        ).items():
             if not row["_binding_verified"] and column in ADVICE_FORMULA_COLUMNS:
                 continue  # Keep the unverified source row without transport or restock advice.
             worksheet[f"{column}{row_index}"] = formula
@@ -482,7 +486,7 @@ def generate_final_restock_recommendation(
     clean_store_name = _text(store_name)
     if not clean_store_name:
         raise FinalRestockWorkbookError("store_name 不能为空")
-    peak_boost_enabled = read_peak_boost_setting()
+    settings = read_final_restock_settings()
     source_path = _path(msku_source_xlsx_path, label="MSKU 源文件")
     inventory_path = _path(shenzhen_inventory_report_xlsx_path, label="深圳库存报告")
     snapshot_path = _path(unlinked_shipments_snapshot_path, label="未关联货件快照")
@@ -519,7 +523,7 @@ def generate_final_restock_recommendation(
         temporary = Path(temporary_directory)
         formula_path = temporary / "final-restock-formulas.xlsx"
         recalculated_path = temporary / "final-restock-recalculated.xlsx"
-        _write_workbook(formula_path, rows, peak_boost_enabled=peak_boost_enabled)
+        _write_workbook(formula_path, rows, **settings)
         _recalculate(formula_path, recalculated_path)
         formula_error_count, formula_error_examples = _inspect_recalculated(
             recalculated_path,

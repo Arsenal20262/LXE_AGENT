@@ -163,12 +163,17 @@ def _generate(tmp_path: Path, *, source_path: Path | None = None, inventory_path
     )
 
 
-def test_generation_snapshots_setting_and_next_generation_reads_saved_value(tmp_path: Path, monkeypatch) -> None:
-    settings.save_parameters({"peak_boost_enabled": False})
+@pytest.mark.parametrize("initial_enabled,initial_days,next_enabled,next_days", [
+    (False, None, True, None), (True, 20, True, 60), (True, 0, True, None),
+])
+def test_generation_snapshots_setting_and_next_generation_reads_saved_value(
+    tmp_path: Path, monkeypatch, initial_enabled, initial_days, next_enabled, next_days,
+) -> None:
+    settings.save_parameters({"peak_boost_enabled": initial_enabled, "peak_boost_days": initial_days})
     original_rows = final_workbook._rows_for_workbook
 
     def change_setting_during_generation(*args, **kwargs):
-        settings.save_parameters({"peak_boost_enabled": True})
+        settings.save_parameters({"peak_boost_enabled": next_enabled, "peak_boost_days": next_days})
         return original_rows(*args, **kwargs)
 
     # This test checks the generation boundary; actual Office evaluation is tested separately.
@@ -189,8 +194,8 @@ def test_generation_snapshots_setting_and_next_generation_reads_saved_value(tmp_
                     assert before.cell(row, column).value != after.cell(row, column).value
                 else:
                     assert before.cell(row, column).value == after.cell(row, column).value
-        assert before["V2"].value == final_restock_formulas(2, peak_boost_enabled=False)["V"]
-        assert after["V2"].value == final_restock_formulas(2)["V"]
+        assert before["V2"].value == final_restock_formulas(2, peak_boost_enabled=initial_enabled, peak_boost_days=initial_days)["V"]
+        assert after["V2"].value == final_restock_formulas(2, peak_boost_enabled=next_enabled, peak_boost_days=next_days)["V"]
         assert before["AG2"].value == after["AG2"].value == 15
         assert before["AH2"].value == after["AH2"].value == "SKU-SEA"
         for sheet in (before, after):

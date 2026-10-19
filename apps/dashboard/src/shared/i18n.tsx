@@ -186,7 +186,9 @@ export const ZH_TEXT = {
   },
   amazonFinalRestockSettings: {
     title: "亚马逊最终备货设置", subtitle: "控制旺季备货天数加成；设置会保存并用于后续生成。",
-    toggle: "启用旺季加成（+30天，最多120天）", toggleHint: "开启时按运营备注和销量趋势规则增加空运或海运备货天数；关闭时不增加旺季天数。",
+    toggle: "启用旺季加成（总备货天数最多120天）", toggleHint: "开启时按运营备注和销量趋势规则增加空运或海运备货天数；关闭时不增加旺季天数。",
+    days: "旺季加成天数", daysHint: "留空使用默认30天，可填0～120的整数；关闭时保留设置，但不加成。",
+    invalidDays: "旺季加成天数须留空或填写0～120的整数。", save: "保存天数",
     saved: "旺季设置已保存。", saving: "正在保存…", appliesNextRun: "保存后下一次最终备货建议生成时生效，正在进行的计算不受影响。",
     loading: "正在读取设置…", retry: "重试", unavailable: "请在桌面应用工作台中打开亚马逊最终备货设置。",
   },
@@ -1111,7 +1113,9 @@ export const UI_TEXT: Record<Language, UiText> = {
     },
     amazonFinalRestockSettings: {
       title: "Amazon final-restock settings", subtitle: "Control the seasonal restock-day boost. The setting is saved for future workbooks.",
-      toggle: "Enable seasonal boost (+30 days, capped at 120)", toggleHint: "When enabled, air or sea restock days follow the existing operations-note and sales-trend rules. When disabled, no seasonal days are added.",
+      toggle: "Enable seasonal boost (total restock days capped at 120)", toggleHint: "When enabled, air or sea restock days follow the existing operations-note and sales-trend rules. When disabled, no seasonal days are added.",
+      days: "Seasonal boost days", daysHint: "Leave blank for the default 30 days, or enter an integer from 0 to 120. Disabling keeps the value without applying the boost.",
+      invalidDays: "Leave seasonal boost days blank or enter an integer from 0 to 120.", save: "Save days",
       saved: "Seasonal setting saved.", saving: "Saving…", appliesNextRun: "Changes apply to the next final-restock workbook. Running calculations keep their current inputs.",
       loading: "Loading settings…", retry: "Retry", unavailable: "Open Amazon final-restock settings in the desktop workbench.",
     },

@@ -39,7 +39,34 @@ def test_seasonal_boost_setting_requires_a_boolean():
         final_restock_formulas(2, peak_boost_enabled=1)
 
 
-def test_disabled_seasonal_boost_excel_recalculation(tmp_path):
+@pytest.mark.parametrize("days", [0, 20, 120])
+def test_custom_days_replace_only_the_existing_seasonal_bonus(days):
+    default = final_restock_formulas(2)
+    custom = final_restock_formulas(2, peak_boost_days=days)
+    for column, formula in default.items():
+        assert custom[column] == (formula.replace(",30,0))", f",{days},0))") if column in ("V", "W") else formula)
+    assert final_restock_formulas(2, peak_boost_days=None) == default
+    assert final_restock_formulas(2, peak_boost_days=30) == default
+    assert final_restock_formulas(2, peak_boost_enabled=False, peak_boost_days=days) == final_restock_formulas(2, peak_boost_enabled=False)
+
+
+@pytest.mark.parametrize("days", [-1, 121, 1.5, True, "20"])
+def test_formula_rejects_invalid_custom_days(days):
+    with pytest.raises(ValueError, match="peak_boost_days"):
+        final_restock_formulas(2, peak_boost_days=days)
+
+
+@pytest.mark.parametrize("enabled,days,remark,expected", [
+    (False, 20, "热销", (90, 95)),
+    (True, None, "热销", (120, 120)),
+    (True, 20, "热销", (110, 115)),
+    (True, 0, "热销", (90, 95)),
+    (True, 120, "热销", (120, 120)),
+    (True, 20, "", (90, 95)),
+    (True, 20, "不补，热销", (90, 95)),
+    (True, 20, "清货，热销", (None, None)),
+])
+def test_configured_seasonal_boost_excel_recalculation(tmp_path, enabled, days, remark, expected):
     executable = shutil.which("soffice") or shutil.which("libreoffice")
     if executable is None:
         pytest.skip("NOT VERIFIED: LibreOffice is unavailable for formula evaluation")
@@ -49,8 +76,8 @@ def test_disabled_seasonal_boost_excel_recalculation(tmp_path):
     sheet["I2"] = "平稳"
     sheet["J2"] = 11
     sheet["S2"] = 80
-    sheet["AF2"] = "热销"
-    formulas = final_restock_formulas(2, peak_boost_enabled=False)
+    sheet["AF2"] = remark
+    formulas = final_restock_formulas(2, peak_boost_enabled=enabled, peak_boost_days=days)
     sheet["V2"] = formulas["V"]
     sheet["W2"] = formulas["W"]
     book.save(source)
@@ -65,8 +92,8 @@ def test_disabled_seasonal_boost_excel_recalculation(tmp_path):
     assert result.returncode == 0, result.stdout + result.stderr
     calculated = load_workbook(output / source.name, data_only=True)
     try:
-        assert calculated.active["V2"].value == 90
-        assert calculated.active["W2"].value == 95
+        assert calculated.active["V2"].value == expected[0]
+        assert calculated.active["W2"].value == expected[1]
     finally:
         calculated.close()
 

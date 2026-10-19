@@ -1,4 +1,5 @@
 import { validateTitlebarMenu } from "./titlebar-menu";
+import { isAmazonFinalRestockSettings } from "./amazon-final-restock-settings";
 import { exportVietnamMapWithDialog } from "./vietnam-map-export";
 import { fileResult } from "./file-preview/errors";
 import { mkdirSync } from "node:fs";
@@ -283,10 +284,8 @@ export function registerDesktopIpc(application: DesktopIpcApplication): () => vo
   });
   ipcMain.handle(IPC_CHANNELS.saveAmazonFinalRestockSettings, (event, input: unknown) => {
     trustedWorkspaceSender(event);
-    if (!input || typeof input !== "object" || Array.isArray(input)
-      || Object.keys(input as object).length !== 1
-      || typeof (input as Record<string, unknown>).peak_boost_enabled !== "boolean") {
-      throw new Error("peak_boost_enabled must be a boolean");
+    if (!isAmazonFinalRestockSettings(input)) {
+      throw new Error("peak_boost_enabled must be a boolean; peak_boost_days must be null or an integer between 0 and 120");
     }
     return application.saveAmazonFinalRestockSettings(input);
   });

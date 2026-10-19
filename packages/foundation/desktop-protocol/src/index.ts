@@ -680,6 +680,7 @@ export interface DesktopVietnamSettingsState {
 
 export interface DesktopAmazonFinalRestockSettings {
   peak_boost_enabled: boolean;
+  peak_boost_days: number | null;
 }
 
 export interface DesktopUsageBalance {

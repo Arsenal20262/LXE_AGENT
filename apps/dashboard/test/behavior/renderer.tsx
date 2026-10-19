@@ -51,7 +51,7 @@ let candidateOverride: { path: string; kind: "file" | "directory" }[] | undefine
 const pendingCandidates: (() => void)[] = [];
 const referenceSkills = ["office-xlsx", "office-docx", "office-pptx"].map(name => ({ name, description: "Office fixture skill", type: "default", commands: [], references: [], location: "/skills/" + name + "/SKILL.md" }));
 let vietnamUploadError: boolean | string = false;
-let amazonSettings = { peak_boost_enabled: true };
+let amazonSettings: { peak_boost_enabled: boolean; peak_boost_days: number | null } = { peak_boost_enabled: true, peak_boost_days: null };
 let amazonReadError = false;
 let amazonSaveMode: "success" | "hold" | "error" = "success";
 let releaseAmazonSave: (() => void) | undefined;

@@ -82,7 +82,7 @@ describe("preload bridge", () => {
     await bridge.desktop.prepareCloudDependencies();
     await bridge.desktop.getCloudState();
     await bridge.desktop.getAmazonFinalRestockSettings();
-    await bridge.desktop.saveAmazonFinalRestockSettings({ peak_boost_enabled: false });
+    await bridge.desktop.saveAmazonFinalRestockSettings({ peak_boost_enabled: false, peak_boost_days: 20 });
     await bridge.desktop.retryCloudConnection();
     await bridge.desktop.openCloudDestination("erp_dashboard");
     await bridge.desktop.selectZiniaoApp();
@@ -229,6 +229,7 @@ describe("preload bridge", () => {
     expect(invocations.find(call => call.channel === IPC_CHANNELS.stageDroppedConversationFiles)?.arguments).toEqual([["/private/drop/notes.txt"]]);
     expect(invocations.find(call => call.channel === IPC_CHANNELS.discardConversationFiles)?.arguments).toEqual([["attachment-1"]]);
     expect(invocations.find(call => call.channel === IPC_CHANNELS.previewDraftConversationFile)?.arguments).toEqual(["attachment-1"]);
+    expect(invocations.find(call => call.channel === IPC_CHANNELS.saveAmazonFinalRestockSettings)?.arguments).toEqual([{ peak_boost_enabled: false, peak_boost_days: 20 }]);
     expect(invocations[1]?.arguments).toEqual([{ provider: "deepseek", api_key: "local-key" }]);
     expect(invocations[2]?.arguments).toEqual(["deepseek"]);
     expect(invocations[4]?.arguments).toEqual([{ enrollment_id: "enroll-123", password: "password-value" }]);
