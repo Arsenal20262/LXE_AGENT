@@ -14,9 +14,11 @@
 
 - 分支：`codex/mabang-tms-warehouse-export`，Pool：`pool-3`。
 - 工作区：`/Users/hym/PycharmProjects/LXE_AGENT/.worktrees/pool-3`。
-- PR 目标基线：`Arsenal20262/LXE_AGENT:main@3b81841b9b1ada8d1622c6d33e1a8d4933fc3c71`；同步前为 `9f36647a`。同批提问独占仍依赖独立 Runtime PR #9（`313cd8bf0f830f6480e444804d69a637d923acf8`），尚未并入本分支。
-- 用户已授权本地基线同步、测试冲突解决及提交；没有 push、创建 PR 或修改主工作区。当前提交范围及验证见末节。
+- 本轮 PR 目标基线：`Arsenal20262/LXE_AGENT:main@88a303386826e560ec6e45c692f93ee0f20311de`。已按用户单独授权，将 Arsenal main 从 `5af6a40e` 快进到该版本，同步来源为 `LXE123/LXE_AGENT:main` 的 8 个上游提交，未将 TMS 或 Runtime 功能合并到 main。同批提问独占仍依赖独立 Runtime PR #9（`313cd8bf0f830f6480e444804d69a637d923acf8`），尚未并入本分支。
+- 业务代码版本：`785ad37b39dbc1ea591443d88de8037b837b7330`，为 TMS 功能提交 `93cc6135` 与上述 main 的本地合并提交，已推送至 `Arsenal20262/LXE_AGENT:codex/mabang-tms-warehouse-export`；本轮文档收口在其后追加独立 docs 提交，复用现有草稿 PR #11，不新建或合并 PR。末节保留的是此前以旧 Arsenal main 为目标的历史同步与提交记录。
+- 最新 main 合并时的验证：Python TMS/CLI 218 通过；Skill/CLI/问答契约 55 通过；Runtime 四个定向文件 184 通过、2 个已知失败；Runtime 类型检查通过。用户随后反馈本地桌面测试通过；不据此将既有 VN1 部分交付改写为单次全量验收通过。
 - 复用一个 TMS Skill、一个命令及原认证、分页、下载、合并和交付链路；没有新增独立国家流程。马帮 ERP、雅仓、上马和越南计算的业务代码未修改，雅仓 Skill 仅同步来源澄清说明。
+- 本轮仅修正文档链接及当前交接信息，进行本地链接、范围和 diff 检查；未重复上述业务测试、未访问生产。用户已授权将文档修正提交推送至原功能分支并更新草稿 PR #11，具体提交及远端状态以 Git 和 PR 记录为准。
 
 ## 新能力与调用链
 
@@ -32,7 +34,7 @@
 
 ## 当前分支累计修改文件
 
-2026-10-19 按相对 PR 目标 `main@3b81841b` 的实际 diff 核对：累计 14 个修改、2 个新增，共 16 个任务文件，完整清单如下。目标 main 原有能力及本次快进带入的 31 个提交不计为本任务新增；同步阶段的局部调整仅为测试冲突解决和本 handoff 更新。此前各文档收口阶段的文件数仍按当时增量理解。
+2026-10-19 按相对本轮 PR 目标 `Arsenal20262/LXE_AGENT:main@88a30338` 的实际 diff 核对：累计 14 个修改、2 个新增，共 16 个任务文件，完整清单如下。目标 main 原有能力及历次基线同步带入的上游提交不计为本任务新增；此前各文档收口阶段的文件数仍按当时增量理解。
 
 - `python/lxeskill_cli/lxeskill/catalog.json`：同命令可选 `warehouse` 字符串，PH1 / VN1 / all。
 - `python/lxeskill_cli/services/mabang_tms/client.py`：列表、导出可选同一 `warehouseId`；无参请求不新增字段；复用现有机制增加下载安全日志。
@@ -48,7 +50,7 @@
 - `skills/southeast-asia-replenishment-workflow-map/SKILL.md`：更新现有 TMS 能力范围。
 - `skills/yacang-reports-export/SKILL.md`：补充同国家仓库的 ERP 来源澄清，不改变雅仓导出规则。
 - `docs/harness/skill/current_skill_catalog.md`：同步能力说明。
-- `docs/harness/skill/mabang-tms-export-validation.md`：修正旧命令并追加本次证据边界。
+- `docs/acceptance/mabang-tms-export-validation.md`：随 main 迁移后的验收文档，修正旧命令并追加本次证据边界。
 - `docs/record/20261016-mabang-tms-warehouse-export-handoff.md`（新增）：本 handoff。
 
 ## 环境与首次实现验证（历史记录）
