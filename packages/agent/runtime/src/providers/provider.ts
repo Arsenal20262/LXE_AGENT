@@ -19,6 +19,7 @@ import {
 import type {
   RuntimeContentBlock,
   RuntimeMessage,
+  RuntimeModelSelection,
   RuntimeMessageContent,
   RuntimeProvider,
   RuntimeProviderRequest,
@@ -95,7 +96,7 @@ export interface RuntimeProviderSnapshot {
 }
 
 export interface RuntimeProviderManager {
-  acquire(): RuntimeProviderSnapshot;
+  acquire(selection?: RuntimeModelSelection): RuntimeProviderSnapshot;
   reconfigure(
     patch: ProviderConfigPatch,
     persist?: (environmentPatch: Record<string, string>) => Promise<void> | void,
@@ -771,8 +772,20 @@ export class AtomicRuntimeProviderManager implements RuntimeProviderManager {
     this.snapshot = this.createSnapshot(1);
   }
 
-  acquire(): RuntimeProviderSnapshot {
-    return this.snapshot;
+  acquire(selection?: RuntimeModelSelection): RuntimeProviderSnapshot {
+    if (!selection) return this.snapshot;
+    const environment = { ...this.environment,
+      AGENT_LLM_PROVIDER: selection.provider, AGENT_LLM_MODEL: selection.model,
+      AGENT_LLM_CREDENTIAL_SOURCE: selection.credential_source,
+      AGENT_LLM_THINKING_ENABLED: selection.thinking_enabled ? "1" : "0",
+      AGENT_LLM_THINKING_EFFORT: selection.effort,
+      ...(selection.credential_source === "cloud" && this.managedLlmState?.() ? {
+        LXE_MANAGED_LLM_PROVIDER: selection.provider, LXE_MANAGED_LLM_MODEL: selection.model,
+      } : {}),
+    };
+    const descriptor = this.load(environment, true, this.managedLlmState?.());
+    if (descriptor.model !== selection.model) throw new Error(`unsupported session LLM model: ${selection.provider}/${selection.model}`);
+    return { generation: this.snapshot.generation, descriptor, provider: this.resolvingProvider(descriptor, environment) };
   }
 
   async reconfigure(

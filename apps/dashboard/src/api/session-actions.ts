@@ -3,9 +3,10 @@ import { callDashboard } from "./client";
 
 // Protocol requests only. Selection, drafts and cache coordination belong to the session workflow.
 export const sessionActions = {
-  create: (directory: string) => callDashboard({ operation: "sessions.create", input: { directory } }),
+  create: (workspace_id: string) => callDashboard({ operation: "sessions.create", input: { workspace_id } }),
   registerWorkspace: (directory: string) => callDashboard({ operation: "workspaces.register", input: { directory } }),
-  renameWorkspace: (directory: string, display_name: string) => callDashboard({ operation: "workspaces.rename", input: { directory, display_name } }),
+  renameWorkspace: (workspace_id: string, display_name: string) => callDashboard({ operation: "workspaces.rename", input: { workspace_id, display_name } }),
+  deleteWorkspace: (workspace_id: string) => callDashboard({ operation: "workspaces.delete", input: { workspace_id } }),
   send: (input: DashboardRpcCall<"sessions.send">["input"]) => callDashboard({ operation: "sessions.send", input }),
   stop: (session_id: string) => callDashboard({ operation: "sessions.stop", input: { session_id } }),
   rename: (session_id: string, title: string) => callDashboard({ operation: "sessions.rename", input: { session_id, title } }),

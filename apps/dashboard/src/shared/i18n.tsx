@@ -116,6 +116,7 @@ export const ZH_TEXT = {
     viewStats: "查看统计",
     noSessions: "暂无会话记录",
     noSkills: "近 7 天暂无技能使用",
+    retry: "重试",
     executionsUnit: (count: string) => `${count} 次执行`,
     loadError: "总览数据加载失败"
   },
@@ -185,8 +186,8 @@ export const ZH_TEXT = {
   },
   workbenchIndex: {
     eyebrow: "工作台",
-    title: "工具",
-    subtitle: "选一个工具开始。",
+    title: "功能",
+    subtitle: "选择一项功能开始。",
     back: "返回工作台",
     tools: {
       syntheticPerformer: {
@@ -194,16 +195,17 @@ export const ZH_TEXT = {
         summary: "批量给图片和视频添加亚马逊要求的 AI 人物标签。"
       },
       inputAssets: {
-        name: "模板与数据源",
+        name: "FBA模版与数据源",
         summary: "查看技能正在使用的模板和长期数据表。"
       }
     }
   },
   inputAssets: {
-    eyebrow: "工作台 · 模板与数据源",
-    title: "模板与数据源",
+    eyebrow: "工作台 · FBA模版与数据源",
+    title: "FBA模版与数据源",
     subtitle: "技能会自动记住这些文件的当前版本。上传新版本时会自动升档，上一版保留一份备用。",
     slotSummary: (filled: number, total: number) => `${filled} / ${total} 已就绪`,
+    noSlots: "暂无可用的模板与数据源。",
     empty: "还没有存过",
     emptyHint: "第一次在对话里上传后，这里就会显示当前版本。",
     current: "当前版本",
@@ -311,6 +313,13 @@ export const ZH_TEXT = {
     tokenSuffix: "Token"
   },
   workspaces: {
+    delete: "删除工作区",
+    deletePrompt: (name: string) => "将把“" + name + "”从工作区列表中移除。文件夹与会话记录会保留，其会话将显示在“未分组”下。",
+    deleting: "正在删除工作区…",
+    ungrouped: "未分组",
+    required: "请先选择工作区。",
+    notFound: "工作区不存在。",
+
     title: "工作区", defaultName: "默认工作区", choose: "选择工作区", open: "打开文件夹",
     newIn: (name: string) => `在“${name}”中新建对话`,
     loadMore: "加载更多对话", retry: "重试", empty: "暂无对话",
@@ -521,6 +530,7 @@ export const ZH_TEXT = {
   },
   usage: {
     title: "使用统计",
+    description: "查看回合、技能和工具的使用情况。",
     rangeAria: "统计时间范围",
     rangeDays: (days: string) => `${days} 天`,
     loading: "正在加载统计...",
@@ -602,6 +612,11 @@ export const ZH_TEXT = {
     closeNotice: "关闭提示",
     interfaceLanguage: "界面语言",
     integrationsGroup: "业务集成",
+    preferencesGroup: "偏好与账户",
+    computerGroup: "这台电脑",
+    searchSettings: "搜索设置",
+    clearSearch: "清除搜索",
+    noSettingsFound: "没有匹配的设置项",
     cancel: "取消",
     listSeparator: "、",
     keepBlankSuffix: "（留空则保持不变）",
@@ -695,7 +710,9 @@ export const ZH_TEXT = {
       workspaceRoot: "新会话默认工作区"
     },
     appearance: {
-      description: "调整整个界面的文字大小，选择后立即生效。",
+      description: "让界面适合你的阅读习惯。更改会立即生效。",
+      themeHint: "选择浅色、深色，或跟随系统外观。",
+      fontSizeHint: "调整界面和对话中的文字大小。",
       fontSizeAria: "字体大小",
       themeAria: "外观主题"
     },
@@ -1018,6 +1035,7 @@ export const UI_TEXT: Record<Language, UiText> = {
       viewStats: "Open stats",
       noSessions: "No sessions yet",
       noSkills: "No skill usage in the last 7 days",
+      retry: "Retry",
       executionsUnit: (count: string) => `${count} runs`,
       loadError: "Failed to load overview"
     },
@@ -1087,8 +1105,8 @@ export const UI_TEXT: Record<Language, UiText> = {
     },
     workbenchIndex: {
       eyebrow: "Workbench",
-      title: "Tools",
-      subtitle: "Pick a tool to get started.",
+      title: "Features",
+      subtitle: "Choose a feature to get started.",
       back: "Back to workbench",
       tools: {
         syntheticPerformer: {
@@ -1096,16 +1114,17 @@ export const UI_TEXT: Record<Language, UiText> = {
           summary: "Batch-add Amazon's required AI performer tag to images and videos."
         },
         inputAssets: {
-          name: "Templates & data sources",
+          name: "FBA templates & data sources",
           summary: "See the templates and long-lived tables your skills are using."
         }
       }
     },
     inputAssets: {
-      eyebrow: "Workbench · Templates & data sources",
-      title: "Templates & data sources",
+      eyebrow: "Workbench · FBA templates & data sources",
+      title: "FBA templates & data sources",
       subtitle: "Skills remember the current version of these files. Uploading a new one promotes it automatically and keeps the previous version as a spare.",
       slotSummary: (filled: number, total: number) => `${filled} / ${total} ready`,
+      noSlots: "No templates or data sources are available yet.",
       empty: "Nothing stored yet",
       emptyHint: "The current version appears here after your first upload in a conversation.",
       current: "Current",
@@ -1213,6 +1232,13 @@ export const UI_TEXT: Record<Language, UiText> = {
       tokenSuffix: "Token"
     },
     workspaces: {
+      delete: "Delete workspace",
+      deletePrompt: (name: string) => "This removes “" + name + "” from the workspace list. The folder and session logs will be kept. Its sessions will appear under Ungrouped.",
+      deleting: "Deleting workspace…",
+      ungrouped: "Ungrouped",
+      required: "Select a workspace first.",
+      notFound: "Workspace not found.",
+
       title: "Workspaces", defaultName: "Default workspace", choose: "Choose workspace", open: "Open folder",
       newIn: (name: string) => `New chat in “${name}”`,
       loadMore: "Load more chats", retry: "Retry", empty: "No conversations yet",
@@ -1423,6 +1449,7 @@ export const UI_TEXT: Record<Language, UiText> = {
     },
     usage: {
       title: "Usage Stats",
+      description: "Review activity across turns, skills and tools.",
       rangeAria: "Stats time range",
       rangeDays: (days: string) => `${days} days`,
       loading: "Loading stats...",
@@ -1504,6 +1531,11 @@ export const UI_TEXT: Record<Language, UiText> = {
       closeNotice: "Dismiss notice",
       interfaceLanguage: "Interface language",
       integrationsGroup: "Integrations",
+      preferencesGroup: "Preferences & account",
+      computerGroup: "This computer",
+      searchSettings: "Search settings",
+      clearSearch: "Clear search",
+      noSettingsFound: "No matching settings",
       cancel: "Cancel",
       listSeparator: ", ",
       keepBlankSuffix: " (leave blank to keep it unchanged)",
@@ -1597,7 +1629,9 @@ export const UI_TEXT: Record<Language, UiText> = {
         workspaceRoot: "Default workspace for new sessions"
       },
       appearance: {
-        description: "Adjust the text size across the interface; changes apply immediately.",
+        description: "Make the interface comfortable to read. Changes apply immediately.",
+        themeHint: "Choose a light or dark appearance, or follow your system.",
+        fontSizeHint: "Adjust text size across the interface and conversations.",
         fontSizeAria: "Font size",
         themeAria: "Appearance theme"
       },

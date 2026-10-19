@@ -1,4 +1,5 @@
 import { projectSessionTitle } from "../../api/session-titles";
+import "./conversation-theme.css";
 import { Pencil } from "lucide-react";
 import { ApprovalGate, PermissionPicker } from "./permissions";
 import { ReferenceComposer } from "./ReferenceComposer";
@@ -583,7 +584,7 @@ function TurnFileList({
           const isOpening = opening.has(file.artifact_id);
           const error = errors.get(file.artifact_id) ?? "";
           return (
-            <div className={error ? "turn-file-item has-error" : "turn-file-item"} key={file.artifact_id}>
+            <div className={`turn-file-item conversation-chrome-theme${error ? " has-error" : ""}`} key={file.artifact_id}>
               <button
                 aria-busy={isOpening}
                 aria-label={t.conversation.openFile(file.name)}
@@ -1279,8 +1280,8 @@ export function ConversationComposer({
   return (
     <div className={`conversation-composer ${dragActive ? "drag-active" : ""}`}>
       <ApprovalGate key={conversationKey} requests={approvals} ready={runtimeReady} onChanged={onApprovalChanged}>
-      {dragActive ? <div className="conversation-drop-hint">{t.conversation.dropFiles}</div> : null}
-      <div className="conversation-compose-box">
+      {dragActive ? <div className="conversation-drop-hint conversation-chrome-theme">{t.conversation.dropFiles}</div> : null}
+      <div className="conversation-compose-box conversation-chrome-theme">
         <UserQuestionGate request={runtimeReady ? question : undefined} conversationKey={runtimeReady ? conversationKey : "offline"} onAnswered={onQuestionAnswered}>
         {attachments.length ? (
           <InputAttachmentList draft attachments={attachments} onRemove={sending ? undefined : removeAttachment} />
@@ -1454,7 +1455,7 @@ export const UnifiedConversationRow = React.memo(function UnifiedConversationRow
   const role = message.role;
   if (role === "user" && message.attachments?.length) {
     const text = readerFacingMessageText(message);
-    return <div className="message-with-meta role-user has-sent-attachments">
+    return <div className="message-with-meta role-user has-sent-attachments conversation-chrome-theme">
       <SentAttachmentList attachments={message.attachments} sessionId={attachmentSessionId}
         ready={row.status !== "sending" && !row.error} onOpen={onOpenAttachment} />
       {text.trim() ? <article className="message-card role-user"><UserReferenceText text={text} skills={Array.isArray(message.invoked_skills) ? message.invoked_skills : []} /></article> : null}
@@ -1463,7 +1464,7 @@ export const UnifiedConversationRow = React.memo(function UnifiedConversationRow
       <MessageMeta createdAt={Number(message.created_at ?? row.createdAt / 1000)} role={role} text={text} />
     </div>;
   }
-  return <div className={`message-with-meta role-${role}`}>
+  return <div className={`message-with-meta role-${role}${role === "user" ? " conversation-chrome-theme" : ""}`}>
     <article className={`message-card role-${role}${row.presentation === "final" ? " response-final-answer" : ""}${message.attachments?.length ? " has-attachments" : ""}`}>
       <MessageContent content={message.content} message={message} />
       {message.attachments?.length ? <InputAttachmentList attachments={message.attachments} onOpen={onOpenAttachment} /> : null}

@@ -253,7 +253,7 @@ export class TypeScriptAgentRuntime implements AgentRuntime {
     }
     const workspace = assertWorkspaceAvailable(session.workspace);
     const executionPaths = this.options.executionPaths ?? new ExecutionPaths(join(process.cwd(), "var"));
-    const configuredProvider = this.options.providerManager?.acquire();
+    const configuredProvider = this.options.providerManager?.acquire(session.model_selection);
     const providerSnapshot = configuredProvider ? { ...configuredProvider, provider: configuredProvider.provider.captureForTurn?.() ?? configuredProvider.provider } : undefined;
     let titleRequested = false;
     const provider = providerSnapshot?.provider ?? this.options.provider;
@@ -473,6 +473,7 @@ export class TypeScriptAgentRuntime implements AgentRuntime {
           system: systemPrompt, tools: toolSchemas, toolChoice: heartbeat || isLastStep ? "none" : "auto",
         });
       const turnContext: RuntimeTurnContextRecord = {
+        ...(session.model_selection_version === undefined ? {} : { model_selection_version: session.model_selection_version }),
         turn_id: job.job_id,
         job_kind: heartbeat ? "heartbeat" : "turn",
         provider: descriptor?.name ?? "custom",
@@ -660,11 +661,14 @@ export class TypeScriptAgentRuntime implements AgentRuntime {
                 titleRequested = true;
                 this.options.sessionTitles?.onMainRequest(job.session_id, job.message_id || job.job_id, providerSnapshot, userIdentity);
               }
-              const response = structuredClone(await provider.turn(request));
+              let requestImagesOmitted = false;
+              const response = structuredClone(await provider.turn({ ...request,
+                onRequestImagesOmitted: () => { requestImagesOmitted = true; },
+              }));
               delete response.contextTokenAnchor;
               const usage = response.usage;
               const actualInput = usage.input_tokens + (usage.cache_read_input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0);
-              if (!isCancelled(handle) && ["stop", "length", "toolUse"].includes(response.stopReason) &&
+              if (!requestImagesOmitted && !isCancelled(handle) && ["stop", "length", "toolUse"].includes(response.stopReason) &&
                 usage.status === "complete" && [usage.input_tokens, usage.output_tokens, usage.cache_read_input_tokens ?? 0, usage.cache_creation_input_tokens ?? 0]
                   .every(value => Number.isSafeInteger(value) && value >= 0) && Number.isSafeInteger(actualInput) && actualInput > 0 &&
                 (!response.responseModel || response.responseModel === systemPromptContext.model)) {

@@ -38,9 +38,9 @@ def test_defaults_persist_and_reload_in_another_process():
     assert state["sku_map"] is None
     raw = {**state["parameters"], "exchange_rate": "4100", "sales_weight_7d": "1", "sales_weight_15d": "0", "sales_weight_30d": "0"}
     settings.save_parameters(raw)
-    child = subprocess.run([sys.executable, "-I", "-B", "-m", "services.vietnam_replenishment.settings", "read"], capture_output=True, text=True)
+    child = subprocess.run([sys.executable, "-I", "-B", "-m", "lxeskill", "vietnam", "replenishment", "settings", "--action", "read"], capture_output=True, text=True)
     assert child.returncode == 0, child.stderr
-    assert json.loads(child.stdout)["data"]["parameters"] == raw
+    assert json.loads(child.stdout)["data"]["data"]["parameters"] == raw
 
 
 @pytest.mark.parametrize("change", [
@@ -227,15 +227,15 @@ def test_desktop_upload_and_saved_map_read_return_all_errors_without_replacing_d
     book.save(invalid)
     book.close()
     child = subprocess.run(
-        [sys.executable, "-I", "-B", "-m", "services.vietnam_replenishment.settings", "upload", str(invalid)],
+        [sys.executable, "-I", "-B", "-m", "lxeskill", "vietnam", "replenishment", "settings", "--action", "upload", "--path", str(invalid)],
         capture_output=True, text=True, encoding="utf-8",
     )
-    assert child.returncode == 1, child.stderr
+    assert child.returncode == 4, child.stderr
     result = json.loads(child.stdout)
-    assert result["success"] is False
-    assert "4 个错误，涉及 2 行" in result["error"]
+    assert result["ok"] is False
+    assert "4 个错误，涉及 2 行" in result["error"]["message"]
     for cell in ("B2", "E2", "C3", "D3"):
-        assert f"Sheet!{cell}" in result["error"]
+        assert f"Sheet!{cell}" in result["error"]["message"]
     assert {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in before} == before
     assert not list(target.parent.glob(".sku-map-*.xlsx"))
 
@@ -243,6 +243,6 @@ def test_desktop_upload_and_saved_map_read_return_all_errors_without_replacing_d
     target.write_bytes(invalid.read_bytes())
     state = settings.read_state()
     assert state["sku_map"] is None
-    assert state["sku_map_error"] == result["error"]
+    assert state["sku_map_error"] == result["error"]["message"]
     assert target.read_bytes() == invalid.read_bytes()
     assert (parameters.read_bytes(), parameters.stat().st_mtime_ns) == before[parameters]

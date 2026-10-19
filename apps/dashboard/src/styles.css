@@ -16,6 +16,8 @@
      this one stack. Document viewers keep the fonts declared by the file. */
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --bg: #fafaf9;
+  /* Shared canvas for chat content, composer dock and scroll-edge fades. */
+  --conversation-bg: var(--bg);
   --bg-soft: #ffffff;
   --surface: #ffffff;
   --surface-muted: #f7f4f0;
@@ -27,8 +29,8 @@
   --inline-code-fill: var(--table-header-fill);
   --inline-code-text: #1f1f1f;
   --row-hover: #f3efe9;
-  --border: #ebe4da;
-  --border-strong: #ddd2c4;
+  --border: #e3e3e3;
+  --border-strong: #d1d1d1;
   --text: #2f2a24;
   --text-strong: #221f1b;
   --text-soft: #5d544a;
@@ -52,7 +54,7 @@
   --tool-muted: #fdf8f0;
   --tool-border: #eee6d9;
   --tool-border-strong: #e1d1b8;
-  --message-border: #e8ded3;
+  --message-border: var(--border);
   --message-border-user: #6f9fc0;
   --message-border-assistant: #d59478;
   --message-border-tool: #d9b56f;
@@ -65,7 +67,7 @@
   --message-tool-text: #826238;
   --message-system-soft: #f7f6f4;
   --message-system-text: #6c635a;
-  --assistant-content-width: 760px;
+  --assistant-content-width: 722px;
   --danger: #a34d3d;
   --danger-soft: #fff5f2;
   --danger-border: #ecc7bf;
@@ -73,10 +75,10 @@
   --info-soft: #fbf7f2;
   --focus-ring: rgba(180, 106, 77, 0.2);
   --scrim: rgba(47, 42, 36, 0.42);
-  --shadow-soft: rgba(82, 62, 42, 0.06);
-  --shadow-medium: rgba(82, 62, 42, 0.1);
-  --shadow-strong: rgba(54, 39, 26, 0.2);
-  --shadow-card: 0 1px 2px rgba(82, 62, 42, 0.05), 0 6px 20px rgba(82, 62, 42, 0.04);
+  --shadow-soft: rgba(0, 0, 0, 0.06);
+  --shadow-medium: rgba(0, 0, 0, 0.1);
+  --shadow-strong: rgba(0, 0, 0, 0.2);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.05), 0 6px 20px rgba(0, 0, 0, 0.04);
   --rate-good: #4e8a4e;
   --rate-good-soft: #edf5ed;
   --rate-warn: #b07f1f;
@@ -144,6 +146,7 @@ button {
 :root[data-theme="dark"] {
   color-scheme: dark;
   --bg: #242322;
+  --conversation-bg: #151515;
   --bg-soft: #2b2927;
   --surface: #32302e;
   --surface-muted: #2e2c2a;
@@ -433,6 +436,10 @@ button {
   gap: 0;
   padding: 0;
   overflow: hidden;
+}
+
+:where(:root:not([data-theme="dark"])) :is(.desktop-fatal-card, .desktop-onboarding-card, .desktop-settings-modal) {
+  box-shadow: 0 24px 80px rgb(0 0 0 / 14%);
 }
 
 .desktop-onboarding-header {
@@ -2050,6 +2057,7 @@ button {
   --app-navigation-width: 53.2px;
   --app-titlebar-height: 41.8px;
   --app-sidebar-width: 256px;
+  --app-panel-radius: 14px;
   --sidebar-control-left: calc(var(--app-navigation-width) + 8px);
   --navigation-bg: var(--bg);
   --sidebar-bg: var(--bg);
@@ -2076,8 +2084,20 @@ button {
   transition: grid-template-columns 180ms cubic-bezier(0.2, 0.75, 0.25, 1);
 }
 
-.app-shell.sidebar-collapsed {
+.app-shell.sidebar-collapsed,
+.app-shell.sidebar-unavailable {
   grid-template-columns: var(--app-navigation-width) 0 minmax(0, 1fr);
+}
+
+/* When the session list is absent, the page owns the same leading corner. */
+.app-shell.sidebar-unavailable > .main-panel > .content-panel {
+  border-top-left-radius: var(--app-panel-radius);
+}
+
+/* Keep the list mounted for scroll/search state, but remove all off-page chrome. */
+.app-sidebar[hidden],
+.sidebar-window-controls[hidden] {
+  display: none;
 }
 
 .sidebar-resizer {
@@ -2249,7 +2269,7 @@ button {
   margin-top: var(--app-titlebar-height);
   padding-top: 8px;
   border-top: 1px solid var(--sidebar-border);
-  border-radius: 14px 0 0 0;
+  border-radius: var(--app-panel-radius) 0 0 0;
   opacity: 1;
   transform: translateX(0);
   visibility: visible;
@@ -2763,6 +2783,10 @@ h1 {
   padding: 4px 9px;
   font-size: 0.6875rem;
   box-shadow: 0 4px 14px rgba(33, 29, 26, 0.06);
+}
+
+:root:not([data-theme="dark"]) .dashboard-refresh-indicator {
+  box-shadow: 0 4px 14px rgb(0 0 0 / 6%);
 }
 
 .dashboard-home-panel .content-panel {
@@ -4937,14 +4961,14 @@ h1 {
 
 .conversation-scroll-area::before {
   top: 0;
-  background: linear-gradient(to bottom, var(--bg) 30%, transparent);
+  background: linear-gradient(to bottom, var(--conversation-bg) 30%, transparent);
 }
 
 /* The composer dock's own gradient sits below the scroll container, so it
    never reached the edge that does the cutting. This one covers that edge. */
 .conversation-scroll-area::after {
   bottom: 0;
-  background: linear-gradient(to top, var(--bg) 30%, transparent);
+  background: linear-gradient(to top, var(--conversation-bg) 30%, transparent);
 }
 
 .conversation-jump-latest {
@@ -5957,7 +5981,7 @@ h1 {
 /* Light chat prose only; shared Markdown previews keep their existing theme. */
 :root:not([data-theme="dark"]) .conversation-feed .message-markdown hr {
   margin: 20px 0;
-  background: #e3e3e2;
+  background: var(--border);
 }
 
 :root:not([data-theme="dark"]) .conversation-feed .message-markdown a[href] {
@@ -5988,7 +6012,7 @@ h1 {
 :root:not([data-theme="dark"]) .conversation-feed .message-markdown blockquote {
   margin-left: 7px;
   padding-left: 14px;
-  border-left: 4px solid #e4e4e3;
+  border-left: 4px solid var(--border);
   color: #52514f;
 }
 
@@ -6420,13 +6444,13 @@ code {
 /* Screenshot-derived light chat palette. Keep these overrides local: the
    shared highlighter also renders tool output, file previews and skill docs. */
 :root:not([data-theme="dark"]) .conversation-feed .message-markdown code:not(pre code) {
-  border: 1px solid #dadad9;
+  border: 1px solid #dadada;
   background: #f0f0ef;
   color: #8e2726;
 }
 
 :root:not([data-theme="dark"]) .conversation-feed .message-markdown pre.code-block {
-  border-color: #e4e4e3;
+  border-color: var(--border);
   background: #fff;
   color: #1a1a1a;
 }
@@ -6458,6 +6482,93 @@ code {
 
 :root:not([data-theme="dark"]) .conversation-feed .message-markdown .code-block .hljs-deletion {
   color: #8e2726;
+}
+
+/* Pixel-checked dark chat colours. Keep the palette local: the sidebar,
+   composer, user bubbles, tool output and other Markdown viewers retain theirs. */
+:root[data-theme="dark"] :is(.conversation-view, .conversation-scroll-area, .conversation-feed) {
+  background-color: var(--conversation-bg);
+}
+
+:root[data-theme="dark"] .conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown {
+  color: #f0efec;
+}
+
+:root[data-theme="dark"] .conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown :is(h1, h2, h3, h4, h5, h6) {
+  color: #f0efec;
+}
+
+:root[data-theme="dark"] .conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown code:not(pre code) {
+  color: #ed7e7e;
+  background: #212121;
+  /* An inset stroke preserves the existing inline box size and line wrapping. */
+  box-shadow: inset 0 0 0 1px #373737;
+}
+
+:root[data-theme="dark"] .conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown pre.code-block {
+  background: #1a1a19;
+  border-color: #2c2c2c;
+  color: #d3d7df;
+}
+
+:root[data-theme="dark"] .conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown hr {
+  background: #2d2d2d;
+}
+
+:root[data-theme="dark"] .conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown blockquote {
+  border-left-color: #2d2d2d;
+  color: #c3c2b7;
+}
+
+/* Only the verified default state; hover keeps the existing link styling. */
+:root[data-theme="dark"] .conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown a[href]:not(:hover) {
+  color: #6da8ed;
+  text-decoration-color: #39506a;
+}
+
+:root[data-theme="dark"] .conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown :is(th, td) {
+  color: #f0efec;
+  border-color: #373737;
+}
+
+:root[data-theme="dark"] .conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown th {
+  background: #212121;
+}
+
+:root[data-theme="dark"] .conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown td {
+  background: transparent;
+}
+
+:root[data-theme="dark"] .conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown .code-block .hljs-keyword {
+  color: #cc7bf4;
+}
+
+:root[data-theme="dark"] .conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown .code-block :is(.hljs-title, .hljs-built_in) {
+  color: #70b8ff;
+}
+
+:root[data-theme="dark"] .conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown .code-block :is(.hljs-type, .hljs-params) {
+  color: #fbae60;
+}
+
+:root[data-theme="dark"] .conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown .code-block.language-typescript :is(.hljs-built_in, .hljs-params .hljs-attr) {
+  color: #fbae60;
+}
+
+:root[data-theme="dark"] .conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown .code-block :is(.hljs-string, .hljs-addition) {
+  color: #9ce963;
+}
+
+:root[data-theme="dark"] .conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown .code-block .hljs-number {
+  color: #5eedee;
+}
+
+:root[data-theme="dark"] .conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown .code-block.language-json .hljs-attr {
+  color: #ebecf0;
+}
+
+:root[data-theme="dark"] .conversation-feed :is(.message-card.role-assistant, .timeline-text.process-message-content) .message-markdown .code-block .hljs-deletion {
+  color: #f57b85;
 }
 
 .modal-backdrop {
@@ -7806,6 +7917,19 @@ pre {
   transform: translateY(0) scale(0.96);
 }
 
+/* Neutral light-theme elevation; retain the existing dark-theme shadows. */
+:root:not([data-theme="dark"]) .runtime-status-popover {
+  box-shadow: 0 18px 50px rgb(0 0 0 / 18%), 0 2px 8px var(--shadow-soft);
+}
+
+:root:not([data-theme="dark"]) .runtime-status-trigger {
+  box-shadow: 0 12px 30px rgb(0 0 0 / 26%), 0 2px 7px var(--shadow-medium);
+}
+
+:root:not([data-theme="dark"]) .runtime-status-trigger:hover {
+  box-shadow: 0 15px 34px rgb(0 0 0 / 30%), 0 2px 8px var(--shadow-medium);
+}
+
 .runtime-status-trigger:focus-visible {
   outline: 3px solid var(--focus-ring);
   outline-offset: 3px;
@@ -8397,13 +8521,13 @@ pre {
 
 .sidebar-session-section .session-index-item {
   display: block;
-  padding: 0 3px 0 0;
+  padding: 0;
   color: var(--sidebar-ink-soft);
 }
 
 .sidebar-session-section .session-index-open {
   width: 100%;
-  padding: 5.5px 8px;
+  padding: 5.5px 0 5.5px 8px;
 }
 
 .sidebar-session-section .session-index-actions {
@@ -8422,6 +8546,7 @@ pre {
 }
 
 .sidebar-session-section .session-index-icon {
+  border-width: 1px;
   color: currentColor;
   opacity: 0.35;
 }
@@ -8447,10 +8572,11 @@ pre {
   min-width: 0;
   color: inherit;
   font-size: 0.8375rem;
+  font-weight: 400;
   text-overflow: clip;
   white-space: nowrap;
-  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent 100%);
-  mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 12px), transparent 100%);
+  mask-image: linear-gradient(to right, #000 calc(100% - 12px), transparent 100%);
 }
 
 .sidebar-session-section .empty-state {
@@ -8602,14 +8728,12 @@ pre {
   opacity: 0.6;
 }
 
-/* The plane, not a card. --surface here sits under every card in the
-   transcript, which in light mode differed from --bg by five units and hid the
-   problem; on dark the same pair is far enough apart that the composer dock's
-   fade to --bg showed up as a band across the bottom. */
+/* Share the chat canvas with the dock and edge fades to avoid visible seams.
+   Cards, including the input card, keep their own surface colours. */
 .conversation-view {
   position: relative;
   overflow: hidden;
-  background: var(--bg);
+  background: var(--conversation-bg);
 }
 
 .conversation-header {
@@ -8735,9 +8859,8 @@ pre {
   background-color: rgba(180, 106, 77, 0.72);
 }
 
-/* One content column for everything. The feed used to be 820px while assistant
-   content capped at --assistant-content-width (760px), so user bubbles, tool
-   traces and replies each ended on a different right edge. */
+/* One centered column for user bubbles, tool traces, replies and the composer.
+   The shared cap leaves room on both sides without shrinking narrow windows. */
 .conversation-feed {
   display: flex;
   width: min(var(--assistant-content-width), calc(100% - 48px));
@@ -9370,9 +9493,19 @@ pre {
   padding: 5px 9px;
 }
 
-/* Light chat tool rows use text contrast for interaction, leaving status
-   colours and the keyboard focus outline independent. */
-:root:not([data-theme="dark"]) .conversation-feed .tool-op-summary:is(:hover, :focus-visible) {
+/* Both themes use text contrast for interaction, leaving the row background,
+   status colours and keyboard focus outline independent. */
+.conversation-feed {
+  --tool-op-hover-name: #52514f;
+  --tool-op-hover-argument: #0b0b0b;
+}
+
+:root[data-theme="dark"] .conversation-feed {
+  --tool-op-hover-name: #bfbdb5;
+  --tool-op-hover-argument: #f5f4ed;
+}
+
+.conversation-feed .tool-op-summary:is(:hover, :focus-visible) {
   background: transparent;
 }
 
@@ -9384,12 +9517,12 @@ pre {
   color: #52514f;
 }
 
-:root:not([data-theme="dark"]) .conversation-feed .tool-op:not(.state-error) .tool-op-summary:not(:disabled):is(:hover, :focus-visible) .tool-op-name {
-  color: #52514f;
+.conversation-feed .tool-op:not(.state-error) .tool-op-summary:not(:disabled):is(:hover, :focus-visible) .tool-op-name {
+  color: var(--tool-op-hover-name);
 }
 
-:root:not([data-theme="dark"]) .conversation-feed .tool-op-summary:not(:disabled):is(:hover, :focus-visible) .tool-op-argument {
-  color: #0b0b0b;
+.conversation-feed .tool-op-summary:not(:disabled):is(:hover, :focus-visible) .tool-op-argument {
+  color: var(--tool-op-hover-argument);
 }
 
 .optimistic-message-state {
@@ -9481,6 +9614,19 @@ pre {
 
 .turn-file-item.has-error {
   border-color: var(--danger-border);
+}
+
+:root:not([data-theme="dark"]) .conversation-feed .turn-file-item {
+  box-shadow: 0 1px 2px rgb(0 0 0 / 6%), 0 3px 8px rgb(0 0 0 / 8%);
+}
+
+:root:not([data-theme="dark"]) .conversation-feed .turn-file-item:not(.has-error) {
+  border-color: var(--border-strong);
+}
+
+:root:not([data-theme="dark"]) .conversation-feed .turn-file-item:has(> .turn-file-card:hover:not(:disabled)):not(.has-error) {
+  border-color: #bdbdbd;
+  background: var(--surface);
 }
 
 /* Kept on every row, including when the whole set shares a type, because it is
@@ -9597,7 +9743,7 @@ pre {
   z-index: 7;
   flex: 0 0 auto;
   padding: 0 24px 18px;
-  background: linear-gradient(to bottom, transparent, var(--bg) 18px);
+  background: linear-gradient(to bottom, transparent, var(--conversation-bg) 18px);
 }
 
 /* Same axis as .conversation-feed — both track --assistant-content-width. */

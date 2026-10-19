@@ -1,3 +1,4 @@
+import { projectWorkspaceData } from "../../api/workspace-membership";
 import { projectSessionData, projectSessionTitle } from "../../api/session-titles";
 import type { DesktopConversationActivityPayload, DesktopConversationSendPayload, DesktopConversationTurnPayload, DesktopInputAttachmentPayload } from "@lxe/desktop-protocol";
 import type { BackgroundTaskChangedPayload } from "@lxe/desktop-protocol";
@@ -61,6 +62,13 @@ export class ConversationDisplayController {
   completeHistory(ticket: HistoryTicket, page: SessionDetailPayload, direction: "latest" | "older" | "newer"): boolean {
     if (!this.isCurrent(ticket)) return false;
     this.receiveHistory(page, direction, ticket.revision); return true;
+  }
+
+  updateWorkspaceMembership(): void {
+    this.state = { ...this.state,
+      ...(this.state.detail ? { detail: projectWorkspaceData(this.state.detail) } : {}),
+      ...(this.state.latest ? { latest: projectWorkspaceData(this.state.latest) } : {}) };
+    this.notify();
   }
 
   updateTitle(session: import("@lxe/desktop-protocol").SessionPayload): void {
@@ -135,7 +143,7 @@ export class ConversationDisplayController {
     this.notify();
   }
   receiveHistory(page: SessionDetailPayload, direction: "latest" | "older" | "newer", requestRevision = this.revision): void {
-    page = projectSessionData(page);
+    page = projectWorkspaceData(projectSessionData(page));
     if (page.session.session_id !== this.state.sessionId) return;
     // Keep the bounded newest page separately only when reading an older, disconnected window.
     const latest = direction === "latest" ? boundConversationWindow(page) : this.state.latest;

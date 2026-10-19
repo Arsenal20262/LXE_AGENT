@@ -23,8 +23,8 @@ def _records(capsys) -> list[dict]:
 def test_catalog_defines_every_cli_command_and_hidden_alias() -> None:
     catalog = load_catalog()
 
-    assert len(catalog) == 46
-    assert sum(bool(entry.get("module")) for entry in catalog.values()) == 40
+    assert len(catalog) == 47
+    assert sum(bool(entry.get("module")) for entry in catalog.values()) == 41
     assert sum(entry.get("handler") == "browser" for entry in catalog.values()) == 2
     assert sum(entry.get("visibility") == "maintenance" for entry in catalog.values()) == 4
     assert len({tuple(entry["command_path"]) for entry in catalog.values()}) == len(catalog)
@@ -162,7 +162,7 @@ def test_doctor_reports_repository_contract_without_adding_a_list_command(capsys
             "command": "doctor",
             "ok": True,
             "data": {
-                "catalog_commands": 46,
+                "catalog_commands": 47,
                 "business_commands": 40,
                 "skill_files": 38,
                 "owner_skills": 30,
@@ -719,5 +719,5 @@ def test_absent_skill_scope_is_unrestricted(monkeypatch, capsys) -> None:
 def test_vietnam_has_one_ordinary_command_and_no_managed_contract() -> None:
     catalog = load_catalog()
     assert not any("managed_execution" in entry for entry in catalog.values())
-    assert [name for name in catalog if name.startswith("vietnam_replenishment_")] == ["vietnam_replenishment_generate"]
+    assert [name for name, entry in catalog.items() if name.startswith("vietnam_replenishment_") and entry["visibility"] != "internal"] == ["vietnam_replenishment_generate"]
     assert not any(name.startswith("assets_vietnam_sku_") for name in catalog)

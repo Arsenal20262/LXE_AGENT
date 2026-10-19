@@ -23,6 +23,7 @@ import {
   buildSystemPrompt,
   configureRuntimeWireTracing,
   createRuntimeProvider,
+  DeepSeekFilesService,
   ExecShellAdapter,
   loadLxeSkillCommandCatalog,
   loadLxeSkillDatasets,
@@ -127,10 +128,14 @@ export function createAgentRuntimeHost(
   const sessionTitles = new SessionTitleService({ store, onChanged: sessionId => options.onSessionChanged?.(sessionId, "title"), logger });
   const permissionPolicy = new PermissionPolicyService();
   const executionPaths = new ExecutionPaths(options.dataRoot);
+  const deepseekFiles = new DeepSeekFilesService({
+    cachePath: join(options.dataRoot, "cache", "deepseek-files.json"),
+    imageDirectory: join(options.dataRoot, "cache", "deepseek-images"),
+  });
   const providerManager = new AtomicRuntimeProviderManager(
     options.dataRoot,
     environment,
-    createRuntimeProvider,
+    descriptor => createRuntimeProvider(descriptor, deepseekFiles),
     options.llmConfigRoot,
     join(options.dataRoot, "config", "auth.json"),
     () => managedLlmState,
@@ -334,7 +339,7 @@ export function createAgentRuntimeHost(
     stop: async () => {
       const errors: unknown[] = [];
       // Audit failures must not leave processes or temporary grants alive.
-      for (const stop of [() => approvals.stop(), () => questions.stop(), () => runtime.stop()]) {
+      for (const stop of [() => approvals.stop(), () => questions.stop(), () => runtime.stop(), () => deepseekFiles.close()]) {
         try { await stop(); } catch (error) { errors.push(error); }
       }
       started = false;

@@ -763,17 +763,17 @@ describe("DashboardService", () => {
 });
 
 
-test("sessions.create validates and canonicalizes directories, reuses blanks, and never invokes tools", async () => {
+test("sessions.create validates workspace identity and directory availability, reuses blanks, and never invokes tools", async () => {
   const root = mkdtempSync(join(tmpdir(), "lxe-blank-rpc-")); roots.push(root);
   const store = new SqliteRuntimeStore(join(root, "agent.sqlite3"), { legacyWorkspace: workspaceFor(root) }); await store.start();
   const service = new DashboardService({ stateRoot: root, llmConfigRoot: root, skillsRoot: root, userSkillsRoot: root,
     environment: {}, store, tools: new ToolRegistry(), mcpConfig: { servers: [] } });
   try {
-    const first = await service.call({ operation: "sessions.create", input: { directory: root } });
-    const other = await service.call({ operation: "sessions.create", input: { directory: join(root, ".") } });
+    const first = await service.call({ operation: "sessions.create", input: { workspace_id: (await service.call({ operation: "workspaces.register", input: { directory: root } })).workspace_id } });
+    const other = await service.call({ operation: "sessions.create", input: { workspace_id: (await service.call({ operation: "workspaces.register", input: { directory: root } })).workspace_id } });
     expect(first).toEqual(other); expect(first.blank).toBe(true);
     expect((await service.call({ operation: "sessions.list", input: {} })).total).toBe(0);
-    await expect(service.call({ operation: "sessions.create", input: { directory: join(root, "missing") } })).rejects.toThrow("ENOENT");
+    await expect(service.call({ operation: "sessions.create", input: { workspace_id: store.registerWorkspace(join(root, "missing")).workspace_id } })).rejects.toThrow("ENOENT");
   } finally { await store.stop(); }
 });
 

@@ -58,7 +58,7 @@ pending events 不经过 Router 或 `AgentJob.raw_data`；Runtime 在 turn 开�
 
 ### `/stop`
 
-停止命令清除该 session 的 pending queue，以 `user_stop` 原因取消 active run，并设置 autonomy suspended；heartbeat 在 suspended 状态下丢弃自主唤醒。停止说明由 Runtime 独立写入历史，不拼到下一条用户消息，详见 [取消与失败](../runtime/runtime_flow.md#cancel-与失败)。
+停止命令清除该 session 的 pending queue，以 `user_stop` 原因取消 active run，并设置 autonomy suspended；heartbeat 在 suspended 状态下丢弃自主唤醒。停止说明由 Runtime 独立写入历史，不拼到下一条用户消息，详见 [取消与失败](../runtime/turn_execution.md#cancel-与失败)。
 
 ### `/clear`
 

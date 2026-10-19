@@ -24,6 +24,7 @@ export * from "./providers/provider-factory";
 export * from "./providers/provider-preferences";
 export * from "./providers/completions-provider";
 export * from "./providers/responses-provider";
+export * from "./providers/deepseek-files";
 export * from "./tooling/process-output";
 export * from "./state/storage";
 export * from "./tooling/registry";

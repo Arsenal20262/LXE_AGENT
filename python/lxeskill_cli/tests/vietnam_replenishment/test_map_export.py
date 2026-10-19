@@ -165,27 +165,27 @@ def test_export_takes_one_snapshot_while_upload_waits(tmp_path, monkeypatch):
     assert source.read_bytes() == replacement.read_bytes()
 
 
-def test_private_bridge_handles_unicode_paths_and_rejects_invalid_inputs(tmp_path):
+def test_settings_cli_handles_unicode_paths_and_rejects_invalid_inputs(tmp_path):
     output = tmp_path / "中文 空格.xlsx"
-    args = [sys.executable, "-I", "-B", "-m", "services.vietnam_replenishment.settings", "export"]
-    result = subprocess.run([*args, "template", str(output)], capture_output=True, text=True, encoding="utf-8")
+    args = [sys.executable, "-I", "-B", "-m", "lxeskill", "vietnam", "replenishment", "settings", "--action", "export"]
+    result = subprocess.run([*args, "--kind", "template", "--path", str(output)], capture_output=True, text=True, encoding="utf-8")
     assert result.returncode == 0, result.stderr
-    assert json.loads(result.stdout)["data"] == {"path": str(output)}
+    assert json.loads(result.stdout)["data"]["data"] == {"path": str(output)}
     for kind, path in [("invalid", str(output)), ("template", "relative.xlsx"), ("template", str(tmp_path / "other.txt"))]:
-        result = subprocess.run([*args, kind, path], capture_output=True, text=True, encoding="utf-8")
-        assert result.returncode == 1
-        assert json.loads(result.stdout)["success"] is False
+        result = subprocess.run([*args, "--kind", kind, "--path", path], capture_output=True, text=True, encoding="utf-8")
+        assert result.returncode == 4
+        assert json.loads(result.stdout)["ok"] is False
 
 
 @pytest.mark.parametrize("action", ["read", "invalid"])
-def test_private_bridge_emits_utf8_even_with_legacy_stdio(tmp_path, monkeypatch, action):
+def test_settings_cli_emits_utf8_even_with_legacy_stdio(tmp_path, monkeypatch, action):
     monkeypatch.setenv("LXE_DATA_ROOT", str(tmp_path / "中文 数据"))
     script = """
 import runpy, sys
 sys.stdout.reconfigure(encoding="gbk")
 sys.stderr.reconfigure(encoding="gbk")
-sys.argv = ["services.vietnam_replenishment.settings", sys.argv[1]]
-runpy.run_module("services.vietnam_replenishment.settings", run_name="__main__")
+sys.argv = ["lxeskill", "vietnam", "replenishment", "settings", "--action", sys.argv[1]]
+runpy.run_module("lxeskill", run_name="__main__")
 """
     child = subprocess.run(
         [sys.executable, "-I", "-B", "-c", script, action],
@@ -194,11 +194,11 @@ runpy.run_module("services.vietnam_replenishment.settings", run_name="__main__")
     result = json.loads(child.stdout.decode("utf-8"))
     if action == "read":
         assert child.returncode == 0, child.stderr
-        assert "中文 数据" in result["data"]["directory"]
+        assert "中文 数据" in result["data"]["data"]["directory"]
     else:
-        assert child.returncode == 1, child.stderr
-        assert result["success"] is False
-        assert "无效的桌面设置操作" in result["error"]
+        assert child.returncode == 4, child.stderr
+        assert result["ok"] is False
+        assert "无效的桌面设置操作" in result["error"]["message"]
 
 
 def test_partial_template_write_keeps_destination(tmp_path, monkeypatch):

@@ -70,7 +70,7 @@ Windows 解包后可执行 `bun scripts/verify-packaged-html.ts dist/desktop-unp
 
 界面验收截图来自生产查看器组件与测试夹具组成的窗口，左侧按钮及示例草稿是测试入口，不是生产聊天界面。
 
-桌面打包入口和 afterPack 都检查 PDF 支持资源、独立查看器、两个 Worker 和许可证；缺项即失败。两平台记录见 [验收记录](file-preview-acceptance.md)。
+桌面打包入口和 afterPack 都检查 PDF 支持资源、独立查看器、两个 Worker 和许可证；缺项即失败。两平台记录见 [验收记录](acceptance/file-preview-acceptance.md)。
 
 文件错误通过独立 IPC 的成功／失败结果返回，Renderer 解包后保留类别、操作和真实诊断；二进制仍为 `Uint8Array`。诊断脱敏，过长时明确标记截断。`scripts/verify-file-availability.ts` 使用生产 preload 和 IPC，在真实 Electron 沙箱里检查删除／移动、权限拒绝、恢复、历史图片、失效应用及缺失引擎；测试只修改独立验收目录内的文件与权限。
 

@@ -1,4 +1,5 @@
 import { fallbackSessionTitle, type SessionTitleState, type SessionTitleSource } from "./session-title";
+import { parseModelSelection } from "./model-selection";
 import { omitImageData } from "../messages/image-content";
 import { DEFAULT_PERMISSION_MODE, parsePermissionMode, type PermissionMode } from "@lxe/protocol";
 import { validContextDisplaySnapshot, type ContextDisplaySnapshot } from "@lxe/protocol";
@@ -11,6 +12,7 @@ import type { SQLQueryBindings } from "bun:sqlite";
 import type { JsonObject, JsonValue, SessionWorkspaceRequest, WorkspaceContext } from "@lxe/protocol";
 import type {
   RuntimeMessage,
+  RuntimeModelSelection,
   RuntimeArtifactRecord,
   RuntimeImageViewRecord,
   RuntimeAttachmentRecord,
@@ -344,7 +346,7 @@ export interface DashboardSessionListOptions {
   limit: number;
   offset: number;
   query?: string;
-  directory?: string;
+  workspace_id?: string | null;
 }
 
 export interface DashboardSessionPageOptions {
@@ -378,6 +380,7 @@ export interface SqliteRuntimeStoreOptions {
 }
 
 interface StoredWorkspace {
+  workspace_id: string;
   directory: string;
   display_name: string | null;
   created_at: number;
@@ -534,6 +537,8 @@ export class SqliteRuntimeStore implements RuntimeStore {
         // Only sessions admitted after this migration opt into automatic naming.
         ["title_automatic", "INTEGER NOT NULL DEFAULT 0"],
         ["context_display", "TEXT"],
+        ["pending_model_selection", "TEXT"],
+        ["model_selection_version", "INTEGER NOT NULL DEFAULT 0"],
         ["workspace_directory", "TEXT NOT NULL DEFAULT ''"],
         ["workspace_worktree", "TEXT NOT NULL DEFAULT ''"],
         ["permission_mode", "TEXT NOT NULL DEFAULT 'danger-full-access'"],
@@ -553,14 +558,25 @@ export class SqliteRuntimeStore implements RuntimeStore {
       if (columns.some((column) => column.name === retiredWorkspaceColumn)) {
         database.exec(`ALTER TABLE agent_sessions DROP COLUMN ${retiredWorkspaceColumn}`);
       }
-      // Historical paths are already stored identities, even when their directories are offline.
-      database.exec(`
-        INSERT OR IGNORE INTO agent_workspaces (directory, created_at)
-        SELECT workspace_directory, MIN(created_at) FROM agent_sessions
-        WHERE workspace_directory != '' GROUP BY workspace_directory
-      `);
-      database.exec("CREATE INDEX IF NOT EXISTS idx_agent_sessions_workspace ON agent_sessions (workspace_directory)");
-      if (this.options.legacyWorkspace) this.ensureWorkspace(this.options.legacyWorkspace.directory);
+      // Group membership is independent from the execution directory. Import old
+      // paths once; replay and restarts must never recreate a deleted registration.
+      if (!columns.some(column => column.name === "workspace_id")) {
+        database.exec("ALTER TABLE agent_sessions ADD COLUMN workspace_id TEXT");
+        database.exec("ALTER TABLE agent_workspaces ADD COLUMN workspace_id TEXT");
+        database.exec(`
+          INSERT OR IGNORE INTO agent_workspaces (directory, created_at)
+          SELECT workspace_directory, MIN(created_at) FROM agent_sessions
+          WHERE workspace_directory != '' GROUP BY workspace_directory
+        `);
+        for (const row of this.allPrepared<{ directory: string }>("SELECT directory FROM agent_workspaces")) {
+          database.query("UPDATE agent_workspaces SET workspace_id = ? WHERE directory = ?").run(randomUUID(), row.directory);
+        }
+        if (this.options.legacyWorkspace) this.ensureWorkspace(this.options.legacyWorkspace.directory);
+        database.exec(`UPDATE agent_sessions SET workspace_id =
+          (SELECT workspace_id FROM agent_workspaces WHERE directory = agent_sessions.workspace_directory)`);
+      }
+      database.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_agent_workspaces_id ON agent_workspaces (workspace_id)");
+      database.exec("CREATE INDEX IF NOT EXISTS idx_agent_sessions_group ON agent_sessions (workspace_id)");
       UsageStore.migrate(database);
       SessionStatusStore.migrate(database);
       if (!hadHistoryImageIndex) database.exec("DELETE FROM transcript_file_state");
@@ -616,18 +632,17 @@ export class SqliteRuntimeStore implements RuntimeStore {
     const source = mergeObjects(current ? parseObject(current.source) : {}, incomingSource);
     const now = Date.now() / 1_000;
     this.db().transaction(() => {
-      this.ensureWorkspace(workspace.directory);
       this.db().query(`
         INSERT INTO agent_sessions (
           session_id, source, workspace_directory, workspace_worktree, permission_mode,
-          created_at, last_active_at, title_automatic
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+          created_at, last_active_at, title_automatic, workspace_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, (SELECT workspace_id FROM agent_workspaces WHERE directory = ?))
         ON CONFLICT(session_id) DO UPDATE SET
           source = excluded.source,
           workspace_directory = excluded.workspace_directory,
           workspace_worktree = excluded.workspace_worktree,
           last_active_at = excluded.last_active_at
-      `).run(sessionId, JSON.stringify(source), workspace.directory, workspace.worktree, DEFAULT_PERMISSION_MODE, now, now);
+      `).run(sessionId, JSON.stringify(source), workspace.directory, workspace.worktree, DEFAULT_PERMISSION_MODE, now, now, workspace.directory);
       if (request.entry_text !== undefined) {
         this.db().query("UPDATE agent_sessions SET blank = 0 WHERE session_id = ?").run(sessionId);
       }
@@ -635,37 +650,79 @@ export class SqliteRuntimeStore implements RuntimeStore {
   }
 
   /** Only this admission path creates blanks; legacy zero-message sessions stay visible. */
-  createBlankSession(workspace: WorkspaceContext): JsonObject {
+  createBlankSession(workspace: WorkspaceContext, workspaceId?: string): JsonObject {
     return this.db().transaction(() => {
-      this.ensureWorkspace(workspace.directory);
+      const registered = workspaceId === undefined
+        ? this.getPrepared<StoredWorkspace>("SELECT * FROM agent_workspaces WHERE directory = ?", workspace.directory)
+        : this.getWorkspace(workspaceId);
+      if (!registered || registered.directory !== workspace.directory) throw new Error("workspace not found");
       const existing = this.getPrepared<Record<string, unknown>>(
-        "SELECT * FROM agent_sessions WHERE workspace_directory = ? AND blank = 1 ORDER BY created_at DESC LIMIT 1", workspace.directory,
+        "SELECT * FROM agent_sessions WHERE workspace_id = ? AND blank = 1 ORDER BY created_at DESC LIMIT 1", registered.workspace_id,
       );
       if (existing) return this.sessionPayload(existing);
       const id = randomUUID().replaceAll("-", ""), now = Date.now() / 1_000;
       this.db().query(`INSERT INTO agent_sessions
-        (session_id, source, workspace_directory, workspace_worktree, permission_mode, created_at, last_active_at, blank, title_automatic)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1)`).run(id, JSON.stringify({ platform: "desktop", chat_type: "dm" }), workspace.directory, workspace.worktree, DEFAULT_PERMISSION_MODE, now, now);
+        (session_id, source, workspace_directory, workspace_worktree, permission_mode, created_at, last_active_at, blank, title_automatic, workspace_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, ?)`).run(id, JSON.stringify({ platform: "desktop", chat_type: "dm" }), workspace.directory, workspace.worktree, DEFAULT_PERMISSION_MODE, now, now, registered.workspace_id);
       return this.sessionPayload(this.getPrepared<Record<string, unknown>>("SELECT * FROM agent_sessions WHERE session_id = ?", id)!);
     })();
   }
 
   async getSession(sessionId: string): Promise<RuntimeSessionRecord | undefined> {
+    await this.waitForSessionWrites(sessionId);
+    await this.enqueueIndexSync(sessionId, this.transcriptPath(sessionId));
     const row = this.getPrepared<{
       session_id: string;
       permission_mode: string;
       source: string;
       workspace_directory: string;
       workspace_worktree: string;
+      pending_model_selection: string | null;
+      model_selection_version: number;
+      model: string;
+      reasoning_effort: string;
+      model_config: string;
     }>(
-      `SELECT session_id, permission_mode, source, workspace_directory, workspace_worktree
+      `SELECT session_id, permission_mode, source, workspace_directory, workspace_worktree,
+              pending_model_selection, model_selection_version, model, reasoning_effort, model_config
        FROM agent_sessions WHERE session_id = ?`,
       text(sessionId),
     );
     if (!row) return undefined;
     const workspace = this.workspaceFromRow(row);
     if (!workspace) throw new Error(`session workspace is missing: ${row.session_id}`);
-    return { session_id: row.session_id, permission_mode: parsePermissionMode(row.permission_mode), source: parseObject(row.source), workspace };
+    const config = parseObject(row.model_config);
+    const selected = row.pending_model_selection ? parseModelSelection(JSON.parse(row.pending_model_selection))
+      : row.model && text(config.provider) ? parseModelSelection({
+        provider: text(config.provider), model: row.model, effort: row.reasoning_effort,
+        credential_source: config.credential_source === "cloud" ? "cloud" : "local",
+        thinking_enabled: config.thinking_enabled === true,
+      }) : undefined;
+    return { session_id: row.session_id, permission_mode: parsePermissionMode(row.permission_mode), source: parseObject(row.source), workspace,
+      ...(selected ? { model_selection: selected } : {}), model_selection_version: row.model_selection_version };
+  }
+
+  /** Commit selection intent before publishing its rebuildable SQLite projection. */
+  async setSessionModelSelection(sessionId: string, selection: RuntimeModelSelection, expectedVersion?: number): Promise<number> {
+    const selected = parseModelSelection(selection);
+    return this.enqueueSessionWrite(sessionId, async () => {
+      const path = this.transcriptPath(sessionId);
+      await this.enqueueIndexSync(sessionId, path);
+      const row = this.getPrepared<{ model_selection_version: number }>(
+        "SELECT model_selection_version FROM agent_sessions WHERE session_id = ?", sessionId);
+      if (!row) throw new Error(`session not found: ${sessionId}`);
+      if (expectedVersion !== undefined && expectedVersion !== row.model_selection_version) {
+        throw new Error(`session model selection changed: expected version ${expectedVersion}, current ${row.model_selection_version}`);
+      }
+      const version = row.model_selection_version + 1;
+      await this.appendTranscriptEvent(sessionId, { kind: "model_selection", selection: selected, version, ts: Date.now() / 1_000 });
+      // Selection acknowledgements survive process exit without relying on a later turn.
+      const file = await open(path, "r+");
+      try { await file.sync(); } finally { await file.close(); }
+      this.removeReplayCacheEntry(sessionId);
+      await this.enqueueIndexSync(sessionId, path);
+      return version;
+    });
   }
 
   /** Explicit session setting; never accepted via source metadata or tool state patches. */
@@ -684,7 +741,7 @@ export class SqliteRuntimeStore implements RuntimeStore {
 
   async appendApprovalEvent(sessionId: string, event: JsonObject): Promise<void> {
     await this.enqueueSessionWrite(sessionId, async () => {
-      if (!await this.getSession(sessionId)) throw new Error(`session not found: ${sessionId}`);
+      if (!this.sessionMetadata(sessionId)) throw new Error(`session not found: ${sessionId}`);
       await this.appendTranscriptEvent(sessionId, event);
       this.replayCache.delete(sessionId);
       await this.enqueueIndexSync(sessionId, this.transcriptPath(sessionId));
@@ -904,6 +961,7 @@ export class SqliteRuntimeStore implements RuntimeStore {
         effort: text(context.effort),
         thinking_enabled: context.thinking_enabled === true,
         provider_generation: Math.max(0, Math.trunc(Number(context.provider_generation ?? 0))),
+        ...(context.model_selection_version === undefined ? {} : { model_selection_version: context.model_selection_version }),
         context_window_tokens: Math.max(0, Math.trunc(Number(context.context_window_tokens ?? 0))),
         ts: Number(context.ts ?? Date.now() / 1_000),
       });
@@ -1206,8 +1264,8 @@ export class SqliteRuntimeStore implements RuntimeStore {
   }
 
   private ensureWorkspace(directory: string): void {
-    this.db().query("INSERT OR IGNORE INTO agent_workspaces (directory, created_at) VALUES (?, ?)")
-      .run(directory, Date.now() / 1_000);
+    this.db().query("INSERT OR IGNORE INTO agent_workspaces (directory, created_at, workspace_id) VALUES (?, ?, ?)")
+      .run(directory, Date.now() / 1_000, randomUUID());
   }
 
   /** Receives an already canonical directory from the host or session creation path. */
@@ -1216,26 +1274,40 @@ export class SqliteRuntimeStore implements RuntimeStore {
     return this.workspaceSummary(directory)!;
   }
 
-  renameWorkspace(directory: string, displayName: string): StoredWorkspace | undefined {
-    this.db().query("UPDATE agent_workspaces SET display_name = ? WHERE directory = ?")
-      .run(displayName.trim() || null, directory);
-    return this.workspaceSummary(directory);
+  renameWorkspace(workspaceId: string, displayName: string): StoredWorkspace | undefined {
+    this.db().query("UPDATE agent_workspaces SET display_name = ? WHERE workspace_id = ?")
+      .run(displayName.trim() || null, workspaceId);
+    const workspace = this.getWorkspace(workspaceId);
+    return workspace ? this.workspaceSummary(workspace.directory) : undefined;
+  }
+
+  getWorkspace(workspaceId: string): Pick<StoredWorkspace, "workspace_id" | "directory" | "display_name" | "created_at"> | undefined {
+    return this.getPrepared<Pick<StoredWorkspace, "workspace_id" | "directory" | "display_name" | "created_at">>("SELECT * FROM agent_workspaces WHERE workspace_id = ?", workspaceId) ?? undefined;
+  }
+
+  deleteWorkspace(workspaceId: string): boolean {
+    return this.db().transaction(() => {
+      if (!this.getWorkspace(workspaceId)) return false;
+      this.db().query("UPDATE agent_sessions SET workspace_id = NULL WHERE workspace_id = ?").run(workspaceId);
+      this.db().query("DELETE FROM agent_workspaces WHERE workspace_id = ?").run(workspaceId);
+      return true;
+    })();
   }
 
   private workspaceSummary(directory: string): StoredWorkspace | undefined {
     return this.getPrepared<StoredWorkspace>(`
-      SELECT w.directory, w.display_name, w.created_at, COUNT(s.session_id) AS session_count,
+      SELECT w.workspace_id, w.directory, w.display_name, w.created_at, COUNT(CASE WHEN s.blank = 0 THEN s.session_id END) AS session_count,
              COALESCE(MAX(s.last_active_at), 0) AS last_active_at
-      FROM agent_workspaces w LEFT JOIN agent_sessions s ON s.workspace_directory = w.directory AND s.blank = 0
+      FROM agent_workspaces w LEFT JOIN agent_sessions s ON s.workspace_id = w.workspace_id
       WHERE w.directory = ? GROUP BY w.directory
     `, directory) ?? undefined;
   }
 
   listSessionWorkspaces(): { items: StoredWorkspace[] } {
     return { items: this.allPrepared<StoredWorkspace>(`
-      SELECT w.directory, w.display_name, w.created_at, COUNT(s.session_id) AS session_count,
+      SELECT w.workspace_id, w.directory, w.display_name, w.created_at, COUNT(CASE WHEN s.blank = 0 THEN s.session_id END) AS session_count,
              COALESCE(MAX(s.last_active_at), 0) AS last_active_at
-      FROM agent_workspaces w LEFT JOIN agent_sessions s ON s.workspace_directory = w.directory AND s.blank = 0
+      FROM agent_workspaces w LEFT JOIN agent_sessions s ON s.workspace_id = w.workspace_id
       GROUP BY w.directory ORDER BY COALESCE(MAX(s.last_active_at), w.created_at) DESC, w.directory ASC
     `) };
   }
@@ -1256,9 +1328,10 @@ export class SqliteRuntimeStore implements RuntimeStore {
       clauses.push("(lower(coalesce(session_id, '')) LIKE ? OR lower(coalesce(title, '')) LIKE ? OR lower(coalesce(model, '')) LIKE ? OR lower(coalesce(source, '')) LIKE ?)");
       whereArgs.push(...Array<string>(4).fill(`%${needle}%`));
     }
-    if (options.directory !== undefined) {
-      clauses.push("workspace_directory = ?");
-      whereArgs.push(options.directory);
+    if (options.workspace_id === null) clauses.push("workspace_id IS NULL");
+    else if (options.workspace_id !== undefined) {
+      clauses.push("workspace_id = ?");
+      whereArgs.push(options.workspace_id);
     }
     const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
     const totalRow = this.getPrepared<{ count: number }>(
@@ -1266,7 +1339,7 @@ export class SqliteRuntimeStore implements RuntimeStore {
       ...whereArgs,
     );
     const rows = this.allPrepared<Record<string, unknown>>(`
-      SELECT session_id, permission_mode, source, workspace_directory, workspace_worktree,
+      SELECT session_id, permission_mode, source, workspace_id, workspace_directory, workspace_worktree,
              model, reasoning_effort, model_config, created_at, last_active_at,
              blank, message_count, tool_call_count, input_tokens, output_tokens, title, title_source, title_version, pinned_at, api_call_count
       FROM agent_sessions ${where}
@@ -1298,7 +1371,7 @@ export class SqliteRuntimeStore implements RuntimeStore {
     ).run(pinned ? Date.now() / 1_000 : 0, safeSessionId);
     if (Number(result.changes ?? 0) !== 1) return undefined;
     const row = this.getPrepared<Record<string, unknown>>(`
-      SELECT session_id, permission_mode, source, workspace_directory, workspace_worktree,
+      SELECT session_id, permission_mode, source, workspace_id, workspace_directory, workspace_worktree,
              model, reasoning_effort, model_config, created_at, last_active_at,
              blank, message_count, tool_call_count, input_tokens, output_tokens, title, title_source, title_version, pinned_at, api_call_count
       FROM agent_sessions WHERE session_id = ?
@@ -1431,7 +1504,7 @@ export class SqliteRuntimeStore implements RuntimeStore {
     if (!exists) return undefined;
     const display = await this.loadTranscriptDisplayPage(safeSessionId, options);
     const row = this.getPrepared<Record<string, unknown>>(`
-      SELECT session_id, permission_mode, source, workspace_directory, workspace_worktree,
+      SELECT session_id, permission_mode, source, workspace_id, workspace_directory, workspace_worktree,
              model, reasoning_effort, model_config, created_at, last_active_at,
              blank, message_count, tool_call_count, input_tokens, output_tokens, title, title_source, title_version, pinned_at, api_call_count, context_display
       FROM agent_sessions WHERE session_id = ?
@@ -1486,6 +1559,7 @@ export class SqliteRuntimeStore implements RuntimeStore {
       pinned_at: Math.max(0, Number(row.pinned_at ?? 0)),
       source,
       workspace,
+      workspace_id: text(row.workspace_id) || null,
       source_summary: {
         platform: text(source.platform) || "unknown",
         chat_type: text(source.chat_type),
@@ -1715,7 +1789,8 @@ export class SqliteRuntimeStore implements RuntimeStore {
       this.db().query("DELETE FROM transcript_attachments WHERE session_id = ?").run(sessionId);
       this.db().query("DELETE FROM transcript_file_state WHERE session_id = ?").run(sessionId);
       this.db().query(`
-        UPDATE agent_sessions SET model = '', reasoning_effort = '', model_config = '{}'
+        UPDATE agent_sessions SET model = '', reasoning_effort = '', model_config = '{}',
+          pending_model_selection = NULL, model_selection_version = 0
         WHERE session_id = ?
       `).run(sessionId);
     })();
@@ -1792,7 +1867,8 @@ export class SqliteRuntimeStore implements RuntimeStore {
         this.db().query("DELETE FROM transcript_artifacts WHERE session_id = ?").run(sessionId);
         this.db().query("DELETE FROM transcript_attachments WHERE session_id = ?").run(sessionId);
         this.db().query(`
-          UPDATE agent_sessions SET model = '', reasoning_effort = '', model_config = '{}'
+          UPDATE agent_sessions SET model = '', reasoning_effort = '', model_config = '{}',
+            pending_model_selection = NULL, model_selection_version = 0
           WHERE session_id = ?
         `).run(sessionId);
       }
@@ -1800,6 +1876,16 @@ export class SqliteRuntimeStore implements RuntimeStore {
         const event = line.event;
         eventCount += 1;
         if (text(event.kind) === "turn_context") latestContext = event;
+        if (event.kind === "model_selection") {
+          if (!Number.isSafeInteger(event.version) || Number(event.version) < 1) throw new Error("invalid session model selection version");
+          const selected = parseModelSelection(event.selection);
+          this.db().query(`UPDATE agent_sessions SET pending_model_selection = ?, model_selection_version = ?
+            WHERE session_id = ?`).run(JSON.stringify(selected), Number(event.version), sessionId);
+        }
+        if (event.kind === "turn_context" && Number.isSafeInteger(event.model_selection_version)) {
+          this.db().query(`UPDATE agent_sessions SET pending_model_selection = NULL
+            WHERE session_id = ? AND model_selection_version = ?`).run(sessionId, Number(event.model_selection_version));
+        }
         if (event.kind === "session_title" && typeof event.title === "string" && Number.isSafeInteger(event.version)) {
           this.db().query(`UPDATE agent_sessions SET title = ?, title_source = ?, title_version = ?,
             title_input = CASE WHEN ? <> '' THEN ? ELSE title_input END

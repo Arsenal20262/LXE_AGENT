@@ -131,6 +131,9 @@ module.exports = async ({suite,win,url,js,step,load,waitFor,click,key,focus,sett
     await js("behavior.ui.fail('models.thinking.update',false)");
     await focus('.conversation-thinking-level:last-of-type'); await key('Enter');
     await waitFor("document.querySelector('.conversation-thinking-level:last-of-type').getAttribute('aria-checked')==='true'",'keyboard thinking selection');
-    assert.deepEqual((await state()).calls.filter(c=>c.operation==='models.thinking.update').map(c=>c.input),[{level:'high'},{level:'high'}]);
+    assert.deepEqual((await state()).calls.filter(c=>c.operation==='models.thinking.update').map(c=>c.input),[
+      {level:'high',session_id:'Default chat',selection_version:0},
+      {level:'high',session_id:'Default chat',selection_version:0},
+    ]);
   });
 };

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type { CSSProperties } from "react";
+import "./conversation-theme.css";
 
 import { formatCompactNumber, formatNumber } from "../../shared/format";
 import { queryError, useStatsOverviewQuery } from "../../api/queries";
@@ -88,7 +89,7 @@ export function ConversationWelcome({ enabled = true }: { enabled?: boolean }) {
         </div>
       </header>
 
-      <div className="welcome-panel">
+      <div className="welcome-panel conversation-chrome-theme">
         <div className="welcome-panel-head">
           <span className="welcome-panel-title">{t.nav.usage}</span>
           <div aria-label={t.welcome.rangeAria} className="welcome-range" role="group">
