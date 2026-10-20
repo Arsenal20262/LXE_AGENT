@@ -1,16 +1,19 @@
 from __future__ import annotations
 
 import json
+from importlib.resources import files
+from pathlib import Path
 import subprocess
 import sys
 
 import pytest
-from openpyxl import Workbook
+from openpyxl import load_workbook
 
 from lxeskill import cli
 from lxeskill.business import load_catalog
 from services.agent_cli.vietnam_replenishment import settings as command
 from services.vietnam_replenishment import settings
+from services.vietnam_replenishment.full_workbook import UNCHANGED
 
 
 COMMAND = ["vietnam", "replenishment", "settings"]
@@ -31,14 +34,15 @@ def test_settings_command_is_internal_and_hidden_from_listing(capsys):
 @pytest.mark.parametrize("arguments", [
     {}, {"action": "invalid"}, {"action": []},
     {"action": "read", "path": "/unexpected.xlsx"},
-    {"action": "save"}, {"action": "upload"}, {"action": "export", "path": "/missing-kind.xlsx"},
+    {"action": "save"}, {"action": "upload"}, {"action": "export"},
+    {"action": "export", "kind": "current", "path": "/unexpected-kind.xlsx"},
     *[{"action": "upload", "path": path} for path in (None, 1, "", " ", "relative.xlsx")],
 ])
 def test_invalid_action_arguments_never_reach_storage(arguments, monkeypatch):
     def unexpected(*_args):
         pytest.fail("invalid arguments must not reach settings storage")
 
-    for name in ("read_state", "save_parameters", "upload_map", "export_map"):
+    for name in ("read_state", "save_parameters", "upload_template", "export_template"):
         monkeypatch.setattr(settings, name, unexpected)
     result = command.run(arguments)
     assert result["success"] is False
@@ -68,21 +72,25 @@ def test_cli_round_trip_uses_shared_storage_and_preserves_failed_upload(tmp_path
     invoke("save", "--parameters", json.dumps(parameters))
     assert invoke("read")["data"]["data"]["parameters"] == parameters
 
-    source = tmp_path / "中文 映射表.xlsx"
-    book = Workbook()
-    book.active.append(["SKU", "热销标记", "成本", "跨境价", "折扣价"])
-    book.active.append(["001", 1, 10, 20, 15])
+    source = tmp_path / "中文 九表模板.xlsx"
+    resource = files("services.vietnam_replenishment").joinpath("resources/skeleton.xlsx")
+    with resource.open("rb") as stream:
+        book = load_workbook(stream)
+    for index, name in enumerate(UNCHANGED, 1):
+        book.create_sheet(name, index)["A1"] = f"original {name}"
     book.save(source)
     book.close()
-    invoke("upload", "--path", str(source))
-    with settings.run_inputs() as (snapshot, config, *_):
-        assert snapshot.read_bytes() == source.read_bytes()
+    state = invoke("upload", "--path", str(source))["data"]["data"]
+    assert state["template"]["file_name"] == source.name
+    assert "sku_map" not in state
+    assert Path(state["template"]["path"]).read_bytes() == source.read_bytes()
+    with settings.run_inputs() as (config, _):
         assert str(config.exchange_rate) == "4200"
     invalid = tmp_path / "坏表.xlsx"
     invalid.write_bytes(b"not an xlsx")
     failed = invoke("upload", "--path", str(invalid), expected=cli.EXIT_BUSINESS)
-    assert "ZIP" in failed["error"]["message"]
+    assert "BadZipFile" in failed["error"]["message"]
     assert failed["error"]["message"] == failed["data"]["error"]["message"]
     output = tmp_path / "导出 当前表.xlsx"
-    assert invoke("export", "--kind", "current", "--path", str(output))["data"]["data"] == {"path": str(output)}
+    assert invoke("export", "--path", str(output))["data"]["data"] == {"path": str(output)}
     assert output.read_bytes() == source.read_bytes()

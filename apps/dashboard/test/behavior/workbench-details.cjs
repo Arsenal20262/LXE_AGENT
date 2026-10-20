@@ -34,13 +34,12 @@ module.exports = async ({ win, js, step, load, waitFor, click, settle, state }) 
   await step("Vietnam detail shares the theme and preserves fields at narrow widths", async () => {
     await open(1);
     await waitFor("document.querySelectorAll('.vietnam-settings-view input').length===7", "parameters loaded");
-    await click('.vietnam-map-upload');
-    await waitFor("document.querySelector('.vietnam-file-status').textContent.includes('sku-map.xlsx')", "map uploaded");
+    await click('.vietnam-template-upload');
+    await waitFor("document.querySelector('.vietnam-file-status').textContent.includes('越南备货清单.xlsx')", "template uploaded");
     await themes("vietnam");
     await win.setContentSize(480, 900); await open(1, "en");
     await waitFor("document.querySelectorAll('.vietnam-settings-view input').length===7", "narrow parameters loaded");
-    await click('.vietnam-advanced summary');
-    assert.equal(await js("document.querySelector('.vietnam-advanced').open"), true);
+    assert.equal(await js("document.querySelectorAll('.vietnam-setting-row').length"), 3);
     await capture("vietnam-narrow-en");
     await win.setContentSize(1200, 900);
   });
