@@ -1,7 +1,7 @@
 // Usage statistics view (turns / skills / tools aggregates).
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
-import { CircleX, Coins, MessagesSquare, TriangleAlert, Wrench, Zap } from "lucide-react";
+import { BookOpen, Coins, MessagesSquare, TriangleAlert, Wrench, Zap } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import {
@@ -10,7 +10,7 @@ import {
   useStatsOverviewQuery,
   useToolStatsQuery,
 } from "../../api/queries";
-import { EmptyState, FailureCount, SuccessRateCell } from "../../shared/components";
+import { EmptyState, FailureCount } from "../../shared/components";
 import { formatDate, formatDurationMs, formatNumber, skillTypeLabel } from "../../shared/format";
 import { useUiText } from "../../shared/i18n";
 import type { StatsOverviewPayload } from "../../api/payloads";
@@ -458,8 +458,8 @@ export function StatsView({ enabled = true }: { enabled?: boolean }) {
     { label: t.usage.totalsTurns, value: formatNumber(totals.turns), tone: "", icon: MessagesSquare },
     { label: t.usage.totalsErrorTurns, value: formatNumber(totals.error_turns), tone: dangerTone(totals.error_turns), icon: TriangleAlert },
     { label: t.usage.totalsToolCalls, value: formatNumber(totals.tool_calls), tone: "", icon: Wrench },
+    { label: t.usage.totalsReads, value: formatNumber(totals.skill_activations ?? 0), tone: "", icon: BookOpen },
     { label: t.usage.totalsExecutions, value: formatNumber(totals.skill_executions), tone: "", icon: Zap },
-    { label: t.usage.totalsFailures, value: formatNumber(totals.skill_failures), tone: dangerTone(totals.skill_failures), icon: CircleX },
     { label: t.usage.totalsTokens, value: formatNumber(totals.input_tokens + totals.output_tokens), tone: "", icon: Coins }
   ];
 
@@ -544,9 +544,6 @@ export function StatsView({ enabled = true }: { enabled?: boolean }) {
                     <th>{t.usage.columnSkills}</th>
                     <th>{t.usage.columnTurns}</th>
                     <th>{t.usage.columnExecutions}</th>
-                    <th>{t.usage.columnFailures}</th>
-                    <th>{t.usage.columnSuccessRate}</th>
-                    <th>{t.usage.columnAvgDuration}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -556,9 +553,6 @@ export function StatsView({ enabled = true }: { enabled?: boolean }) {
                       <td>{formatNumber(module.skills)}</td>
                       <td>{formatNumber(module.turns)}</td>
                       <td>{formatNumber(module.executions)}</td>
-                      <td><FailureCount value={module.failures} /></td>
-                      <td><SuccessRateCell executions={module.executions} failures={module.failures} /></td>
-                      <td>{formatDurationMs(module.executions > 0 ? module.duration_ms / module.executions : 0)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -580,10 +574,7 @@ export function StatsView({ enabled = true }: { enabled?: boolean }) {
                     <th>{t.usage.columnName}</th>
                     <th>{t.usage.columnActivations}</th>
                     <th>{t.usage.columnExecutions}</th>
-                    <th>{t.usage.columnFailures}</th>
-                    <th>{t.usage.columnSuccessRate}</th>
                     <th>{t.usage.columnTurns}</th>
-                    <th>{t.usage.columnAvgDuration}</th>
                     <th>{t.usage.columnLastUsed}</th>
                   </tr>
                 </thead>
@@ -593,10 +584,7 @@ export function StatsView({ enabled = true }: { enabled?: boolean }) {
                       <td title={skill.name}>{t.skillDisplayName(skill.name)}</td>
                       <td>{formatNumber(skill.activations)}</td>
                       <td>{formatNumber(skill.executions)}</td>
-                      <td><FailureCount value={skill.failures} /></td>
-                      <td><SuccessRateCell executions={skill.executions} failures={skill.failures} /></td>
                       <td>{formatNumber(skill.execution_turns)}</td>
-                      <td>{formatDurationMs(skill.executions > 0 ? skill.duration_ms / skill.executions : 0)}</td>
                       <td>{formatDate(skill.last_used_at)}</td>
                     </tr>
                   ))}

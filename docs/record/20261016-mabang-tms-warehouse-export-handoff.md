@@ -5,10 +5,10 @@
 ## 当前工作区、基线和 Git 状态（2026-10-20）
 
 - 分支 `codex/mabang-tms-warehouse-export`，Pool `pool-3`；工作区 `/Users/hym/PycharmProjects/LXE_AGENT/.worktrees/pool-3`。
-- 本轮起点 HEAD：`cdfda4d47525eab3a4e03b3666705315b2b03e51`。业务提交为 `93cc6135`；`785ad37b` 合入最新主线；`cdfda4d4` 只修正文档链接及交接状态。
-- PR 目标：`Arsenal20262/LXE_AGENT:main@88a303386826e560ec6e45c692f93ee0f20311de`。本轮通过 GitHub 只读查询确认 Arsenal 与 LXE123 两个远端 main 均仍为该 SHA，本地 `arsenal/main`、`origin/main` 相同；本地 `main` 仍为 `9f36647a`，未切换或修改。
-- Arsenal main 已按此前单独授权从 `5af6a40e` 快进同步 8 个上游提交，没有将 TMS 或 Runtime 功能合入 main。
-- 文档提交前只读查询：[Arsenal PR #11](https://github.com/Arsenal20262/LXE_AGENT/pull/11) 为草稿；[上游 PR #95](https://github.com/LXE123/LXE_AGENT/pull/95) 已进入评审。查询时两者 head 均为 `cdfda4d4`、累计 16 个文件、3 个提交，均未合并、无合并冲突；随后文档提交按末节授权追加，远端结果以 Git/PR 记录为准。
+- 本轮起点：`481f1c100f113d28e0d9230c02da756b0b6429aa`。业务提交为 `93cc6135`；`785ad37b` 合入此前主线；`cdfda4d4`、`481f1c10` 为文档收口。
+- 本轮复审目标：[LXE123 PR #95](https://github.com/LXE123/LXE_AGENT/pull/95)，目标 main 经 GitHub 查询和 fetch 确认为 `abdd477a8d38d664c026c9471b57fbbfbac48345`，比此前 `88a30338` 多 6 个提交。
+- 按本轮授权在 pool-3 执行本地 `merge --no-commit --no-ff` 并解决测试冲突，待最终检查后提交。合并基线为 `abdd477a`；上游已有的 131 文件变动属于基线更新，不计为 TMS 新增能力，公共 Runtime 生产文件与目标 main 一致。
+- [Arsenal 草稿 PR #11](https://github.com/Arsenal20262/LXE_AGENT/pull/11) 与上游 #95 使用同一 TMS head 分支。本轮提交前远端 head 为 `481f1c10`；仅更新该开发分支及现有 PR #95，不更新任一远端 main，不合并 PR。最终提交、推送和 GitHub 状态以本轮交付记录为准。
 - 独立 [Runtime PR #9](https://github.com/Arsenal20262/LXE_AGENT/pull/9)（`313cd8bf0f830f6480e444804d69a637d923acf8`）仍未正式集成，不复制其公共分派修复。
 
 ## 新能力与调用链
@@ -35,7 +35,7 @@
 
 ## 当前分支累计修改文件
 
-2026-10-19 按相对本轮 PR 目标 `Arsenal20262/LXE_AGENT:main@88a30338` 的实际 diff 核对：累计 14 个修改、2 个新增，共 16 个任务文件，完整清单如下。目标 main 原有能力及历次基线同步带入的上游提交不计为本任务新增；此前各文档收口阶段的文件数仍按当时增量理解。
+2026-10-20 按本地解决冲突后的工作树相对 `LXE123/LXE_AGENT:main@abdd477a` 核对：累计 14 个修改、2 个新增，共 16 个任务文件，完整清单如下。目标 main 原有能力及基线同步带入的上游提交不计为本任务新增；此前各阶段的文件数仍按当时增量理解。
 
 - `python/lxeskill_cli/lxeskill/catalog.json`：同命令可选 `warehouse` 字符串，PH1 / VN1 / all。
 - `python/lxeskill_cli/services/mabang_tms/client.py`：列表、导出可选同一 `warehouseId`；无参请求不新增字段；复用现有机制增加下载安全日志。
@@ -43,8 +43,8 @@
 - `python/lxeskill_cli/services/mabang_tms/workbooks.py`：反方审查后增加同 SKU/同仓库存记录的输出行数下界检查。
 - `python/lxeskill_cli/tests/mabang_tms/test_mabang_tms_export.py`：分仓、分页、Excel、CLI、下载及部分成功的离线回归。
 - `python/lxeskill_cli/tests/mabang_tms/fixtures/vn1-pagination-metadata.json`（新增）：脱敏的 VN1 分页元数据，商品及 Excel 测试行另行合成。
-- `packages/agent/runtime/test/engine/runtime.test.ts`：TMS/雅仓工具轨迹、附件名称及 2 个共享 Runtime 阻塞回归；后两项仍失败，正式集成 PR #9 后再去重。
-- `packages/agent/runtime/test/tooling/lxeskill-command.test.ts`：参数与同命令归属合同。
+- `packages/agent/runtime/test/engine/runtime.test.ts`：保留 TMS/雅仓工具轨迹、附件名称；两个重复的公共调度用例归属 PR #9。命令归属检查适配 main 的公开 CLI 查询和现有统计能力。
+- `packages/agent/runtime/test/tooling/lxeskill-command.test.ts`：保留 main 原有测试，通过公开 CLI 查询验证 TMS 参数、交付数据集及两平台命令归属，不恢复 main 已删除的内部 catalog 读取器。
 - `packages/agent/runtime/test/tooling/skills.test.ts`：索引描述、跨 ERP 来源/范围规则及禁止默认全仓。
 - `packages/agent/runtime/test/tooling/user-questions.test.ts`：直接使用 Skill 中的真实提问参数，验证三选项、等待和跳过。
 - `skills/mabang-tms-products-export/SKILL.md`：国家/仓库选择、询问、执行与部分交付说明。
@@ -54,19 +54,40 @@
 - `docs/acceptance/mabang-tms-export-validation.md`：随 main 迁移后的验收文档，修正旧命令并追加本次证据边界。
 - `docs/record/20261016-mabang-tms-warehouse-export-handoff.md`（新增）：本 handoff。
 
-## 最新已执行验证（2026-10-19）
+## 最新已执行验证（2026-10-20）
 
-以下测试运行于 `785ad37b` 对应业务代码；之后 `cdfda4d4` 和本轮仅改文档，未重复业务测试。
+以下测试运行于本地整合 main@`abdd477a`、解决冲突并去重后的工作树。先完成定向回归，再按本轮要求运行一次现有完整源码验证；重叠用例不累加。离线通过不代表真实模型或生产验收通过。
 
 | 范围 | 命令与实际结果 |
 | --- | --- |
-| Python TMS / CLI | 从 pool-3 根运行 `UV_CACHE_DIR=/private/tmp/lxe-uv-cache uv run --offline --no-sync pytest python/lxeskill_cli/tests/mabang_tms python/lxeskill_cli/tests/lxeskill/test_lxeskill_cli.py`：218 通过。 |
-| Skill / CLI / 问答契约 | `bun test packages/agent/runtime/test/tooling/lxeskill-command.test.ts packages/agent/runtime/test/tooling/skills.test.ts packages/agent/runtime/test/tooling/user-questions.test.ts`：55 通过。 |
-| Runtime 与上述三个契约文件 | 另包含 `packages/agent/runtime/test/engine/runtime.test.ts`：184 通过、2 个已知失败；已包含上述 55 项，不重复累计。 |
-| Runtime 类型检查 | 在 `packages/agent/runtime` 运行 `bun run typecheck`：退出码 0。 |
-| 桌面手工测试 | pool-3 独立服务启动后用户反馈通过；具体场景未逐项记录，不代替全量生产或全部模型行为验收。 |
+| Python TMS / CLI / infra | 从 pool-3 根运行 `UV_CACHE_DIR=/private/tmp/lxe-uv-cache uv run --offline --frozen --no-sync pytest -q python/lxeskill_cli/tests/mabang_tms python/lxeskill_cli/tests/lxeskill python/lxeskill_cli/tests/infra`：首轮 613 通过、4 跳过、59 项因沙箱禁止绑定回环端口失败；同命令加 `--lf --lfnf=none` 在沙箱外仅复测受阻项，59 通过。合计 672 通过、4 跳过。 |
+| Runtime / Skill / CLI / 问答契约 | `bun test packages/agent/runtime/test/tooling/lxeskill-command.test.ts packages/agent/runtime/test/tooling/skills.test.ts packages/agent/runtime/test/tooling/user-questions.test.ts packages/agent/runtime/test/engine/runtime.test.ts`：175 通过、0 失败，包含四选项上限、TMS 19 个轨迹及四种附件名称。 |
+| 雅仓定向回归 | `uv run --offline --frozen --no-sync pytest -q python/lxeskill_cli/tests/yacang`：沙箱回环端口限制项在沙箱外复验；59 个不同用例全部通过。 |
+| Runtime / Gateway / 协议扩展回归 | 现有 Runtime 测试目录、Gateway orchestration 及 foundation/protocol：1099 通过、2 跳过。回环端口和嵌套沙箱受限项在沙箱外复验；原沙箱测试使用既有 `LXE_EXEC_SANDBOX_NODE` 指定本机 Node，不改测试断言。 |
+| 完整源码验证 | `bun run verify:source` 退出码 0：协议生成、生产边界检查和全部 8 个工作区 TypeScript 检查通过；Bun 2262 通过、10 跳过（282 文件）；Python 2569 通过、14 跳过、30 条已有依赖警告。命令沿用本机 Node、worktree 自有 `.venv` 和离线 uv 缓存，未调用生产 ERP。日志 `/private/tmp/tms-final-verify-source.log`。 |
+| Diff / 范围 | `git diff --check`、`git diff --cached --check` 通过，无未解决冲突。相对自动合并结果仅人工修改 4 个文件，相对目标 main 仍为 16 个 TMS 任务文件；公共 Runtime 生产代码与 main 一致，TMS Python 和两次生产证据未变。 |
+| 真实模型 / 离线业务工具 | 用户在 pool-3 桌面配置本地密钥并授权发送 Skill、系统提示及合成对话后，使用现有 Provider 的本地配置解析：`deepseek-v4-flash`、思考 `max`。15 个不同场景通过，覆盖选仓、ERP 澄清、跳过、取消、无效答案、部分成功及失败；轨迹核对见下节。没有执行模型提供的 shell 或访问生产 ERP。 |
+| GitHub CI | 提交前远端 `481f1c10` 查询返回 0 个 check run、0 个 commit status，不能写成远端 CI 通过；推送后须另查新 head。 |
 
-两个失败为 `review TMS mixed question/exec must not export on skip` 的 question-first / exec-first：前者跳过后仍执行同批排队 exec，后者在回答前执行。模型和 exec 均为离线替身，未调用生产。保留正常断言，不 skip/todo，不改成接受错误行为。
+起点 `481f1c10` 的两个同批用例本轮单独复测仍为 0 通过、2 失败：question-first 跳过后仍执行同批 exec，exec-first 在回答前执行，均为离线替身。它们已确认由 PR #9 保留后从 TMS 去重，不能将其描述为修复通过。当前 175 项与此前 184/2 的数量差还包括 main 的测试重整和契约适配，不仅是去除两项。
+
+### 真实模型轨迹与证据边界
+
+复用 `runtime.test.ts` 的 MemoryStore/job、现有 TypeScriptAgentRuntime、Provider、完整仓库 SkillCatalog 索引、原生 read/send_files 和 UserQuestionService；模型自行读取 Skill，业务 exec 只返回合成终态，附件是本地合成 XLSX，emitter 不向外发送文件。现有 Gateway/问答集成由上述离线全量覆盖；本次没有用真实模型遍历整个 Electron UI，也没有验证生产 Excel 内容。
+
+| 场景 | 实际轨迹与结果 |
+| --- | --- |
+| 明确 TMS 菲律宾、越南、全部 | 读取 TMS Skill → 分别传 `--warehouse PH1`、`VN1`、`all` → 独立 send_files；3 项通过 |
+| 明确雅仓菲律宾、越南 | 读取雅仓 Skill → 分别传 PH8805、VN8806，未调用 TMS；允许原有报表类型澄清及帮助查询；2 项通过 |
+| 未指定 TMS 仓库、仅菲律宾、仅越南 | 先询问仓库或 ERP；模拟选择 VN1、TMS、雅仓后，在后续模型调用传入正确命令和范围；3 项通过 |
+| 仓库/ERP 跳过、仓库/ERP 取消、未完成仓库选择 | 5 项均未尝试业务导出；取消及无效答案后停止，跳过不冒充授权 |
+| VN1 部分成功、失败 | 2 项通过；部分成功交付标注的文件并说明 1000/4208 与错误；失败不发送附件、不重新导出 |
+
+15 项均未观察到同批 `ask_user_question` 与 exec；选择后的导出来自后续模型调用，不是本轮启用了 Runtime 全局独占。此为一次模型配置下的样本验证，不能保证其他模型或所有未来响应，也不能代替 PR #9 的独立设计评审。附件校验包含真实 send_files、Runtime artifact 路径/basename 及交付事件，文件内容和业务响应仍是合成替身。
+
+初版临时替身缺少雅仓 `--help`、报表澄清，并误把命令调用计数当作导出次数，曾有 5 次用例失败；按现有 CLI/统计契约修正替身后只复测受影响项，未改生产逻辑、仓库断言或默认测试。原始失败和成功证据保留在忽略目录 `var/validation/tms-final/`，汇总为 `acceptance-results.json`。临时入口已改名为 `live-acceptance.ts`，避免默认测试发现触发模型请求，不纳入 PR。
+
+独立 Electron 凭据探针曾无法解密缓存；正常桌面启动后用户配置本地密钥，本次直接复用 Provider 的 `localAuthPath` 读取，没有修补配置/认证源码。原桌面云端别名与缓存的自动化读取仍未作为本轮测试结论。
 
 ## 必要历史记录
 
@@ -79,7 +100,8 @@
 | TLS 离线诊断与日志 | 首轮异常后增加 16 个离线用例，TMS 165 通过；安全日志增加 6 项后 171 通过。测试覆盖 TLS/半截文件/429、单次 GET、原异常、停止及部分交付，生产根因仍未知。 |
 | Runtime 临时组合探测 | 测试进程临时加载 `313cd8bf` 后曾 35 通过、0 失败；未 merge/cherry-pick 或改 Runtime 源码，不能称正式集成。 |
 | 2026-10-19：同步 Arsenal main@3b81841b | 保留 main“四选项上限”及新增 TMS 仓库测试，原断言均不变。Python TMS/CLI/infra/雅仓 703 通过、4 跳过；契约 54 通过；Runtime 定向 33 通过、2 失败。备份快照 `/private/tmp/lxe-tms-pre-sync-benozgy9`、stash `129c0778865a5b3f8f1dac063fb0ee8ee951a4dc` 保留。 |
-| 2026-10-19：同步 main@88a30338 与推送 | 主线合并及最新验证见上节，随后推送 TMS 分支并更新原草稿 #11；上游主线能力不计为本次新增。 |
+| 2026-10-19：同步 main@88a30338 与推送 | `785ad37b`：Python TMS/CLI 218 通过；四个 Bun 文件 184 通过、2 个已知失败（包含契约 55 项）；Runtime 类型检查通过。随后推送并更新草稿 #11，上游能力不计为 TMS 新增。 |
+| 2026-10-20：文档收敛 | `481f1c10` 仅收敛两份文档，保留生产证据和限制，一次性文档/范围检查 27 项通过；当时未变更业务代码或移除两个公共用例。 |
 
 此前还只读检查过用户手动产生的两个旧命名文件：VN1 4208 行、PH1 4324 行，各 5 批，与原始批次逐行逐单元格一致且仓库分开。该文件检查不等于下面两次受控 CLI 的单次全量验收，也不证明当前所有 Agent 场景。
 
@@ -136,18 +158,22 @@
 
 ## 剩余依赖、验收与评审顺序
 
-- Runtime PR #9 仍未合并。对最新 main 的只读合并模拟确认仅 `docs/harness/tool/ask-user-question.md` 内容冲突，Runtime 源码和测试可自动合并；本轮未修改该分支。先完成其独立设计评审与获批集成，再回归本任务已确认的提问独占要求并去重重叠测试。
-- [上游审查说明](https://github.com/LXE123/LXE_AGENT/pull/95#issuecomment-6265254194) 已撤回此前 P1 定级及“必须合入前修复”的建议。该审查只针对 `785ad37b`；评级变化不等于两个行为用例通过，也不取消本任务已确认的提问独占目标，不把它描述为本 PR 新引入的公共 Runtime 回归。
+- Runtime PR #9（`313cd8bf`）仍未合并，未复制其公共修复。两个同批调用用例及更完整的 18 项回归由该 PR 保留；本轮只从 TMS 去重。当前 main 的 [提问契约](../harness/tool/ask-user-question.md) 明确沿用串行分派，回答或跳过后继续同批剩余调用，并不保证提问独占。按该设计验收模型是否先澄清、后发起已确认范围的导出；若真实轨迹不能满足业务要求，阻止提交并报告，不在 TMS 内改公共策略。PR #9 的策略需要独立评审，先前临时组合验证不代表正式集成。
+- [最新上游审查](https://github.com/LXE123/LXE_AGENT/pull/95#issuecomment-6286207316) 针对 `481f1c10` 实测 184 通过、2 失败，定为 P2 默认失败测试/依赖未闭合，未确认新的 Python 导出缺陷。本轮收敛测试归属不等于公共调度行为修复，也不把既有行为描述为本 PR 引入的生产回归。
 - 单次 VN1 全部 4208 条交付、TLS EOF 根因、PH1/all 新选仓参数下的完整生产导出仍 **NOT VERIFIED**。两次生产授权已使用完毕；无链接有效期/重复 GET 合同证据，不增加重试、不重放旧链接或自动启动新任务。
-- 真实模型的来源/仓库澄清、选择、跳过、取消及跨渠道交付仍需逐项验收。现有用户手工测试反馈和固定模型轨迹分别说明，不冒充全部场景已验证。
-- Arsenal #11 已记录验证和限制；上游 #95 说明尚缺最新测试、Runtime 依赖及两次部分交付事实，需另行授权更新。TMS 可独立代码评审，当前不能称全绿或完整生产验收通过；正式集成时对当时 main 做必要回归。
+- 本次 15 项真实模型/离线工具验证与 19 个固定模型轨迹分别记录；完整 Electron UI、跨渠道真实交付及生产 ERP 端到端仍 **NOT VERIFIED**。不能把本次未观察到混合调用解释为公共 Runtime 独占策略已生效。
+- PH1/VN1/all、仅国家先澄清 ERP、仅 TMS 先澄清仓库、all 为当前账号全部仓库、部分成功提示及非 Agent 无参兼容均为本任务已确认要求，无新增业务决策。适用源码测试及本次模型样本已通过，未发现本 PR 新增阻断缺陷；可按用户条件式授权提交并更新现有 PR，仍须组长评审，不自动合并。
 
-## 本轮文档收敛（2026-10-20）
+## PR #95 本地收口（2026-10-20）
 
-本轮仅收敛本 handoff 和验收说明：将重复阶段记录归并到历史表，保留两次生产请求计数、文件路径/散列、内容核验、TLS 证据和当前依赖。仓库 ID、分页、Excel、Skill/catalog/CLI、下载日志、认证、附件及两个 Runtime 失败回归均未修改；无新增入口、命令、抽象或测试框架。
+本轮人工修改仅两个测试文件及两份文档。`question-first` / `exec-first` 在起点复测均失败；PR #9 包含同名用例，并额外断言回答前没有执行，另有 18 项公共场景，因此从 TMS 去重而不修改断言或跳过。TMS 的 19 个选仓/来源/跳过/取消/无效选择轨迹及附件、问答契约测试保留。
 
-本轮一次性文档/范围核对 27 项通过：两次生产验收核心段落与原提交逐字一致，4 处本地链接引用（3 个目标）均有效，16 文件清单与实际 diff 一致，其余任务文件未变；`git diff --check` 通过。没有新增测试文件或重跑业务全量测试。
+实际文本冲突仅 `packages/agent/runtime/test/tooling/lxeskill-command.test.ts`：main 移除了 Runtime 直接读取 catalog 的实现，而 TMS 在旧测试中增加仓库合同。保留 main 的四个测试，TMS 合同改用现有公开 `lxeskill list`、`datasets list` 和 `TurnStatistics`；`runtime.test.ts` 的 TMS 轨迹也改用公开查询，消除对已删除模块的引用。未改公共生产实现、统计规则或工具分派。
 
-用户随后授权将两份收敛文档提交、推送至原 TMS 分支并更新 Arsenal 草稿 PR #11。仅追加 docs 提交，不改 main、Runtime 或既有业务提交，不合并 PR；新提交 hash 及推送结果以本轮 Git/PR 记录为准。上游 #95 使用同一 head 分支，代码随推送更新，其说明和合并状态不在本轮操作范围。
+TMS 的 Python 业务代码、分页、Excel、下载与无参兼容未变。Skill/catalog 的自动合并保留双方内容，本轮未人工修改已确认的业务规则。没有新增接口、命令或抽象，未访问生产。两次生产验收证据继续保留，见 [实现与验收](../acceptance/mabang-tms-export-validation.md)。
 
-本轮未访问生产；当前仓库文件清单见上，原始业务验收说明见 [实现与验收](../acceptance/mabang-tms-export-validation.md)。
+已按用户补充的《PR 审查规范（LXE_AGENT）》及五份架构/模块说明核对：未改变模块职责、数据归属、Electron 交互或公共 Runtime；命令归属通过公开 CLI 查询，认证、文件和错误仍由原业务层处理。按规范第 2、5、6 节提交人工审核的摘要：
+
+- **缘由**：在既有 TMS 导出中支持越南并避免相同国家的 ERP/仓库混淆。
+- **内容**：可选 warehouse 参数、范围及文件校验、命名、分页兼容、下载诊断和 Skill 澄清规则；本轮仅收敛测试归属、主线测试冲突及验收说明。
+- **影响**：Agent 先明确来源与仓库，all 为当前账号全部仓库；非 Agent 无参兼容，异常可交付已校验部分。业务要求已由用户明确，组长的合并前人工评审仍保留；模型样本和离线通过不等于生产全量验收。
