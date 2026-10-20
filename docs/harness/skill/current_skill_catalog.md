@@ -88,7 +88,7 @@ LXE formally maintains these modules' command and failure contracts. Their resul
 - `office-docx`: read, create, edit and check Word documents; render pages and export PDF.
 - `office-pptx`: read, create, edit and check slide decks; render slides and export PDF.
 
-Office uses `exec` → `shared.office`, plus existing `read` and `send_files`. It adds no `lxeskill` business commands. See [Office runtime](../../office-runtime.md).
+Office uses `exec` → LibreOffice Kit CLI, plus existing `read` and `send_files`. It adds no `lxeskill` business commands. See [Office runtime](../../office-runtime.md).
 
 - `skill-creator`: create or edit reusable user skills through conversation and existing file/exec tools.
 
