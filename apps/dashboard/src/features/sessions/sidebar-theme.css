@@ -1,0 +1,40 @@
+@import "../../shared/cds-theme.css";
+
+/* CDS purpose colors, scoped to the conversation list. Preserve its geometry,
+   typography and interaction behavior; these mappings are an LXE adaptation. */
+.app-sidebar.conversation-chrome-theme {
+  --sidebar-bg: var(--cds-surface-nav);
+  --sidebar-border: var(--cds-alpha-2);
+  --sidebar-ink: var(--cds-ink);
+  --sidebar-ink-soft: var(--cds-secondary);
+  --sidebar-accent: var(--cds-accent);
+  --sidebar-hover: color-mix(in srgb, var(--sidebar-bg) 95%, var(--sidebar-ink));
+  --sidebar-active: color-mix(in srgb, var(--sidebar-bg) 90%, var(--sidebar-ink));
+  /* Opaque fills also mask long titles behind the existing action-button fade. */
+  --sidebar-action-bg: var(--sidebar-hover);
+  --sidebar-shadow: var(--shadow-strong);
+  --focus-ring: var(--cds-accent);
+  color: var(--sidebar-ink-soft);
+}
+.app-sidebar.conversation-chrome-theme .session-index-item.active {
+  --sidebar-action-bg: var(--sidebar-active);
+  background: var(--sidebar-active);
+}
+.app-sidebar.conversation-chrome-theme .sidebar-search-button.is-selected {
+  background: var(--sidebar-active);
+  color: var(--sidebar-accent);
+}
+.app-sidebar.conversation-chrome-theme .search-box:focus-within {
+  box-shadow: 0 0 0 2px var(--cds-accent-tint);
+}
+.app-sidebar.conversation-chrome-theme .search-box input::placeholder,
+.app-sidebar.conversation-chrome-theme .session-index-heading,
+.app-sidebar.conversation-chrome-theme .workspace-default-badge {
+  color: var(--cds-muted);
+}
+.app-sidebar.conversation-chrome-theme .workspace-index-scroll {
+  scrollbar-color: var(--cds-alpha-3) transparent;
+}
+.app-sidebar.conversation-chrome-theme .session-index-icon[data-session-state="completed"] { color: var(--success); }
+.app-sidebar.conversation-chrome-theme .session-index-icon[data-session-state="error"] { color: var(--danger); }
+.app-sidebar.conversation-chrome-theme .session-index-icon[data-session-state="waiting_input"] { color: var(--sidebar-accent); }

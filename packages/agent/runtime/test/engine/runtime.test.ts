@@ -3016,15 +3016,17 @@ test("request anchors survive restart and power next-request display without sum
   expect(last.display_metrics.context_tokens).toBeLessThan(10900);
 });
 
-test.each(["partial", "unreported", "zero", "different-model"] as const)("does not anchor %s usage", async kind => {
+test.each(["partial", "unreported", "zero", "different-model", "images-omitted"] as const)("does not anchor %s usage", async kind => {
   const store=new MemoryStore();
   const runtime=new TypeScriptAgentRuntime({ permissionPolicy,
     store,tools:new ToolRegistry(),systemPrompt:"s",
-    provider:{summarize,turn:async()=>messageFixture({
+    provider:{summarize,turn:async request=>{
+      if (kind === "images-omitted") request.onRequestImagesOmitted?.(1);
+      return messageFixture({
       content:[{type:"text",text:"done"}],
       ...(kind==="different-model"?{responseModel:"unexpected"}:{}),
       usage:{input_tokens:kind==="zero"?0:100,status:kind==="partial"||kind==="unreported"?kind:"complete"},
-    })},
+    }); }},
     emitter:{emit:async()=>undefined,typing:async()=>undefined},
   });
   await runtime.start();

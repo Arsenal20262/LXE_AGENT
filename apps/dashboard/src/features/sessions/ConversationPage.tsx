@@ -29,7 +29,8 @@ export function ConversationPage({ selection, conversation, workspace, actions, 
         {selectedSessionId || newConversation ? (
           <SessionDetailView
             workspaceControl={<WorkspaceControl
-              directory={selectedSession?.workspace.directory ?? workspace.defaultDirectory}
+              directory={selectedSession?.workspace.directory ?? ""}
+              workspaceId={selectedSession?.workspace_id ?? null}
               defaultDirectory={workspace.defaultDirectory}
               workspaces={workspace.workspaces}
               editable={newConversation}

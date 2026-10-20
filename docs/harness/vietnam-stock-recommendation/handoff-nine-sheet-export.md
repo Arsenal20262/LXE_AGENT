@@ -75,3 +75,17 @@ skills/vietnam-replenishment/SKILL.md
 - 修复前后 golden：从 Git HEAD 加载原合并器及资产 helper，与工作区实现对照；使用 3 个合成雅仓 SKU（模板提供其中 2 个）和同一份真实 Office Kit 重算五表结果。两份最终九表的全部 18 个 ZIP 部件内容一致；9 张表顺序、尺寸、全部公式与缓存、250 个非空缓存单元格、四张业务表 XML、备货与价格列一致。正常上传、换版、同内容重试、再次换版的 4 步 current / previous 序列一致。结果目录：系统临时目录 `vietnam-p2-golden-bkkzrn9e`。
 - 业务边界：SKU 参数 B/G/AE/AJ 解析、雅仓三表来源、备货与价格公式、五张计算表结构及九表顺序均未修改。真实雅仓生产数据、聊天附件到 Excel UI 全链路、Windows 实机、发布 build 及掉电 / 进程强制终止恢复：NOT VERIFIED。本轮只跑上述定向测试，未宣称全量回归通过。
 - Git 收口：预期仅上述 6 个文件未暂存；提交前仍需用户批准。push 与远端 PR 更新需另获明确授权。没有本轮已知的未修复 P2；合并前仍按项目规范检查最新 main 兼容性和最终验证。
+
+## 2026-10-20：PR #90 本地冲突收敛
+
+本节记录最新状态；前述未提交、未创建 PR 等描述为各历史阶段的记录。
+
+- 分支 / Pool 不变。两个 P2 的 6 文件独立提交为 `2ec00f5a57a70ffcdba36cb0ca685a796e2654b9`（`fix: protect Vietnam template uploads and optional number formats`），原有 5 个功能提交保留。按用户批准执行 `git merge --no-ff --no-commit origin/main`，合入基线为 `88a303386826e560ec6e45c692f93ee0f20311de`；本轮只完成本地修复与合并，不 push、不修改原 PR #90。
+- 七处冲突：Dashboard 设置页保留 main 的主题、统一页头与无障碍结构，保留九表模板按钮和直接显示的天数修正；Desktop 服务保留 main 的统一 `lxeskill` 调用、UTF-8/环境注入和结果解析，上传/导出改接模板；Desktop 测试保留 main 的协议断言，并验证真实模板上传、导出及无效替换保护；计算说明保留统一内部 CLI 与九表口径；Python 设置层保留模板生命周期与参数能力，移除直接模块 CLI；旧 `test_map_export.py` 继续删除，其 UTF-8 契约迁入统一 CLI 测试；设置测试保留故障注入、配置持久化和损坏模板真实错误，子进程改用统一 CLI。
+- 自动合并之外的 CLI 契约联动：复用 main 已有的 `services/agent_cli/vietnam_replenishment/settings.py`，将 `upload_map/export_map` 改接 `upload_template/export_template`；保留内部命令 `read/save/upload/export`，删除 catalog 的旧 `kind` 参数并测试其被拒绝。没有新增 CLI 命令、工具或框架。main 新增的 `workbench-details.cjs` 起初仍引用旧 map 按钮及折叠区，定向测试失败；仅同步这些选择器和直接显示字段的断言后通过，没有修改 Runtime 或业务计算。
+- 合并定向验证：Python CLI/infra/越南模块 `677 passed, 4 skipped`（沙箱外允许本机回环端口，包含真实 Office Kit 九表集成及无 `numFmts` 重算）；Runtime engine/审批/CLI/Skill 契约 `149 passed`；Desktop 设置/预加载桥接 `11 passed`；Dashboard Chromium `workbench-details`、`vietnam-settings` 两项通过，覆盖 11 个场景；Desktop 和 Dashboard typecheck 通过。Python 设置/资产/统一 CLI 的先行验证 `66 passed` 与 677 项存在覆盖重叠，不累计为额外用例。
+- 合并后 golden：复用上述三 SKU 合成模板及 Office 重算结果，重新生成九表，与 P2 修复前样例全部 18 个 ZIP 部件内容一致；9 张表的顺序、尺寸、公式、250 个非空缓存单元格及四张业务表 XML 一致。`input_assets.py`、`full_workbook.py`、模板参数解析、workflow、recalculation、workbook、雅仓来源处理和通用 CLI 共 8 个生产文件与 P2 fix 提交逐字节一致。B/G/AE/AJ 来源、SKU 精确匹配、公式及备货量未因合并变化。
+- PR 范围：相对最新 `origin/main` 为 53 个相关文件，原 PR 的 48 个文件保留；增加 P2 的共享资产 helper/测试、main 的设置 CLI adapter/测试，以及 main 的工作台页面行为测试共 5 个必要联动文件。main 自身新增的主题、Runtime、其他业务及历史文档变更来自合并父提交，不计入 PR 新增范围。历史实施计划未改写；没有新依赖、lockfile 或环境变量。
+- 最终门禁：提交前检查无旧 SKU map 生产消费者、无冲突标记及无无关工作区文件，执行 `git diff --check` 与暂存差异检查；验证通过后按本轮授权完成 merge commit。push 和远端重新 Review 仍需分别获得用户确认。
+- 检查结果：扫描 617 个生产源码/契约文件，旧 map 入口消费者为 0；53 文件范围与原 PR 加上述 5 个联动文件精确一致，敏感信息模式扫描无命中，历史计划未改写。`git diff --check`、`git diff --cached --check origin/main` 通过；针对 merge 第一父提交的暂存检查仅提示 main 已有的 `apps/dashboard/src/shared/cds-theme.css` 和 `docs/design/cds/tokens/lxe-theme.snapshot.css` 末尾空行，两文件与 main 逐字节一致，不在本 PR diff 内，未扩大范围修改。暂存后无未解决冲突、未暂存或未跟踪文件。
+- NOT VERIFIED：真实雅仓生产数据、真实聊天附件到 Excel UI 全链路、Windows 实机、发布 build、全仓全部测试及掉电/进程强制终止恢复。上述合成九表、Office、Desktop 和 Dashboard 定向结果不扩大为这些验证。

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { ArrowLeft, Download, FileSpreadsheet, Upload, Save, LoaderCircle } from "lucide-react";
+import { Download, FileSpreadsheet, Upload, Save, LoaderCircle } from "lucide-react";
 import type { DesktopVietnamParameters, DesktopVietnamSettingsState } from "@lxe/desktop-protocol";
 import { useUiText } from "../../shared/i18n";
+import { WorkbenchPageHeader } from "./page-header";
 import "./vietnam-settings.css";
 
 const days = [7, 15, 30] as const;
@@ -99,14 +100,11 @@ export function VietnamSettingsWorkbench({ onBack }: { onBack: () => void }) {
     finally { setBusy(false); }
   };
 
-  return <section className="workbench-tool-view vietnam-settings-view">
-    <header className="workbench-tool-header">
-      <button className="workbench-back" onClick={onBack} type="button"><ArrowLeft size={14} />{t.workbenchIndex.back}</button>
-      <h2>{copy.title}</h2><p className="workbench-index-subtitle">{copy.subtitle}</p>
-    </header>
+  return <section className="workbench-tool-view workbench-detail vietnam-settings-view" aria-labelledby="vietnam-settings-title">
+    <WorkbenchPageHeader title={copy.title} titleId="vietnam-settings-title" description={copy.subtitle} onBack={onBack} />
     {error ? <p className="workbench-error" role="alert">{error}</p> : null}
     {notice ? <p className="workbench-tool-status" role="status">{notice}</p> : null}
-    {loading ? <p role="status"><LoaderCircle className="spin" size={16} />{copy.loading}</p> : null}
+    {loading ? <p className="workbench-loading" role="status"><LoaderCircle className="spin" size={16} />{copy.loading}</p> : null}
     {!loading && !state ? <button className="workbench-refresh" type="button" onClick={() => void load()}>{copy.retry}</button> : null}
     <article className="vietnam-settings-card vietnam-template-card">
       <header className="asset-slot-header"><h3>{copy.template}</h3>

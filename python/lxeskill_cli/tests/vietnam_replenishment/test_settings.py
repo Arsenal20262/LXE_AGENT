@@ -145,9 +145,9 @@ def test_defaults_persist_and_reload_in_another_process():
     assert "sku_map" not in state and "sku_map_error" not in state
     raw = {**state["parameters"], "exchange_rate": "4100", "sales_weight_7d": "1", "sales_weight_15d": "0", "sales_weight_30d": "0"}
     settings.save_parameters(raw)
-    child = subprocess.run([sys.executable, "-I", "-B", "-m", "services.vietnam_replenishment.settings", "read"], capture_output=True, text=True)
+    child = subprocess.run([sys.executable, "-I", "-B", "-m", "lxeskill", "vietnam", "replenishment", "settings", "--action", "read"], capture_output=True, text=True)
     assert child.returncode == 0, child.stderr
-    assert json.loads(child.stdout)["data"]["parameters"] == raw
+    assert json.loads(child.stdout)["data"]["data"]["parameters"] == raw
 
 
 @pytest.mark.parametrize("change", [
@@ -206,3 +206,47 @@ def test_initialization_uses_only_skill_data_directory(tmp_path, old_parameters)
     assert state["parameters_error"] is None
     assert "sku_map" not in state and "sku_map_error" not in state
     assert (app / "config" / "settings.json").read_text() == old_parameters
+
+
+def test_saved_template_corruption_is_reported_and_upload_can_repair(tmp_path):
+    state = settings.upload_template(nine_sheet_template(tmp_path / "initial.xlsx"))
+    target = Path(state["template"]["path"])
+    target.write_bytes(b"broken")
+    state = settings.read_state()
+    assert "BadZipFile" in state["template_error"]
+    assert state["template"] is None
+    assert target.read_bytes() == b"broken"
+    replacement = nine_sheet_template(tmp_path / "replacement.xlsx", marker="repaired")
+    state = settings.upload_template(replacement)
+    assert state["template_error"] is None
+    assert Path(state["template"]["path"]).read_bytes() == replacement.read_bytes()
+
+
+def test_settings_cli_and_saved_template_read_preserve_real_errors_without_replacing_data(tmp_path):
+    state = settings.upload_template(nine_sheet_template(tmp_path / "good.xlsx"))
+    target = Path(state["template"]["path"])
+    parameters = settings.data_directory() / "parameters.json"
+    before = {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in (target, parameters)}
+    invalid = nine_sheet_template(tmp_path / "中文 不完整.xlsx")
+    book = load_workbook(invalid)
+    book["越南备货清单"]["B1"] = "错误标题"
+    book.save(invalid)
+    book.close()
+    child = subprocess.run(
+        [sys.executable, "-I", "-B", "-m", "lxeskill", "vietnam", "replenishment", "settings", "--action", "upload", "--path", str(invalid)],
+        capture_output=True, text=True, encoding="utf-8",
+    )
+    assert child.returncode == 4, child.stderr
+    result = json.loads(child.stdout)
+    assert result["ok"] is False
+    assert "第 2 列表头应为 判断热销" in result["error"]["message"]
+    assert {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in before} == before
+    assert not list(target.parent.parent.glob(".promote-*"))
+
+    # A template edited outside the app uses exactly the same validation on read.
+    target.write_bytes(invalid.read_bytes())
+    state = settings.read_state()
+    assert state["template"] is None
+    assert state["template_error"] == result["error"]["message"]
+    assert target.read_bytes() == invalid.read_bytes()
+    assert (parameters.read_bytes(), parameters.stat().st_mtime_ns) == before[parameters]
