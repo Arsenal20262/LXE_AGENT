@@ -400,7 +400,7 @@ def test_current_template_snapshot_survives_real_concurrent_upload(
 def test_shared_cli_has_no_vietnam_business_dependency():
     import ast
 
-    tree = ast.parse(Path(lxeskill.__file__).read_text())
+    tree = ast.parse(Path(lxeskill.__file__).read_text(encoding="utf-8"))
     assert not [node.module for node in ast.walk(tree) if isinstance(node, ast.ImportFrom)
                 and (node.module or "").startswith("services.vietnam_replenishment")]
     assert not [node.value for node in ast.walk(tree) if isinstance(node, ast.Constant)

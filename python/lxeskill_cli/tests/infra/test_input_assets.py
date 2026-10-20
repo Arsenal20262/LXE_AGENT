@@ -71,6 +71,24 @@ def test_only_two_generations_are_kept(slot_root: Path, tmp_path: Path) -> None:
     assert [item.read_text(encoding="utf-8") for item in previous] == ["v2"]
 
 
+def test_read_only_source_can_be_synced_without_changing_its_metadata(slot_root, tmp_path):
+    source = _write(tmp_path / "read-only.xlsx", "template")
+    source.chmod(0o444)
+    before = source.stat()
+    try:
+        version = promote_asset("contract_template", source)
+        assert version.path.read_bytes() == source.read_bytes() == b"template"
+        assert version.path.stat().st_mtime_ns == before.st_mtime_ns
+        assert version.path.stat().st_mode & 0o200 == 0
+        assert source.stat().st_mode == before.st_mode
+        assert source.stat().st_mtime_ns == before.st_mtime_ns
+    finally:
+        source.chmod(0o600)
+        for path in slot_root.rglob("*"):
+            if path.is_file():
+                path.chmod(0o600)
+
+
 def test_identical_content_does_not_burn_the_rollback_slot(
     slot_root: Path, tmp_path: Path
 ) -> None:
@@ -106,7 +124,7 @@ def test_failed_first_promotion_never_publishes_a_partial_file(slot_root, tmp_pa
         raise OSError(5, "injected copy error")
 
     with monkeypatch.context() as fault:
-        fault.setattr(input_assets.shutil, "copy2", partial_copy)
+        fault.setattr(input_assets.shutil, "copyfile", partial_copy)
         with pytest.raises(OSError, match="injected copy error"):
             promote_asset("contract_template", source)
     assert current_asset("contract_template") is None
@@ -150,7 +168,7 @@ def test_cleanup_failure_does_not_mask_promotion_result(slot_root, tmp_path, mon
     with monkeypatch.context() as fault:
         fault.setattr(input_assets.shutil, "rmtree", fail_cleanup)
         if copy_fails:
-            fault.setattr(input_assets.shutil, "copy2", fail_copy)
+            fault.setattr(input_assets.shutil, "copyfile", fail_copy)
             with pytest.raises(OSError, match="injected copy error"):
                 promote_asset("contract_template", second)
         else:

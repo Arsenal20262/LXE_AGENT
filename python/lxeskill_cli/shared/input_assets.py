@@ -185,9 +185,12 @@ def promote_asset(slot_id: str, source: str | os.PathLike[str]) -> AssetVersion:
         staged_current = staging / "incoming"
         staged_current.mkdir()
         copied = staged_current / incoming.name
-        shutil.copy2(incoming, copied)
-        with copied.open("rb") as stream:
+        shutil.copyfile(incoming, copied)
+        # Windows fsync requires a writable handle. Apply the source permissions
+        # afterwards so a read-only template can still be staged and synced.
+        with copied.open("r+b") as stream:
             os.fsync(stream.fileno())
+        shutil.copystat(incoming, copied)
         if _digest(copied) != incoming_digest:
             raise InputAssetError(f"input asset changed while staging: {incoming}")
         promoted = _describe(copied)._replace(path=current_dir / incoming.name)

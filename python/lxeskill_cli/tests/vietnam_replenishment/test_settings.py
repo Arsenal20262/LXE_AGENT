@@ -95,7 +95,7 @@ def test_1904_upload_preserves_current_previous_and_export(tmp_path):
     assert exported.read_bytes() == current.read_bytes()
 
 
-@pytest.mark.parametrize("failure", ["copy", "partial_copy", "short_copy", "fsync", "before_replace", "previous_replace"])
+@pytest.mark.parametrize("failure", ["copy", "partial_copy", "short_copy", "fsync", "metadata", "before_replace", "previous_replace"])
 @pytest.mark.parametrize("same_name", [False, True])
 def test_failed_template_promotion_preserves_both_versions_and_can_retry(
     tmp_path, monkeypatch, failure, same_name,
@@ -115,9 +115,12 @@ def test_failed_template_promotion_preserves_both_versions_and_can_retry(
 
     before = versions()
     replace_file = input_assets.os.replace
+    copy_file = input_assets.shutil.copyfile
     failed = False
 
     def fail_copy(source, destination, *args, **kwargs):
+        if not Path(destination).is_relative_to(root):
+            return copy_file(source, destination, *args, **kwargs)
         if failure in ("partial_copy", "short_copy"):
             Path(destination).write_bytes(Path(source).read_bytes()[:100])
         if failure == "short_copy":
@@ -137,7 +140,9 @@ def test_failed_template_promotion_preserves_both_versions_and_can_retry(
         failed = False
         with monkeypatch.context() as fault:
             if failure in ("copy", "partial_copy", "short_copy"):
-                fault.setattr(input_assets.shutil, "copy2", fail_copy)
+                fault.setattr(input_assets.shutil, "copyfile", fail_copy)
+            elif failure == "metadata":
+                fault.setattr(input_assets.shutil, "copystat", fail_copy)
             elif failure == "fsync":
                 def fail_sync(_descriptor):
                     raise OSError(5, "injected fsync I/O error")
