@@ -24,3 +24,5 @@
 - [马帮巴西海外仓](mabang-brazil-export-validation.md)：真实接口、文件校验和兼容处理。
 - [马帮 TMS](mabang-tms-export-validation.md)：自动化验证、真实验收和未确认事项。
 - [雅仓](yacang-export-validation.md)：真实文件与网页对照、字段口径和未完成事项。
+- [上马启用商品](shangman-enabled-export-validation.md)：筛选样本、XLSX 范围修复及生产失败记录。
+- [越南备货九表](vietnam-nine-sheet-validation.md)：工作簿保真、模板换版、日期系统及跨平台验证。

@@ -1,6 +1,6 @@
 # 越南备货实现说明
 
-本文只说明实现边界。取数、执行和交付步骤见 [越南 Skill](../../../skills/vietnam-replenishment/SKILL.md)；命令参数与结果字段以 [CLI 契约](../../../python/lxeskill_cli/lxeskill/catalog.json) 为准。
+本文只说明实现边界。取数、执行和交付步骤见 [越南 Skill](../../../skills/vietnam-replenishment/SKILL.md)；命令参数与结果字段以 [CLI 契约](../../../python/lxeskill_cli/lxeskill/catalog.json) 为准。已执行的文件、故障与跨平台验证见[九表验收记录](../../acceptance/vietnam-nine-sheet-validation.md)。
 
 ## 计算边界
 
@@ -8,7 +8,7 @@
 
 ## 设置与本轮快照
 
-应用数据目录 `skill-data/vietnam-stock-recommendation/` 只保存全局计算参数 `parameters.json`。设置页把完整九表模板保存在 `vietnam_full_workbook` 输入资产槽，并只提供“导出当前模板表”和“上传/替换模板表”两个操作。每轮计算都从模板首张「越南备货清单」提取本轮 SKU 的热销标记、成本、跨境价和折扣价。没有九表模板时明确失败。
+应用数据目录 `skill-data/vietnam-stock-recommendation/` 只保存全局计算参数 `parameters.json`。设置页把完整九表模板保存在 `vietnam_full_workbook` 输入资产槽，并只提供“导出当前模板表”和“上传/替换模板表”两个操作。每轮计算都从模板首张「越南备货清单」提取本轮 SKU 的热销标记、成本、跨境价和折扣价。没有九表模板时明确失败；不接受独立 SKU 映射表覆盖，也不回退交付旧五表结果。
 
 桌面设置页通过 `lxeskill vietnam replenishment settings --action read|save|upload|export` 读写参数及九表模板，使用 lxeskillCLI 的结果和错误格式。该命令是桌面内部入口，不出现在模型命令列表；Electron 不引用 Python 内部业务模块路径。
 
