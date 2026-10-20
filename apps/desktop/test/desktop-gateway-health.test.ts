@@ -118,10 +118,12 @@ describe("desktop lxeskill health", () => {
   });
 
   test("reports the actual spawn failure for an absent Python", async () => {
-    const service = serviceFor({ pythonPath: join(tmpdir(), "absent-lxe-health-python") });
+    const pythonPath = join(tmpdir(), "absent-lxe-health-python");
+    const service = serviceFor({ pythonPath, environment: {} });
     await service.check();
     expect(service.snapshot().state).toBe("error");
-    expect(service.snapshot().message).toContain("ENOENT");
+    expect(service.snapshot().message).toContain(pythonPath);
+    expect(service.snapshot().message).toMatch(/ENOENT|Executable not found in \$PATH/u);
   });
 
   test("terminates a hung subprocess at the probe deadline", async () => {
