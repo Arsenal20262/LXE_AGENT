@@ -13,7 +13,6 @@ let conversations!: LocalConversationController;
 const runtime = new ProcessAgentRuntime({
   command: process.execPath, arguments: [resolve(root, "apps/agent-cli/test/fixtures-jsonrpc-ui.ts")],
   cwd: root, environment: { ...process.env },
-  agentSoulPath: "/soul", skillsRoot: "/skills", userSkillsRoot: "/user-skills", lxeskillCatalogPath: "/catalog",
   llmConfigRoot: "/llm", dataRoot: root, legacyWorkspace: workspace,
   onDesktopStream: (batch) => { conversations.handleStreamBatch(batch); },
   onEvent: (event) => conversations.handleAgentEvent(event),

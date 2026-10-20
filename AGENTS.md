@@ -5,7 +5,7 @@
 - `packages/agent/runtime`：Bun Agent 运行时——会话状态的唯一属主（`db/agent.sqlite3`）。
 - `apps/gateway`、`apps/desktop`：编排层与桌面壳；desktop 负责注入各进程的环境变量与 DB 路径。
 - `python/lxeskill_cli`：一次性 Python CLI（`lxeskill` 命令）——无状态执行器，自己的表在 `db/lxeskill.sqlite3`。
-- `skills/`：模型可见的技能定义；`python/lxeskill_cli/lxeskill/catalog.json` 是模型工具契约，改动必须过测试。
+- `skills/`：模型可见的技能定义；`python/lxeskill_cli/lxeskill/catalog.json` 由 lxeskillCLI 内部维护，对外通过 CLI 查询命令暴露契约。
 - `docs/harness/`：内部技术文档（紫鸟 API 参考、选型约束、真实响应样本都在这里）。
 
 ## 红线（违反 = 生产事故）
@@ -29,7 +29,7 @@ When you receive an instruction:
 - **Obsidian 协作**：需要访问 Obsidian 时，先发现当前机器上的 CLI 路径，并用 `obsidian vaults` 确认 Vault，不要写死安装位置或笔记目录。若 CLI 已安装且应用正在运行，但沙箱因看不到应用 IPC 而误报未运行，申请在沙箱外执行，并将命令前缀限制为实际 CLI 路径；若未安装或未启用 CLI，明确说明，并在已知 Vault 路径时回退为直接读写 Markdown，否则询问用户。默认只读；只有用户明确要求维护笔记时才执行写操作，不执行 `eval` 或插件管理命令。
 - 测试必须从仓库根运行：`uv run pytest python/lxeskill_cli/tests`。从子目录运行会因相对路径假失败。
 - **验证必须拿真实结果，警惕假通过**：管道会吞掉退出码（`cmd | tail` 的退出码是 tail 的，不是 cmd 的——用 `set -o pipefail` 或先落盘再查 `$?`）；扫描类校验匹配到空集也会"通过"（cwd 漂移、glob 写错时扫了 0 个文件照样报绿）。报告通过之前，先确认命令真的执行了、扫描真的扫到了东西。
-- `catalog.json` 是 Python 和 Bun 双端消费的契约，改它的定向测试必须两边都跑：`uv run pytest python/lxeskill_cli/tests/lxeskill python/lxeskill_cli/tests/infra` 加 `bun test packages/agent/runtime/test/tooling/lxeskill-command.test.ts`。
+- `catalog.json` 由 Python 读取；Bun 通过 `lxeskill list` 查询命令归属。修改命令契约时，两端定向测试都要跑：`uv run pytest python/lxeskill_cli/tests/lxeskill python/lxeskill_cli/tests/infra` 加 `bun test packages/agent/runtime/test/tooling/lxeskill-command.test.ts`。
 - 开发过程中只运行与改动直接相关的定向测试；每个任务的全量测试只在合并到 `main` 前、完成最终 rebase 后运行一次，不得在代码和基线均未变化时重复执行。
 - 如果全量测试后代码发生修改，或 `main` 的变化实际进入了当前分支，则原验证结果失效，自己决定要重新全量测试还是定向测试；无变化的 rebase 不构成重复测试理由。
 

@@ -750,3 +750,22 @@ def test_vietnam_has_one_ordinary_command_and_no_managed_contract() -> None:
     assert not any("managed_execution" in entry for entry in catalog.values())
     assert [name for name, entry in catalog.items() if name.startswith("vietnam_replenishment_") and entry["visibility"] != "internal"] == ["vietnam_replenishment_generate"]
     assert not any(name.startswith("assets_vietnam_sku_") for name in catalog)
+
+
+def test_datasets_list_exposes_public_relative_directories(capsys):
+    assert lxeskill.main(["datasets", "list"]) == 0
+    (record,) = _records(capsys)
+    assert record["protocol_version"] == "1"
+    assert record["command"] == "datasets list"
+    assert record["ok"] is True
+    datasets = record["data"]["datasets"]
+    assert datasets
+    assert any(item["id"] == "fba_delivery_csv" and item["dir"] == "fba/delivery_csv" for item in datasets)
+    assert all(set(item) == {"id", "dir", "holds"} for item in datasets)
+    assert all(not Path(item["dir"]).is_absolute() and item["holds"] for item in datasets)
+    assert record["files"] == []
+
+
+def test_datasets_list_rejects_extra_arguments(capsys):
+    assert lxeskill.main(["datasets", "list", "--unknown"]) == lxeskill.EXIT_USAGE
+    assert _records(capsys)[0]["error"]["code"] == "invalid_arguments"

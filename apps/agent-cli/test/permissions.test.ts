@@ -62,7 +62,6 @@ test("host shutdown still stops processes and releases resources when approval a
     dataRoot: root, legacyWorkspace: { directory: root, worktree: root },
     agentSoulPath: soul, skillsRoot: skills, userSkillsRoot: join(root, "user"),
     llmConfigRoot: join(repositoryRoot(import.meta.dir), "config", "llm"),
-    lxeskillCatalogPath: join(root, "missing-catalog.json"),
     environment: { LOCAL_LOGS_ENABLED: "0", LXE_DATA_SERVER_ENABLED: "0" },
     emitter: { emit: async () => {}, typing: async () => {} },
   });
@@ -93,7 +92,6 @@ test("Desktop host exposes exec without a managed lxeskill tool", async () => {
     dataRoot: root, legacyWorkspace: { directory: workspaceRoot, worktree: workspaceRoot },
     agentSoulPath: soul, skillsRoot: skills, userSkillsRoot: join(root, "user"),
     llmConfigRoot: join(repositoryRoot(import.meta.dir), "config", "llm"),
-    lxeskillCatalogPath: join(repositoryRoot(import.meta.dir), "python", "lxeskill_cli", "lxeskill", "catalog.json"),
     environment: { LOCAL_LOGS_ENABLED: "0", LXE_DATA_SERVER_ENABLED: "0", LXE_MANAGED_PYTHON: process.execPath },
     emitter: { emit: async () => {}, typing: async () => {} },
   });

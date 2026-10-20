@@ -10,6 +10,7 @@ from lxeskill.business import ArtifactPathError, execute_module_json, load_catal
 from lxeskill.browser import BrowserCliError, execute_browser_command
 from shared.infra.net import bootstrap_network_policy
 from shared.input_assets import InputAssetError, current_asset, promote_asset
+from shared.datasets import load_datasets
 from shared.logging import get_logger, setup_logging
 from shared.repository import skills_root
 from shared.workspace import activate_project_workspace, resolve_workspace_input
@@ -501,13 +502,25 @@ def _main(argv: list[str] | None = None) -> int:
                     "command": "help",
                     "ok": True,
                     "data": {
-                        "usage": "lxeskill <list|describe|doctor|cloud-status|cloud-context|command> [options]",
+                        "usage": "lxeskill <list|describe|datasets list|doctor|cloud-status|cloud-context|command> [options]",
                         "input_modes": ["flags", "input-json", "stdin-json"],
                         "input_modes_note": "Supported modes depend on the command; use describe or command --help.",
                     },
                     "files": [],
                 }
             )
+            return 0
+        if arguments[:2] == ["datasets", "list"]:
+            if len(arguments) != 2:
+                raise LxeSkillError("invalid_arguments", f"unexpected arguments: {' '.join(arguments[2:])}", exit_code=EXIT_USAGE)
+            _emit({
+                "type": "result", "command": "datasets list", "ok": True,
+                "data": {"datasets": [
+                    {"id": key, "dir": dataset.dir, "holds": dataset.holds}
+                    for key, dataset in load_datasets().items()
+                ]},
+                "files": [],
+            })
             return 0
         if arguments[0] == "doctor":
             if len(arguments) != 1:

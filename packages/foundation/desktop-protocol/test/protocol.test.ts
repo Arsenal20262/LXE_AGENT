@@ -304,7 +304,6 @@ describe("desktop agent protocol", () => {
         agent_soul_path: "/runtime/resources/agent/SOUL.md",
         skills_root: "/runtime/resources/skills",
         user_skills_root: "/home/tester/.agents/skills",
-        lxeskill_catalog_path: "/runtime/resources/lxeskill/catalog.json",
         llm_config_root: "/runtime/resources/config/llm",
         data_root: "/runtime/data",
         legacy_workspace: { directory: "/workspace/project", worktree: "/workspace" },

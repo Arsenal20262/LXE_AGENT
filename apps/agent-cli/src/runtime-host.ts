@@ -25,8 +25,7 @@ import {
   createRuntimeProvider,
   DeepSeekFilesService,
   ExecShellAdapter,
-  loadLxeSkillCommandCatalog,
-  loadLxeSkillDatasets,
+  queryLxeSkillCommandSkills,
   loadMcpConfig,
   TurnUsageSyncService,
   McpManager,
@@ -59,7 +58,6 @@ export interface AgentRuntimeHostOptions {
   agentSoulPath: string;
   skillsRoot: string;
   userSkillsRoot: string;
-  lxeskillCatalogPath: string;
   llmConfigRoot: string;
   dataRoot: string;
   legacyWorkspace: WorkspaceContext;
@@ -114,7 +112,6 @@ export function createAgentRuntimeHost(
     LXE_AGENT_SOUL_PATH: options.agentSoulPath,
     LXE_SKILLS_ROOT: options.skillsRoot,
     LXE_USER_SKILLS_ROOT: options.userSkillsRoot,
-    LXE_LXESKILL_CATALOG_PATH: options.lxeskillCatalogPath,
     LXE_LLM_CONFIG_ROOT: options.llmConfigRoot,
     LXE_DATA_ROOT: options.dataRoot,
     LXE_WORKSPACE_ROOT: join(options.dataRoot, "workspace"),
@@ -162,20 +159,6 @@ export function createAgentRuntimeHost(
         .catch(error => logger.warn("skills_notification_failed", { error }));
     },
   });
-  const commandCatalogPath = options.lxeskillCatalogPath;
-  const cliCommands = existsSync(commandCatalogPath)
-    ? loadLxeSkillCommandCatalog(commandCatalogPath)
-    : [];
-  const cliDatasets = existsSync(commandCatalogPath)
-    ? loadLxeSkillDatasets(commandCatalogPath)
-    : [];
-  const businessCommands = new Map(
-    cliCommands
-      .filter((entry) => ["business", "browser"].includes(entry.visibility) || (
-        entry.visibility === "maintenance" && entry.ownerSkills.length > 0
-      ))
-      .map((entry) => [entry.command, entry.ownerSkills] as const),
-  );
   const execShell = new ExecShellAdapter({ environment });
   const sourceRoot = String(environment.LXE_SOURCE_ROOT ?? "").trim();
   const sourcePython = sourceRoot ? join(
@@ -195,8 +178,6 @@ export function createAgentRuntimeHost(
     ...(environment.LXE_FD_PATH ? { fdPath: environment.LXE_FD_PATH } : {}),
     repositorySkillsRoot: options.skillsRoot,
     userSkillsRoot: options.userSkillsRoot,
-    businessCommands,
-    businessCommandCatalog: cliCommands,
     execShell,
     execEnv: ({ skillNames }) => ({ LXESKILL_SKILL_SCOPE: skillNames.join(",") }),
     ...(options.onBackgroundTaskChanged ? { onExecUpdate: options.onBackgroundTaskChanged } : {}),
@@ -236,7 +217,6 @@ export function createAgentRuntimeHost(
     },
     mcpStatus: (serverName) => mcpManager.status(serverName),
     skillCatalog,
-    cliCommands,
     allowedSkillTypes,
     providerManager,
     managedLlmState: () => managedLlmState,
@@ -255,6 +235,7 @@ export function createAgentRuntimeHost(
   });
   const providerDescriptor = providerManager.acquire().descriptor;
   const runtime = new TypeScriptAgentRuntime({
+    commandSkills: () => queryLxeSkillCommandSkills({ cwd: options.dataRoot, environment }),
     permissionPolicy, executionPaths, approvalAvailable: true,
     store, sessionTitles,
     providerManager,
@@ -291,7 +272,6 @@ export function createAgentRuntimeHost(
       model: context.model,
       skillPrompt: context.workspaceSnapshot?.skills.prompt ?? context.skillPrompt,
       workspaceInstructions: context.workspaceSnapshot?.instructions_prompt ?? "",
-      datasets: cliDatasets,
       larkCliAvailable: execShell.hasExecutable("lark-cli", context.workspace.worktree, context.workspace.directory),
     }),
     services: runtimeServices,

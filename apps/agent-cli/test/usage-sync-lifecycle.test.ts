@@ -26,7 +26,6 @@ for (const cliState of ["missing", "failed", "ready"] as const) {
       dataRoot: root, legacyWorkspace: { directory: root, worktree: root },
       agentSoulPath: soul, skillsRoot: skills, userSkillsRoot: join(root, "user"),
       llmConfigRoot: join(repositoryRoot(import.meta.dir), "config", "llm"),
-      lxeskillCatalogPath: join(root, "missing-catalog.json"),
       environment: { LOCAL_LOGS_ENABLED: "0", LXE_MANAGED_PYTHON: python, LXE_DATA_SERVER_ENABLED: "1", LXE_DATA_SERVER_URL: "https://fixture.invalid" },
       emitter: { emit: async () => {}, typing: async () => {} },
     });

@@ -6,6 +6,8 @@ commands:
   - lxeskill mabang-tms products export
 ---
 
+需要查询 lxeskill 产物目录时，运行 `lxeskill datasets list`；返回的 `dir` 相对于当前环境的 `artifact_root`。
+
 # 马帮 TMS 数据导出
 
 ## 业务范围

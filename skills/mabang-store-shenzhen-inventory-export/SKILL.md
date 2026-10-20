@@ -8,6 +8,8 @@ references:
   - references/report.md
 ---
 
+需要查询 lxeskill 产物目录时，运行 `lxeskill datasets list`；返回的 `dir` 相对于当前环境的 `artifact_root`。
+
 # Amazon 备货真实库存（深圳仓库）
 
 ## 执行与错误

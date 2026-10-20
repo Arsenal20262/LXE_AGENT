@@ -342,3 +342,22 @@ describe("UsageStore", () => {
     }
   });
 });
+
+test("new call counts accumulate on historical usage without resetting its upload cursor", () => {
+  const database = usageDatabase();
+  try {
+    const store = new UsageStore(database);
+    const base = { started_at: startedAt, status: "completed", elapsed_ms: 1,
+      input_tokens: 0, output_tokens: 0, tool_calls: 0, api_calls: 1, tools: [] };
+    store.recordTurn("s", { ...base, turn_id: "old", activations: [{ skill: "demo", module: "default" }],
+      executions: [{ skill: "demo", module: "default", command: "demo run", success: false, duration_ms: 7 }] });
+    const first = store.exportTurnUsageBatch("https://cloud.example", startedAt - 1, 10);
+    store.acknowledgeTurnUsage("https://cloud.example", Number(first.turns[0]!.sequence));
+    store.recordTurn("s", { ...base, turn_id: "new", activations: Array(2).fill({ skill: "demo", module: "default" }),
+      executions: [{ skill: "demo", module: "default", command: "demo run" }] });
+    expect(store.skillUsageStats(30, "demo")).toEqual([expect.objectContaining({ activations: 3, executions: 2, failures: 1, duration_ms: 7 })]);
+    const batch = store.exportTurnUsageBatch("https://cloud.example", startedAt - 1, 10);
+    expect(batch.turns.map(turn => turn.turn_id)).toEqual(["new"]);
+    expect(batch.turns[0]!.items).toContainEqual(expect.objectContaining({ kind: "skill_execution", calls: 1, errors: 0, duration_ms: 0 }));
+  } finally { database.close(true); }
+});

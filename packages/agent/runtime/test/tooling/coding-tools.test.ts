@@ -149,9 +149,7 @@ describe("native coding tools", () => {
     roots.push(root, outsideRoot);
     writeFileSync(outsidePath, "outside\n", "utf8");
     const registry = new ToolRegistry();
-    const processes = registerCodingTools(registry, {
-      businessCommands: new Map([["lxeskill replenish store resolve", ["replenishment-store-resolve"]]]),
-    });
+    const processes = registerCodingTools(registry, {});
     expect(registry.schemas().map((item) => item.name)).toEqual([
       "read", "write", "edit", "grep", "find", "ls", "send_files", "exec", "wait",
     ]);
@@ -412,6 +410,27 @@ describe("native coding tools", () => {
     } finally {
       await processes.stop();
     }
+  });
+
+  test("exec does not block CLI wrappers, modules or shell composition", async () => {
+    const seen: string[] = [];
+    class FixtureShell extends ExecShellAdapter {
+      override normalizeCommand(_cwd: string, input: string): string {
+        seen.push(input);
+        return printCommand("fixture command executed");
+      }
+    }
+    const registry = new ToolRegistry();
+    const processes = registerCodingTools(registry, { execShell: new FixtureShell() });
+    const commands = ["python -m lxeskill list", "python -m services.agent_cli.demo",
+      "lxeskill demo run && echo done", "lxeskill demo run > report.txt", "cd . && lxeskill list"];
+    try {
+      for (const command of commands) {
+        const result = await registry.execute("exec", { command }, context(projectRoot));
+        expect(String(result.content[0]?.text)).toContain("fixture command executed");
+      }
+      expect(seen).toEqual(commands);
+    } finally { await processes.stop(); }
   });
 
   test("exec yields to a session-owned wait and emits one UI-only completion snapshot", async () => {
@@ -1132,30 +1151,11 @@ describe("native coding tools", () => {
     await processes.stop();
   });
 
-  test("restores grep modes, find ordering, unrestricted delivery, and direct business CLI guards", async () => {
+  test("restores grep modes, find ordering, unrestricted delivery, and generic exec argument validation", async () => {
     const root = mkdtempSync(join(tmpdir(), "lxe-coding-contract-"));
     roots.push(root);
     const registry = new ToolRegistry();
-    const processes = registerCodingTools(registry, {
-      businessCommands: new Map([
-        ["lxeskill replenish store resolve", ["replenishment-store-resolve"]],
-        ["lxeskill mabang delivery export", ["mabang-delivery-export"]],
-      ]),
-      businessCommandCatalog: [
-        {
-          command: "lxeskill replenish store resolve",
-          module: "services.agent_cli.mabang.resolve_fba_store",
-          ownerSkills: ["replenishment-store-resolve"],
-          attributionSkill: "replenishment-store-resolve",
-        },
-        {
-          command: "lxeskill mabang delivery export",
-          module: "services.agent_cli.mabang.download_fba_delivery_csv",
-          ownerSkills: ["mabang-delivery-export"],
-          attributionSkill: "mabang-delivery-export",
-        },
-      ],
-    });
+    const processes = registerCodingTools(registry, {});
     await registry.execute("write", { file_path: "src/a.py", content: "alpha\nbeta\nbeta\n" }, context(root));
     const count = await registry.execute("grep", {
       pattern: "beta", path: "src", output_mode: "count", type: "py",
@@ -1165,66 +1165,6 @@ describe("native coding tools", () => {
       .toEqual([join(root, "src", "a.py")]);
     await registry.execute("write", { file_path: "artifacts/a.txt", content: "ok" }, context(root));
     expect((await registry.execute("send_files", { paths: ["artifacts/a.txt"] }, context(root))).files).toHaveLength(1);
-    const rejected = async (
-      command: string,
-      executionContext: Parameters<ToolRegistry["execute"]>[2] = context(root),
-    ): Promise<ToolExecutionError> => {
-      try {
-        await registry.execute("exec", { command }, executionContext);
-      } catch (error) {
-        expect(error).toBeInstanceOf(ToolExecutionError);
-        return error as ToolExecutionError;
-      }
-      throw new Error(`expected command to be rejected: ${command}`);
-    };
-    const directModule = await rejected("python -m services.agent_cli.mabang.resolve_fba_store");
-    expect(directModule.code).toBe("permission_denied");
-    expect(directModule.recoveryGroup).toBe("lxeskill_invocation");
-    expect(directModule.details).toMatchObject({
-      type: "lxeskill_invocation_error",
-      violations: ["direct_business_module"],
-      canonical_command_path: "lxeskill replenish store resolve",
-      owner_skills: ["replenishment-store-resolve"],
-      describe_command: "lxeskill describe replenish store resolve",
-    });
-    const deliveryModule = await rejected("python -m services.agent_cli.mabang.download_fba_delivery_csv");
-    expect(deliveryModule.details).toMatchObject({
-      canonical_command_path: "lxeskill mabang delivery export",
-      owner_skills: ["mabang-delivery-export"],
-      describe_command: "lxeskill describe mabang delivery export",
-    });
-    const pythonWrapper = await rejected("python -m lxeskill replenish store resolve");
-    expect(pythonWrapper.code).toBe("permission_denied");
-    expect(pythonWrapper.details).toMatchObject({ violations: ["python_module_wrapper", "not_standalone"] });
-    const embedded = await registry.execute("exec", {
-      command: printCommand("lxeskill replenish store resolve"),
-    }, context(root));
-    expect(String(embedded.content[0]?.text)).toContain("lxeskill replenish store resolve");
-    const powershellDiscovery = await registry.execute("exec", {
-      command: "(Get-Command lxeskill).Source",
-    }, context(root));
-    expect(String(powershellDiscovery.content[0]?.text)).toContain("status:");
-    const moduleSearchText = await registry.execute("exec", {
-      command: printCommand("services.agent_cli.mabang.resolve_fba_store"),
-    }, context(root));
-    expect(String(moduleSearchText.content[0]?.text)).toContain("services.agent_cli.mabang.resolve_fba_store");
-    expect((await rejected("cd . && python -m services.agent_cli.mabang.resolve_fba_store")).details)
-      .toMatchObject({ violations: ["direct_business_module", "shell_composition"] });
-    expect((await rejected("lxeskill replenish store resolve && echo done")).details)
-      .toMatchObject({ violations: ["shell_composition"] });
-    expect((await rejected("lxeskill replenish store resolve > result.txt")).details)
-      .toMatchObject({ violations: ["shell_composition"] });
-    expect((await rejected("lxeskill replenish store resolve\necho done")).details)
-      .toMatchObject({ violations: ["shell_composition"] });
-    const unknownLegacy = await rejected("python -m services.agent_cli.mabang.removed_old_module");
-    expect(unknownLegacy.details).toMatchObject({ discovery_command: "lxeskill list" });
-    const hiddenSkills = registry.createExposureState({ allowedSkills: new Set(["another-skill"]) });
-    const hiddenCommand = await rejected(
-      "python -m services.agent_cli.mabang.download_fba_delivery_csv",
-      { ...context(root), exposureState: hiddenSkills },
-    );
-    expect(hiddenCommand.details).toMatchObject({ discovery_command: "lxeskill list" });
-    expect(hiddenCommand.modelContent(1)).not.toContain("mabang-delivery-export");
     // Unknown commands pass through: authorization belongs to the CLI, which
     // rejects them with a structured error. Here the temp root has neither a
     // managed Python nor .venv, so normalization fails before any spawn.
@@ -1234,21 +1174,12 @@ describe("native coding tools", () => {
     await expect(registry.execute("exec", {
       command: "lxeskill.cmd unknown command",
     }, context(root))).rejects.toThrow("project Python is unavailable");
-    const classified = registry.definition("exec")?.classifyInvocation?.({
-      command: "lxeskill replenish store resolve --store-name Demo --token secret",
-    });
-    expect(classified).toEqual({
-      usageName: "lxeskill:replenish store resolve",
-      commandId: "replenish store resolve",
-      ownerSkills: ["replenishment-store-resolve"],
-      attributionSkill: "replenishment-store-resolve",
-    });
     await expect(registry.execute("exec", {
       command: "lxeskill replenish store resolve",
       "yield-time-ms": 120_000,
     }, context(root))).rejects.toThrow("between 250 and 30000 milliseconds");
     expect(registry.definition("exec")?.input_schema.properties).toMatchObject({
-      command: { description: expect.stringContaining("exactly one standalone") },
+      command: { description: expect.stringContaining("Shell command string") },
       "yield-time-ms": { type: "number", minimum: 250, maximum: 30_000, default: 10_000 },
     });
     expect(registry.definition("wait")?.input_schema.properties).toMatchObject({

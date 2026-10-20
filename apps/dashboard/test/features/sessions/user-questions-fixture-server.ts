@@ -15,7 +15,6 @@ const states = new Map<string, string>();
 const runtime = new ProcessAgentRuntime({
   command: process.execPath, arguments: [resolve("apps/agent-cli/test/fixtures-user-questions.ts")], cwd: root,
   environment: { ...process.env, LOCAL_LOGS_ENABLED: "0", LOG_LEVEL: "ERROR" },
-  agentSoulPath: "/soul", skillsRoot: "/skills", userSkillsRoot: "/user-skills", lxeskillCatalogPath: "/catalog",
   llmConfigRoot: "/llm", dataRoot, legacyWorkspace: workspace,
 });
 const scheduler = new SessionScheduler({ runtime: {

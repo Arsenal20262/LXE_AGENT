@@ -3,13 +3,6 @@ import type { PermissionApprovalService } from "../../permissions/approvals";
 import type { JsonObject } from "@lxe/protocol";
 import type { ExecShellAdapter } from "../exec-shell";
 
-export interface LxeSkillRecoveryCommand {
-  command: string;
-  module?: string;
-  ownerSkills: readonly string[];
-  attributionSkill?: string;
-}
-
 export type ProcessStatus = "running" | "completed" | "failed" | "killed";
 
 export interface CodingToolOptions {
@@ -26,8 +19,6 @@ export interface CodingToolOptions {
   onExecUpdate?: (snapshot: JsonObject) => Promise<void> | void;
   ripgrepPath?: string | null;
   fdPath?: string | null;
-  businessCommands?: ReadonlyMap<string, readonly string[]>;
-  businessCommandCatalog?: readonly LxeSkillRecoveryCommand[];
   execShell?: ExecShellAdapter;
   execEnv?: (context: { skillNames: readonly string[] }) => Record<string, string>;
 }

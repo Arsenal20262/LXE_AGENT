@@ -9,6 +9,8 @@ commands:
   - lxeskill shangman login clear
 ---
 
+需要查询 lxeskill 产物目录时，运行 `lxeskill datasets list`；返回的 `dir` 相对于当前环境的 `artifact_root`。
+
 # 上马登录
 
 为上马 ERP 数据采集提供认证支持。独立登录成功后结束；作为已授权任务的前置步骤时，成功且登录态已保存后返回调用 Skill 继续原任务，不把登录成功当作数据采集完成。

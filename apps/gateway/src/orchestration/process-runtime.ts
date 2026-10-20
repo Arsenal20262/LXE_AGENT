@@ -55,7 +55,6 @@ export interface ProcessAgentRuntimeOptions {
   agentSoulPath: string;
   skillsRoot: string;
   userSkillsRoot: string;
-  lxeskillCatalogPath: string;
   llmConfigRoot: string;
   dataRoot: string;
   legacyWorkspace: WorkspaceContext;
@@ -230,7 +229,6 @@ export class ProcessAgentRuntime implements DirectAgentRuntime {
         agent_soul_path: this.options.agentSoulPath,
         skills_root: this.options.skillsRoot,
         user_skills_root: this.options.userSkillsRoot,
-        lxeskill_catalog_path: this.options.lxeskillCatalogPath,
         llm_config_root: this.options.llmConfigRoot,
         data_root: this.options.dataRoot,
         legacy_workspace: this.options.legacyWorkspace,

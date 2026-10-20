@@ -8,6 +8,8 @@ references:
   - references/results.md
 ---
 
+需要查询 lxeskill 产物目录时，运行 `lxeskill datasets list`；返回的 `dir` 相对于当前环境的 `artifact_root`。
+
 # 下载 Amazon 未关联货件并生成扣减快照
 
 ## 范围与输入

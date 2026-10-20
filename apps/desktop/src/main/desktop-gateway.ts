@@ -45,6 +45,8 @@ import {
 } from "./dashboard-invalidation";
 import { publicDashboardChannelHealth } from "./dashboard-channel-health";
 import { DesktopLxeSkillHealth } from "./lxeskill-health";
+import { listLxeSkillCommands } from "./lxeskill-commands";
+import type { LxeSkillQueryOptions } from "@lxe/core";
 import {
   previewConversationAttachment,
   previewConversationImageView,
@@ -137,6 +139,7 @@ export class DesktopGateway {
   private dashboardObservedRuntimeReady = false;
   private lastError = "";
   private lxeskillHealth: DesktopLxeSkillHealth | undefined;
+  private lxeskillQueryOptions: LxeSkillQueryOptions | undefined;
 
   private files: FilePreviewService | undefined;
   constructor(private readonly options: DesktopGatewayOptions) {}
@@ -195,7 +198,6 @@ export class DesktopGateway {
       LXE_AGENT_SOUL_PATH: this.options.paths.agentSoulPath,
       LXE_SKILLS_ROOT: this.options.paths.skillsRoot,
       LXE_USER_SKILLS_ROOT: this.options.paths.userSkillsRoot,
-      LXE_LXESKILL_CATALOG_PATH: this.options.paths.lxeskillCatalogPath,
       LXE_LLM_CONFIG_ROOT: this.options.paths.llmConfigRoot,
       LXE_DATA_ROOT: this.options.paths.dataRoot,
       LXE_AGENT_SQLITE_DB_PATH: join(this.options.paths.dataRoot, "db", "agent.sqlite3"),
@@ -232,6 +234,9 @@ export class DesktopGateway {
       }),
     };
     void this.lxeskillHealth?.stop();
+    this.lxeskillQueryOptions = {
+      pythonPath: this.options.paths.managedPythonPath, cwd: this.options.paths.dataRoot, environment,
+    };
     this.lxeskillHealth = new DesktopLxeSkillHealth({
       pythonPath: this.options.paths.managedPythonPath,
       dataRoot: this.options.paths.dataRoot,
@@ -251,7 +256,6 @@ export class DesktopGateway {
       agentSoulPath: this.options.paths.agentSoulPath,
       skillsRoot: this.options.paths.skillsRoot,
       userSkillsRoot: this.options.paths.userSkillsRoot,
-      lxeskillCatalogPath: this.options.paths.lxeskillCatalogPath,
       llmConfigRoot: this.options.paths.llmConfigRoot,
       dataRoot: this.options.paths.dataRoot,
       legacyWorkspace,
@@ -461,6 +465,10 @@ export class DesktopGateway {
   }
 
   async dashboardCall<O extends DashboardRpcOperation>(call: DashboardRpcCall<O>): Promise<DashboardRpcResult<O>> {
+    if (call.operation === "commands.list") {
+      if (!this.lxeskillQueryOptions) throw new Error("Desktop CLI configuration is not ready");
+      return await listLxeSkillCommands(this.lxeskillQueryOptions) as DashboardRpcResult<O>;
+    }
     if (!this.composition || !this.runtime?.isReady) throw new Error("Desktop Gateway is not ready");
     if (call.operation === "channels.health") {
       const items = publicDashboardChannelHealth(

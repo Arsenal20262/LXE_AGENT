@@ -6,6 +6,8 @@ commands:
   - lxeskill replenish store resolve
 ---
 
+需要查询 lxeskill 产物目录时，运行 `lxeskill datasets list`；返回的 `dir` 相对于当前环境的 `artifact_root`。
+
 # 解析马帮 Amazon 店铺
 
 ## 执行与错误
