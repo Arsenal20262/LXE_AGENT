@@ -42,6 +42,47 @@ test("queries command attribution and datasets through the installed public CLI"
   } finally { rmSync(dataRoot, { recursive: true, force: true }); }
 });
 
+test("Mabang TMS exposes one export command with optional warehouse scope and its own deliverable dataset", async () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), "lxe-tms-query-"));
+  const options = { cwd: root, pythonPath: join(root, process.platform === "win32" ? ".venv/Scripts/python.exe" : ".venv/bin/python"),
+    environment: { ...process.env, LXE_DATA_ROOT: dataRoot } };
+  try {
+    const data = await queryLxeSkill("list", options);
+    const commands = (data.commands as Record<string, unknown>[]).filter(entry => String(entry.name).startsWith("mabang_tms_"));
+    expect(commands).toHaveLength(1);
+    expect(commands[0]).toMatchObject({
+      command: "mabang-tms products export",
+      owner_skills: ["mabang-tms-products-export"],
+      attribution_skill: "mabang-tms-products-export",
+      artifact_paths: [{ field: "artifacts[].path", role: "deliverable" }],
+      input_schema: { properties: { warehouse: { type: "string", enum: ["PH1", "VN1", "all"] } } },
+    });
+    expect(commands[0]?.input_schema).not.toHaveProperty("required"); // Unscoped external CLI compatibility.
+    const datasets = await queryLxeSkill("datasets list", options);
+    expect(datasets.datasets).toContainEqual(expect.objectContaining({ id: "mabang_tms_exports", dir: "mabang_tms/exports" }));
+  } finally { rmSync(dataRoot, { recursive: true, force: true }); }
+});
+
+test.each([
+  ["mabang-tms products export", "PH1", "mabang-tms-products-export"],
+  ["mabang-tms products export", "VN1", "mabang-tms-products-export"],
+  ["mabang-tms products export", "all", "mabang-tms-products-export"],
+  ["yacang reports export --report inventory-sales", "PH8805", "yacang-reports-export"],
+  ["yacang reports export --report inventory-sales", "VN8806", "yacang-reports-export"],
+])("country export command keeps ERP ownership: %s --warehouse %s", async (command, warehouse, owner) => {
+  const dataRoot = mkdtempSync(join(tmpdir(), "lxe-erp-query-"));
+  try {
+    const stats = new TurnStatistics({ directory: root, commandSkills: () => queryLxeSkillCommandSkills({
+      cwd: root, pythonPath: join(root, process.platform === "win32" ? ".venv/Scripts/python.exe" : ".venv/bin/python"),
+      environment: { ...process.env, LXE_DATA_ROOT: dataRoot },
+    }) });
+    stats.observe("exec", { command: `lxeskill ${command} --warehouse ${warehouse}` });
+    expect((await stats.snapshot()).executions).toEqual([
+      expect.objectContaining({ command: command.split(" --")[0], skill: owner }),
+    ]);
+  } finally { rmSync(dataRoot, { recursive: true, force: true }); }
+});
+
 test("records repeated Skill reads and longest matching command calls without execution outcomes", async () => {
   let queries = 0;
   const stats = new TurnStatistics({ directory: root, commandSkills: async () => { queries++; return [
