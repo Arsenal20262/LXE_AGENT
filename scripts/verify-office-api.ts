@@ -48,15 +48,24 @@ try {
   onRender = ready;
   const controller = new AbortController();
   const pending = cache.get(large, ".docx", controller.signal);
+  let settled = false;
+  void pending.finally(() => { settled = true; }).catch(() => {});
   const rejected = assert.rejects(pending);
   await started;
+  await new Promise(resolve => setTimeout(resolve, 200));
+  assert.equal(settled, false, "Cancellation fixture completed before cancellation");
   controller.abort(new Error("Acceptance cancellation"));
   await rejected;
   onRender = undefined;
   // A new conversion must work after cancellation has drained the worker.
   const recovered = await cache.get(await readFile(join(fixtures, "原始 文档.docx")), ".docx", signal());
   recovered.release();
+  const disposeStarted = new Promise<void>(resolve => { onRender = resolve; });
+  const duringDispose = assert.rejects(cache.get(large, ".docx", signal()));
+  await disposeStarted;
+  await new Promise(resolve => setTimeout(resolve, 200));
   await cache.dispose();
+  await duringDispose;
   assert((await readdir(cacheRoot)).every(name => /^[a-f0-9]{64}\.(pdf|json)$/.test(name)), "Temporary input/output leaked");
   // Verify the actual Kit timeout contract used by the production adapter.
   const entry = createRequire(cli).resolve("@deepseek-ai/libreoffice-kit");
