@@ -10,6 +10,7 @@
 | --- | --- |
 | 先看懂颜色如何使用 | [中文指南](guide.zh-CN.md) |
 | 查看 LXE 具体用了哪些规则、改了哪些数值 | [LXE 适配说明](lxe-adaptation.md) |
+| 并排检查组件状态与当前实现 | [当前适配总表](current-adaptation.md)；仓库根运行 `bun run cds:preview` |
 | 查原话、来源版本、证据边界和 Skill 线索 | [来源与证据](evidence.md) |
 | 复制或核对当前采用的色彩变量 | [变量说明与完整表](tokens/README.md)、[CSS 快照](tokens/lxe-theme.snapshot.css) |
 | 看首页、设置、能力、活动和工作台的实现案例 | [案例索引](examples/README.md) |
@@ -31,6 +32,9 @@ cds/
 ├── README.md                     阅读入口与维护方法
 ├── guide.zh-CN.md                中文色彩使用指南
 ├── lxe-adaptation.md             原规则与 LXE 实现的对照
+├── current-adaptation.md         当前适配总表（首批三类组件）
+├── current-adaptation.json       展示页与总表共用的状态／证据记录
+├── showcase/                     本轮实际交互验证记录与截图
 ├── evidence.md                   来源、证据边界与 Skill 线索
 ├── archive.json                  归档时间、版本、实现提交
 ├── SHA256SUMS.txt                本资料库文件校验清单
@@ -57,6 +61,8 @@ cds/
 3. 改动 LXE 配色或布局时，更新适配说明、变量快照、相关案例，并记录实现提交。原始 CDS 文件保持原样。
 4. 核对亮暗主题、悬停、选中、焦点、错误、禁用、窄屏和长文本。静态色表不代表这些状态都已验证，也不代表已完成无障碍审计。
 5. 更新归档元数据后，在本目录重新生成校验清单；校验清单自身不参与哈希。不要改写 `sources/SHA256SUMS.txt`，它属于原提取包。
+
+2026-10-20 增加组件状态展示：首批覆盖设置输入框、会话导航行、工具调用条。`bun run cds:check` 用本地 Electron 核对交互、保存实际计算样式与源码哈希，并退出预览进程；`bun run cds:docs` 从 JSON 重建总表和归档校验清单。原生输入框样式探针与生产 React 组件在页面上分别标注。未取得的 Claude 专用规则、未实现的字段错误样式和仍沿用的旧变量均保留为缺口。
 
 在本目录执行 `shasum -a 256 -c SHA256SUMS.txt` 可核对归档完整性。要判断生产变量是否已经变化，从仓库根执行：
 

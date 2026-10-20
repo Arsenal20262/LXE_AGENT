@@ -7,8 +7,9 @@
 - Electron Desktop 是默认产品线，当前正式分发目标为 Windows x64。
 - React Dashboard 直接作为 Electron Renderer 加载，不在正式安装包中启动 localhost Dashboard 服务。
 - Electron Main 集成 Gateway，并负责窗口、托盘、配置、凭证和后台组件生命周期。
-- Agent Runtime 编译为私有 `agent-cli.exe`，其本地 `AgentRuntimeHost` 负责 Store、Provider、Runtime、MCP、Python CLI、Workspace、工具与 Dashboard 生命周期；它不安装系统命令，也不加入系统 `PATH`。同一可执行文件提供显式调用的一次性 `exec` 入口，但 Desktop 仍只使用长驻 `serve`。
+- Agent Runtime 编译为私有 `agent-cli.exe`，其本地 `AgentRuntimeHost` 负责 Store、Provider、Runtime、MCP、Workspace、工具与 Dashboard 生命周期；它不安装系统命令，也不加入系统 `PATH`。同一可执行文件提供显式调用的一次性 `exec` 入口，但 Desktop 仍只使用长驻 `serve`。
 - `lxeskill` 保持 Python 原生实现，以 wheel 形式安装到应用携带的私有 Python。
+- Electron 启动时在后台执行 `lxeskill list`，独立展示 CLI 可用性；检查失败不阻塞 Agent 启动或命令执行。桌面整体重启或现有“重启 Agent”操作会重新检查，关闭时取消未完成的检查。此状态只表示 CLI 入口可用，不代表业务认证或所有业务命令可用。
 - Dashboard 支持桌面聊天、附件、会话切换、重命名、删除和停止任务；飞书是另一个任务入口。桌面回合还支持结构化问题卡片。
 
 ## 工作区与对话
@@ -93,7 +94,7 @@ python.exe -I -m lxeskill ...
 
 `-I` 启用 Python 导入隔离，避免用户级 Python 配置和 site-packages 污染运行环境；`-m` 按模块启动 `lxeskill`。运行时同时设置 `PYTHONNOUSERSITE=1`。源码模式使用当前 checkout 自己的 `.venv`，不共享其他 worktree 的 editable 安装。这个导入隔离不提供文件系统沙箱。
 
-运行时执行 `lxeskill list` 检查业务 CLI；失败会保留实际诊断，普通 Agent 能力可继续运行。桌面和独立终端的马帮认证入口见 [浏览器认证手册](../../python/lxeskill_cli/browser_auth_service/README.md)。紫鸟页面操作遵守 [官方配对 Selenium 约束](../harness/skill/reference/ziniao-webdriver-doc-1.0.0/reference/automation-framework-policy.md)。
+Electron 执行 `lxeskill list` 检查 CLI 入口，失败时展示实际诊断；agentcli 的启动和 `exec` 调用不依赖这项检查。桌面和独立终端的马帮认证入口见 [浏览器认证手册](../../python/lxeskill_cli/browser_auth_service/README.md)。紫鸟页面操作遵守 [官方配对 Selenium 约束](../harness/skill/reference/ziniao-webdriver-doc-1.0.0/reference/automation-framework-policy.md)。
 
 ### 工作台媒体标签
 

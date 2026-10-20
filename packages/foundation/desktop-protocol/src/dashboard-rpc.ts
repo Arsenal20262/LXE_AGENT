@@ -448,6 +448,7 @@ export type StatsOverviewPayload = {
     llm_calls: number;
     input_tokens: number;
     output_tokens: number;
+    skill_activations?: number;
     skill_executions: number;
     skill_failures: number;
   };
@@ -603,7 +604,7 @@ export type DashboardRpcResult<O extends DashboardRpcOperation> =
 
 export type AgentDashboardRpcOperation = Exclude<
   DashboardRpcOperation,
-  "channels.health" | "sessions.send" | "sessions.stop" | "sessions.activity"
+  "commands.list" | "channels.health" | "sessions.send" | "sessions.stop" | "sessions.activity"
     | "sessions.status.list" | "sessions.status.ack"
     | "sessions.file.open" | "sessions.file.reveal" | "sessions.attachment.open" | "sessions.attachment.preview" | "sessions.image_view.preview"
 >;
@@ -943,7 +944,8 @@ export function parseDashboardRpcCall(value: unknown): DashboardRpcCall {
 
 export function parseAgentDashboardRpcCall(value: unknown): AgentDashboardRpcCall {
   const call = parseDashboardRpcCall(value);
-  if (call.operation === "channels.health"
+  if (call.operation === "commands.list"
+    || call.operation === "channels.health"
     || call.operation === "sessions.send"
     || call.operation === "sessions.stop"
     || call.operation === "sessions.activity"

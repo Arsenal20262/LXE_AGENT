@@ -72,9 +72,11 @@ describe("skill context", () => {
     expect(skills.find((skill) => skill.name === "vietnam-replenishment")?.commands).toEqual([
       "lxeskill vietnam replenishment calculate",
     ]);
-    expect(skills.find((skill) => skill.name === "vietnam-replenishment")?.description).toContain("生成越南备货清单");
+    expect(skills.find((skill) => skill.name === "vietnam-replenishment")?.description).toContain("完整九表备货清单");
     const vietnamPolicy = skills.find((skill) => skill.name === "vietnam-replenishment")?.content ?? "";
-    expect(vietnamPolicy).toContain("--sku-map");
+    expect(vietnamPolicy).toContain("--template-file");
+    expect(vietnamPolicy).toContain("九表模板");
+    expect(vietnamPolicy).not.toContain("--sku-map");
     expect(vietnamPolicy).toContain("parameters.json");
     expect(vietnamPolicy).toContain("sandbox_permissions");
     expect(vietnamPolicy).not.toContain("managed_lxeskill");
@@ -100,8 +102,8 @@ describe("skill context", () => {
     expect(prompt).toContain("demo");
     expect(prompt).toContain("skills/demo/SKILL.md");
     expect(prompt).toContain("Commands: lxeskill demo run");
-    expect(prompt).toContain("## lxeskill invocation contract");
-    expect(prompt).toContain("exec.cwd instead");
+    expect(prompt).not.toContain("## lxeskill invocation contract");
+    expect(prompt).not.toContain("exec.cwd instead");
     expect(prompt).not.toContain("managed_lxeskill");
     expect(prompt).not.toContain("blocked");
     expect(prompt).not.toContain("lxeskill hidden run");

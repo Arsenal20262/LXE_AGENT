@@ -8,6 +8,7 @@
 - [文件预览](file-preview-acceptance.md)：HTML、文档查看器及文件失效状态。
 - [工作区用应用打开](20261002-workspace-applications.md)：应用检测、原生启动、图标及两平台验证。
 - [Office 运行能力](office-runtime-20260930.md)：文档实测、Windows 前置依赖和证据位置。
+- [Office 接口简化与 Kit 0.1.5](office-integration-20261020.md)：Node API、CLI、业务适配及 macOS / Windows 实测。
 
 ## 运行环境、数据与更新
 

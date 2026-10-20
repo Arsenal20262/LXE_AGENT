@@ -1,3 +1,4 @@
+import { skillPathKey } from "../../src/tooling/skill-files";
 import { PermissionPolicyService } from "../../src/permissions/policy";
 import { messageFixture, eventFixture } from "../message-fixtures";
 import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
@@ -140,21 +141,6 @@ const handle = (): RuntimeHandle => {
     registerProcess: () => () => undefined,
   };
 };
-
-const lxeSkillInvocationError = (details: JsonObject = {
-  type: "lxeskill_invocation_error",
-  violations: ["shell_composition"],
-  required_command_shape: "lxeskill <command> [options]",
-  use_exec_cwd: true,
-  canonical_command_path: "lxeskill mabang delivery export",
-  owner_skills: ["mabang-delivery-export"],
-  describe_command: "lxeskill describe mabang delivery export",
-}): ToolExecutionError => new ToolExecutionError(
-  "unsupported_invocation",
-  "Invalid lxeskill invocation: use one standalone lxeskill command.",
-  details,
-  "lxeskill_invocation",
-);
 
 describe("TypeScriptAgentRuntime", () => {
   test.each(["read-only", "workspace-write"] as const)("describes %s before contacting the model", async mode => {
@@ -728,138 +714,8 @@ describe("TypeScriptAgentRuntime", () => {
     await runtime.stop();
   });
 
-  test("sends structured lxeskill recovery to the model while keeping tool display concise", async () => {
-    const store = new MemoryStore();
-    const emitted: EmitRequest[] = [];
-    const commands: string[] = [];
-    const tools = new ToolRegistry();
-    tools.register({
-      name: "exec",
-      description: "exec",
-      input_schema: { type: "object" },
-      execute: async (input) => {
-        const command = String(input.command ?? "");
-        commands.push(command);
-        if (command !== "lxeskill mabang delivery export --delivery-no SP260703001") {
-          throw lxeSkillInvocationError({
-            type: "lxeskill_invocation_error",
-            violations: ["direct_business_module", "shell_composition"],
-            required_command_shape: "lxeskill <command> [options]",
-            use_exec_cwd: true,
-            discovery_command: "lxeskill list",
-          });
-        }
-        return { content: [{ type: "text", text: "downloaded" }] };
-      },
-    });
-    let providerCalls = 0;
-    const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
-      store,
-      tools,
-      provider: { summarize, turn: async (request) => {
-        providerCalls += 1;
-        if (providerCalls === 1) {
-          return messageFixture({
-            content: [{
-              type: "tool_call", id: "bad", name: "exec",
-              arguments: {
-                command: "cd /Users/llxx/Projects/github/LXE_AGENT_LOCAL_FBA && uv run --frozen python -m services.agent_cli.mabang.download_shipment_delivery --delivery-no SP260703001",
-              },
-            }],
-            stopReason: "toolUse",
-            usage: { input_tokens: 1, output_tokens: 1 },
-          });
-        }
-        if (providerCalls === 2) {
-          const last = request.messages.at(-1)?.content;
-          const block = Array.isArray(last) ? last[0] : undefined;
-          const payload = JSON.parse(String(block?.content ?? "{}"));
-          expect(payload).toMatchObject({
-            type: "lxeskill_invocation_error",
-            attempt: 1,
-            retryable: true,
-            discovery_command: "lxeskill list",
-            next_action: "read_owner_skill_or_run_standalone_describe_then_retry_once",
-          });
-          return messageFixture({
-            content: [{
-              type: "tool_call", id: "good", name: "exec",
-              arguments: { command: "lxeskill mabang delivery export --delivery-no SP260703001" },
-            }],
-            stopReason: "toolUse",
-            usage: { input_tokens: 1, output_tokens: 1 },
-          });
-        }
-        return messageFixture({
-          content: [{ type: "text", text: "complete" }],
-          stopReason: "stop",
-          usage: { input_tokens: 1, output_tokens: 1 },
-        });
-      } },
-      emitter: {
-        emit: async (request) => { emitted.push(request); },
-        typing: async () => undefined,
-      },
-      systemPrompt: "test",
-    });
-
-    await runtime.start();
-    await runtime.runTurn(job(), handle());
-    await runtime.stop();
-
-    expect(commands).toEqual([
-      "cd /Users/llxx/Projects/github/LXE_AGENT_LOCAL_FBA && uv run --frozen python -m services.agent_cli.mabang.download_shipment_delivery --delivery-no SP260703001",
-      "lxeskill mabang delivery export --delivery-no SP260703001",
-    ]);
-    const display = JSON.stringify(emitted);
-    expect(display).toContain("Invalid lxeskill invocation");
-    expect(display).not.toContain("canonical_command_path");
-    expect(display).not.toContain("violations");
-  });
-
-  test("limits lxeskill invocation recovery per turn and resets it for the next turn", async () => {
-    const store = new MemoryStore();
-    const tools = new ToolRegistry();
-    tools.register({
-      name: "exec",
-      description: "exec",
-      input_schema: { type: "object" },
-      execute: async () => { throw lxeSkillInvocationError(); },
-    });
-    const responses: AssistantMessage[] = [
-      messageFixture({ content: [{ type: "tool_call", id: "bad-1", name: "exec", arguments: {} }], stopReason: "toolUse", usage: { input_tokens: 1, output_tokens: 1 } }),
-      messageFixture({ content: [{ type: "tool_call", id: "bad-2", name: "exec", arguments: {} }], stopReason: "toolUse", usage: { input_tokens: 1, output_tokens: 1 } }),
-      messageFixture({ content: [{ type: "text", text: "stopped" }], stopReason: "stop", usage: { input_tokens: 1, output_tokens: 1 } }),
-      messageFixture({ content: [{ type: "tool_call", id: "bad-3", name: "exec", arguments: {} }], stopReason: "toolUse", usage: { input_tokens: 1, output_tokens: 1 } }),
-      messageFixture({ content: [{ type: "text", text: "stopped" }], stopReason: "stop", usage: { input_tokens: 1, output_tokens: 1 } }),
-    ];
-    const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
-      store,
-      tools,
-      provider: { summarize, turn: async () => responses.shift()! },
-      emitter: { emit: async () => undefined, typing: async () => undefined },
-      systemPrompt: "test",
-    });
-
-    await runtime.start();
-    await runtime.runTurn(job(), handle());
-    await runtime.runTurn({ ...job(), job_id: "j2", message_id: "m2" }, handle());
-    await runtime.stop();
-
-    const recoveries = store.messages.flatMap((message) =>
-      message.role === "tool" && Array.isArray(message.content)
-        ? message.content.filter((block) => block.type === "tool_result")
-        : []
-    ).map((block) => JSON.parse(String(block.content)));
-    expect(recoveries.map((payload) => ({ attempt: payload.attempt, retryable: payload.retryable }))).toEqual([
-      { attempt: 1, retryable: true },
-      { attempt: 2, retryable: false },
-      { attempt: 1, retryable: true },
-    ]);
-    expect(recoveries[1]?.next_action).toBe("stop_retrying_shell_variations_and_report");
-  });
-
-  test("records skill activation once and attributes every later lxeskill execution independently", async () => {
+  test("counts every skill read request and command call independently of execution results", async () => {
+    const skillPath = join(process.cwd(), "skills/replenishment-store-resolve/SKILL.md");
     const store = new MemoryStore();
     const tools = new ToolRegistry();
     const executionSkillNames: Array<readonly string[]> = [];
@@ -879,20 +735,6 @@ describe("TypeScriptAgentRuntime", () => {
       name: "exec",
       description: "exec",
       input_schema: { type: "object" },
-      classifyInvocation: () => ({
-        usageName: "lxeskill:replenish store resolve",
-        commandId: "replenish store resolve",
-        ownerSkills: [
-          "replenishment-store-resolve",
-          "mabang-store-unlinked-shipments-export",
-          "replenishment-sales-analyze",
-          "mabang-store-shenzhen-inventory-export",
-          "mabang-store-msku-export",
-          "replenishment-calculate",
-          "replenishment-amazon-restock-inventory-snapshot",
-        ],
-        attributionSkill: "replenishment-store-resolve",
-      }),
       execute: async (input, context) => {
         executionSkillNames.push(context.skill_names ?? []);
         if (input.fail === true) throw new Error("command failed");
@@ -901,8 +743,8 @@ describe("TypeScriptAgentRuntime", () => {
     });
     const responses: AssistantMessage[] = [
       messageFixture({ content: [
-        { type: "tool_call", id: "read-1", name: "read", arguments: {} },
-        { type: "tool_call", id: "read-2", name: "read", arguments: {} },
+        { type: "tool_call", id: "read-1", name: "read", arguments: { path: skillPath } },
+        { type: "tool_call", id: "read-2", name: "read", arguments: { path: skillPath } },
       ], stopReason: "toolUse", usage: { input_tokens: 1, output_tokens: 1 } }),
       messageFixture({ content: [{ type: "text", text: "complete" }], stopReason: "stop", usage: { input_tokens: 1, output_tokens: 1 } }),
       messageFixture({ content: [
@@ -914,6 +756,7 @@ describe("TypeScriptAgentRuntime", () => {
     const runtime = new TypeScriptAgentRuntime({ permissionPolicy,
       store,
       tools,
+      commandSkills: async () => [{ command: "lxeskill replenish store resolve", skill: "replenishment-store-resolve" }],
       provider: { summarize, turn: async () => responses.shift()! },
       emitter: { emit: async (request) => { emitted.push(request); }, typing: async () => undefined },
       systemPrompt: (context) => {
@@ -925,6 +768,7 @@ describe("TypeScriptAgentRuntime", () => {
         return {
           names: ["replenishment-store-resolve"],
           prompt: "skills: replenishment-store-resolve",
+          locations: { [skillPathKey(skillPath)]: "replenishment-store-resolve" },
           modules: { "replenishment-store-resolve": "replenishment" },
         };
       },
@@ -947,10 +791,10 @@ describe("TypeScriptAgentRuntime", () => {
     expect(store.metrics[0]?.activations).toEqual([{
       skill: "replenishment-store-resolve",
       module: "replenishment",
-    }]);
+    }, { skill: "replenishment-store-resolve", module: "replenishment" }]);
     expect(store.metrics[0]?.executions).toEqual([]);
     expect(store.metrics[1]?.tools).toContainEqual(expect.objectContaining({
-      name: "lxeskill:replenish store resolve",
+      name: "exec",
       calls: 2,
       errors: 1,
     }));
@@ -960,13 +804,11 @@ describe("TypeScriptAgentRuntime", () => {
         skill: "replenishment-store-resolve",
         module: "replenishment",
         command: "replenish store resolve",
-        success: true,
       }),
       expect.objectContaining({
         skill: "replenishment-store-resolve",
         module: "replenishment",
         command: "replenish store resolve",
-        success: false,
       }),
     ]);
     expect(JSON.stringify(store.metrics[1]?.executions)).not.toContain("--store-name");
@@ -3165,12 +3007,12 @@ describe("skill loading", () => {
     { scenario: "business phrase", text: "查询越南备货", currentFile: false, previousFile: false },
     { scenario: "calculation request with XLSX", text: "帮我计算一下越南备货", currentFile: true, previousFile: false },
     { scenario: "XLSX upload alone", text: "", currentFile: true, previousFile: false },
-    { scenario: "reply after an XLSX upload", text: "绑定并查询", currentFile: false, previousFile: true },
+    { scenario: "reply after an XLSX upload", text: "继续查询", currentFile: false, previousFile: true },
   ])("leaves $scenario to the model without loading a Skill or probing attachments", async ({ text, currentFile, previousFile }) => {
     const store = new MemoryStore(), tools = new ToolRegistry();
     let loads = 0, attachmentReads = 0, executions = 0, providerCalls = 0;
-    const attachment = { type: "local_file", attachment_id: "sku-map", turn_id: previousFile ? "previous-turn" : "j1",
-      path: "/uploads/越南 SKU 映射表.xlsx", name: "越南 SKU 映射表.xlsx", size_bytes: 100,
+    const attachment = { type: "local_file", attachment_id: "vietnam-template", turn_id: previousFile ? "previous-turn" : "j1",
+      path: "/uploads/东南亚越南备货清单.xlsx", name: "东南亚越南备货清单.xlsx", size_bytes: 100,
       media_type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", ts: 1 };
     if (previousFile) store.messages = [{ role: "user", message_id: "previous-message", content: [attachment] }];
     store.resolveAttachment = async () => { attachmentReads++; return undefined; };
@@ -3252,7 +3094,7 @@ describe("skill loading", () => {
       const user = store.messages.find(m => m.role === "user" && m.message_id === "m1");
       expect(user && "invoked_skills" in user && user.invoked_skills).toEqual(["office-xlsx"]);
       expect(store.messageReasons.filter(r => r === "skill_invocation")).toHaveLength(1);
-      expect(JSON.stringify(store.metrics)).toContain('"skill":"office-xlsx"');
+      expect(store.metrics[0]?.activations).toEqual([]);
       await runtime.runTurn(job({ job_id: "j2", user_input: "continue" }), handle());
       expect(looked).toEqual(["office-xlsx", "missing-skill"]);
     } finally { await runtime.stop(); }

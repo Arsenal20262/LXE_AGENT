@@ -4,7 +4,6 @@ import type { DesktopFileCall, DesktopFileOperations } from "@lxe/desktop-protoc
 import { imageBytesThumbnail } from "./attachment-thumbnail";
 import { UpdateBusyError } from "./update-service";
 import { prepareConversationAttachments } from "./conversation-submission";
-import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { shell } from "electron";
 import { DashboardRpcError } from "@lxe/desktop-protocol";
@@ -45,7 +44,9 @@ import {
   dashboardInvalidationForAgentEvent,
 } from "./dashboard-invalidation";
 import { publicDashboardChannelHealth } from "./dashboard-channel-health";
-import { desktopLxeSkillState } from "./lxeskill-health";
+import { DesktopLxeSkillHealth } from "./lxeskill-health";
+import { listLxeSkillCommands } from "./lxeskill-commands";
+import type { LxeSkillQueryOptions } from "@lxe/core";
 import {
   previewConversationAttachment,
   previewConversationImageView,
@@ -137,6 +138,8 @@ export class DesktopGateway {
   private gatewayState: DesktopHealth["gateway"] = "stopped";
   private dashboardObservedRuntimeReady = false;
   private lastError = "";
+  private lxeskillHealth: DesktopLxeSkillHealth | undefined;
+  private lxeskillQueryOptions: LxeSkillQueryOptions | undefined;
 
   private files: FilePreviewService | undefined;
   constructor(private readonly options: DesktopGatewayOptions) {}
@@ -161,7 +164,7 @@ export class DesktopGateway {
           return image ? { source: "history" as const, image } : stored;
         },
       };
-    }, new OfficePreviewCache(join(this.options.paths.dataRoot, "cache", "file-previews"), this.options.paths.officeNodePath, this.options.paths.officeCliPath), {
+    }, new OfficePreviewCache(join(this.options.paths.dataRoot, "cache", "file-previews"), this.options.paths.officeCliPath), {
       openPath: path => shell.openPath(path), revealPath: path => shell.showItemInFolder(path),
     });
   }
@@ -195,7 +198,6 @@ export class DesktopGateway {
       LXE_AGENT_SOUL_PATH: this.options.paths.agentSoulPath,
       LXE_SKILLS_ROOT: this.options.paths.skillsRoot,
       LXE_USER_SKILLS_ROOT: this.options.paths.userSkillsRoot,
-      LXE_LXESKILL_CATALOG_PATH: this.options.paths.lxeskillCatalogPath,
       LXE_LLM_CONFIG_ROOT: this.options.paths.llmConfigRoot,
       LXE_DATA_ROOT: this.options.paths.dataRoot,
       LXE_AGENT_SQLITE_DB_PATH: join(this.options.paths.dataRoot, "db", "agent.sqlite3"),
@@ -231,6 +233,18 @@ export class DesktopGateway {
         machineIdentityPath: join(this.options.paths.dataRoot, "db", "machine_identity.json"),
       }),
     };
+    void this.lxeskillHealth?.stop();
+    this.lxeskillQueryOptions = {
+      pythonPath: this.options.paths.managedPythonPath, cwd: this.options.paths.dataRoot, environment,
+    };
+    this.lxeskillHealth = new DesktopLxeSkillHealth({
+      pythonPath: this.options.paths.managedPythonPath,
+      dataRoot: this.options.paths.dataRoot,
+      environment,
+      recovery: this.options.packaged ? "Reinstall or rebuild LXE Agent"
+        : `Run uv sync --frozen --all-groups --python 3.12.10 in ${this.options.paths.sourceRoot}`,
+      onChanged: () => this.publishHealth(),
+    });
     const feishu = loadFeishuConfig(environment);
     const allowedSkillTypes = this.options.allowedSkillTypes();
     let composition: DirectGatewayComposition | undefined;
@@ -242,7 +256,6 @@ export class DesktopGateway {
       agentSoulPath: this.options.paths.agentSoulPath,
       skillsRoot: this.options.paths.skillsRoot,
       userSkillsRoot: this.options.paths.userSkillsRoot,
-      lxeskillCatalogPath: this.options.paths.lxeskillCatalogPath,
       llmConfigRoot: this.options.paths.llmConfigRoot,
       dataRoot: this.options.paths.dataRoot,
       legacyWorkspace,
@@ -328,6 +341,7 @@ export class DesktopGateway {
     this.store = store;
     this.composition = composition;
     try {
+      void this.lxeskillHealth.check();
       await composition.start();
       this.gatewayState = "ready";
       this.lastError = "";
@@ -362,6 +376,7 @@ export class DesktopGateway {
   }
 
   async stop(strict = false): Promise<void> {
+    await this.lxeskillHealth?.stop();
     await this.files?.dispose(); this.files = undefined;
     const composition = this.composition;
     if (composition) await composition.stop();
@@ -398,6 +413,8 @@ export class DesktopGateway {
       return this.health();
     }
     this.gatewayState = "starting";
+    await this.lxeskillHealth?.stop();
+    void this.lxeskillHealth?.check();
     this.publishHealth();
     try {
       await this.runtime.restart();
@@ -448,6 +465,10 @@ export class DesktopGateway {
   }
 
   async dashboardCall<O extends DashboardRpcOperation>(call: DashboardRpcCall<O>): Promise<DashboardRpcResult<O>> {
+    if (call.operation === "commands.list") {
+      if (!this.lxeskillQueryOptions) throw new Error("Desktop CLI configuration is not ready");
+      return await listLxeSkillCommands(this.lxeskillQueryOptions) as DashboardRpcResult<O>;
+    }
     if (!this.composition || !this.runtime?.isReady) throw new Error("Desktop Gateway is not ready");
     if (call.operation === "channels.health") {
       const items = publicDashboardChannelHealth(
@@ -590,13 +611,12 @@ export class DesktopGateway {
   health(): DesktopHealth {
     const setup = this.options.config.state();
     const agentStatus = this.runtime?.status();
-    const runtimeFilesReady = existsSync(this.options.paths.managedPythonPath)
-      && existsSync(this.options.paths.lxeskillModulePath);
+    const lxeskill = this.lxeskillHealth?.snapshot();
     return {
       gateway: this.gatewayState,
       agent_cli: agentStatus?.state ?? "stopped",
-      lxeskill: runtimeFilesReady ? desktopLxeSkillState(agentStatus) : "error",
-      message: this.lastError || agentStatus?.lxeskillMessage || agentStatus?.message || "",
+      lxeskill: lxeskill?.state ?? "stopped",
+      message: this.lastError || lxeskill?.message || agentStatus?.message || "",
       version: this.options.version,
       resource_root: this.options.paths.resourceRoot,
       data_root: this.options.paths.dataRoot,
