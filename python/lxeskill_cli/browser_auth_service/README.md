@@ -1,6 +1,7 @@
 # browser_auth_service
 
-马帮登录态刷新 CLI。业务请求平时直接读取本地状态；需要刷新时才通过子进程调用本服务，
+马帮 ERP 登录态由 lxeskillCLI 按需维护。agentcli 不在启动或闲置时刷新认证。
+业务请求平时直接读取本地状态；需要刷新时才通过子进程调用本服务，
 通过桌面提供的 Electron 窗口，或手动绑定的 Chrome/Edge，重新获取 Cookie、FBA `freeToken` 和 WMS Cookie Header。
 
 状态文件在：
@@ -18,23 +19,26 @@ var/db/lxeskill/browser_auth_service/mabang_erp/<account>/state.json
 `erp_http_session` / `external_http_session` 使用无状态 CookieJar，不参与认证状态；新流程如果依赖服务端
 `Set-Cookie` 连续性，需要显式纳入认证材料或使用局部短命 HTTP session。
 
+公开刷新命令不接受 `--account`，统一使用当前配置的 `MABANG_ACCOUNT` 和 `MABANG_PASSWORD`。
+旧的 `lxeskill auth …` 命令已移除。浏览器绑定与状态文件位置不变。
+
 ## 用 CLI 测统一认证路径
 
 桌面内发起的业务调用自动使用 Electron。独立终端运行时，先绑定本机浏览器的实际可执行文件：
 
 ```bash
-uv run --frozen lxeskill auth browser bind --executable "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-uv run --frozen lxeskill auth browser status
-uv run --frozen lxeskill auth refresh
-uv run --frozen lxeskill auth browser unbind
+uv run --frozen lxeskill mabang auth browser bind --executable "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+uv run --frozen lxeskill mabang auth browser status
+uv run --frozen lxeskill mabang auth refresh
+uv run --frozen lxeskill mabang auth browser unbind
 ```
 
 Windows 示例：
 
 ```powershell
-uv run --frozen lxeskill auth browser bind --executable "C:\Program Files\Google\Chrome\Application\chrome.exe"
+uv run --frozen lxeskill mabang auth browser bind --executable "C:\Program Files\Google\Chrome\Application\chrome.exe"
 # 或指定 Edge；两者任选其一，不扫描或自动切换。
-uv run --frozen lxeskill auth browser bind --executable "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+uv run --frozen lxeskill mabang auth browser bind --executable "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
 ```
 
 绑定会在临时环境启动一次空白页，验证成功后才保存路径；替换失败保留原配置。
@@ -78,7 +82,8 @@ FBA 仍等待目标域的 `freeToken`，WMS 跳转和最后 1 秒等待保持原
 业务请求发现本地状态缺失、过期或不完整时，通过内部 `ensure` 命令自动恢复。`ensure` 会在账户锁内
 重新读取状态：第一个调用者执行完整刷新，并发等待者复用它写入的新状态，不再重复启动浏览器。
 如果第一个刷新失败，下一位等待者会重新检查状态并接替刷新。服务端明确返回 401/403 后的重试和手工
-`lxeskill auth refresh` 仍使用无条件 `refresh`，不会复用服务器已经拒绝的状态。
+`lxeskill mabang auth refresh` 仍使用无条件 `refresh`，不会复用服务器已经拒绝的状态。
+认证获取或恢复失败会直接返回实际错误，外层业务重试不会再次登录；终态失败也不再要求 AI 追加刷新。
 
 Windows PowerShell 不支持上面的 Unix 环境变量写法，用这个：
 

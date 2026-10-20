@@ -101,7 +101,6 @@ export type AgentInitializePayload = {
   agent_soul_path: string;
   skills_root: string;
   user_skills_root: string;
-  lxeskill_catalog_path: string;
   llm_config_root: string;
   data_root: string;
   legacy_workspace: WorkspaceContext;
@@ -832,7 +831,6 @@ const validateRequestPayload = (command: AgentCommand, payload: Record<string, u
       requireText("agent_soul_path");
       requireText("skills_root");
       requireText("user_skills_root");
-      requireText("lxeskill_catalog_path");
       requireText("llm_config_root");
       requireText("data_root");
       requireWorkspace(payload.legacy_workspace, "initialize.legacy_workspace");

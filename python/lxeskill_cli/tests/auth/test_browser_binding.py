@@ -91,10 +91,10 @@ def test_cli_binding_commands_do_not_refresh_or_require_credentials(tmp_path, mo
     executable = tmp_path / "浏览器 with spaces"
     executable.touch()
     for arguments in (["bind", "--executable", str(executable)], ["status"], ["unbind"]):
-        assert cli.main(["auth", "browser", *arguments]) == 0
+        assert cli.main(["mabang", "auth", "browser", *arguments]) == 0
         payload = json.loads(capsys.readouterr().out)
         assert payload["ok"] is True
-        assert payload["command"] == "auth browser " + arguments[0]
+        assert payload["command"] == "mabang auth browser " + arguments[0]
 
 
 def test_host_refresh_uses_same_complete_route_without_playwright(tmp_path, monkeypatch):
