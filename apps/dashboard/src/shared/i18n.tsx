@@ -185,11 +185,11 @@ export const ZH_TEXT = {
     loading: "正在读取设置…", retry: "重试", unavailable: "请在桌面应用中打开越南备货设置。",
   },
   amazonFinalRestockSettings: {
-    title: "亚马逊最终备货设置", subtitle: "控制旺季备货天数加成；设置会保存并用于后续生成。",
-    toggle: "启用旺季加成（总备货天数最多120天）", toggleHint: "开启时按运营备注和销量趋势规则增加空运或海运备货天数；关闭时不增加旺季天数。",
-    days: "旺季加成天数", daysHint: "留空使用默认30天，可填0～120的整数；关闭时保留设置，但不加成。",
+    title: "亚马逊最终备货设置", subtitle: "保存旺季加成偏好与天数；每轮默认不加成，需在聊天请求中明确启用。",
+    toggle: "保存旺季加成偏好（本轮仍需明确启用）", toggleHint: "此开关不会自动为聊天任务启用加成；只有当前请求明确要求时，才按备注和销量趋势加成，总天数最多120天。",
+    days: "旺季加成天数", daysHint: "留空使用默认30天，可填0～120整数；本轮明确启用时使用保存天数或请求指定值。",
     invalidDays: "旺季加成天数须留空或填写0～120的整数。", save: "保存天数",
-    saved: "旺季设置已保存。", saving: "正在保存…", appliesNextRun: "保存后下一次最终备货建议生成时生效，正在进行的计算不受影响。",
+    saved: "旺季设置已保存。", saving: "正在保存…", appliesNextRun: "设置保存后供下一次任务读取；普通店铺名请求仍不加成。正在进行的计算不受影响。",
     loading: "正在读取设置…", retry: "重试", unavailable: "请在桌面应用工作台中打开亚马逊最终备货设置。",
   },
   workbenchIndex: {
@@ -1112,11 +1112,11 @@ export const UI_TEXT: Record<Language, UiText> = {
       loading: "Loading settings…", retry: "Retry", unavailable: "Open these settings in the desktop app.",
     },
     amazonFinalRestockSettings: {
-      title: "Amazon final-restock settings", subtitle: "Control the seasonal restock-day boost. The setting is saved for future workbooks.",
-      toggle: "Enable seasonal boost (total restock days capped at 120)", toggleHint: "When enabled, air or sea restock days follow the existing operations-note and sales-trend rules. When disabled, no seasonal days are added.",
-      days: "Seasonal boost days", daysHint: "Leave blank for the default 30 days, or enter an integer from 0 to 120. Disabling keeps the value without applying the boost.",
+      title: "Amazon final-restock settings", subtitle: "Save seasonal preferences and days. Every run defaults off unless the current chat request explicitly enables it.",
+      toggle: "Save seasonal preference (explicit per-run opt-in required)", toggleHint: "This saved switch does not automatically enable chat tasks. Explicit current-request opt-in applies existing note and trend rules, capped at 120 total days.",
+      days: "Seasonal boost days", daysHint: "Leave blank for 30 days, or enter an integer from 0 to 120. An opted-in run uses saved days unless the request specifies a value.",
       invalidDays: "Leave seasonal boost days blank or enter an integer from 0 to 120.", save: "Save days",
-      saved: "Seasonal setting saved.", saving: "Saving…", appliesNextRun: "Changes apply to the next final-restock workbook. Running calculations keep their current inputs.",
+      saved: "Seasonal setting saved.", saving: "Saving…", appliesNextRun: "Saved settings are read on the next task; a store-name-only request still has no boost. Running calculations keep their snapshot.",
       loading: "Loading settings…", retry: "Retry", unavailable: "Open Amazon final-restock settings in the desktop workbench.",
     },
     workbenchIndex: {

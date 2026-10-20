@@ -34,10 +34,10 @@ def test_invalid_days_are_rejected_including_when_disabled(days):
         settings.save_parameters({"peak_boost_enabled": False, "peak_boost_days": days})
 
 
-def test_default_is_on_and_persists_across_reads():
-    assert settings.read_state() == {"peak_boost_enabled": True, "peak_boost_days": None}
-    assert settings.read_state()["peak_boost_enabled"] is True
-    assert json.loads((settings.data_directory() / "parameters.json").read_text()) == {"peak_boost_enabled": True, "peak_boost_days": None}
+def test_default_is_off_and_persists_across_reads():
+    assert settings.read_state() == {"peak_boost_enabled": False, "peak_boost_days": None}
+    assert settings.read_state()["peak_boost_enabled"] is False
+    assert json.loads((settings.data_directory() / "parameters.json").read_text()) == {"peak_boost_enabled": False, "peak_boost_days": None}
 
 
 def test_saved_setting_is_used_by_next_read():

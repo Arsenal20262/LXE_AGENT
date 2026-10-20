@@ -32,6 +32,7 @@ def test_cli_forwards_the_three_offline_files(monkeypatch) -> None:
         "msku_source_xlsx_path": "/inputs/source.xlsx",
         "shenzhen_inventory_report_xlsx_path": "/inputs/shenzhen.xlsx",
         "unlinked_shipments_snapshot_path": "/inputs/shipments.xlsx",
+        "peak_boost_enabled": False, "peak_boost_days": None,
     })
 
     assert result == expected
@@ -40,6 +41,7 @@ def test_cli_forwards_the_three_offline_files(monkeypatch) -> None:
         "msku_source_xlsx_path": "/inputs/source.xlsx",
         "shenzhen_inventory_report_xlsx_path": "/inputs/shenzhen.xlsx",
         "unlinked_shipments_snapshot_path": "/inputs/shipments.xlsx",
+        "peak_boost_enabled": False, "peak_boost_days": None,
     }
 
 
@@ -60,7 +62,7 @@ def test_catalog_has_four_inputs_and_rejects_the_removed_flag(monkeypatch, capsy
     required = ["store_name", "msku_source_xlsx_path", "shenzhen_inventory_report_xlsx_path",
                 "unlinked_shipments_snapshot_path"]
     assert entry["input_schema"]["required"] == required
-    assert list(entry["input_schema"]["properties"]) == required
+    assert list(entry["input_schema"]["properties"]) == [*required, "peak_boost_enabled", "peak_boost_days"]
     monkeypatch.delenv("LXESKILL_SKILL_SCOPE", raising=False)
     assert lxeskill.main([
         "replenish", "final-restock", "generate", "--shenzhen-source-msku-xlsx-path", "source.xlsx",

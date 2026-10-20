@@ -10,9 +10,11 @@ module.exports = async ({ js, step, waitFor, click, state }) => {
   const loaded = () => waitFor(`Boolean(document.querySelector('${toggle}'))`, "Amazon settings loaded");
   const checked = value => waitFor(`document.querySelector('${toggle}').checked === ${value} && !document.querySelector('${toggle}').disabled`, "saved toggle");
 
-  await step("default-on, localized setting without data uploads", async () => {
+  await step("saved-on preference still requires current-request opt-in", async () => {
     await js("behavior.mountAmazonSettings('zh')"); await loaded(); await checked(true);
     assert.match(await js("document.body.innerText"), /默认30天/);
+    assert.match(await js("document.body.innerText"), /每轮默认不加成/);
+    assert.equal(await js("document.querySelectorAll('[role=dialog]').length"), 0);
     assert.equal(await js(`document.querySelector('${days}').value`), "");
     assert.equal(await js("document.querySelectorAll('input[type=file]').length"), 0);
   });

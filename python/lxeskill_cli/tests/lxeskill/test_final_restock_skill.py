@@ -49,12 +49,12 @@ def test_final_restock_is_exposed_with_one_owner_and_the_existing_inputs(capsys)
     assert entry["exposed"] is True
     assert entry["owner_skills"] == [SKILL]
     assert entry["input_modes"] == ["flags"]
-    assert entry["input_schema"] == {
-        "type": "object",
-        "properties": {key: {"type": "string", "minLength": 1} for key in INPUTS},
-        "required": list(INPUTS),
-        "additionalProperties": False,
-    }
+    schema = entry["input_schema"]
+    assert schema["required"] == list(INPUTS) and schema["additionalProperties"] is False
+    assert {key: schema["properties"][key] for key in INPUTS} == {key: {"type": "string", "minLength": 1} for key in INPUTS}
+    assert schema["properties"]["peak_boost_enabled"]["type"] == "boolean"
+    assert schema["properties"]["peak_boost_days"]["minimum"] == 0
+    assert schema["properties"]["peak_boost_days"]["maximum"] == 120
     assert entry["deliver_artifacts_on_failure"] is True
     assert lxeskill.main(["list"]) == 0
     commands = _terminal(capsys)["data"]["commands"]
@@ -166,14 +166,21 @@ def test_source_without_native_local_inventory_is_rejected_by_cli(tmp_path: Path
     assert terminal["files"] == []
 
 
-def test_skill_describes_binding_verification_advice_guard() -> None:
+def test_skill_describes_a_rules_without_suppressing_unverified_advice() -> None:
     skill = (Path(__file__).resolve().parents[4] / "skills" / SKILL / "SKILL.md").read_text()
     assert "`uq122`" in skill
-    assert "I/J/R/S" in skill
+    assert "14 个公式字段" in skill
+    assert "--require-complete-inventory" not in skill
+    assert "缺失、空白、非法或非有限" in skill
+    assert "合法占位行不因此阻断" in skill
+    assert "require_complete_inventory" not in load_catalog()["mabang_export_store_msku_actual_inventory"]["input_schema"]["properties"]
+    assert "每轮默认关闭" in skill
+    assert "不自动弹旺季询问窗口" in skill
+    assert "--peak-boost-enabled" in skill
     assert "U–AC" in skill
     assert "13 列公式" in skill
     assert "绑定核验未通过" in skill
-    assert "未能匹配库存/组合目录" in skill
+    assert "商品类型核验失败不等于没有库存" in skill
 
 
 def test_unknown_store_returns_actual_local_source_mismatch(tmp_path: Path, capsys) -> None:
@@ -224,4 +231,30 @@ def test_terminal_preserves_success_or_formula_failure_and_file(
     if formula_errors:
         assert terminal["error"]["message"] == result.to_payload()["exception"]
         assert "AC2=#VALUE!" in terminal["error"]["message"]
-    generate.assert_called_once_with("Amazon-Test", **{key: value for key, value in INPUTS.items() if key != "store_name"})
+    generate.assert_called_once_with("Amazon-Test", **{key: value for key, value in INPUTS.items() if key != "store_name"}, peak_boost_enabled=False, peak_boost_days=None)
+
+
+def test_explicit_current_request_boost_flags_reach_existing_generator(tmp_path, monkeypatch, capsys):
+    from services.agent_cli.mabang import generate_final_restock_recommendation as adapter
+    output = tmp_path / "workspace/.lxeagent/artifacts/replenish/final_restock_recommendation/result.xlsx"
+    output.parent.mkdir(parents=True)
+    book = Workbook()
+    book.save(output)
+    book.close()
+    result = FinalRestockWorkbookResult("Amazon-Test", "202610201000", str(output), 1, 0, ())
+    generate = Mock(return_value=result)
+    monkeypatch.setattr(adapter, "generate_final_restock_recommendation", generate)
+    assert lxeskill.main([*_args(INPUTS), "--peak-boost-enabled", "--peak-boost-days", "20"]) == 0
+    assert _terminal(capsys)["ok"] is True
+    assert generate.call_args.kwargs["peak_boost_enabled"] is True
+    assert generate.call_args.kwargs["peak_boost_days"] == 20
+
+
+@pytest.mark.parametrize("days", ["-1", "121", "1.5", "invalid"])
+def test_invalid_request_days_stop_before_reading_business_inputs(days, monkeypatch, capsys):
+    from services.mabang.amazon.fba import final_restock_workbook as service
+    read_input = Mock(side_effect=AssertionError("invalid days must not read input files"))
+    monkeypatch.setattr(service, "_path", read_input)
+    assert lxeskill.main([*_args(INPUTS), "--peak-boost-days", days]) != 0
+    assert _terminal(capsys)["ok"] is False
+    read_input.assert_not_called()

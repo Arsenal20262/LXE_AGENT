@@ -41,7 +41,7 @@ describe("Amazon final-restock settings bridge", () => {
       managedPath: "/managed", dataRoot };
     try {
       const first = new DesktopAmazonFinalRestockSettingsService(options);
-      expect(await first.read()).toEqual({ peak_boost_enabled: true, peak_boost_days: null });
+      expect(await first.read()).toEqual({ peak_boost_enabled: false, peak_boost_days: null });
       writeFileSync(join(dataRoot, "skill-data/amazon-final-restock/parameters.json"), '{"peak_boost_enabled":false}');
       expect(await first.read()).toEqual({ peak_boost_enabled: false, peak_boost_days: null });
       await first.save({ peak_boost_enabled: false, peak_boost_days: 20 });

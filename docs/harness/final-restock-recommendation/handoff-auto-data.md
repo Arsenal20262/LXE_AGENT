@@ -1,5 +1,45 @@
 # 最终备货建议：自动取数衔接交接
 
+## 2026-10-20 已授权本地提交收口
+
+- 用户本轮已明确批准pool-7 A规则的精确暂存及1个本地Commit，提交标题为`feat: align Amazon final restock with confirmed A rules`。范围严格为已准备清单的20个文件：A规则生成/公式/设置及CLI、catalog、UI说明、Skill/导航、对应测试和本handoff；不含PR #90、main、其他Pool或普通备货运行代码。
+- 提交前HEAD为`ec41d9d838ee1e1cbcf3042f0ec6f397ba6ba7b2`。本轮运行代码及测试与已有成功证据逐文件哈希一致，只新增本节交接记录，不重做功能或重复全量测试。20/20文件及原diff、refs、stash已备份到`/var/folders/4v/hq4g01tn1jd8vtpm9mmx1q0m0000gn/T/pool7-a-rules-commit-20261020-25rn38oy`。
+- 复用证据：Python范围回归1105 passed/4 Windows skipped，最后解析定向104 passed；Bun71 passed；后续真实Python桥接31 passed、隔离Electron界面2组、Runtime交付边界2 passed。历史同轮三文件经正式CLI默认/显式旺季两次生成均2002行、35列、28028公式、Office错误0；这些测试有重叠，不累计为新的全量数字。AG只用uq122，合法25条深圳占位不阻断，全部MSKU14公式、AH/AD规则及本轮旺季默认关闭均已核对。
+- 本节与A规则一同提交；精确SHA和最终工作区状态以本轮提交后Git报告为准。依次核对完整cached diff、文件集合、`git diff --cached --check`与新增内容敏感信息后才commit。下方“授权待确认、未提交”等文字为各轮历史记录，不表示本轮仍未获本地Git授权。
+- 提交后只读比较`origin/main@abdd477a8d38d664c026c9471b57fbbfbac48345`，关注Runtime、Desktop、catalog和MSKU接口，结果在本轮报告中说明；不据此自动同步或改写历史。三个PR顺序保持PR1→PR2→最终功能（原PR3+pool-7）；生产ERP、真实模型聊天交付、原生Windows/Microsoft Excel及外部消费者仍未验证，本轮没有新增这些授权，也不push/merge/创建远端PR。
+
+## 2026-10-20 最终提交准备与隔离调用链验收（授权待确认）
+
+- **版本与范围**：pool-7 `codex/final-restock-auto-data`，HEAD仍为`ec41d9d838ee1e1cbcf3042f0ec6f397ba6ba7b2`；本轮没有新增运行代码，核对本轮A规则20个未提交文件，拟作1个完整Commit：`feat: align Amazon final restock with confirmed A rules`，仅属最终功能PR，不改PR1/PR2/普通备货。精确20路径清单与授权后cached diff/check步骤见临时验收目录`commit-plan.md`。本节写入时尚未取得明确Git写授权，因此未add/commit；生产ERP、真实模型与导出也未获本轮授权，未执行。
+- **main更新事实**：只读ls-remote并fetch确认远端`origin/main=abdd477a8d38d664c026c9471b57fbbfbac48345`，本地main仍`88a303386826e560ec6e45c692f93ee0f20311de`，pool-7 HEAD不变。新增6提交涉及认证维护、Electron CLI健康检查及Skill统计；未将main合入本分支，不能沿用此前88a30338兼容性证据声称最新main已经合并验证通过。正式三个PR仍须串行，到本层时复核当时main；未执行merge/rebase/push/远端PR操作。
+- **实际本地启动**：按现有Dashboard脚本启动Vite，`http://127.0.0.1:5173/`返回HTTP200及真实Renderer入口。项目既有隔离Electron界面组Amazon/越南均通过（2组，含6/8个业务场景），验证设置、保存、错误恢复、无自动旺季对话框。完整Desktop `dev.ts`会清除`LXE_DATA_ROOT`且源码paths固定使用本checkout的`var`，因此未在非隔离业务数据上启动常驻Desktop/Gateway/Agent；不为本次验收改启动架构，完整应用启动与全链聊天交付仍NOT VERIFIED。临时Vite已在验收后停止，隔离Electron和CLI已退出；不影响原有服务。
+- **真实设置桥接**：既有Amazon/Vietnam/preload定向Bun 31 passed，其中真实本worktree Python经`-I -B -X utf8 -m lxeskill`执行设置read/save，验证重启服务实例持久化、默认false、旧配置兼容及损坏失败；UI和桥接分别实测，不声称已在完整聊天中端到端贯通。标准CLI终态与现有协议继续复用，未新增私有入口。
+- **真实离线CLI/Service/Office**：在临时`runtime-data/workspace`复制10月19日同轮三文件，用真实`uv run --frozen --no-sync lxeskill replenish final-restock generate`执行两次离线参数验收。先经现有设置CLI保存历史开关true、天数20；默认生成仍不加成（V/W最大100），显式`--peak-boost-enabled --peak-boost-days 120`时最大120。两次分别4.902s/4.825s，仅为本机离线生成耗时，不代表生产性能。均2002行、35列、28028公式、Office错误0，逐行AG/AH/14公式/AI缓存与精度检查一致，24个未核验商品保留全部公式；默认与显式运行均未改写保存偏好。原三文件哈希未变，未访问ERP，未调用模型。
+- **交付/消费者边界**：真实CLI返回合法terminal.files；既有Runtime文件交付及附件边界2 passed，不等于Desktop聊天附件交付已完成。对项目apps/packages/Python/Skill扫描未发现活动34列固定消费者或深圳严格覆盖调用，历史handoff与PR1/PR2/原PR3阶段说明保留为历史；公式纯函数仍保留旧默认供底层兼容，业务Service明确传本轮false。实际Dashboard XLSX解析器读取本轮默认产物为1工作表、2003含表头行、35列，最后AI存在；预览器missingResults=20467恰等于Office合法空结果数量（另7561个非空公式结果），不能把合法空公式误报为计算未执行。外部Excel消费者未验证。
+- **证据与停止边界**：复用上一轮匹配源码Python1105 passed/4 Windows skipped、Bun71 passed及最后AG解析104 passed，不重复全量测试。新增本轮隔离UI2、桥接31、文件交付边界2及真实CLI两次结果单独记录，不累计重叠测试数。日志`/private/tmp/pool7-final-acceptance-{renderer,bridge,send-files,cli,preview}.log`；备份20/20文件、patch、具体CLI终态、两份重算Excel和`cli-acceptance-result.json`在`/var/folders/4v/hq4g01tn1jd8vtpm9mmx1q0m0000gn/T/pool7-final-acceptance-20261020-ikh3kshv`。原生Windows/Microsoft Excel、生产新轮、真实模型、完整常驻Desktop与最新main合并兼容性均NOT VERIFIED。需要本地Commit授权与生产一次验收授权时分别确认，不自动重复运行、不扩大性能或架构任务。
+
+## 2026-10-20 A方案最小修正：AG唯一来源uq122（未提交）
+
+- **当前契约**：按用户最新确认，AG唯一数值来源为马帮Amazon MSKU列表`uq122`（导出列“本地库存”），不切换深圳报告。下节前轮的“AG待业务确认、深圳真实记录100%覆盖阻断及严格模式”已被本节取代，保留为历史证据；35列、全部行14公式、AH报告非空优先、AD诊断及本轮明确启用旺季的A规则继续有效。
+- **实现**：最终生成复用现有数值解析器逐MSKU检查AG，正数、真实0、有限负数和合法数字文本保留；缺列、空白、非法、布尔或非有限值均停止，错误包含MSKU、uq122/本地库存及原因。未新增库存算法、CLI、Tool、Workflow、缓存或来源回退。
+- **深圳边界与清理**：删除上一轮新增的`require_complete_inventory`及其catalog/CLI/Skill调用、原始库存严格值模式和未核验行额外查询/分组分支，移除仅服务该选项的未提交测试文件`test_final_restock_inventory_coverage.py`。深圳Service、CLI适配器及深圳Skill与本轮起点HEAD内容完全一致，保留全量原生库存导出、显式源表与旧调用兼容；商品类型核验范围不变。最终表仍要求合法同源报告、MSKU身份完整、无重复及结构/数值有效，但不要求每行具有深圳物理库存值；“无本地SKU”“无库存数据”合法占位不阻断，不将占位0写AG或宣称为真实库存。
+- **真实离线证据**：明确使用10月19日17:29源表、17:29深圳报告和17:35货件快照。源表2002个MSKU的uq122为1970正数、29个0、3个有限负数，缺失/空白/非法/非有限均0。深圳1977条真实库存行+24条无本地SKU+1条无库存数据，共2002个报告身份；25条占位均通过合法来源校验并使用各自uq122填AG，未修改原始三文件（SHA256前后一致）。
+- **最终代码生成与重算**：现有Office Kit实际生成2002商品行、35列、28028个公式（14×2002），Excel错误0。逐行核对AG、AH、全部14公式文本与AI缓存值/两位小数格式，差异0；24个商品类型核验未通过行也保留全部公式。旺季参数省略时关闭，不受历史开关影响。输出及审计在备份目录的`offline-output/`、`source-audit.json`、`real-generation-result.json`，不冒充生产新数据或线上交付。
+- **本轮测试证据**：新增14个针对性断言场景先复现失败。影响范围Python回归1105 passed、4 skipped（Windows路径2、原生Windows Job2），含CLI/catalog/infra、库存/来源/普通备货/货件、设置/公式及Office；随后AG解析收敛为现有可选数值解析器+必填判断以精确区分NaN与空白，最终受影响工作簿/A规则/CLI/Skill补跑104 passed。两次结果有重叠，不累计数量。Bun Desktop/越南/input-assets/preload/Runtime Skill/catalog 71 passed。日志：`/private/tmp/pool7-ag-uq122-regression.log`、`pool7-ag-uq122-final-focused.log`、`pool7-ag-uq122-bun.log`、`pool7-ag-uq122-real.log`；`git diff --check`通过。Dashboard/设置持久化/公式函数未再修改，保留前轮对应测试证据，不重复UI/TypeScript全量检查。
+- **安全与Git**：pool-7 / `codex/final-restock-auto-data`，HEAD保持`ec41d9d838ee1e1cbcf3042f0ec6f397ba6ba7b2`。起始24个未提交文件已复制并逐个SHA256验证至`/var/folders/4v/hq4g01tn1jd8vtpm9mmx1q0m0000gn/T/pool7-ag-uq122-20261020-zr5oef4i`，含原patch、refs和stash清单；清理严格模式后保留19个已跟踪修改及1个未跟踪A规则测试，共20个，均未暂存。其他原有A改动保留；main/其他Pool、提交历史、refs、stash未改变，未调用生产ERP，未add/commit/push/merge。
+- **验收边界与下一步**：本轮AG口径已明确且离线35列生成成功，无需再等深圳库存补齐或AG切换决定；生产ERP新轮执行、外部真实模型路由、原生Windows/Microsoft Excel仍NOT VERIFIED。既定三个PR依赖不变；当前业务改动仍未提交，后续精确暂存/本地Commit须另行授权。不追加性能或架构任务。
+
+## 2026-10-20 A规则与可供天数（未提交；AG切换未验收）
+
+- **范围与依据**：pool-7 / `codex/final-restock-auto-data`，起始及当前 HEAD `ec41d9d8`；用户本轮任务正文是新业务口径，补充的《Amazon最终备货建议公式核对版》仍对应旧 `ee593539`，仅作旧口径对照。未取得具名“修订V2”的独立文件，不声称读取该文件。原有“未核验不出建议、34列、持久开关自动启用”等历史记录由本节覆盖，仅适用于最终功能分支，不改 PR1/PR2/原PR3分支或历史。沿用本地 `main/origin/main=88a30338` 的既有 CLI/终态和 Desktop 能力（此前远端只读核对相同；本轮收尾查询遇 GitHub 空响应，当前远端最新未重新确认），不新增 Tool/Skill/Workflow/Runtime 路由或库存算法。
+- **AG仍为uq122，待业务确认**：MSKU 的 `uq122` 为马帮列表导出的“本地库存”，本地未用深圳量覆盖。深圳原始 XLSX 按“库存SKU编号”汇总“可用库存量”；普通商品直接匹配，已知组合仍按既有 `min(floor(组件可用量/配比))` 计算“真实库存（深圳仓库）数量”，不再次扣 FBA。只读核对13份原始文件（每份1838行），全量观察到“仓位库存－未发货量＝可用库存量”；例如 3081－17472＝−14391，负值已存在于原始字段，非本地新增扣减。此为样本算术关系，不是新库存算法，也不证明17472的业务范围/有效性或负库存已获业务认可。组合换算、仓位库存、可用库存和MSKU列表库存不能混称同一口径；AG是否换字段仍须业务明确确认。
+- **真实覆盖证据与阻塞**：10月19日四批同源文件各2002行，深圳报告各仅1977行真实库存业务数据，另24行“无本地SKU”、1行“无库存数据”。原始候选库存可用既有算法逐MSKU复现1977行；原始文件与报表的批次关联不能仅由数值一致当作认证证明。当前真实样本不满足新全覆盖要求。对明确指定的 `202610191729` 源表/深圳报告与 `202610191735` 货件快照做离线生成，实际在真实库存缺失时停止，0个正式输出，三输入SHA-256不变；没有通过删除商品、补0或历史回退制造成功。源头仍缺24个本地SKU映射及1个库存/组件记录，需业务/ERP数据修正后重新取数。
+- **本轮实现**：现有深圳命令增加可选 `--require-complete-inventory`（普通调用默认false），最终 Skill 必须同时传本轮显式MSKU路径和该开关。严格模式查询全部可识别源SKU及既有组件，逐原始记录校验库存值，真实0/有限负数保留；缺记录/值、非法/非有限值停止，不发布占位报告。商品类型False可有真实库存，核验结果不伪造为True；未启用严格模式仍按原普通备货分类、分组及兼容调用。最终计算拒绝无库存/无SKU/未知业务表的占位行以及空库存值，保留店铺、批次、指纹、完整覆盖校验。
+- **A字段/公式**：全部MSKU写原13个公式及AI，不再以商品类型False屏蔽U–AC；AH报告非空优先，空时回退源表，不仅因编码不同停止。源数量接受有限负数和数字文本，必需字段缺失、非法及非有限值仍明确失败，不设负数阈值、不清零/截断/取绝对值。AD空白按A为0，合法数值及数字文本按克；非空解析失败给出MSKU、源字段、AD阶段、原值和原因，不伪装下载失败。AI在AH后追加“可供天数”，使用用户给定公式，保留S，显示2位小数而不截断精度；共35列、14个公式字段。原13列在3个行号、两种开关和4种天数下共312项公式文本对照全部相同。
+- **旺季每轮授权**：现有生成命令增加可选 `--peak-boost-enabled` 和 `--peak-boost-days`；Service默认false，历史保存开关为True也不自动加成。本轮明确启用才按保存天数（空为30）或本轮0～120整数覆盖；配置只读取一次，不重写保存偏好，损坏配置仍停止。保留存储路径、旧配置兼容、开关读写、天数和120上限；Dashboard双语说明同步为“保存偏好、每轮仍须聊天明确启用”，不增加旺季询问窗口，不绕过权限或店铺歧义确认。
+- **验证**：最终影响范围 Python **1100 passed、4 skipped**（两项Windows路径和两项Windows Job清理），含标准CLI/catalog/infra、普通备货、真实库存、来源核验、三类货件、设置及Office Kit重算；新增A规则/物理覆盖场景在旧代码先有18失败，最初商品过滤共享分组回归已修为模式默认隔离，旧普通备货保护断言保持且通过。Bun Desktop/越南/input-assets/preload/Runtime Skill/catalog **71 passed**；现有Electron Amazon/越南界面 **2 passed**，无旺季自动对话框。Dashboard和Desktop typecheck通过。未做生产ERP、新35列真实业务交付、原生Windows或外部真实模型路由；代码/离线通过不能替代这些验收。
+- **文件与Git**：实现位于原6个Python业务/CLI文件及catalog、Dashboard文案；同步5份Skill/目录/本交接文档和11份必要测试（其中新增2份A规则/真实库存覆盖测试）。起始1711文件哈希、HEAD/refs/stash已保存到临时根 `pool7-a-rules-20261020-g_tqxm_f`，AG逐MSKU明细、原始字段算术核对和真实生成停止证据同目录。测试日志为 `/private/tmp/pool7-a-rules-regression-final.log`、`pool7-a-rules-bun-closeout.log`、`pool7-a-rules-renderer.log`、`pool7-a-rules-dashboard-ts.log`、`pool7-a-rules-desktop-ts.log`。本轮不add/commit/push/merge，不修改main或其他Pool；三个PR方案不变，当前新增业务变化未提交。AG切换/真实库存全覆盖/生产交付仍待确认，不宣布全部验收。
+
 ## 2026-10-19 本地提交收口 3/3：货件失败定位与最终状态
 
 - 前两组分别为 `f01118f9`（旺季自定义天数及 getter 清理，19 文件）和 `ce2f0968`（显式 MSKU 源表，10 文件）。本组仅剩 4 文件：货件 Service、CLI、CLI 定向测试及本 handoff；原 30 个未提交文件按职责全部覆盖，不将其他 Pool 或 main 改动混入。下文的“未提交”和 NOT VERIFIED 是各次检查的历史状态，本节记录最终增量结果。

@@ -11,11 +11,12 @@ from __future__ import annotations
 def final_restock_formulas(
     row_number: int, *, peak_boost_enabled: bool = True, peak_boost_days: int | None = None,
 ) -> dict[str, str]:
-    """Return the 13 formulas for a data row in the 34-column mskulist layout.
+    """Return the original 13 formulas plus supply days in the 35-column layout.
 
     Keys are column letters; values include Excel's leading ``=``. Callers
     own source validation, workbook writing and recalculation. The current
-    seasonal boost defaults on and can be persistently disabled by the user.
+    helper retains its legacy formula defaults; business generation explicitly
+    supplies the current request opt-in and its settings snapshot.
     """
     if type(row_number) is not int or not 2 <= row_number <= 1_048_576:
         raise ValueError("row_number must be an Excel data-row integer between 2 and 1048576")
@@ -70,4 +71,5 @@ def final_restock_formulas(
         "AA": f'=IF(OR(V{r}="",W{r}=""),"",IF(({sea_plan})<=0,"",ROUND({sea_plan},0)))',
         "AB": f'=IF(AA{r}="","",IF(ROUND(AA{r},-1)<=0,"",ROUND(AA{r},-1)))',
         "AC": f'=IF(OR(AB{r}="",AD{r}=""),"",AB{r}*AD{r})',
+        "AI": f'=IF(OR(J{r}="",J{r}=0),"",(R{r}+T{r}+IF(Y{r}="",0,Y{r})+IF(AB{r}="",0,AB{r}))/J{r})',
     }

@@ -13,7 +13,7 @@ from services.mabang.amazon.fba.final_restock_recommendation import final_restoc
 
 def test_formula_contract():
     formulas = final_restock_formulas(2)
-    assert tuple(formulas) == ("I", "J", "R", "S", "U", "V", "W", "X", "Y", "Z", "AA", "AB", "AC")
+    assert tuple(formulas) == ("I", "J", "R", "S", "U", "V", "W", "X", "Y", "Z", "AA", "AB", "AC", "AI")
     assert formulas["J"] == "=E2/7*0.6+F2/14*0.3+G2/30*0.1"
     assert formulas["R"] == "=K2+L2+M2+O2+P2+Q2"
     assert formulas["S"] == '=IF(J2=0,"",R2/J2)'
@@ -29,8 +29,8 @@ def test_seasonal_boost_is_on_by_default_and_can_be_disabled():
     assert 'SEARCH("热销",AF2)' in enabled["V"]
     assert 'SEARCH("热销",AF2)' not in disabled["V"]
     assert "+0,120" in disabled["V"] and "+0,120" in disabled["W"]
-    assert {column: enabled[column] for column in ("I", "J", "R", "S", "U", "X", "Y", "Z", "AA", "AB", "AC")} == {
-        column: disabled[column] for column in ("I", "J", "R", "S", "U", "X", "Y", "Z", "AA", "AB", "AC")
+    assert {column: enabled[column] for column in ("I", "J", "R", "S", "U", "X", "Y", "Z", "AA", "AB", "AC", "AI")} == {
+        column: disabled[column] for column in ("I", "J", "R", "S", "U", "X", "Y", "Z", "AA", "AB", "AC", "AI")
     }
 
 

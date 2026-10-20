@@ -62,7 +62,7 @@ def _source_rows() -> list[dict[str, object]]:
             "MSKU": "CLEAR-1", "父ASIN": "PARENT-CLEAR", "ASIN": "ASIN-CLEAR", "本地SKU": "SKU-CLEAR",
             "本地SKU名称": "Clearance item", "备注": "清货", "7天销量": 7, "14天销量": 14,
             "30天销量": 30, "90天销量": 90, "可售": 0, "待入库": 0, "预留": 0,
-            "计划入库": 0, "在途": 0, "待调仓": 0, "调仓中": 0, "单品重量(g)(cm)": 50, "本地库存": None,
+            "计划入库": 0, "在途": 0, "待调仓": 0, "调仓中": 0, "单品重量(g)(cm)": 50, "本地库存": 0,
         },
         {
             "MSKU": "COMBO-1", "父ASIN": "PARENT-COMBO", "ASIN": "ASIN-COMBO", "本地SKU": "SKU-COMBO",
@@ -71,10 +71,10 @@ def _source_rows() -> list[dict[str, object]]:
             "计划入库": 0, "在途": 0, "待调仓": 0, "调仓中": 0, "单品重量(g)(cm)": 25, "本地库存": 7,
         },
         {
-            "MSKU": "UNBOUND-1", "父ASIN": "PARENT-UNBOUND", "ASIN": "ASIN-UNBOUND", "本地SKU": "",
+            "MSKU": "UNBOUND-1", "父ASIN": "PARENT-UNBOUND", "ASIN": "ASIN-UNBOUND", "本地SKU": "UNVERIFIED-LOCAL",
             "本地SKU名称": "Unbound item", "备注": "", "7天销量": 7, "14天销量": 14,
             "30天销量": 30, "90天销量": 90, "可售": 0, "待入库": 0, "预留": 0,
-            "计划入库": 0, "在途": 0, "待调仓": 0, "调仓中": 0, "单品重量(g)(cm)": 50, "本地库存": None,
+            "计划入库": 0, "在途": 0, "待调仓": 0, "调仓中": 0, "单品重量(g)(cm)": 50, "本地库存": 0,
         },
     ]
 
@@ -95,7 +95,7 @@ def _write_source(
     workbook.close()
     if local_skus is None:
         local_skus = tuple(
-            LocalSkuDefinition(str(row["本地SKU"]), 1)
+            LocalSkuDefinition(str(row["本地SKU"]), None if row["MSKU"] == "UNBOUND-1" else 1)
             for row in rows if str(row.get("本地SKU") or "").strip()
         )
     source_verification.annotate_source(
@@ -110,6 +110,7 @@ def _write_inventory_report(path: Path, source_path: Path, rows: list[dict[str, 
     source = source_verification.load_verified_source(source_path, store_name=STORE)
     rows = _source_rows() if rows is None else rows
     inventory_rows = []
+    verdicts = {record["MSKU"]: record["是否通过绑定核验"] for record in source.records}
     for row in rows:
         child_skus = "SKU-CHILD * 2" if row["MSKU"] == "COMBO-1" else ""
         inventory_rows.append(
@@ -119,8 +120,9 @@ def _write_inventory_report(path: Path, source_path: Path, rows: list[dict[str, 
                 asin=str(row["ASIN"]),
                 local_sku=str(row["本地SKU"]),
                 product_link="",
-                actual_inventory=Decimal("12") if row["MSKU"] == "SEA-1" else None,
+                actual_inventory=Decimal("12") if row["MSKU"] == "SEA-1" else Decimal(0),
                 child_skus=child_skus,
+                binding_verified=verdicts[str(row["MSKU"])],
             )
         )
     inventory.write_actual_inventory_xlsx(inventory_rows, path)
@@ -146,7 +148,7 @@ def _write_confirmed_empty_snapshot(directory: Path, *, snapshot_time: str = "20
 
 
 def _generate(tmp_path: Path, *, source_path: Path | None = None, inventory_path: Path | None = None,
-              snapshot_path: Path | None = None):
+              snapshot_path: Path | None = None, **generation_settings):
     source_path = source_path or _write_source(
         tmp_path / "202610131000-Amazon-Test_店铺MSKU数据.xlsx"
     )
@@ -160,6 +162,7 @@ def _generate(tmp_path: Path, *, source_path: Path | None = None, inventory_path
         shenzhen_inventory_report_xlsx_path=inventory_path,
         unlinked_shipments_snapshot_path=snapshot_path,
         output_dir=tmp_path / "out",
+        **generation_settings,
     )
 
 
@@ -180,26 +183,29 @@ def test_generation_snapshots_setting_and_next_generation_reads_saved_value(
     monkeypatch.setattr(final_workbook, "_rows_for_workbook", change_setting_during_generation)
     monkeypatch.setattr(final_workbook, "_recalculate", copyfile)
     monkeypatch.setattr(final_workbook, "_inspect_recalculated", lambda *args, **kwargs: (0, ()))
-    first = _generate(tmp_path / "first")
-    second = _generate(tmp_path / "next")
+    first = _generate(tmp_path / "first", peak_boost_enabled=True)
+    second = _generate(tmp_path / "next", peak_boost_enabled=True)
     first_book = load_workbook(first.output_xlsx_path, data_only=False)
     second_book = load_workbook(second.output_xlsx_path, data_only=False)
     try:
         before, after = first_book.active, second_book.active
-        assert before.max_column == after.max_column == 34
+        assert before.max_column == after.max_column == 35
         assert before["AD1"].value == after["AD1"].value == "单件重量(g)"
         for row in range(2, 6):
-            for column in range(1, 35):
-                if row < 5 and column in (22, 23):
-                    assert before.cell(row, column).value != after.cell(row, column).value
+            for column in range(1, 36):
+                if column in (22, 23):
+                    expected_first = final_restock_formulas(row, peak_boost_enabled=True, peak_boost_days=initial_days)
+                    expected_next = final_restock_formulas(row, peak_boost_enabled=True, peak_boost_days=next_days)
+                    assert before.cell(row, column).value == expected_first["V" if column == 22 else "W"]
+                    assert after.cell(row, column).value == expected_next["V" if column == 22 else "W"]
                 else:
                     assert before.cell(row, column).value == after.cell(row, column).value
-        assert before["V2"].value == final_restock_formulas(2, peak_boost_enabled=initial_enabled, peak_boost_days=initial_days)["V"]
-        assert after["V2"].value == final_restock_formulas(2, peak_boost_enabled=next_enabled, peak_boost_days=next_days)["V"]
+        assert before["V2"].value == final_restock_formulas(2, peak_boost_enabled=True, peak_boost_days=initial_days)["V"]
+        assert after["V2"].value == final_restock_formulas(2, peak_boost_enabled=True, peak_boost_days=next_days)["V"]
         assert before["AG2"].value == after["AG2"].value == 15
         assert before["AH2"].value == after["AH2"].value == "SKU-SEA"
         for sheet in (before, after):
-            assert all(sheet.cell(5, col).value is None for col in range(21, 30))
+            assert all(sheet.cell(5, col).data_type == "f" for col in range(21, 30))
             assert all(sheet[f"{col}5"].data_type == "f" for col in ("I", "J", "R", "S"))
     finally:
         first_book.close()
@@ -250,32 +256,30 @@ def test_generates_all_source_rows_without_formula_errors(tmp_path: Path, unboun
         assert formulas.sheetnames == ["mskulist"]
         sheet = formulas["mskulist"]
         cached = values["mskulist"]
-        headers = [sheet.cell(1, column).value for column in range(1, 35)]
+        headers = [sheet.cell(1, column).value for column in range(1, 36)]
         assert headers == [
             "店铺名称", "MSKU", "父ASIN", "ASIN", "7天销量", "14天销量", "30天销量", "90天销量",
             "销量趋势", "加权日销", "可售", "待入库", "预留", "计划入库", "在途", "运营中心转运",
             "运营中心处理中", "FBA总库存（马帮）", "可销售天数", "未发出货件总计", "建议运输方式",
             "空运补货天数", "海运补货天数", "空运计划", "空运实际", "空运总重", "海运计划",
-            "海运实际", "海运总重", "单件重量(g)", "本地SKU名称", "备注", "本地库存", "本地SKU",
+            "海运实际", "海运总重", "单件重量(g)", "本地SKU名称", "备注", "本地库存", "本地SKU", "可供天数",
         ]
         assert sheet.freeze_panes == "A2"
-        assert sheet.auto_filter.ref == "A1:AH5"
+        assert sheet.auto_filter.ref == "A1:AI5"
         assert sheet.sheet_view.zoomScale == 85
         assert sheet["J2"].number_format == "0.0000"
         assert sheet["S2"].number_format == "0.00"
-        assert all(sheet.cell(2, col).font.name == "Calibri" for col in range(1, 35))
-        assert all(not sheet.cell(2, col).font.bold for col in range(1, 35))
+        assert all(sheet.cell(2, col).font.name == "Calibri" for col in range(1, 36))
+        assert all(not sheet.cell(2, col).font.bold for col in range(1, 36))
 
         for row_number in range(2, 6):
-            expected = final_restock_formulas(row_number)
-            if row_number == 5:
-                expected = {column: formula for column, formula in expected.items() if column in ("I", "J", "R", "S")}
+            expected = final_restock_formulas(row_number, peak_boost_enabled=False)
             assert {column: sheet[f"{column}{row_number}"].value for column in expected} == expected
         assert [sheet.cell(row, 2).value for row in range(2, 6)] == ["SEA-1", "CLEAR-1", "COMBO-1", "UNBOUND-1"]
         assert [sheet.cell(row, 1).value for row in range(2, 6)] == [STORE] * 4
         assert sheet["N2"].value == 17
         assert cached["T2"].value == 0
-        assert sheet["AG3"].value is None
+        assert sheet["AG3"].value == 0
         assert sheet["AG2"].value == 15
         assert sheet["AH3"].value == "SKU-CLEAR"
         assert sheet["AH4"].value == "SKU-COMBO"
@@ -285,17 +289,16 @@ def test_generates_all_source_rows_without_formula_errors(tmp_path: Path, unboun
         assert cached["AC2"].value == pytest.approx(cached["AB2"].value * cached["AD2"].value)
         assert cached["AC3"].value is None  # Clearance quantity is formula-empty.
         assert sheet["E5"].value == unbound_sales  # Keep the unbound row and its original sales.
-        assert sheet["AH5"].value is None
+        assert sheet["AH5"].value == "UNVERIFIED-LOCAL"
         for column in ("U", "V", "W", "X", "Y", "Z", "AA", "AB", "AC"):
-            assert sheet[f"{column}5"].value is None
-            assert cached[f"{column}5"].value is None
+            assert sheet[f"{column}5"].data_type == "f"
     finally:
         formulas.close()
         values.close()
 
 
 @pytest.mark.parametrize("all_failed,blank_report_skus", [(False, False), (False, True), (True, False)])
-def test_binding_verdict_controls_advice_after_office_recalculation(
+def test_binding_verdict_is_preserved_without_suppressing_advice_after_office_recalculation(
     tmp_path: Path, all_failed: bool, blank_report_skus: bool,
 ) -> None:
     if not os.environ.get("LXE_OFFICE_NODE"):
@@ -306,11 +309,12 @@ def test_binding_verdict_controls_advice_after_office_recalculation(
         LocalSkuDefinition("SKU-SEA", 1),
         LocalSkuDefinition("SKU-CLEAR", 1),
         LocalSkuDefinition("SKU-COMBO", 2, (inventory.ComboComponent("SKU-CHILD", Decimal(2)),)),
+        LocalSkuDefinition("UNVERIFIED-LOCAL", None),
         LocalSkuDefinition("UNKNOWN-LOCAL-SKU", None),
     )
     if all_failed:
         source_rows = source_rows[3:]
-        local_skus = local_skus[-1:]
+        local_skus = local_skus[-2:]
     source_path = _write_source(
         tmp_path / "202610131000-Amazon-Test_店铺MSKU数据.xlsx", source_rows,
         local_skus=local_skus,
@@ -321,10 +325,16 @@ def test_binding_verdict_controls_advice_after_office_recalculation(
         {"UNBOUND-1": False, "UNMATCHED-1": False} if all_failed else
         {"SEA-1": True, "CLEAR-1": True, "COMBO-1": True, "UNBOUND-1": False, "UNMATCHED-1": False}
     )
-    report_rows = (
-        [{**row, "本地SKU": ""} for row in source_rows] if blank_report_skus else source_rows
-    )
-    report_path = _write_inventory_report(tmp_path / "inventory.xlsx", source_path, report_rows)
+    report_path = _write_inventory_report(tmp_path / "inventory.xlsx", source_path, source_rows)
+    if blank_report_skus:
+        book = load_workbook(report_path)
+        for ws in book.worksheets:
+            if ws.title != source_verification.SHEET:
+                headers = [c.value for c in ws[1]]
+                for row_index in range(2, ws.max_row + 1):
+                    ws.cell(row_index, headers.index("本地SKU") + 1).value = None
+        book.save(report_path)
+        book.close()
     result = _generate(tmp_path, source_path=source_path, inventory_path=report_path)
     assert result.success and result.formula_error_count == 0
     assert result.row_count == len(source_rows)
@@ -337,7 +347,7 @@ def test_binding_verdict_controls_advice_after_office_recalculation(
         values = load_workbook(path, read_only=True, data_only=True)
         try:
             sheet, cached = formulas["mskulist"], values["mskulist"]
-            assert sheet.max_row == len(source_rows) + 1 and sheet.max_column == 34
+            assert sheet.max_row == len(source_rows) + 1 and sheet.max_column == 35
             for row_number, source_row in enumerate(source_rows, 2):
                 msku = source_row["MSKU"]
                 assert sheet[f"B{row_number}"].value == msku
@@ -346,16 +356,12 @@ def test_binding_verdict_controls_advice_after_office_recalculation(
                 ]
                 assert sheet[f"AG{row_number}"].value == source_row["本地库存"]
                 assert sheet[f"AH{row_number}"].value == (source_row["本地SKU"] or None)
-                expected = final_restock_formulas(row_number)
+                expected = final_restock_formulas(row_number, peak_boost_enabled=False)
                 for column in ("I", "J", "R", "S"):
                     assert sheet[f"{column}{row_number}"].value == expected[column]
                 assert cached[f"I{row_number}"].value is not None
                 for column in ("U", "V", "W", "X", "Y", "Z", "AA", "AB", "AC"):
-                    if verdicts[msku]:
-                        assert sheet[f"{column}{row_number}"].value == expected[column]
-                    else:
-                        assert sheet[f"{column}{row_number}"].value is None
-                        assert cached[f"{column}{row_number}"].value is None
+                    assert sheet[f"{column}{row_number}"].value == expected[column]
                 if msku == "COMBO-1":
                     assert cached[f"U{row_number}"].value == "空运（急发）"
                     assert cached[f"Y{row_number}"].value == 50
@@ -387,48 +393,46 @@ def test_workbook_layout_mapping_and_pr1_formulas_before_office(tmp_path: Path) 
     try:
         assert workbook.sheetnames == ["mskulist"]
         sheet = workbook["mskulist"]
-        assert sheet.max_column == 34
+        assert sheet.max_column == 35
         assert sheet.max_row == len(verified.records) + 1
-        assert tuple(sheet.cell(1, column).value for column in range(1, 35)) == (
+        assert tuple(sheet.cell(1, column).value for column in range(1, 36)) == (
             "店铺名称", "MSKU", "父ASIN", "ASIN", "7天销量", "14天销量", "30天销量", "90天销量",
             "销量趋势", "加权日销", "可售", "待入库", "预留", "计划入库", "在途", "运营中心转运",
             "运营中心处理中", "FBA总库存（马帮）", "可销售天数", "未发出货件总计", "建议运输方式",
             "空运补货天数", "海运补货天数", "空运计划", "空运实际", "空运总重", "海运计划",
-            "海运实际", "海运总重", "单件重量(g)", "本地SKU名称", "备注", "本地库存", "本地SKU",
+            "海运实际", "海运总重", "单件重量(g)", "本地SKU名称", "备注", "本地库存", "本地SKU", "可供天数",
         )
         assert sheet["AH4"].value == "SKU-COMBO"
         assert sheet["AH3"].value == "SKU-CLEAR"
-        assert sheet["AG3"].value is None
+        assert sheet["AG3"].value == 0
         assert sheet["AG2"].value == 15
         assert sheet["N2"].value == 17
         assert sheet["T2"].value == 0
         assert sheet["AD2"].value == 50
         assert sheet.freeze_panes == "A2"
-        assert sheet.auto_filter.ref == f"A1:AH{len(rows) + 1}"
+        assert sheet.auto_filter.ref == f"A1:AI{len(rows) + 1}"
         assert sheet.sheet_view.zoomScale == 85
         assert sheet["J2"].number_format == "0.0000"
         assert sheet["S2"].number_format == "0.00"
-        assert all(sheet.cell(2, column).font.name == "Calibri" for column in range(1, 35))
-        assert all(not sheet.cell(2, column).font.bold for column in range(1, 35))
+        assert all(sheet.cell(2, column).font.name == "Calibri" for column in range(1, 36))
+        assert all(not sheet.cell(2, column).font.bold for column in range(1, 36))
         for row_number in range(2, len(rows) + 2):
             expected = final_restock_formulas(row_number)
-            if row_number == 5:
-                expected = {column: formula for column, formula in expected.items() if column in ("I", "J", "R", "S")}
             actual = {
                 column: sheet[f"{column}{row_number}"].value
                 for column in expected
             }
             assert actual == expected
-        assert all(sheet[f"{column}5"].value is None for column in ("U", "V", "W", "X", "Y", "Z", "AA", "AB", "AC"))
+        assert all(sheet[f"{column}5"].data_type == "f" for column in ("U", "V", "W", "X", "Y", "Z", "AA", "AB", "AC", "AI"))
         assert [sheet.cell(row, 2).value for row in range(2, 6)] == ["SEA-1", "CLEAR-1", "COMBO-1", "UNBOUND-1"]
-        assert [sheet.cell(1, column).value for column in range(1, 35)][29] == "单件重量(g)"
+        assert [sheet.cell(1, column).value for column in range(1, 36)][29] == "单件重量(g)"
         assert sheet["AD2"].value == 50  # Header changes; numeric values remain grams.
     finally:
         workbook.close()
 
 
 @pytest.mark.parametrize("unbound_sales", [0, 7])
-def test_unbound_rows_keep_source_data_without_advice_formulas(
+def test_unverified_rows_keep_source_data_with_all_formulas(
     tmp_path: Path, unbound_sales: int,
 ) -> None:
     source_rows = _source_rows()
@@ -450,10 +454,10 @@ def test_unbound_rows_keep_source_data_without_advice_formulas(
     try:
         sheet = workbook["mskulist"]
         assert sheet.max_row == 5
-        assert sheet.max_column == 34
+        assert sheet.max_column == 35
         assert sheet["E5"].value == unbound_sales
-        assert sheet["AH5"].value is None
-        assert all(sheet[f"{column}5"].value is None for column in ("U", "V", "W", "X", "Y", "Z", "AA", "AB", "AC"))
+        assert sheet["AH5"].value == "UNVERIFIED-LOCAL"
+        assert all(sheet[f"{column}5"].data_type == "f" for column in ("U", "V", "W", "X", "Y", "Z", "AA", "AB", "AC", "AI"))
         for row_number in (2, 3, 4):
             assert {
                 column: sheet[f"{column}{row_number}"].value
@@ -548,8 +552,8 @@ def test_ah_uses_report_local_sku_and_falls_back_to_source_when_blank(tmp_path: 
     rows = final_workbook._rows_for_workbook(
         source.records, store_name=STORE, inventory_by_key=inventory_by_key, shipment_by_key={},
     )
-    assert [row["本地SKU"] for row in rows] == ["SKU-SEA", "SKU-CLEAR", "SKU-COMBO", ""]
-    assert [row["本地库存"] for row in rows] == [15, None, 7, None]
+    assert [row["本地SKU"] for row in rows] == ["SKU-SEA", "SKU-CLEAR", "SKU-COMBO", "UNVERIFIED-LOCAL"]
+    assert [row["本地库存"] for row in rows] == [15, 0, 7, 0]
 
 
 @pytest.mark.parametrize("msku,changed_sku", [
@@ -557,7 +561,7 @@ def test_ah_uses_report_local_sku_and_falls_back_to_source_when_blank(tmp_path: 
     ("COMBO-1", "REPORT-COMBO"),
     ("UNBOUND-1", "REPORT-UNBOUND"),
 ])
-def test_ah_rejects_report_local_sku_changed_after_source_verification(
+def test_ah_accepts_report_local_sku_priority_after_source_verification(
     tmp_path: Path, msku: str, changed_sku: str,
 ) -> None:
     source_path = _write_source(tmp_path / "202610131000-Amazon-Test_店铺MSKU数据.xlsx")
@@ -580,17 +584,18 @@ def test_ah_rejects_report_local_sku_changed_after_source_verification(
     source = source_verification.load_verified_source(source_path, store_name=STORE)
     _, source_by_key = final_workbook._unique_source_rows(source.records)
     inventory_by_key = final_workbook._load_shenzhen_rows(report, expected_keys=set(source_by_key))
-    with pytest.raises(FinalRestockWorkbookError, match="本地SKU.*不一致"):
-        final_workbook._rows_for_workbook(
-            source.records, store_name=STORE,
-            inventory_by_key=inventory_by_key, shipment_by_key={},
-        )
+    rows = final_workbook._rows_for_workbook(
+        source.records, store_name=STORE,
+        inventory_by_key=inventory_by_key, shipment_by_key={},
+    )
+    assert next(row for row in rows if row["MSKU"] == msku)["本地SKU"] == changed_sku
 
 
-def test_ag_preserves_negative_zero_and_blank_local_stock(tmp_path: Path) -> None:
+def test_ag_preserves_negative_zero_and_numeric_text_local_stock(tmp_path: Path) -> None:
     source_rows = _source_rows()
     source_rows[0]["本地库存"] = -3
     source_rows[1]["本地库存"] = 0
+    source_rows[3]["本地库存"] = "2.5"
     source_path = _write_source(tmp_path / "202610131000-Amazon-Test_店铺MSKU数据.xlsx", source_rows)
     report = _write_inventory_report(tmp_path / "inventory.xlsx", source_path)
     verified = source_verification.load_verified_source(source_path, store_name=STORE)
@@ -600,7 +605,7 @@ def test_ag_preserves_negative_zero_and_blank_local_stock(tmp_path: Path) -> Non
         verified.records, store_name=STORE, inventory_by_key=inventory_by_key,
         shipment_by_key={},
     )
-    assert [row["本地库存"] for row in rows] == [-3, 0, 7, None]
+    assert [row["本地库存"] for row in rows] == [-3, 0, 7, 2.5]
     with pytest.raises(FinalRestockWorkbookError, match="必须是有限非负数"):
         final_workbook._optional_number(-1, context="未关联货件数量")
 
@@ -692,7 +697,7 @@ def test_explicit_zero_weight_is_preserved_without_accepting_invalid_weight(tmp_
     )
     assert mapped[0]["单件重量(g)"] == 0
     rows[0]["单品重量(g)(cm)"] = "invalid"
-    with pytest.raises(FinalRestockWorkbookError, match="无法解析为克数"):
+    with pytest.raises(FinalRestockWorkbookError, match="AD重量解析.*MSKU=SEA-1.*无法解析"):
         final_workbook._rows_for_workbook(
             rows, store_name=STORE,
             inventory_by_key=final_workbook._load_shenzhen_rows(report, expected_keys=set(source_by_key)),

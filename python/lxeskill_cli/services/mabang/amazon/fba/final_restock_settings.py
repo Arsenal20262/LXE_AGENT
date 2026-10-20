@@ -39,7 +39,7 @@ def _path() -> Path:
 def _read_unlocked() -> FinalRestockSettings:
     path = _path()
     if not path.exists():
-        return {"peak_boost_enabled": True, "peak_boost_days": None}
+        return {"peak_boost_enabled": False, "peak_boost_days": None}
     if path.stat().st_size > 1024 * 1024:
         raise ValueError("Amazon 最终备货设置文件超过 1 MiB")
     raw = json.loads(path.read_text(encoding="utf-8"))

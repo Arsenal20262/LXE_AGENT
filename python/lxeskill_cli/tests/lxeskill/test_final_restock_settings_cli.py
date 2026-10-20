@@ -66,7 +66,7 @@ def test_real_cli_round_trip_keeps_storage_format_and_actual_failure():
         return record
 
     initial = invoke("read")["data"]["data"]
-    assert initial["peak_boost_enabled"] is True
+    assert initial["peak_boost_enabled"] is False
     assert settings.read_state() == initial
     path = settings.data_directory() / "parameters.json"
     path.write_text('{"peak_boost_enabled":false}', encoding="utf-8")
