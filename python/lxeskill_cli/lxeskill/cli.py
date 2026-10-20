@@ -216,8 +216,8 @@ def _field_is_conditionally_optional(
 def _apply_stored_assets(entry: dict[str, Any], arguments: dict[str, Any]) -> dict[str, dict[str, str]]:
     """Fill slot-backed fields from storage, and report where each value came from.
 
-    A caller-supplied path always wins and is promoted after the command
-    succeeds; only an omitted field falls back to the stored current version.
+    A caller-supplied path always wins; only an omitted field falls back to
+    the stored current version. Promotion follows the field's contract.
     """
     sources: dict[str, dict[str, str]] = {}
     properties = dict(dict(entry.get("input_schema") or {}).get("properties") or {})
@@ -419,6 +419,12 @@ def _run_entry(entry: dict[str, Any], argv: list[str]) -> int:
         if asset_sources and isinstance(data, dict):
             data = {**data, "asset_sources": asset_sources}
         if not ok:
+            business_error = data.get("error") if isinstance(data, dict) else None
+            if isinstance(business_error, dict) and business_error.get("code") == "input_required":
+                raise LxeSkillError(
+                    "input_required", str(business_error["message"]),
+                    exit_code=EXIT_USAGE, recovery=data.get("recovery"),
+                )
             failure: dict[str, Any] = {
                     "type": "result",
                     "command": command,

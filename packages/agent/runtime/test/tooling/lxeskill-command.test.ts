@@ -18,8 +18,27 @@ test("queries command attribution and datasets through the installed public CLI"
     expect(commands.length).toBeGreaterThan(0);
     expect(commands).toContainEqual({ command: "lxeskill replenish store resolve", skill: "replenishment-store-resolve" });
     expect(commands.every(item => !item.command.startsWith("services."))).toBe(true);
+    expect(commands).toContainEqual({ command: "lxeskill vietnam replenishment calculate", skill: "vietnam-replenishment" });
+    const contract = await queryLxeSkill("list", options);
+    expect(contract.commands).toContainEqual(expect.objectContaining({
+      name: "vietnam_replenishment_generate", command: "vietnam replenishment calculate",
+      owner_skills: ["vietnam-replenishment"], input_modes: ["flags"],
+      input_schema: {
+        type: "object",
+        properties: {
+          sales_file: { type: "string", minLength: 1 }, inventory_file: { type: "string", minLength: 1 },
+          products_file: { type: "string", minLength: 1 },
+          template_file: { type: "string", minLength: 1, "x-lxe-file-input": {
+            accepted_extensions: [".xlsx"],
+            instruction: "请上传完整的东南亚越南备货九表 XLSX 模板，或使用已保存的当前模板。",
+          } },
+        },
+        required: ["sales_file", "inventory_file", "products_file"], additionalProperties: false,
+      },
+    }));
     const data = await queryLxeSkill("datasets list", options);
     expect(data.datasets).toContainEqual(expect.objectContaining({ id: "fba_delivery_csv", dir: "fba/delivery_csv" }));
+    expect(data.datasets).toContainEqual(expect.objectContaining({ id: "vietnam_recommendations", dir: "vietnam/recommendations" }));
   } finally { rmSync(dataRoot, { recursive: true, force: true }); }
 });
 

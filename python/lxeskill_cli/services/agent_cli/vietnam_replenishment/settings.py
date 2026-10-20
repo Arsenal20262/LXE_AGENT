@@ -16,7 +16,7 @@ def run(arguments: dict[str, Any]) -> dict[str, Any]:
             "read": {"action"},
             "save": {"action", "parameters"},
             "upload": {"action", "path"},
-            "export": {"action", "kind", "path"},
+            "export": {"action", "path"},
         }
         if not isinstance(action, str) or action not in fields:
             raise ValueError(f"无效的桌面设置操作: {action!r}")
@@ -31,9 +31,9 @@ def run(arguments: dict[str, Any]) -> dict[str, Any]:
         elif action == "save":
             result = settings.save_parameters(arguments["parameters"])
         elif action == "upload":
-            result = settings.upload_map(Path(arguments["path"]))
+            result = settings.upload_template(Path(arguments["path"]))
         else:
-            result = settings.export_map(arguments["kind"], Path(arguments["path"]))
+            result = settings.export_template(Path(arguments["path"]))
         return {"success": True, "data": result}
     except Exception as exc:  # noqa: BLE001 — keep actual validation and I/O diagnostics
         return {"success": False, "error": {"code": type(exc).__name__, "message": validation_diagnostic(exc)}}

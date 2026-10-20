@@ -164,7 +164,7 @@ export class DesktopGateway {
           return image ? { source: "history" as const, image } : stored;
         },
       };
-    }, new OfficePreviewCache(join(this.options.paths.dataRoot, "cache", "file-previews"), this.options.paths.officeNodePath, this.options.paths.officeCliPath), {
+    }, new OfficePreviewCache(join(this.options.paths.dataRoot, "cache", "file-previews"), this.options.paths.officeCliPath), {
       openPath: path => shell.openPath(path), revealPath: path => shell.showItemInFolder(path),
     });
   }
