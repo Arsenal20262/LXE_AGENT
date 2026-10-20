@@ -486,8 +486,10 @@ export class UsageStore {
           name: clippedText(row.name, 256),
           module: clippedText(row.module, 256),
           calls: Number(row.calls ?? 0),
-          errors: Number(row.errors ?? 0),
-          duration_ms: Number(row.duration_ms ?? 0),
+          ...(row.kind === "tool" ? {
+            errors: Number(row.errors ?? 0),
+            duration_ms: Number(row.duration_ms ?? 0),
+          } : {}),
         });
       }
     }

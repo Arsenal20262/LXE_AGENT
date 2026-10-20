@@ -262,7 +262,11 @@ describe("TurnUsageSyncService", () => {
       "secret command arguments",
       testWorkspace.directory,
     ]) expect(serialized).not.toContain(forbidden);
-    expect(uploads[0]?.body.turns[0].items[2]).not.toHaveProperty("detail");
+    expect(uploads[0]?.body.turns[0].items).toEqual([
+      { kind: "tool", name: "tool-0", module: "", calls: 1, errors: 0, duration_ms: 3 },
+      { kind: "skill_activation", name: "inventory", module: "fba", calls: 1 },
+      { kind: "skill_execution", name: "inventory", module: "fba", calls: 1 },
+    ]);
     await store.stop();
   });
 
