@@ -68,7 +68,7 @@
 }
 .workbench-theme .vietnam-settings-view h3 { font-size: .9375rem; font-weight: 500; }
 .workbench-theme .vietnam-settings-view p { color: var(--text-soft); }
-.workbench-theme .vietnam-map-card { gap: 14px; }
+.workbench-theme .vietnam-template-card { gap: 14px; }
 .workbench-theme .vietnam-file-status {
   padding: 12px 14px; border-radius: 8px; background: var(--cds-alpha-1);
   overflow-wrap: anywhere; color: var(--text); font-size: .8125rem;
