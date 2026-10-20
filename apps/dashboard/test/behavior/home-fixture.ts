@@ -19,7 +19,7 @@ export function createHomeFixture(initialMode = "ready") {
         if (operation === "stats.overview") return {
           days: Number(input.days), peak_hour: null, daily: [], modules: [],
           totals: { turns: empty ? 18 : 32, error_turns: 0, tool_calls: 180, llm_calls: 40,
-            input_tokens: 740000, output_tokens: 34868, skill_executions: empty ? 0 : 12, skill_failures: empty ? 0 : 1 },
+            input_tokens: 740000, output_tokens: 34868, skill_activations: empty ? 0 : 9, skill_executions: empty ? 0 : 12, skill_failures: empty ? 0 : 1 },
         } satisfies StatsOverviewPayload;
         if (operation === "stats.skills.list") return { days: Number(input.days), items: empty ? [] : [
           { name: "Amazon 备货算法参数管理", executions: 28, failures: 0 },
