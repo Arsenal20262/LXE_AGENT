@@ -6,10 +6,12 @@ from hashlib import sha256
 from importlib.resources import files
 import os
 from pathlib import Path
+from xml.dom import minidom
 from xml.etree import ElementTree as ET
 from zipfile import ZipFile
 
 from openpyxl import Workbook, load_workbook
+from openpyxl.formatting.rule import CellIsRule
 from openpyxl.styles import Font
 import pytest
 
@@ -119,11 +121,53 @@ def _builtin_template(path: Path) -> Path:
     return path
 
 
+def _style_namespace(path: Path, prefix: str | None, section_default: str | None = None) -> None:
+    """Use an explicit SpreadsheetML binding without changing style semantics."""
+    staged = path.with_suffix(".tmp")
+    with ZipFile(path) as source, ZipFile(staged, "w") as target:
+        for item in source.infolist():
+            data = source.read(item.filename)
+            if item.filename == "xl/styles.xml":
+                document = minidom.parseString(data)
+                try:
+                    for node in list(document.getElementsByTagNameNS(MAIN, "*")):
+                        document.renameNode(node, MAIN, f"{prefix}:{node.localName}" if prefix else node.localName)
+                    root = document.documentElement
+                    for attribute in list(root.attributes.values()):
+                        if attribute.value == MAIN and attribute.name.startswith("xmlns"):
+                            root.removeAttribute(attribute.name)
+                    root.setAttribute(f"xmlns:{prefix}" if prefix else "xmlns", MAIN)
+                    if section_default is not None:
+                        root.setAttribute("xmlns", MAIN)
+                        for name in ("fonts", "cellXfs"):
+                            document.getElementsByTagNameNS(MAIN, name)[0].setAttribute("xmlns", section_default)
+                    data = document.toxml(encoding="utf-8")
+                finally:
+                    document.unlink()
+                assert all(node.tag.startswith(f"{{{MAIN}}}") for node in ET.fromstring(data).iter())
+            target.writestr(item, data)
+    staged.replace(path)
+
+
+@pytest.mark.parametrize("template_prefix,section_default", [
+    (None, None), ("ns0", None), ("sheet", "urn:unused-style-default"),
+])
+@pytest.mark.parametrize("calculated_prefix", [None, "calc"])
 @pytest.mark.parametrize("missing_formats", [False, True])
-def test_style_merge_accepts_optional_numfmts_and_keeps_all_style_references_valid(tmp_path, missing_formats):
+def test_style_merge_accepts_optional_numfmts_and_keeps_all_style_references_valid(
+    tmp_path, missing_formats, template_prefix, section_default, calculated_prefix,
+):
     template, current = _inputs(tmp_path)
     if missing_formats:
         _builtin_template(template)
+    book = load_workbook(current)
+    book[CURRENT[0]].conditional_formatting.add(
+        "E2", CellIsRule(operator="equal", formula=['"SKU-CURRENT"'], font=Font(bold=True)),
+    )
+    book.save(current)
+    book.close()
+    _style_namespace(template, template_prefix, section_default)
+    _style_namespace(current, calculated_prefix)
     validate_full_template(template)
     output = tmp_path / "merged.xlsx"
     combine_full_workbook(template, current, output)
@@ -131,8 +175,11 @@ def test_style_merge_accepts_optional_numfmts_and_keeps_all_style_references_val
     with ZipFile(template) as original, ZipFile(output) as merged:
         before = ET.fromstring(original.read("xl/styles.xml"))
         after = ET.fromstring(merged.read("xl/styles.xml"))
-        assert [node.tag.rsplit("}", 1)[-1] for node in after][:2] == ["numFmts", "fonts"]
+        assert all(node.tag.startswith(f"{{{MAIN}}}") for node in after.iter())
+        assert [node.tag for node in after][:2] == [f"{{{MAIN}}}numFmts", f"{{{MAIN}}}fonts"]
+        assert [node.tag for node in after].index(f"{{{MAIN}}}dxfs") < [node.tag for node in after].index(f"{{{MAIN}}}tableStyles")
         formats = after.find(f"{{{MAIN}}}numFmts")
+        assert formats is not None and all(node.tag == f"{{{MAIN}}}numFmt" for node in formats)
         identifiers = [int(node.attrib["numFmtId"]) for node in formats]
         assert len(identifiers) == len(set(identifiers))
         assert int(formats.attrib["count"]) == len(identifiers)
@@ -141,6 +188,7 @@ def test_style_merge_accepts_optional_numfmts_and_keeps_all_style_references_val
             new = after.find(f"{{{MAIN}}}{section}")
             assert [ET.tostring(node) for node in new[:len(old)]] == [ET.tostring(node) for node in old]
             for node in new:
+                assert node.tag == f"{{{MAIN}}}xf"
                 number = int(node.attrib.get("numFmtId", 0))
                 assert number < 164 or number in identifiers
                 for attribute, name in (("fontId", "fonts"), ("fillId", "fills"), ("borderId", "borders"), ("xfId", "cellStyleXfs")):
@@ -165,15 +213,22 @@ def test_style_merge_accepts_optional_numfmts_and_keeps_all_style_references_val
         reference.close()
 
 
+@pytest.mark.parametrize("template_prefix,calculated_prefix,missing_formats", [
+    (None, None, False), ("ns0", None, True),
+    ("sheet", "calc", False), ("sheet", "calc", True),
+])
 @pytest.mark.skipif(
     not (os.environ.get("LXE_OFFICE_NODE") and os.environ.get("LXE_OFFICE_CLI")),
     reason="Host Office Kit paths are not configured",
 )
-def test_template_without_numfmts_can_be_reopened_by_office(tmp_path):
+def test_template_styles_can_be_reopened_by_office(tmp_path, template_prefix, calculated_prefix, missing_formats):
     from services.vietnam_replenishment.recalculation import recalculate_with_office
 
     template, current = _inputs(tmp_path)
-    _builtin_template(template)
+    if missing_formats:
+        _builtin_template(template)
+    _style_namespace(template, template_prefix)
+    _style_namespace(current, calculated_prefix)
     validate_full_template(template)
     merged = tmp_path / "merged.xlsx"
     combine_full_workbook(template, current, merged)
@@ -183,9 +238,10 @@ def test_template_without_numfmts_can_be_reopened_by_office(tmp_path):
     try:
         assert tuple(book.sheetnames) == REQUIRED_ORDER
         assert book[REQUIRED_ORDER[0]]["E2"].value == "SKU-CURRENT"
-        for name in UNCHANGED:
-            assert book[name]["A2"].value == 1234.5
-            assert book[name]["A2"].number_format == "0.00"
+        if missing_formats:
+            for name in UNCHANGED:
+                assert book[name]["A2"].value == 1234.5
+                assert book[name]["A2"].number_format == "0.00"
     finally:
         book.close()
 

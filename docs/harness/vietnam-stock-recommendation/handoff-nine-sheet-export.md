@@ -89,3 +89,16 @@ skills/vietnam-replenishment/SKILL.md
 - 最终门禁：提交前检查无旧 SKU map 生产消费者、无冲突标记及无无关工作区文件，执行 `git diff --check` 与暂存差异检查；验证通过后按本轮授权完成 merge commit。push 和远端重新 Review 仍需分别获得用户确认。
 - 检查结果：扫描 617 个生产源码/契约文件，旧 map 入口消费者为 0；53 文件范围与原 PR 加上述 5 个联动文件精确一致，敏感信息模式扫描无命中，历史计划未改写。`git diff --check`、`git diff --cached --check origin/main` 通过；针对 merge 第一父提交的暂存检查仅提示 main 已有的 `apps/dashboard/src/shared/cds-theme.css` 和 `docs/design/cds/tokens/lxe-theme.snapshot.css` 末尾空行，两文件与 main 逐字节一致，不在本 PR diff 内，未扩大范围修改。暂存后无未解决冲突、未暂存或未跟踪文件。
 - NOT VERIFIED：真实雅仓生产数据、真实聊天附件到 Excel UI 全链路、Windows 实机、发布 build、全仓全部测试及掉电/进程强制终止恢复。上述合成九表、Office、Desktop 和 Dashboard 定向结果不扩大为这些验证。
+
+## 2026-10-20：P2-2 样式命名空间补修（未提交）
+
+- 分支 / Pool 不变，HEAD 仍为 `3c692642510e7f01c2d6e0d2c05036e08b97d602`。Push 前只读验收发现前次测试遗漏了输出样式子节点的实际命名空间检查；本节记录该缺陷的局部修复，不修改 P2-1、main 合并或统一 CLI 契约。
+- 根因：`minidom.importNode()` 保留 DOM 的 `namespaceURI`，但不会复制源文档祖先上的 `xmlns` 声明，`toxml()` 也不会自动补齐。默认命名空间样式导入带前缀的模板后，重新解析会落入空命名空间；计算结果使用不同前缀时还可能产生未绑定前缀。原 `dxfs` 补建路径也需要使用目标文档的有效前缀。
+- 最小修复：仅在现有 `_append_styles` 内导入样式时检查目标父节点及祖先的实际命名空间绑定，缺少或被局部覆盖时在导入子树补上所需 `xmlns`；复用原节点 URI / QName，不硬编码前缀。补建 `dxfs` 沿用目标根前缀，保留位置。数字格式 ID、样式索引及引用映射算法不变，没有新增合并器、框架、Service 或依赖。
+- 测试：默认命名空间、`ns0` / `sheet` 模板与默认 / `calc` 计算结果，分别覆盖有 / 无 `numFmts`；同时覆盖目标样式分组局部覆盖默认绑定、缺少 `dxfs` 及条件样式。12 组 XML 测试均重新解析并检查完整 QName，检查 numFmt / xf ID、引用边界、节点顺序、原样式及四张业务表 XML。修复前原矩阵 `10 failed, 2 passed`，最终矩阵全部通过。
+- 定向回归：从仓库根配置现有 Office Kit，运行 `test_full_workbook.py` 与 `test_pr5_integration.py`，`27 passed`、无跳过，包含 4 个默认 / 前缀样式的真实 Office 打开重算及原 7 个九表集成用例。未重复运行无变更的 Runtime、Desktop、CLI 或模板生命周期套件。
+- 原验收复现样例：错误命名空间节点由 203 个降为 0，重新解析后的 ElementTree QName 和 DOM `namespaceURI` 均验证通过。既有 Golden 的全部 18 个 ZIP 部件、九表结构、公式及 250 个非空缓存单元格逐字节一致；另一个带前缀样例修复前后仅 `xl/styles.xml` 有预期差异，其余部件和业务结果保持。
+- 实际修改仅 3 个文件：`services/vietnam_replenishment/full_workbook.py`、`tests/vietnam_replenishment/test_full_workbook.py`（均在 `python/lxeskill_cli/` 下）及本 handoff。SKU 参数来源、雅仓读取、公式、Office 调用、聊天临时模板和 current / previous 未修改。
+- Git 边界：本轮仅修改与定向验证，未 add、commit、merge、rebase、push 或修改远端 PR。工作区修复验证通过后可以准备独立 fix commit；必须先获提交授权，再分别获 Push / 请求重新 Review 授权。当前已提交 HEAD 尚不包含本次修复。
+- 最终检查：`git diff --check` 通过；仅上述 3 个相关文件未暂存，无暂存或未跟踪文件，HEAD 不变。生产模块除 `_append_styles` 及其标准库命名空间常量导入外 AST 不变，敏感信息模式扫描无命中。
+- NOT VERIFIED：真实 ERP 生产数据、真实聊天附件 UI 全链路、Windows 实机、原生 Excel / WPS、发布 build、全仓全量回归及掉电恢复；不以 Office Kit 和合成文件结果代替这些验证。

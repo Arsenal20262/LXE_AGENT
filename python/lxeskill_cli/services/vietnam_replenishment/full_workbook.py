@@ -11,7 +11,7 @@ from copy import copy
 import os
 from pathlib import Path
 import posixpath
-from xml.dom import minidom
+from xml.dom import XMLNS_NAMESPACE, minidom
 from xml.etree import ElementTree as ET
 from zipfile import BadZipFile, ZipFile
 
@@ -112,12 +112,27 @@ def _section(document, name: str):
 def _append_styles(template: ZipFile, calculated: ZipFile) -> tuple[bytes, dict[str, int]]:
     """Append new style indices; source style indices used by unchanged tabs stay stable."""
     with _parsed(template.read("xl/styles.xml")) as original, _parsed(calculated.read("xl/styles.xml")) as fresh:
+        prefix = original.documentElement.prefix
+
+        def import_style(node, parent):
+            copied = original.importNode(node, deep=True)
+            # minidom keeps namespaceURI but does not copy inherited xmlns bindings.
+            for element in (copied, *copied.getElementsByTagNameNS(MAIN, "*")):
+                if element.namespaceURI == MAIN:
+                    binding = f"xmlns:{element.prefix}" if element.prefix else "xmlns"
+                    scope = parent
+                    while scope.nodeType == scope.ELEMENT_NODE and not scope.hasAttribute(binding):
+                        scope = scope.parentNode
+                    if scope.nodeType != scope.ELEMENT_NODE or scope.getAttribute(binding) != MAIN:
+                        copied.setAttributeNS(XMLNS_NAMESPACE, binding, MAIN)
+            return copied
+
         offsets = {}
         for name in ("fonts", "fills", "borders", "cellStyleXfs", "cellXfs", "dxfs"):
             old = _section(original, name)
             new = _section(fresh, name)
             if name == "dxfs" and old is None and new is not None:
-                old = original.createElementNS(MAIN, "dxfs")
+                old = original.createElementNS(MAIN, f"{prefix}:dxfs" if prefix else "dxfs")
                 old.setAttribute("count", "0")
                 original.documentElement.insertBefore(old, _section(original, "tableStyles"))
             if old is None or new is None:
@@ -134,7 +149,6 @@ def _append_styles(template: ZipFile, calculated: ZipFile) -> tuple[bytes, dict[
         number_formats = {}
         if fresh_formats is not None:
             if original_formats is None:
-                prefix = original.documentElement.prefix
                 original_formats = original.createElementNS(MAIN, f"{prefix}:numFmts" if prefix else "numFmts")
                 original_formats.setAttribute("count", "0")
                 original.documentElement.insertBefore(original_formats, original.documentElement.firstChild)
@@ -144,7 +158,7 @@ def _append_styles(template: ZipFile, calculated: ZipFile) -> tuple[bytes, dict[
                     number_formats[old_id] = old_id
                     continue
                 number_formats[old_id] = next_id
-                copied = original.importNode(node, deep=True)
+                copied = import_style(node, original_formats)
                 copied.setAttribute("numFmtId", str(next_id))
                 original_formats.appendChild(copied)
                 next_id += 1
@@ -156,7 +170,7 @@ def _append_styles(template: ZipFile, calculated: ZipFile) -> tuple[bytes, dict[
             if new is None:
                 continue
             for node in _elements(new):
-                copied = original.importNode(node, deep=True)
+                copied = import_style(node, old)
                 for attr, target in (("fontId", "fonts"), ("fillId", "fills"), ("borderId", "borders")):
                     if copied.hasAttribute(attr):
                         copied.setAttribute(attr, str(int(copied.getAttribute(attr)) + offsets[target]))
