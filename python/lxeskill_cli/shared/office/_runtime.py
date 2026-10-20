@@ -7,6 +7,7 @@ from pathlib import Path
 import signal
 import subprocess
 
+
 def configured_file(name: str) -> str:
     value = os.environ.get(name, "").strip()
     if not value:
