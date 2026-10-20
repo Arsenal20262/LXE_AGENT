@@ -1,6 +1,6 @@
 {
   "archivedAt": "2026-10-18T17:25:46.822Z",
-  "archiveDate": "2026-10-19",
+  "archiveDate": "2026-10-20",
   "kind": "CDS evidence and LXE adaptation reference archive",
   "repositoryBaseline": "7e2bef2d05147c543493b6947c3b085f9ad108f8",
   "sourceExtractionMetadata": "sources/provenance.json",
@@ -44,6 +44,13 @@
     "SHA256SUMS.txt covers every archived file except itself."
   ],
   "supplements": [
+    {
+      "date": "2026-10-20",
+      "document": "current-adaptation.md",
+      "sourceData": "current-adaptation.json",
+      "verification": "showcase/verification.json",
+      "scope": "Interactive light/dark gallery of settings native field styles, production session navigation and production tool rows. Missing upstream evidence, invalid-field support, legacy tool colors and non-applicable disabled states explicitly identified. Original evidence and historical snapshots unchanged."
+    },
     {
       "date": "2026-10-19",
       "document": "examples/activity-workbench.md",
