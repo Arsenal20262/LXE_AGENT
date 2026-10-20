@@ -721,3 +721,19 @@ def test_vietnam_has_one_ordinary_command_and_no_managed_contract() -> None:
     assert not any("managed_execution" in entry for entry in catalog.values())
     assert [name for name, entry in catalog.items() if name.startswith("vietnam_replenishment_") and entry["visibility"] != "internal"] == ["vietnam_replenishment_generate"]
     assert not any(name.startswith("assets_vietnam_sku_") for name in catalog)
+
+
+def test_business_input_required_uses_the_existing_upload_recovery_envelope(monkeypatch, capsys):
+    recovery = {"next_action": "ask_user_to_upload_file", "field": "input_xlsx",
+                "accepted_extensions": [".xlsx"], "instruction": "请上传本轮所需工作簿。"}
+    message = "Required uploaded file is missing: input_xlsx"
+    def fake_execute(*_args, **_kwargs):
+        payload = {"success": False, "error": {"code": "input_required", "message": message}, "recovery": recovery}
+        return False, [{"type": "text", "text": json.dumps(payload)}], [], {"code": "business_cli_failed", "message": message}
+    monkeypatch.setattr(lxeskill, "execute_module_json", fake_execute)
+    assert lxeskill.main(["mabang", "delivery", "export", "--delivery-no", "SP1"]) == lxeskill.EXIT_USAGE
+    records = _records(capsys)
+    assert len(records) == 1
+    assert records[0]["error"] == {"code": "input_required", "message": message}
+    assert records[0]["recovery"] == recovery
+    assert records[0]["files"] == []

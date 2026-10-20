@@ -6,6 +6,7 @@ Only ``current`` is ever handed to a command, and the model never sees
 """
 from __future__ import annotations
 
+import ast
 import json
 from pathlib import Path
 
@@ -219,7 +220,7 @@ def test_every_declared_slot_binding_is_registered_and_optional() -> None:
             )
 
 
-def test_every_registered_slot_is_bound_to_at_least_one_field() -> None:
+def test_every_registered_slot_has_a_binding_or_business_promotion_consumer() -> None:
     bound = {
         str((definition or {}).get("x-lxe-asset-slot") or "")
         for entry in CATALOG["entries"]
@@ -227,7 +228,24 @@ def test_every_registered_slot_is_bound_to_at_least_one_field() -> None:
     }
     command_slots = {slot for slot, entry in ASSETS.items() if entry.management == "command"}
     desktop_slots = {slot for slot, entry in ASSETS.items() if entry.management == "desktop"}
-    assert not command_slots - bound, f"registered but unused command slots: {sorted(command_slots - bound)}"
+    # Business settings may own promotion directly without binding a mutable
+    # current path to a calculation argument. Count actual imported API calls,
+    # not arbitrary slot-name strings or a country-specific exception list.
+    promoted = set()
+    for path in (REPO_ROOT / "python/lxeskill_cli/services").rglob("*.py"):
+        source = path.read_text(encoding="utf-8")
+        if "shared.input_assets" not in source:
+            continue
+        tree = ast.parse(source)
+        imports = {alias.asname or alias.name for node in ast.walk(tree)
+                   if isinstance(node, ast.ImportFrom) and node.module == "shared.input_assets"
+                   for alias in node.names if alias.name == "promote_asset"}
+        promoted.update(node.args[0].value for node in ast.walk(tree)
+                        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                        and node.func.id in imports and node.args
+                        and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str))
+    unused = command_slots - bound - promoted
+    assert not unused, f"registered but unused command slots: {sorted(unused)}"
     assert not desktop_slots & bound, f"desktop-managed slots bound to commands: {sorted(desktop_slots & bound)}"
 
 

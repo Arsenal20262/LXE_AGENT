@@ -167,8 +167,6 @@ test("Vietnam calculation requires three local reports and a saved or supplied n
           accepted_extensions: [".xlsx"],
           instruction: "请上传完整的东南亚越南备货九表 XLSX 模板，或使用已保存的当前模板。",
         },
-        "x-lxe-asset-slot": "vietnam_full_workbook",
-        "x-lxe-asset-promote-on-success": false,
       },
     },
     required: ["sales_file", "inventory_file", "products_file"], additionalProperties: false,

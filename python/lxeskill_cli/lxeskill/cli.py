@@ -213,8 +213,7 @@ def _apply_stored_assets(entry: dict[str, Any], arguments: dict[str, Any]) -> di
     """Fill slot-backed fields from storage, and report where each value came from.
 
     A caller-supplied path always wins; only an omitted field falls back to
-    the stored current version. Vietnam resolves its template in the protected
-    workflow snapshot instead. Promotion follows the field's contract.
+    the stored current version. Promotion follows the field's contract.
     """
     sources: dict[str, dict[str, str]] = {}
     properties = dict(dict(entry.get("input_schema") or {}).get("properties") or {})
@@ -225,19 +224,10 @@ def _apply_stored_assets(entry: dict[str, Any], arguments: dict[str, Any]) -> di
         if not _is_missing(arguments.get(name)):
             sources[name] = {"slot": slot_id, "from": "upload"}
             continue
-        if slot_id == "vietnam_full_workbook":
-            # This slot is replaced under the Vietnam settings lock. Only check
-            # availability here; the workflow selects and snapshots it together.
-            from services.vietnam_replenishment.settings import _locked
-
-            with _locked():
-                stored = current_asset(slot_id)
-        else:
-            stored = current_asset(slot_id)
+        stored = current_asset(slot_id)
         if stored is None:
             continue
-        if slot_id != "vietnam_full_workbook":
-            arguments[name] = str(stored.path)
+        arguments[name] = str(stored.path)
         sources[name] = {
             "slot": slot_id,
             "from": "stored",
@@ -253,15 +243,10 @@ def _promote_successful_assets(
     sources: dict[str, dict[str, str]],
     data: dict[str, Any],
 ) -> None:
-    """Promote supplied or generated assets unless the field is one-run only."""
+    """Keep a declared updated output, or otherwise the supplied input, as current."""
     properties = dict(dict(entry.get("input_schema") or {}).get("properties") or {})
     for name, info in sources.items():
-        property_schema = dict(properties.get(name) or {})
-        if property_schema.get("x-lxe-asset-promote-on-success", True) is False:
-            if info.get("from") == "upload":
-                info["file_name"] = os.path.basename(str(arguments[name]))
-            continue
-        output_field = str(property_schema.get("x-lxe-asset-output-field") or "")
+        output_field = str(dict(properties.get(name) or {}).get("x-lxe-asset-output-field") or "")
         updated_path = str(data.get(output_field) or "") if output_field else ""
         if not updated_path and info.get("from") != "upload":
             continue
@@ -284,10 +269,7 @@ def _promote_successful_assets(
         info["updated_at"] = promoted.updated_at
 
 
-def _require_uploaded_file_inputs(
-    entry: dict[str, Any], arguments: dict[str, Any],
-    asset_sources: dict[str, dict[str, str]] | None = None,
-) -> None:
+def _require_uploaded_file_inputs(entry: dict[str, Any], arguments: dict[str, Any]) -> None:
     schema = dict(entry.get("input_schema") or {})
     properties = dict(schema.get("properties") or {})
     required = {str(name) for name in list(schema.get("required") or [])}
@@ -303,8 +285,6 @@ def _require_uploaded_file_inputs(
             continue
         value = arguments.get(name)
         if not _is_missing(value):
-            continue
-        if slots.get(name) == "vietnam_full_workbook" and (asset_sources or {}).get(name, {}).get("from") == "stored":
             continue
         accepted_extensions = [
             str(extension).strip()
@@ -385,7 +365,7 @@ def _run_entry(entry: dict[str, Any], argv: list[str]) -> int:
     _require_in_scope(entry)
     arguments, session_id = _input_arguments(entry, argv)
     asset_sources = _apply_stored_assets(entry, arguments)
-    _require_uploaded_file_inputs(entry, arguments, asset_sources)
+    _require_uploaded_file_inputs(entry, arguments)
     if str(entry.get("session_mode") or "none") == "lxe_session" and not session_id:
         raise LxeSkillError("session_required", f"{command} requires an LXE session", exit_code=EXIT_ENVIRONMENT)
     if str(entry.get("handler") or "") == "auth":
@@ -438,14 +418,14 @@ def _run_entry(entry: dict[str, Any], argv: list[str]) -> int:
         raw = str(content[0].get("text") or "{}") if content else "{}"
         data = json.loads(raw)
         if asset_sources and isinstance(data, dict):
-            # The protected snapshot may select a newer version than the early
-            # availability check. Report its actual provenance, never that check's.
-            if asset_sources.get("template_file", {}).get("slot") == "vietnam_full_workbook":
-                snapshot_source = dict(data.get("asset_sources") or {}).get("template_file")
-                if isinstance(snapshot_source, dict):
-                    asset_sources["template_file"] = snapshot_source
             data = {**data, "asset_sources": asset_sources}
         if not ok:
+            business_error = data.get("error") if isinstance(data, dict) else None
+            if isinstance(business_error, dict) and business_error.get("code") == "input_required":
+                raise LxeSkillError(
+                    "input_required", str(business_error["message"]),
+                    exit_code=EXIT_USAGE, recovery=data.get("recovery"),
+                )
             failure: dict[str, Any] = {
                     "type": "result",
                     "command": command,
