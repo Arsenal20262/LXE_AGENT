@@ -4,18 +4,19 @@ from __future__ import annotations
 
 from hashlib import sha256
 from importlib.resources import files
+import os
 from pathlib import Path
 from xml.etree import ElementTree as ET
 from zipfile import ZipFile
 
-from openpyxl import load_workbook
+from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font
 import pytest
 
 from services.vietnam_replenishment.asset_contract import AssetContractError, load_template_sku_parameters
 from services.vietnam_replenishment.full_workbook import (
-    REQUIRED_ORDER, UNCHANGED, FullWorkbookError, _sheet_parts,
-    combine_full_workbook,
+    MAIN, CURRENT, REQUIRED_ORDER, UNCHANGED, FullWorkbookError, _sheet_parts,
+    combine_full_workbook, validate_full_template,
 )
 
 
@@ -84,6 +85,109 @@ def test_bad_sheet_order_is_rejected_without_partial_output(tmp_path: Path) -> N
     with pytest.raises(FullWorkbookError, match="指定顺序的九表"):
         combine_full_workbook(template, current, output)
     assert not output.exists()
+
+
+def _builtin_template(path: Path) -> Path:
+    """A valid nine-sheet workbook with built-in formats and no optional numFmts."""
+    book = Workbook()
+    book.remove(book.active)
+    for name in REQUIRED_ORDER:
+        book.create_sheet(name)
+    main = book[REQUIRED_ORDER[0]]
+    for cell, value in {"B1": "判断热销", "E1": "SKU", "G1": "成本", "AE1": "跨境价", "AJ1": "折扣价",
+                        "B2": 2, "E2": "VN-A", "G2": 12, "AE2": 22, "AJ2": 16}.items():
+        main[cell] = value
+    for name in UNCHANGED:
+        book[name]["A1"] = f"original {name}"
+        book[name]["A2"] = 1234.5
+        book[name]["A2"].number_format = "0.00"
+        book[name]["B2"] = "=越南备货清单!H2"
+    book.save(path)
+    book.close()
+    staged = path.with_suffix(".tmp")
+    with ZipFile(path) as source, ZipFile(staged, "w") as target:
+        for item in source.infolist():
+            data = source.read(item.filename)
+            if item.filename == "xl/styles.xml":
+                styles = ET.fromstring(data)
+                formats = styles.find(f"{{{MAIN}}}numFmts")
+                assert formats is not None and len(formats) == 0
+                styles.remove(formats)
+                data = ET.tostring(styles)
+            target.writestr(item, data)
+    staged.replace(path)
+    return path
+
+
+@pytest.mark.parametrize("missing_formats", [False, True])
+def test_style_merge_accepts_optional_numfmts_and_keeps_all_style_references_valid(tmp_path, missing_formats):
+    template, current = _inputs(tmp_path)
+    if missing_formats:
+        _builtin_template(template)
+    validate_full_template(template)
+    output = tmp_path / "merged.xlsx"
+    combine_full_workbook(template, current, output)
+
+    with ZipFile(template) as original, ZipFile(output) as merged:
+        before = ET.fromstring(original.read("xl/styles.xml"))
+        after = ET.fromstring(merged.read("xl/styles.xml"))
+        assert [node.tag.rsplit("}", 1)[-1] for node in after][:2] == ["numFmts", "fonts"]
+        formats = after.find(f"{{{MAIN}}}numFmts")
+        identifiers = [int(node.attrib["numFmtId"]) for node in formats]
+        assert len(identifiers) == len(set(identifiers))
+        assert int(formats.attrib["count"]) == len(identifiers)
+        for section in ("cellStyleXfs", "cellXfs"):
+            old = before.find(f"{{{MAIN}}}{section}")
+            new = after.find(f"{{{MAIN}}}{section}")
+            assert [ET.tostring(node) for node in new[:len(old)]] == [ET.tostring(node) for node in old]
+            for node in new:
+                number = int(node.attrib.get("numFmtId", 0))
+                assert number < 164 or number in identifiers
+                for attribute, name in (("fontId", "fonts"), ("fillId", "fills"), ("borderId", "borders"), ("xfId", "cellStyleXfs")):
+                    if attribute in node.attrib:
+                        assert int(node.attrib[attribute]) < len(after.find(f"{{{MAIN}}}{name}"))
+        parts = _sheet_parts(original)
+        assert all(original.read(parts[name]) == merged.read(parts[name]) for name in UNCHANGED)
+
+    result, reference = load_workbook(output), load_workbook(current)
+    try:
+        assert tuple(result.sheetnames) == REQUIRED_ORDER
+        for name in CURRENT:
+            assert result[name].max_row == reference[name].max_row
+            assert result[name].max_column == reference[name].max_column
+            for row in reference[name]:
+                for cell in row:
+                    assert result[name][cell.coordinate].number_format == cell.number_format
+        if missing_formats:
+            assert result[UNCHANGED[0]]["A2"].number_format == "0.00"
+    finally:
+        result.close()
+        reference.close()
+
+
+@pytest.mark.skipif(
+    not (os.environ.get("LXE_OFFICE_NODE") and os.environ.get("LXE_OFFICE_CLI")),
+    reason="Host Office Kit paths are not configured",
+)
+def test_template_without_numfmts_can_be_reopened_by_office(tmp_path):
+    from services.vietnam_replenishment.recalculation import recalculate_with_office
+
+    template, current = _inputs(tmp_path)
+    _builtin_template(template)
+    validate_full_template(template)
+    merged = tmp_path / "merged.xlsx"
+    combine_full_workbook(template, current, merged)
+    reopened = tmp_path / "office.xlsx"
+    recalculate_with_office(merged, reopened)
+    book = load_workbook(reopened, data_only=True)
+    try:
+        assert tuple(book.sheetnames) == REQUIRED_ORDER
+        assert book[REQUIRED_ORDER[0]]["E2"].value == "SKU-CURRENT"
+        for name in UNCHANGED:
+            assert book[name]["A2"].value == 1234.5
+            assert book[name]["A2"].number_format == "0.00"
+    finally:
+        book.close()
 
 
 def test_template_parameters_use_saved_formula_result_without_a_sku_map(tmp_path: Path) -> None:

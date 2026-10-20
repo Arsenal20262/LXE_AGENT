@@ -62,3 +62,16 @@ python/lxeskill_cli/tests/vietnam_replenishment/test_workbook.py
 python/lxeskill_cli/tests/vietnam_replenishment/test_workflow.py
 skills/vietnam-replenishment/SKILL.md
 ```
+
+## 2026-10-20：PR #90 两个 P2 修复（未提交）
+
+- 分支 / Pool：`codex/vietnam-stock-full-workbook` / `.worktrees/pool-17`，本轮基于 `ce68b598`；PR 为 `LXE123/LXE_AGENT#90`。复用原工作区，无新分支或 Worktree。本轮没有 add、commit、push、merge、rebase 或修改远端 PR。
+- 复现：设置页 `upload_template` 校验临时快照后调用共享 `promote_asset`。原 helper 先清空 previous、移走 current，再直接复制新文件；注入复制错误会使 current 缺失，半写错误会留下截断的 current，previous 也已推进。合法的仅内置数字格式九表模板可通过 `validate_full_template`，但缺少可选 `numFmts` 时原合并器报错。新增定向回归在修复前得到预期的 `9 failed, 1 passed`。
+- 上传修复：仅调整原 `shared/input_assets.py` 提升职责。同一资产槽内暂存完整版本，复制后 fsync 并核对 SHA-256；再通过目录 rename/replace 切换版本，切换失败恢复原 current / previous。保留原文件名、两代目录布局和相同内容不推进 previous 的语义；设置页原锁、校验入口及聊天临时模板路径不变。复制、半写、短写、同步或版本切换故障后，两代文件名与 hash 保持一致，临时目录清理，读取和导出旧 current 正常，连续失败后可恢复上传。
+- 额外故障保护：若发布失败后，文件系统再次拒绝回滚，保留良好版本副本并在原始异常上注明恢复目录，不删除唯一可恢复副本；若清理临时目录本身失败，则记录真实错误，不能覆盖原始上传错误或把已发布成功的上传报告为失败。这两种复合故障有独立测试；不承诺掉电或强制终止下的跨两代事务原子性。
+- 样式修复：仅在缺少 `numFmts` 且计算表提供该节点时补建空节点，放在样式表首部并沿用原命名空间前缀；随后复用已有数字格式 ID 分配与样式追加逻辑。有 `numFmts` 的路径不变。回归检查 ID 唯一、cellXfs / cellStyleXfs 及字体、填充、边框引用合法，原样式索引与四张业务表 XML 保持。
+- 实际修改共 6 个文件：`shared/input_assets.py`、`services/vietnam_replenishment/full_workbook.py`、`tests/infra/test_input_assets.py`、`tests/vietnam_replenishment/test_settings.py`、`tests/vietnam_replenishment/test_full_workbook.py`（以上均在 `python/lxeskill_cli/` 下），以及本 handoff。没有新增 Store、Tool、Service、Workflow、CLI 命令、Runtime 路由或依赖。
+- 定向验证：配置本 Worktree 内现有 `LXE_OFFICE_NODE` / `LXE_OFFICE_CLI`，从仓库根执行 `uv run --frozen pytest`，覆盖资产版本、上传故障、样式合并、九表集成、重算、工作流与相关 CLI：`162 passed`，无跳过。包含原 7 个真实 Office Kit 集成用例及新增的无 `numFmts` 成品 Office 打开重算用例。默认 uv 缓存受沙箱限制，改用临时 `UV_CACHE_DIR` 后运行；无依赖或 lockfile 变化。
+- 修复前后 golden：从 Git HEAD 加载原合并器及资产 helper，与工作区实现对照；使用 3 个合成雅仓 SKU（模板提供其中 2 个）和同一份真实 Office Kit 重算五表结果。两份最终九表的全部 18 个 ZIP 部件内容一致；9 张表顺序、尺寸、全部公式与缓存、250 个非空缓存单元格、四张业务表 XML、备货与价格列一致。正常上传、换版、同内容重试、再次换版的 4 步 current / previous 序列一致。结果目录：系统临时目录 `vietnam-p2-golden-bkkzrn9e`。
+- 业务边界：SKU 参数 B/G/AE/AJ 解析、雅仓三表来源、备货与价格公式、五张计算表结构及九表顺序均未修改。真实雅仓生产数据、聊天附件到 Excel UI 全链路、Windows 实机、发布 build 及掉电 / 进程强制终止恢复：NOT VERIFIED。本轮只跑上述定向测试，未宣称全量回归通过。
+- Git 收口：预期仅上述 6 个文件未暂存；提交前仍需用户批准。push 与远端 PR 更新需另获明确授权。没有本轮已知的未修复 P2；合并前仍按项目规范检查最新 main 兼容性和最终验证。

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from decimal import Decimal
+from hashlib import sha256
 from importlib.resources import files
 import json
 from pathlib import Path
@@ -15,6 +16,7 @@ from services.vietnam_replenishment import settings, workflow
 from services.vietnam_replenishment.full_workbook import UNCHANGED
 from services.vietnam_replenishment.workbook import RecommendationConfig
 from shared.input_assets import current_asset, previous_asset
+from shared import input_assets
 
 
 @pytest.fixture(autouse=True)
@@ -69,6 +71,72 @@ def test_nine_sheet_template_upload_export_and_invalid_replacement(tmp_path):
 def test_nine_sheet_template_export_requires_saved_version(tmp_path):
     with pytest.raises(ValueError, match="模板"):
         settings.export_template(tmp_path / "missing.xlsx")
+
+
+@pytest.mark.parametrize("failure", ["copy", "partial_copy", "short_copy", "fsync", "before_replace", "previous_replace"])
+@pytest.mark.parametrize("same_name", [False, True])
+def test_failed_template_promotion_preserves_both_versions_and_can_retry(
+    tmp_path, monkeypatch, failure, same_name,
+):
+    oldest = nine_sheet_template(tmp_path / "oldest.xlsx", marker="previous")
+    old = nine_sheet_template(tmp_path / "current.xlsx", marker="current")
+    settings.upload_template(oldest)
+    settings.upload_template(old)
+    incoming_dir = tmp_path / "incoming"
+    incoming_dir.mkdir()
+    incoming = nine_sheet_template(incoming_dir / (old.name if same_name else "new.xlsx"), marker="new")
+    root = input_assets.slot_dir("vietnam_full_workbook")
+
+    def versions():
+        return tuple((version.file_name, sha256(version.path.read_bytes()).hexdigest())
+                     for version in (current_asset("vietnam_full_workbook"), previous_asset("vietnam_full_workbook")))
+
+    before = versions()
+    replace_file = input_assets.os.replace
+    failed = False
+
+    def fail_copy(source, destination, *args, **kwargs):
+        if failure in ("partial_copy", "short_copy"):
+            Path(destination).write_bytes(Path(source).read_bytes()[:100])
+        if failure == "short_copy":
+            return str(destination)
+        raise OSError(5, "injected copy I/O error")
+
+    def fail_replace(source, destination):
+        nonlocal failed
+        destination = Path(destination)
+        target = "current" if failure == "before_replace" else "previous"
+        if not failed and (destination == root / target or destination.parent == root / target):
+            failed = True
+            raise OSError(5, f"injected {target} replace error")
+        return replace_file(source, destination)
+
+    for _ in range(2):
+        failed = False
+        with monkeypatch.context() as fault:
+            if failure in ("copy", "partial_copy", "short_copy"):
+                fault.setattr(input_assets.shutil, "copy2", fail_copy)
+            elif failure == "fsync":
+                def fail_sync(_descriptor):
+                    raise OSError(5, "injected fsync I/O error")
+                fault.setattr(input_assets.os, "fsync", fail_sync)
+            else:
+                fault.setattr(input_assets.os, "replace", fail_replace)
+            expected = input_assets.InputAssetError if failure == "short_copy" else OSError
+            with pytest.raises(expected, match="changed while staging" if failure == "short_copy" else "injected"):
+                settings.upload_template(incoming)
+        assert versions() == before
+        assert {path.name for path in root.iterdir()} == {"current", "previous"}
+        state = settings.read_state()
+        assert state["template_error"] is None
+        exported = tmp_path / "after-failure.xlsx"
+        settings.export_template(exported)
+        assert exported.read_bytes() == old.read_bytes()
+
+    assert settings.upload_template(incoming)["template_error"] is None
+    assert current_asset("vietnam_full_workbook").path.read_bytes() == incoming.read_bytes()
+    assert previous_asset("vietnam_full_workbook").path.read_bytes() == old.read_bytes()
+    assert {path.name for path in root.iterdir()} == {"current", "previous"}
 
 
 def test_defaults_persist_and_reload_in_another_process():

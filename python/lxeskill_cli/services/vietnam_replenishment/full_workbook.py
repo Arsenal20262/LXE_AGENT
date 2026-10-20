@@ -134,7 +134,10 @@ def _append_styles(template: ZipFile, calculated: ZipFile) -> tuple[bytes, dict[
         number_formats = {}
         if fresh_formats is not None:
             if original_formats is None:
-                raise FullWorkbookError("业务模板缺少自定义数字格式表")
+                prefix = original.documentElement.prefix
+                original_formats = original.createElementNS(MAIN, f"{prefix}:numFmts" if prefix else "numFmts")
+                original_formats.setAttribute("count", "0")
+                original.documentElement.insertBefore(original_formats, original.documentElement.firstChild)
             for node in _elements(fresh_formats):
                 old_id = int(node.getAttribute("numFmtId"))
                 if old_id <= 163:

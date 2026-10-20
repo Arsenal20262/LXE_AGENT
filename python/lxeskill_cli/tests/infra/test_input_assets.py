@@ -97,6 +97,66 @@ def test_empty_slot_reports_no_current_version(slot_root: Path) -> None:
     assert current_asset("export_tax_products") is None
 
 
+def test_failed_first_promotion_never_publishes_a_partial_file(slot_root, tmp_path, monkeypatch):
+    source = _write(tmp_path / "template.xlsx", "complete content")
+
+    def partial_copy(_source, destination):
+        Path(destination).write_text("partial")
+        raise OSError(5, "injected copy error")
+
+    with monkeypatch.context() as fault:
+        fault.setattr(input_assets.shutil, "copy2", partial_copy)
+        with pytest.raises(OSError, match="injected copy error"):
+            promote_asset("contract_template", source)
+    assert current_asset("contract_template") is None
+    assert not list(slot_dir("contract_template").iterdir())
+    assert promote_asset("contract_template", source).path.read_text() == "complete content"
+
+
+def test_failed_rollback_retains_good_copies_and_the_original_error(slot_root, tmp_path, monkeypatch):
+    for index in range(2):
+        promote_asset("contract_template", _write(tmp_path / f"v{index}.xlsx", f"v{index}"))
+    root = slot_dir("contract_template")
+    original_replace = input_assets.os.replace
+
+    def fail_current_replace(source, destination):
+        if Path(destination) == root / "current":
+            raise OSError(5, "injected current publication or rollback error")
+        return original_replace(source, destination)
+
+    with monkeypatch.context() as fault:
+        fault.setattr(input_assets.os, "replace", fail_current_replace)
+        with pytest.raises(OSError, match="injected current publication") as raised:
+            promote_asset("contract_template", _write(tmp_path / "v2.xlsx", "v2"))
+    assert "retained copies" in raised.value.__notes__[0]
+    assert input_assets.previous_asset("contract_template").path.read_text() == "v1"
+    [staging] = list(root.glob(".promote-*"))
+    assert (staging / "previous" / "v0.xlsx").read_text() == "v0"
+
+
+@pytest.mark.parametrize("copy_fails", [False, True])
+def test_cleanup_failure_does_not_mask_promotion_result(slot_root, tmp_path, monkeypatch, copy_fails):
+    first = _write(tmp_path / "first.xlsx", "first")
+    second = _write(tmp_path / "second.xlsx", "second")
+    promote_asset("contract_template", first)
+
+    def fail_cleanup(_directory):
+        raise OSError(5, "injected cleanup error")
+
+    def fail_copy(_source, _destination):
+        raise OSError(5, "injected copy error")
+
+    with monkeypatch.context() as fault:
+        fault.setattr(input_assets.shutil, "rmtree", fail_cleanup)
+        if copy_fails:
+            fault.setattr(input_assets.shutil, "copy2", fail_copy)
+            with pytest.raises(OSError, match="injected copy error"):
+                promote_asset("contract_template", second)
+        else:
+            promote_asset("contract_template", second)
+    assert current_asset("contract_template").path.read_text() == ("first" if copy_fails else "second")
+
+
 def test_registered_slots_describe_business_name_and_usage() -> None:
     master = ASSETS["export_tax_master"]
     assert master.display_name == "出口退税总表"
