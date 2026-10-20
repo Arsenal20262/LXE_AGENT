@@ -1,6 +1,6 @@
 ---
 name: shangman-products-export
-description: 导出上马 ERP 中涉及 Shopee（虾皮）和 TikTok Shop（TK）业务的海外仓商品、库存及销量原始 XLSX。用于上马数据导出和备货数据准备。
+description: 导出上马 ERP 中涉及 Shopee（虾皮）和 TikTok Shop（TK）业务的海外仓商品、库存及销量 XLSX，按 ERP status=2 启用商品范围筛选并保留官方原始业务字段及数值。用于上马数据导出和备货数据准备。
 type: replenishment
 commands:
   - lxeskill shangman products export
