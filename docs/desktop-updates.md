@@ -102,4 +102,4 @@ bun scripts/test-update-extraction.ts <已缓存的makensis.exe路径>
 
 构建夹具生成旧版 ZIP 与两个新版 7z 安装包，共用一个随机测试 AppID 和安装缓存；这个身份与正式应用隔离。原生下载测试另外使用自己的缓存，避免覆盖安装测试的缓存。安装路径包含中文和空格，但保持较短，以兼容旧 ZIP 解压器的路径长度限制。测试包的隧道清理脚本替换为无系统操作的夹具，不能发布这些测试包。
 
-本轮结果见 [2026-10-06 验证记录](desktop-updates-validation-20261006.md)。[2026-09-21 记录](desktop-updates-validation-20260921.md) 描述的是旧实现。正式发布仍走现有发布者确认流程。
+本轮结果见 [2026-10-06 验证记录](acceptance/desktop-updates-validation-20261006.md)。[2026-09-21 记录](acceptance/desktop-updates-validation-20260921.md) 描述的是旧实现。正式发布仍走现有发布者确认流程。

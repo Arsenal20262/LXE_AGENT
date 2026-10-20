@@ -4,9 +4,9 @@
 
 Runtime 是 Agent 的执行核心，负责一个 turn 里的 Context、模型调用、工具执行、streaming、持久化和 usage。它运行在私有 `agent-cli` 子进程中，不在 Electron Main 里直接运行。
 
-Gateway 通过版本化 NDJSON 协议提交任务和取消请求。Runtime 只返回执行事件和结果，不解析飞书事件，也不决定结果应该发到哪个聊天窗口。
+Gateway 通过 JSON-RPC 2.0 提交任务和取消请求，使用 stdin/stdout 传输和 JSONL（NDJSON）分帧。业务协议版本通过 `initialize` 单独校验，详见 [Gateway ↔ Agent 协议](../gateway/agent-protocol.md)。Runtime 只返回执行事件和结果，不解析飞书事件，也不决定结果应该发到哪个聊天窗口。
 
-Runtime package 提供执行核心，但不提供产品 composition root。真正的宿主装配位于 [`apps/agent-cli/src/runtime-host.ts`](/apps/agent-cli/src/runtime-host.ts)：它创建 Store、Provider、Runtime、MCP、Python CLI、Workspace、Agent 工具和 DashboardService，并只向 NDJSON server 暴露最小宿主接口。Gateway 不依赖 Runtime package。
+Runtime package 提供执行核心，但不提供产品 composition root。真正的宿主装配位于 [`apps/agent-cli/src/runtime-host.ts`](/apps/agent-cli/src/runtime-host.ts)：它创建 Store、Provider、Runtime、MCP、Python CLI、Workspace、Agent 工具和 DashboardService，并只向 JSON-RPC 2.0 server 暴露最小宿主接口。Gateway 不依赖 Runtime package。
 
 同一个 composition root 也供一次性 [Agent CLI exec](agent_cli_exec.md) 复用。`exec` 直接调用宿主，不经过 Desktop 私有请求 envelope，并把 CLI 会话放在独立数据库中。
 
@@ -40,11 +40,9 @@ Runtime package 提供执行核心，但不提供产品 composition root。真�
 
 ## 专题导航
 
-- [Runtime Flow](runtime_flow.md)：从平台消息到最终 delivery 的端到端边界。
+- [Runtime 执行流程](turn_execution.md)：端到端链路、turn 快照、step 循环、工具、取消和结果交付。
 - [Agent CLI exec](agent_cli_exec.md)：一次性脚本调用、输出、会话与安全边界。
-- [Turn Execution](turn_execution.md)：turn snapshot、provider、tool 和 final outcome。
 - [会话模型与 effort](session-models.md)：独立保存、重启恢复和下一轮生效。
-- [Turn Step Lifecycle](turn_step_lifecycle.md)：单个 step 的固定顺序。
 - [会话权限与工作区目录](permission-policy.md)：权限状态、统一策略、产物与临时目录。
 - [Workspace Instance](workspace_instances.md)：会话工作区、AGENTS 指令、缓存刷新和回收。
 - [Context](context/README.md)：history、预算、Transcript v2 和 compaction。

@@ -22,7 +22,9 @@ export function useInputAssetSlots() {
     if (!desktop) return;
     setLoading(true);
     try {
-      setSlots(await desktop.listInputAssets());
+      const assets = await desktop.listInputAssets();
+      // Vietnam templates are managed in their own settings page.
+      setSlots(assets.filter(asset => asset.slot !== "vietnam_full_workbook"));
       setError("");
     } catch (cause) {
       setError(errorText(cause));

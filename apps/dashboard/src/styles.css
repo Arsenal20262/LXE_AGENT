@@ -9493,9 +9493,19 @@ pre {
   padding: 5px 9px;
 }
 
-/* Light chat tool rows use text contrast for interaction, leaving status
-   colours and the keyboard focus outline independent. */
-:root:not([data-theme="dark"]) .conversation-feed .tool-op-summary:is(:hover, :focus-visible) {
+/* Both themes use text contrast for interaction, leaving the row background,
+   status colours and keyboard focus outline independent. */
+.conversation-feed {
+  --tool-op-hover-name: #52514f;
+  --tool-op-hover-argument: #0b0b0b;
+}
+
+:root[data-theme="dark"] .conversation-feed {
+  --tool-op-hover-name: #bfbdb5;
+  --tool-op-hover-argument: #f5f4ed;
+}
+
+.conversation-feed .tool-op-summary:is(:hover, :focus-visible) {
   background: transparent;
 }
 
@@ -9507,12 +9517,12 @@ pre {
   color: #52514f;
 }
 
-:root:not([data-theme="dark"]) .conversation-feed .tool-op:not(.state-error) .tool-op-summary:not(:disabled):is(:hover, :focus-visible) .tool-op-name {
-  color: #52514f;
+.conversation-feed .tool-op:not(.state-error) .tool-op-summary:not(:disabled):is(:hover, :focus-visible) .tool-op-name {
+  color: var(--tool-op-hover-name);
 }
 
-:root:not([data-theme="dark"]) .conversation-feed .tool-op-summary:not(:disabled):is(:hover, :focus-visible) .tool-op-argument {
-  color: #0b0b0b;
+.conversation-feed .tool-op-summary:not(:disabled):is(:hover, :focus-visible) .tool-op-argument {
+  color: var(--tool-op-hover-argument);
 }
 
 .optimistic-message-state {

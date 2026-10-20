@@ -40,15 +40,16 @@ Tool call 使用 server-specific timeout 和 turn abort signal。调用失败更
 
 ## lxeskill 业务命令
 
-业务能力不注册为独立 model tool。模型通过 native `exec` 执行一条独立的 `lxeskill ...` 命令：
+业务能力不注册为独立 model tool。模型通过 native `exec` 执行 `lxeskill ...` 命令：
 
-- `catalog.json` 决定稳定 command path、owner skill、业务 module 和 artifact 声明。
-- `exec.command` 只允许一条独立的 `lxeskill` 调用；拒绝 `python -m`、内部业务 module、管道、重定向和 shell 拼接。
+- lxeskillCLI 内部的 `catalog.json` 决定 command path、owner skill、业务 module 和 artifact 声明。agentcli 不读取该文件。Electron 通过 `lxeskill list` 获取命令列表，模型按需使用 `list`、`describe`、`datasets list`。
+- `exec` 按通用权限与沙箱规则执行命令，不为 lxeskill 添加命令形状限制或 Python 模块拦截；推荐调用方式写在 Skill 中。
 - Desktop 下发服务器验证的业务权限决定允许的 skill types；`AgentRuntimeHost` 生成实际 skill scope，Runtime exec adapter 注入 `LXESKILL_SKILL_SCOPE`。CLI 负责命令授权、参数校验和业务 dispatch。
 - Desktop 优先使用 `LXE_MANAGED_PYTHON` 指向的应用私有 Python；源码开发才回退到项目 `.venv`。cwd、yield observation、output limit、Session ownership 和 Windows process tree 由 native process manager 处理。
 - CLI 保留版本化 JSONL/result/artifact 合同，Runtime 将 stdout/stderr 作为受控 process output 返回。
+- agentcli 不执行 lxeskill 启动探测，也不缓存可用性来拦截调用。每次 `exec` 使用当时的执行环境并返回实际结果；桌面的 CLI 状态检查由 Electron 独立负责。
 
-Skill 只能调用自己声明且由 catalog 归属的命令；生成文件和其它可读普通文件都可直接通过 `send_files` 发送。
+lxeskillCLI 根据注入的 Skill 范围校验命令归属；生成文件和其它可读普通文件都可直接通过 `send_files` 发送。
 
 ## State patch 与 artifact
 
@@ -81,7 +82,7 @@ Model-visible result、用户展示和运行日志是三个不同输出，不能
 
 ## Usage
 
-Runtime 按 tool name 记录 calls、errors、duration；当前已激活 owner skill 同步累计 usage。Turn 完成后批量写入 usage tables，Dashboard 可按时间和 skill/tool 查询。
+Runtime 的独立统计组件在工具执行前观察调用：`read` 命中已发现的 Skill 路径时，每次计一次读取；`exec` 简单识别以 lxeskill 开头的命令。回合收尾时通过 `lxeskill list` 的归属字段记录 Skill 命令调用次数，不推断成功、失败或耗时。查询失败只记录日志，不影响工具调用。通用工具仍记录 calls、errors、duration。数据继续写入原有 usage tables。
 
 ## Failure 语义
 
@@ -96,4 +97,4 @@ Runtime 按 tool name 记录 calls、errors、duration；当前已激活 owner s
 
 ## 验证
 
-Tests 覆盖宿主路径访问、read-before-edit、exec/wait 生命周期、跨 Session 隔离、进程树终止、tool search、MCP timeout/disable、独立 `lxeskill` 命令约束、skill ownership、result trimming、cancel closure 和 artifact ordering。
+Tests 覆盖宿主路径访问、read-before-edit、exec/wait 生命周期、跨 Session 隔离、进程树终止、tool search、MCP timeout/disable、通用命令执行、Skill 调用统计与 CLI 归属查询、result trimming、cancel closure 和 artifact ordering。

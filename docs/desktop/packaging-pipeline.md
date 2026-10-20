@@ -218,7 +218,7 @@ Agent CLI 也是 TypeScript 编写的，但它不是 Electron 页面的一部分
 dist/agent-cli/agent-cli.exe
 ```
 
-应用启动后，Gateway 会把它作为子进程启动，并通过标准输入输出传递一行一个 JSON 的 NDJSON 消息。
+应用启动后，Gateway 会把它作为子进程启动，通过 stdin/stdout 传输 JSON-RPC 2.0 消息，采用 JSONL（NDJSON）分帧：每行一个 JSON 对象或 batch 数组。
 
 ### LXE Skill CLI：uv build
 
@@ -230,7 +230,7 @@ build/desktop-publish/python-site-packages/
 
 electron-builder 组装时，再把这个 overlay 合并到私有 Python 的 `Lib/site-packages`。因此每次打包都会带上当前 Python 源码，同时可以复用那套很大的基础 Python Runtime。基础缓存不保存项目 wheel，wheel 构建输出每次重新生成，避免发布旧业务代码。
 
-资源装配从模块各自的生产输出直接生成 `extraResources`。最终不携带 wheel 文件、旧冻结版 `runtime/lxeskill`、构建用 `uv.exe`、npm/npx 和 npm 缓存。Playwright 控制库复用私有 Node，移除其重复 Node；安装包不包含 `runtime/playwright` 浏览器目录。运行时真实检查 `lxeskill list`，打包成功不能代替业务 CLI 健康验证。
+资源装配从模块各自的生产输出直接生成 `extraResources`。最终不携带 wheel 文件、旧冻结版 `runtime/lxeskill`、构建用 `uv.exe`、npm/npx 和 npm 缓存。Playwright 控制库复用私有 Node，移除其重复 Node；安装包不包含 `runtime/playwright` 浏览器目录。Electron 启动时执行 `lxeskill list` 检查 CLI 入口，打包成功不能代替这项检查，检查成功也不代表各业务服务均可用。
 
 ## 第三步：准备发布资源
 
@@ -363,7 +363,7 @@ LXE Agent/
 1. Electron Runtime 启动，并从 `app.asar` 加载 `main.js`。
 2. Main 确定程序资源和独立数据目录，取得单实例锁；首次启动先迁移旧数据，再初始化配置、日志和数据库。
 3. 配置完成后，Main 在自己的进程里启动 Gateway。
-4. Gateway 启动 `resources/runtime/agent-cli/agent-cli.exe` 子进程，通过 NDJSON 与它通信。
+4. Gateway 启动 `resources/runtime/agent-cli/agent-cli.exe` 子进程，通过 JSON-RPC 2.0 与它通信，使用 stdin/stdout 传输和 JSONL（NDJSON）分帧。
 5. Agent CLI 按任务需要调用私有 Python、`lxeskill`、Node CLI、ripgrep 或 fd；马帮认证通过 Main 的受控服务操作独立 Electron 窗口，紫鸟使用用户配置的客户端和配对 Selenium。桌面媒体任务由 Main 直接启动私有 Python 和 ExifTool。
 6. Main 创建 BrowserWindow，通过 Preload 暴露的白名单 IPC，让 Dashboard 与 Main、Gateway 和 Agent 交互。
 
@@ -373,7 +373,7 @@ flowchart LR
     MAIN --> WINDOW["BrowserWindow"]
     WINDOW --> PRELOAD["Preload 安全桥"]
     PRELOAD --> UI["Dashboard Renderer"]
-    MAIN <-->|"NDJSON"| AGENT["agent-cli.exe"]
+    MAIN <-->|"JSON-RPC 2.0<br/>JSONL 分帧 / stdin / stdout"| AGENT["agent-cli.exe"]
     AGENT --> PY["私有 Python<br/>lxeskill"]
     AGENT --> NODE["私有 Node"]
     AGENT --> LARK["lark-cli.exe<br/>内嵌飞书技能"]

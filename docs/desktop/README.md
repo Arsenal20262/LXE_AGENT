@@ -7,8 +7,9 @@
 - Electron Desktop 是默认产品线，当前正式分发目标为 Windows x64。
 - React Dashboard 直接作为 Electron Renderer 加载，不在正式安装包中启动 localhost Dashboard 服务。
 - Electron Main 集成 Gateway，并负责窗口、托盘、配置、凭证和后台组件生命周期。
-- Agent Runtime 编译为私有 `agent-cli.exe`，其本地 `AgentRuntimeHost` 负责 Store、Provider、Runtime、MCP、Python CLI、Workspace、工具与 Dashboard 生命周期；它不安装系统命令，也不加入系统 `PATH`。同一可执行文件提供显式调用的一次性 `exec` 入口，但 Desktop 仍只使用长驻 `serve`。
+- Agent Runtime 编译为私有 `agent-cli.exe`，其本地 `AgentRuntimeHost` 负责 Store、Provider、Runtime、MCP、Workspace、工具与 Dashboard 生命周期；它不安装系统命令，也不加入系统 `PATH`。同一可执行文件提供显式调用的一次性 `exec` 入口，但 Desktop 仍只使用长驻 `serve`。
 - `lxeskill` 保持 Python 原生实现，以 wheel 形式安装到应用携带的私有 Python。
+- Electron 启动时在后台执行 `lxeskill list`，独立展示 CLI 可用性；检查失败不阻塞 Agent 启动或命令执行。桌面整体重启或现有“重启 Agent”操作会重新检查，关闭时取消未完成的检查。此状态只表示 CLI 入口可用，不代表业务认证或所有业务命令可用。
 - Dashboard 支持桌面聊天、附件、会话切换、重命名、删除和停止任务；飞书是另一个任务入口。桌面回合还支持结构化问题卡片。
 
 ## 工作区与对话
@@ -33,11 +34,11 @@
 
 应用目录与检测规则参考 DeepSeek Harness `639ed01539`（MIT），覆盖其 macOS、Windows 编辑器、IDE、Git 客户端和终端条目，菜单只列出本机检测到的应用。检测及图标在主进程缓存；失败可重试。卸载或移动启动器后，下次打开会重新检测该应用一次；不可用则回到系统文件管理器。错误保留实际诊断，图标提取失败使用通用图标。
 
-桌面桥接新增 `desktop.getWorkspaceApplications({ refresh? })`，`desktop.openWorkspace(directory, applicationId?)` 的应用 ID 可省略，省略时保持系统打开行为。主进程校验调用方和目录，只接受内置应用 ID，用参数数组启动，并清理凭据及应用运行环境。外部应用独立运行；成功仅表示启动请求已接受，不保证窗口已加载完成。不会修改系统默认应用，也不连接内置终端、浏览器或 Agent 工具。两平台结果及复现入口见[验收记录](../record/20261002-workspace-applications.md)。
+桌面桥接新增 `desktop.getWorkspaceApplications({ refresh? })`，`desktop.openWorkspace(directory, applicationId?)` 的应用 ID 可省略，省略时保持系统打开行为。主进程校验调用方和目录，只接受内置应用 ID，用参数数组启动，并清理凭据及应用运行环境。外部应用独立运行；成功仅表示启动请求已接受，不保证窗口已加载完成。不会修改系统默认应用，也不连接内置终端、浏览器或 Agent 工具。两平台结果及复现入口见[验收记录](../acceptance/20261002-workspace-applications.md)。
 
 ## 输入框引用
 
-输入 `@` 选择当前工作区文件或目录，输入 `/` 选择技能；Enter 确认，目录可用 Tab 下钻。文件引用只传路径，显式技能由运行时加载。点击文件或技能引用可在右侧预览，目录引用只作为文字传递。草稿继续按会话保存；详细交互见[输入框引用说明](../composer-references.md)，两平台结果见[验收记录](../composer-references-acceptance.md)。
+输入 `@` 选择当前工作区文件或目录，输入 `/` 选择技能；Enter 确认，目录可用 Tab 下钻。文件引用只传路径，显式技能由运行时加载。点击文件或技能引用可在右侧预览，目录引用只作为文字传递。草稿继续按会话保存；详细交互见[输入框引用说明](../composer-references.md)，两平台结果见[验收记录](../acceptance/composer-references-acceptance.md)。
 
 ## 右侧工具栏
 
@@ -56,7 +57,7 @@
 ```mermaid
 flowchart LR
     UI["React Dashboard<br/>Electron Renderer"] <-->|"白名单 IPC"| MAIN["Electron Main<br/>Gateway"]
-    MAIN <-->|"NDJSON / stdin / stdout"| AGENT["agent-cli.exe<br/>Bun + TypeScript"]
+    MAIN <-->|"JSON-RPC 2.0<br/>JSONL 分帧 / stdin / stdout"| AGENT["agent-cli.exe<br/>Bun + TypeScript"]
     AGENT --> SKILL["lxeskill wheel<br/>私有 Python"]
     AGENT --> TOOLS["私有 Node.js / ripgrep / fd<br/>CLI 与搜索工具"]
     MAIN --> AUTH["马帮认证窗口 / 受控本机服务"]
@@ -71,7 +72,7 @@ Renderer 只能访问 preload 暴露的白名单接口。Dashboard 业务请求�
 
 AI 调用 `ask_user_question` 后，输入区保留普通聊天草稿并显示问题卡片。回答在卡片内填写，通过专用接口提交；收到确认后恢复普通输入。卡片可停止本次任务，等待期间不增加模型请求。问题归 Bun Runtime 所有，界面刷新可继续回答，Agent 重启使旧问题失效。完整协议与生命周期见 [结构化提问](../harness/tool/ask-user-question.md)。
 
-Main 与 `agent-cli` 使用 NDJSON 协议通信：每行是一个完整 JSON 消息，通过标准输入输出传递初始化、执行回合、取消、关闭、状态和错误事件。两个进程分别拥有自己的 SQLite 数据库，禁止并发写入同一个数据库。Main 内的 Gateway 不依赖 Runtime package；`agent-cli` 也不依赖 Gateway package。
+Main 与 `agent-cli` 使用 JSON-RPC 2.0 通信，通过 stdin/stdout 传输，采用 JSONL（NDJSON）分帧：每行一个完整 JSON 对象或 batch 数组，承载初始化、执行回合、取消、关闭、状态和错误消息。业务协议版本通过 `initialize` 单独校验，详见 [Gateway ↔ Agent 协议](../harness/gateway/agent-protocol.md)。两个进程分别拥有自己的 SQLite 数据库，禁止并发写入同一个数据库。Main 内的 Gateway 不依赖 Runtime package；`agent-cli` 也不依赖 Gateway package。
 
 ## 私有运行时与工具
 
@@ -93,7 +94,7 @@ python.exe -I -m lxeskill ...
 
 `-I` 启用 Python 导入隔离，避免用户级 Python 配置和 site-packages 污染运行环境；`-m` 按模块启动 `lxeskill`。运行时同时设置 `PYTHONNOUSERSITE=1`。源码模式使用当前 checkout 自己的 `.venv`，不共享其他 worktree 的 editable 安装。这个导入隔离不提供文件系统沙箱。
 
-运行时执行 `lxeskill list` 检查业务 CLI；失败会保留实际诊断，普通 Agent 能力可继续运行。桌面和独立终端的马帮认证入口见 [浏览器认证手册](../../python/lxeskill_cli/browser_auth_service/README.md)。紫鸟页面操作遵守 [官方配对 Selenium 约束](../harness/skill/reference/ziniao-webdriver-doc-1.0.0/reference/automation-framework-policy.md)。
+Electron 执行 `lxeskill list` 检查 CLI 入口，失败时展示实际诊断；agentcli 的启动和 `exec` 调用不依赖这项检查。桌面和独立终端的马帮认证入口见 [浏览器认证手册](../../python/lxeskill_cli/browser_auth_service/README.md)。紫鸟页面操作遵守 [官方配对 Selenium 约束](../harness/skill/reference/ziniao-webdriver-doc-1.0.0/reference/automation-framework-policy.md)。
 
 ### 工作台媒体标签
 
@@ -250,7 +251,7 @@ Windows 安装版把受管运行状态和默认工作区放在 `%LOCALAPPDATA%\L
 | 路径 | 内容 |
 | --- | --- |
 | `apps/desktop` | Electron Main、preload、桌面 IPC 和安装器组装 |
-| `apps/agent-cli` | Desktop 私有 NDJSON `serve` 与一次性 `exec` 入口 |
+| `apps/agent-cli` | Desktop 私有 JSON-RPC 2.0 `serve` 与一次性 `exec` 入口 |
 | `apps/gateway` | Gateway、平台接入、调度和 Dashboard API |
 | `apps/dashboard` | React Dashboard 与 Electron 桌面外壳 |
 | `packages/agent/runtime` | TypeScript Agent Runtime、模型和工具执行 |

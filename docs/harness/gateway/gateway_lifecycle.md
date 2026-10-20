@@ -14,7 +14,7 @@ Gateway lifecycle 负责在 Electron Main 内管理持久化、私有 Runtime �
 
 ## 生产组件装配
 
-Electron Main 创建 `ProcessAgentRuntime`、桌面 Gateway SQLite store 与可选 Feishu adapter，然后调用 `createDirectGatewayComposition()`。Feishu adapter 的图片模型输入处理器由 Desktop 显式注入，Gateway 只依赖 `InboundImageProcessorPort`，没有 Runtime fallback。Renderer 发送 `{ operation, input }` 类型化调用，经 preload IPC 进入 `DesktopGateway`；Main 处理本地健康、会话控制、状态协调及设置持久化等职责；Agent 数据操作通过私有 JSON-RPC / NDJSON 交给 `agent-cli` 内的 `DashboardService`。具体分发以 `DesktopGateway.call()` 为准，生产 Dashboard 没有 HTTP transport。
+Electron Main 创建 `ProcessAgentRuntime`、桌面 Gateway SQLite store 与可选 Feishu adapter，然后调用 `createDirectGatewayComposition()`。Feishu adapter 的图片模型输入处理器由 Desktop 显式注入，Gateway 只依赖 `InboundImageProcessorPort`，没有 Runtime fallback。Renderer 发送 `{ operation, input }` 类型化调用，经 preload IPC 进入 `DesktopGateway`；Main 处理本地健康、会话控制、状态协调及设置持久化等职责；Agent 数据操作通过 JSON-RPC 2.0 交给 `agent-cli` 内的 `DashboardService`，使用 stdin/stdout 传输和 JSONL（NDJSON）分帧。具体分发以 `DesktopGateway.call()` 为准，生产 Dashboard 没有 HTTP transport。
 
 `ProcessAgentRuntime.isReady` 是 Runtime readiness 的唯一事实来源。Lifecycle 的 ingress 与 health 每次直接读取该值；composition 只负责在状态通知到达时把当前值同步给 Scheduler 的派发门闩。Desktop 不得直接修改 Scheduler，也不得根据另一份缓存决定是否接受或执行消息。
 
