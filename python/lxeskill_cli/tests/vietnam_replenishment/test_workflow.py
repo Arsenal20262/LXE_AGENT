@@ -184,3 +184,38 @@ def test_generator_without_final_file_is_not_success(tmp_path: Path, monkeypatch
             sales="sales.xlsx", inventory="inventory.xlsx", products="products.xlsx", template=str(template),
         )
     assert caught.value.code == "output_missing"
+
+
+def test_explicit_missing_template_never_falls_back_to_current(tmp_path, monkeypatch):
+    stored = _template(tmp_path / "stored.xlsx")
+    store.upload_template(stored)
+    monkeypatch.setattr(workflow, "load_vietnam_files", lambda **_: pytest.fail("Reports loaded for a missing explicit template"))
+    with pytest.raises(FileNotFoundError):
+        workflow.generate_current_vietnam_recommendation(
+            sales="sales.xlsx", inventory="inventory.xlsx", products="products.xlsx",
+            template=str(tmp_path / "missing.xlsx"),
+        )
+    assert store.read_state()["template"]["file_name"] == "stored.xlsx"
+
+
+def test_failed_template_snapshot_is_removed_and_current_unchanged(tmp_path, monkeypatch):
+    from services.vietnam_replenishment import settings
+    from shared.input_assets import current_asset
+
+    template = _template(tmp_path / "stored.xlsx")
+    store.upload_template(template)
+    saved = current_asset("vietnam_full_workbook")
+    before = saved.path.read_bytes()
+    snapshots = []
+    def partial_copy(source, target):
+        snapshots.append(Path(target))
+        Path(target).write_bytes(b"partial")
+        raise OSError("snapshot copy interrupted")
+    monkeypatch.setattr(settings.shutil, "copyfile", partial_copy)
+    monkeypatch.setattr(workflow, "load_vietnam_files", lambda **_: pytest.fail("Reports loaded after failed snapshot"))
+    with pytest.raises(OSError, match="snapshot copy interrupted"):
+        workflow.generate_current_vietnam_recommendation(
+            sales="sales.xlsx", inventory="inventory.xlsx", products="products.xlsx",
+        )
+    assert saved.path.read_bytes() == before
+    assert snapshots and all(not p.exists() and not p.parent.exists() for p in snapshots)

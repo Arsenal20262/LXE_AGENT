@@ -40,7 +40,7 @@ def run(arguments: dict[str, Any]) -> dict[str, Any]:
         detail = validation_diagnostic(exc)
         return _failure(str(getattr(exc, "code", type(exc).__name__)), detail)
 
-    return {
+    payload = {
         "success": True,
         "status": "completed",
         "warehouse": "VN8806",
@@ -52,3 +52,6 @@ def run(arguments: dict[str, Any]) -> dict[str, Any]:
         "source_files": public_reports(list(result.source_files), YACANG_REPORTS),
         "validation": result.validation,
     }
+    if getattr(result, "template_asset_source", None) is not None:
+        payload["asset_sources"] = {"template_file": result.template_asset_source}
+    return payload

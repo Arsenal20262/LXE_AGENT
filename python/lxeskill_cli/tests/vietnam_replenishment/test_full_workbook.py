@@ -285,3 +285,262 @@ def test_template_conflicting_duplicate_current_sku_is_rejected(tmp_path: Path) 
     book.close()
     with pytest.raises(AssetContractError, match="参数冲突"):
         load_template_sku_parameters(template, {"SKU-CURRENT"})
+
+
+# These inputs are built from Workbook, independently of the packaged skeleton
+# and the earlier namespace-renaming helper that missed the review counterexamples.
+def _independent_inputs(directory):
+    paths = []
+    for label, names in (("business", REQUIRED_ORDER), ("calculated", CURRENT)):
+        book = Workbook()
+        book.remove(book.active)
+        for name in names:
+            book.create_sheet(name)["A1"] = name
+        main = book[CURRENT[0]]
+        for cell, value in {"B1": "判断热销", "E1": "SKU", "G1": "成本", "AE1": "跨境价", "AJ1": "折扣价",
+                            "B2": 2, "E2": "001-A", "G2": 12, "AE2": 22, "AJ2": 16, "H2": "=G2*2"}.items():
+            main[cell] = value
+        main["G2"].number_format = "0.00000"
+        if names == CURRENT:
+            main.conditional_formatting.add("H2", CellIsRule(operator="greaterThan", formula=["10"], font=Font(bold=True)))
+        path = directory / f"{label}.xlsx"
+        book.save(path)
+        book.close()
+        paths.append(path)
+    return tuple(paths)
+
+
+def _rewrite_parts(path, updates):
+    staged = path.with_suffix(".rewrite")
+    with ZipFile(path) as source, ZipFile(staged, "w") as target:
+        for item in source.infolist():
+            target.writestr(item, updates.get(item.filename, source.read(item.filename)))
+        for name, raw in updates.items():
+            if name not in source.namelist():
+                target.writestr(name, raw)
+    staged.replace(path)
+
+
+def _one_shared_string(path, prefix):
+    from services.vietnam_replenishment.full_workbook import CONTENT, PACKAGE_REL, REL
+
+    def tag(local):
+        return f"{prefix}:{local}" if prefix else local
+
+    declaration = f'xmlns:{prefix}' if prefix else 'xmlns'
+    sst = f'<{tag("sst")} {declaration}="{MAIN}" count="1" uniqueCount="1"><{tag("si")}><{tag("r")}><{tag("rPr")}><{tag("b")}/></{tag("rPr")}><{tag("t")}>001-A</{tag("t")}></{tag("r")}></{tag("si")}></{tag("sst")}>'
+    with ZipFile(path) as archive:
+        part = _sheet_parts(archive)[CURRENT[0]]
+        sheet = ET.fromstring(archive.read(part))
+        cell = sheet.find(f".//{{{MAIN}}}c[@r='E2']")
+        cell.clear()
+        cell.attrib.update(r="E2", t="s")
+        ET.SubElement(cell, f"{{{MAIN}}}v").text = "0"
+        types = ET.fromstring(archive.read("[Content_Types].xml"))
+        ET.SubElement(types, f"{{{CONTENT}}}Override", PartName="/xl/sharedStrings.xml",
+                      ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml")
+        relations = ET.fromstring(archive.read("xl/_rels/workbook.xml.rels"))
+        ET.SubElement(relations, f"{{{PACKAGE_REL}}}Relationship", Id="independentSst", Type=REL+"/sharedStrings", Target="sharedStrings.xml")
+    _rewrite_parts(path, {part: ET.tostring(sheet), "xl/sharedStrings.xml": sst.encode(),
+                          "[Content_Types].xml": ET.tostring(types), "xl/_rels/workbook.xml.rels": ET.tostring(relations)})
+
+
+@pytest.mark.parametrize("target_prefix,source_prefix", [("ss", ""), ("", "result"), ("one", "two")])
+def test_independent_shared_string_qnames_and_rich_text(tmp_path, target_prefix, source_prefix):
+    template, current = _independent_inputs(tmp_path)
+    _one_shared_string(template, target_prefix)
+    _one_shared_string(current, source_prefix)
+    validate_full_template(template)
+    output = tmp_path / "merged.xlsx"
+    combine_full_workbook(template, current, output)
+    with ZipFile(output) as archive:
+        root = ET.fromstring(archive.read("xl/sharedStrings.xml"))
+        assert all(node.tag.startswith(f"{{{MAIN}}}") for node in root.iter())
+        assert len(root.findall(f"{{{MAIN}}}si")) == 2
+    book = load_workbook(output)
+    assert book[CURRENT[0]]["E2"].value == "001-A"
+    book.close()
+
+
+def test_independent_prefixed_package_declarations(tmp_path):
+    from services.vietnam_replenishment.full_workbook import CONTENT, PACKAGE_REL, REL
+
+    template, current = _independent_inputs(tmp_path)
+    _one_shared_string(current, "fresh")
+    updates = {}
+    for part, uri, prefix in (("[Content_Types].xml", CONTENT, "ct"), ("xl/_rels/workbook.xml.rels", PACKAGE_REL, "package")):
+        with ZipFile(template) as archive:
+            document = minidom.parseString(archive.read(part))
+        for node in list(document.getElementsByTagNameNS(uri, "*")):
+            document.renameNode(node, uri, prefix+":"+node.localName)
+        document.documentElement.removeAttribute("xmlns")
+        document.documentElement.setAttribute("xmlns:"+prefix, uri)
+        updates[part] = document.toxml(encoding="utf-8")
+        document.unlink()
+    _rewrite_parts(template, updates)
+    validate_full_template(template)
+    output = tmp_path / "merged.xlsx"
+    combine_full_workbook(template, current, output)
+    with ZipFile(output) as archive:
+        types = ET.fromstring(archive.read("[Content_Types].xml"))
+        relations = ET.fromstring(archive.read("xl/_rels/workbook.xml.rels"))
+        assert all(n.tag in (f"{{{CONTENT}}}Default", f"{{{CONTENT}}}Override") for n in types)
+        assert all(n.tag == f"{{{PACKAGE_REL}}}Relationship" for n in relations)
+        assert len([n for n in types if n.get("PartName") == "/xl/sharedStrings.xml"]) == 1
+        assert len([n for n in relations if n.get("Type") == REL+"/sharedStrings" and n.get("Target") == "sharedStrings.xml"]) == 1
+    book = load_workbook(output)
+    assert book[CURRENT[0]]["E2"].value == "001-A"
+    book.close()
+
+
+@pytest.mark.parametrize("local_rebinding", [False, True])
+@pytest.mark.parametrize("inherited_ignorable", [False, True])
+def test_independent_style_attributes_preserve_namespace_scope(tmp_path, local_rebinding, inherited_ignorable):
+    mc = "http://schemas.openxmlformats.org/markup-compatibility/2006"
+    extension = "urn:pr90-independent-ignorable"
+    template, current = _independent_inputs(tmp_path)
+    with ZipFile(current) as archive:
+        document = minidom.parseString(archive.read("xl/styles.xml"))
+    root = document.documentElement
+    root.setAttribute("xmlns:mc", mc)
+    root.setAttribute("xmlns:q", extension)
+    font = document.getElementsByTagNameNS(MAIN, "font")[0]
+    if local_rebinding:
+        font.setAttribute("xmlns:q", extension)
+        child = document.createElementNS(MAIN, "q:b")
+        child.setAttribute("xmlns:q", MAIN)
+        font.appendChild(child)
+    (root if inherited_ignorable else font).setAttributeNS(mc, "mc:Ignorable", "q")
+    font.setAttributeNS(extension, "q:marker", "keep-uri")
+    _rewrite_parts(current, {"xl/styles.xml": document.toxml(encoding="utf-8")})
+    document.unlink()
+    book = load_workbook(current)
+    book.close()
+    output = tmp_path / "merged.xlsx"
+    combine_full_workbook(template, current, output)
+    with ZipFile(output) as archive:
+        raw = archive.read("xl/styles.xml")
+        styles = ET.fromstring(raw)
+        imported = styles.find(f"{{{MAIN}}}fonts")[1]
+        assert imported.attrib[f"{{{extension}}}marker"] == "keep-uri"
+        assert imported.attrib[f"{{{mc}}}Ignorable"] == "q"
+        assert all(n.tag.startswith(f"{{{MAIN}}}") for n in styles.iter())
+        document = minidom.parseString(raw)
+        imported = document.getElementsByTagNameNS(MAIN, "fonts")[0].childNodes[1]
+        assert imported.getAttribute("xmlns:q") == extension
+        if local_rebinding:
+            bold = imported.getElementsByTagNameNS(MAIN, "b")[-1]
+            assert bold.getAttribute("xmlns:q") == MAIN
+        document.unlink()
+    book = load_workbook(output)
+    book.close()
+
+
+@pytest.mark.parametrize("table_styles", [False, True])
+@pytest.mark.parametrize("colors", [False, True])
+def test_independent_dxfs_schema_order(tmp_path, table_styles, colors):
+    template, current = _independent_inputs(tmp_path)
+    with ZipFile(template) as archive:
+        root = ET.fromstring(archive.read("xl/styles.xml"))
+    for name, present in (("tableStyles", table_styles), ("colors", colors), ("dxfs", False)):
+        node = root.find(f"{{{MAIN}}}{name}")
+        if not present and node is not None:
+            root.remove(node)
+        elif present and node is None:
+            ET.SubElement(root, f"{{{MAIN}}}{name}")
+    _rewrite_parts(template, {"xl/styles.xml": ET.tostring(root)})
+    output = tmp_path / "merged.xlsx"
+    combine_full_workbook(template, current, output)
+    with ZipFile(output) as archive:
+        root = ET.fromstring(archive.read("xl/styles.xml"))
+        order = ("numFmts", "fonts", "fills", "borders", "cellStyleXfs", "cellXfs", "cellStyles", "dxfs", "tableStyles", "colors", "extLst")
+        positions = [order.index(n.tag.removeprefix(f"{{{MAIN}}}")) for n in root]
+        assert positions == sorted(positions)
+        assert root.find(f"{{{MAIN}}}dxfs") is not None
+
+
+@pytest.mark.parametrize("corruption", ["sst_namespace", "package_namespace", "style_order", "style_reference"])
+def test_final_validation_rejects_confirmed_xml_corruption(tmp_path, monkeypatch, corruption):
+    from services.vietnam_replenishment import full_workbook as merger
+
+    template, current = _independent_inputs(tmp_path)
+    _one_shared_string(current, "")
+    if corruption == "sst_namespace":
+        append = merger._append_strings
+        def broken_strings(*args):
+            data, offset, new = append(*args)
+            return data.replace(b"<r>", b'<r xmlns="">'), offset, new
+        monkeypatch.setattr(merger, "_append_strings", broken_strings)
+    elif corruption == "package_namespace":
+        declarations = merger._string_part_declarations
+        def broken_declarations(*args):
+            parts = declarations(*args)
+            parts["[Content_Types].xml"] = parts["[Content_Types].xml"].replace(b"<Override ", b'<Override xmlns="" ', 1)
+            return parts
+        monkeypatch.setattr(merger, "_string_part_declarations", broken_declarations)
+    else:
+        append = merger._append_styles
+        def broken_styles(*args):
+            data, offsets = append(*args)
+            root = ET.fromstring(data)
+            if corruption == "style_order":
+                dxfs = root.find(f"{{{MAIN}}}dxfs")
+                root.remove(dxfs)
+                root.append(dxfs)
+            else:
+                root.find(f"{{{MAIN}}}cellXfs")[0].set("fontId", "999999")
+            return ET.tostring(root), offsets
+        monkeypatch.setattr(merger, "_append_styles", broken_styles)
+    output = tmp_path / "bad.xlsx"
+    with pytest.raises(FullWorkbookError):
+        combine_full_workbook(template, current, output)
+    assert not output.exists()
+
+
+def test_serialization_rejects_attribute_namespace_rebinding():
+    from services.vietnam_replenishment.full_workbook import _serialize_xml
+
+    document = minidom.parseString(f'<styleSheet xmlns="{MAIN}" xmlns:q="urn:extension"><fonts><font q:marker="keep"/></fonts></styleSheet>')
+    font = document.getElementsByTagNameNS(MAIN, "font")[0]
+    # The DOM retains the original attribute URI even after its binding is damaged.
+    font.setAttribute("xmlns:q", MAIN)
+    try:
+        assert font.getAttributeNode("q:marker").namespaceURI == "urn:extension"
+        with pytest.raises(FullWorkbookError, match="属性命名空间"):
+            _serialize_xml(document)
+    finally:
+        document.unlink()
+
+
+def test_inherited_ignorable_resolves_uri_before_local_prefix_rebinding(tmp_path):
+    mc = "http://schemas.openxmlformats.org/markup-compatibility/2006"
+    extension = "urn:pr90-independent-ignorable"
+    template, current = _independent_inputs(tmp_path)
+    with ZipFile(current) as archive:
+        document = minidom.parseString(archive.read("xl/styles.xml"))
+    root = document.documentElement
+    root.setAttribute("xmlns:mc", mc)
+    root.setAttribute("xmlns:q", extension)
+    root.setAttributeNS(mc, "mc:Ignorable", "q")
+    font = document.getElementsByTagNameNS(MAIN, "font")[0]
+    # The inherited Ignorable token refers to EXT at its declaration site,
+    # although q now denotes SpreadsheetML inside the imported font.
+    font.setAttribute("xmlns:q", MAIN)
+    extension_node = document.createElementNS(extension, "aud:marker")
+    extension_node.setAttribute("xmlns:aud", extension)
+    font.appendChild(extension_node)
+    _rewrite_parts(current, {"xl/styles.xml": document.toxml(encoding="utf-8")})
+    document.unlink()
+    output = tmp_path / "merged.xlsx"
+    combine_full_workbook(template, current, output)
+    with ZipFile(output) as archive:
+        document = minidom.parseString(archive.read("xl/styles.xml"))
+    try:
+        imported = document.getElementsByTagNameNS(MAIN, "fonts")[0].childNodes[1]
+        prefixes = imported.getAttributeNS(mc, "Ignorable").split()
+        assert prefixes
+        assert {imported.getAttribute("xmlns:"+prefix) for prefix in prefixes} == {extension}
+        assert imported.getAttribute("xmlns:q") == MAIN
+        assert imported.getElementsByTagNameNS(extension, "marker")[0].namespaceURI == extension
+    finally:
+        document.unlink()

@@ -250,3 +250,68 @@ def test_settings_cli_and_saved_template_read_preserve_real_errors_without_repla
     assert state["template_error"] == result["error"]["message"]
     assert target.read_bytes() == invalid.read_bytes()
     assert (parameters.read_bytes(), parameters.stat().st_mtime_ns) == before[parameters]
+
+
+def test_template_snapshot_lock_covers_selection_and_copy_only(tmp_path, monkeypatch):
+    import time
+
+    a = nine_sheet_template(tmp_path / "A.xlsx", marker="A")
+    b = nine_sheet_template(tmp_path / "B.xlsx", marker="B")
+    settings.upload_template(a)
+    before = current_asset("vietnam_full_workbook")
+    ready = tmp_path / "upload-at-lock"
+    done = tmp_path / "upload-completed"
+    destination = tmp_path / "run-snapshot.xlsx"
+    child = None
+    copy = settings.shutil.copyfile
+
+    def copy_with_concurrent_upload(source, target):
+        nonlocal child
+        child = subprocess.Popen(
+            [sys.executable, "-I", "-B", "-c", '''
+import sys
+from pathlib import Path
+from contextlib import contextmanager
+from services.vietnam_replenishment import settings
+from shared.process_lock import _try_lock, _unlock
+locked = settings._locked
+@contextmanager
+def signal_lock_attempt():
+    with (settings.data_directory() / ".settings.lock").open("r+b") as stream:
+        acquired = _try_lock(stream)
+        Path(sys.argv[2]).write_text("unexpectedly-acquired" if acquired else "blocked")
+        if acquired:
+            _unlock(stream)
+    with locked() as root:
+        yield root
+settings._locked = signal_lock_attempt
+settings.upload_template(Path(sys.argv[1]))
+Path(sys.argv[3]).write_text("completed")
+''', str(b), str(ready), str(done)],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        deadline = time.monotonic() + 10
+        while not ready.exists() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert ready.exists(), "Uploader did not reach the existing settings lock"
+        assert ready.read_text() == "blocked"
+        assert child.poll() is None and not done.exists()
+        assert current_asset("vietnam_full_workbook") == before
+        return copy(source, target)
+
+    monkeypatch.setattr(settings.shutil, "copyfile", copy_with_concurrent_upload)
+    try:
+        source, provenance = settings.snapshot_template(None, destination)
+        assert source == before.path and provenance["file_name"] == "A.xlsx"
+        assert destination.read_bytes() == a.read_bytes()
+        # The snapshot has returned, so the uploader must now be able to finish.
+        out, err = child.communicate(timeout=30)
+        assert child.returncode == 0, (out, err)
+        assert done.exists()
+        assert destination.read_bytes() == a.read_bytes()
+        assert current_asset("vietnam_full_workbook").path.read_bytes() == b.read_bytes()
+        assert previous_asset("vietnam_full_workbook").path.read_bytes() == a.read_bytes()
+    finally:
+        if child is not None and child.poll() is None:
+            child.kill()
+            child.communicate()

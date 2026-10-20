@@ -194,13 +194,14 @@ def test_chat_template_is_temporary_across_runs_and_sessions(
     output = tmp_path / "workspace" / ".lxeagent" / "artifacts" / "vietnam" / "result.xlsx"
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_bytes(b"synthetic workbook")
-    selected: list[str] = []
+    selected: list[str | None] = []
 
     def succeed(**arguments):
-        selected.append(arguments["template"])
+        selected.append(arguments.get("template"))
         return SimpleNamespace(
             output_xlsx=output, sku_count=1, config=RecommendationConfig(),
-            config_source="parameters.json", template_source=arguments["template"],
+            config_source="parameters.json",
+            template_source=arguments.get("template") or str(current_asset("vietnam_full_workbook").path),
             source_files=(), validation={"status": "passed", "sku_count": 1},
         )
 
@@ -217,7 +218,7 @@ def test_chat_template_is_temporary_across_runs_and_sessions(
     monkeypatch.setenv("LXE_AGENT_SESSION_ID", "chat-two")
     assert lxeskill.main([*COMMAND, *ARGS]) == 0
     _record(capsys)
-    assert selected[-1] == str(current_asset("vietnam_full_workbook").path)
+    assert selected[-1] is None  # Default selection belongs to the protected workflow snapshot.
     assert current_asset("vietnam_full_workbook").path.read_bytes() == template_a.read_bytes()
     assert previous_asset("vietnam_full_workbook") is None
 
@@ -234,7 +235,7 @@ def test_chat_template_is_temporary_across_runs_and_sessions(
     monkeypatch.setattr(generate, "generate_current_vietnam_recommendation", succeed)
     assert lxeskill.main([*COMMAND, *ARGS]) == 0
     _record(capsys)
-    assert selected[-1] == str(current_asset("vietnam_full_workbook").path)
+    assert selected[-1] is None
     assert current_asset("vietnam_full_workbook").path.read_bytes() == template_b.read_bytes()
 
 
@@ -314,3 +315,71 @@ def test_first_calculation_requires_template_upload(tmp_path, monkeypatch, capsy
     assert result["error"]["code"] == "input_required"
     assert result["recovery"]["field"] == "template_file"
     assert result["files"] == []
+
+
+@pytest.mark.parametrize("upload_window", ["after_cli_check", "during_reports"])
+def test_current_template_snapshot_survives_real_concurrent_upload(
+    tmp_path, monkeypatch, capsys, upload_window,
+):
+    import os
+    import subprocess
+    import sys
+    from services.vietnam_replenishment import workflow
+
+    monkeypatch.setenv("LXE_DATA_ROOT", str(tmp_path / "state"))
+    monkeypatch.setenv("LXE_WORKSPACE_ROOT", str(tmp_path / "workspace"))
+    activate_project_workspace()
+    a = _valid_template(tmp_path / "A.xlsx", "A")
+    b = _valid_template(tmp_path / "B.xlsx", "B")
+    book = load_workbook(b)
+    book["越南备货清单"]["G2"] = 77
+    book.save(b)
+    book.close()
+    settings.upload_template(a)
+    old = current_asset("vietnam_full_workbook")
+
+    def upload_from_another_process():
+        child = subprocess.run(
+            [sys.executable, "-I", "-B", "-m", "lxeskill", "vietnam", "replenishment", "settings",
+             "--action", "upload", "--path", str(b)],
+            env=os.environ.copy(), capture_output=True, text=True, timeout=30,
+        )
+        assert child.returncode == 0, (child.stdout, child.stderr)
+
+    if upload_window == "after_cli_check":
+        require = lxeskill._require_uploaded_file_inputs
+        def check_then_replace(*args, **kwargs):
+            require(*args, **kwargs)
+            upload_from_another_process()
+        monkeypatch.setattr(lxeskill, "_require_uploaded_file_inputs", check_then_replace)
+
+    def load_reports(**_paths):
+        if upload_window == "during_reports":
+            # A separate uploader must be able to finish while this run is reading
+            # reports, proving the settings lock is no longer held here.
+            upload_from_another_process()
+        return SimpleNamespace(skus=("VN-A",), artifacts={}, file_hashes={}, in_transit_mismatch=())
+
+    expected = b if upload_window == "after_cli_check" else a
+    seen_snapshots = []
+    def generate_from_snapshot(output, *, template, parameters, **_kwargs):
+        seen_snapshots.append(template)
+        assert template.read_bytes() == expected.read_bytes()
+        assert parameters["VN-A"].cost == (77 if expected == b else 10)
+        assert current_asset("vietnam_full_workbook").file_name == "B.xlsx"
+        assert not old.path.exists()
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_bytes(b"synthetic result")
+        return output
+
+    monkeypatch.setattr(workflow, "load_vietnam_files", load_reports)
+    monkeypatch.setattr(workflow, "generate_vietnam_workbook", generate_from_snapshot)
+    assert lxeskill.main([*COMMAND, *ARGS]) == 0
+    record = _record(capsys)
+    assert record["ok"] is True
+    assert Path(record["data"]["template_source"]).name == expected.name
+    assert record["data"]["asset_sources"]["template_file"]["file_name"] == expected.name
+    assert record["data"]["asset_sources"]["template_file"]["from"] == "stored"
+    assert len(seen_snapshots) == 1 and not seen_snapshots[0].exists()
+    assert current_asset("vietnam_full_workbook").path.read_bytes() == b.read_bytes()
+    assert previous_asset("vietnam_full_workbook").path.read_bytes() == a.read_bytes()

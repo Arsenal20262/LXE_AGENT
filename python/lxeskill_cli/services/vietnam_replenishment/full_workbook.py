@@ -22,6 +22,7 @@ MAIN = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 PACKAGE_REL = "http://schemas.openxmlformats.org/package/2006/relationships"
 CONTENT = "http://schemas.openxmlformats.org/package/2006/content-types"
+MC = "http://schemas.openxmlformats.org/markup-compatibility/2006"
 REQUIRED_ORDER = (
     "越南备货清单", "改库存", "改折扣", "报官方活动", "竞价报名",
     "雅仓库存", "雅仓动销", "数据更改", "库存商品信息",
@@ -109,23 +110,123 @@ def _section(document, name: str):
     return found[0] if found else None
 
 
+def _import_node(document, node, parent):
+    """Keep the source subtree's namespace scope, including attribute/MC prefixes.
+
+    importNode copies local declarations but omits inherited ones. Copy those
+    only where the destination scope differs; never overwrite local bindings,
+    which may legitimately be rebound again further down the subtree.
+    """
+    def scope(element):
+        bindings = {"xmlns": ""}
+        ancestors = []
+        while element.nodeType == element.ELEMENT_NODE:
+            ancestors.append(element)
+            element = element.parentNode
+        for ancestor in reversed(ancestors):
+            bindings.update((attr.name, attr.value) for attr in ancestor.attributes.values()
+                            if attr.namespaceURI == XMLNS_NAMESPACE)
+        return bindings
+
+    copied = document.importNode(node, deep=True)
+    destination = scope(parent)
+    for binding, uri in scope(node.parentNode).items():
+        if not copied.hasAttribute(binding) and destination.get(binding, "") != uri:
+            copied.setAttributeNS(XMLNS_NAMESPACE, binding, uri)
+    # MC Ignorable is inherited by URI, not by a prefix that a descendant may
+    # have rebound. Carry that context using bindings valid at the imported root.
+    bindings = scope(node)
+
+    def bound_prefix(uri):
+        existing = next((name.split(":", 1)[1] for name, value in bindings.items()
+                         if name.startswith("xmlns:") and value == uri), None)
+        if existing is not None:
+            return existing
+        index = 1
+        while f"xmlns:lxe{index}" in bindings:
+            index += 1
+        prefix = f"lxe{index}"
+        bindings[f"xmlns:{prefix}"] = uri
+        copied.setAttributeNS(XMLNS_NAMESPACE, f"xmlns:{prefix}", uri)
+        return prefix
+
+    ignored = []
+    ancestor = node
+    while ancestor.nodeType == ancestor.ELEMENT_NODE:
+        if ancestor.hasAttributeNS(MC, "Ignorable"):
+            context = scope(ancestor)
+            ignored.extend(bound_prefix(context[f"xmlns:{prefix}"])
+                           for prefix in ancestor.getAttributeNS(MC, "Ignorable").split())
+        ancestor = ancestor.parentNode
+    if ignored:
+        copied.setAttributeNS(MC, f"{bound_prefix(MC)}:Ignorable", " ".join(dict.fromkeys(ignored)))
+    return copied
+
+
+def _serialize_xml(document):
+    """Check real QNames after serialization, not just minidom's in-memory URIs."""
+    data = document.toxml(encoding="utf-8")
+
+    def qnames(tree):
+        return [(node.namespaceURI, node.localName,
+                 sorted((attr.namespaceURI or "", attr.localName, attr.value)
+                        for attr in node.attributes.values() if attr.namespaceURI != XMLNS_NAMESPACE))
+                for node in tree.getElementsByTagName("*")]
+
+    with _parsed(data) as reparsed:
+        if qnames(document) != qnames(reparsed):
+            raise FullWorkbookError("九表 XML 序列化改变了元素或属性命名空间")
+    return data
+
+
+def _validate_merged_xml(archive):
+    """Guard the XML contracts touched by this merger before file publication."""
+    styles = ET.fromstring(archive.read("xl/styles.xml"))
+    order = ("numFmts", "fonts", "fills", "borders", "cellStyleXfs", "cellXfs",
+             "cellStyles", "dxfs", "tableStyles", "colors", "extLst")
+    if styles.tag != f"{{{MAIN}}}styleSheet":
+        raise FullWorkbookError("九表 styles.xml 根节点命名空间无效")
+    positions = [order.index(node.tag.removeprefix(f"{{{MAIN}}}"))
+                 for node in styles if node.tag.removeprefix(f"{{{MAIN}}}") in order]
+    if positions != sorted(set(positions)):
+        raise FullWorkbookError("九表 styles.xml 节点顺序无效")
+    # Extensions may have their own namespaces; standard elements cannot lose theirs.
+    for part in ("xl/styles.xml", "xl/sharedStrings.xml"):
+        if part not in archive.namelist():
+            continue
+        root = ET.fromstring(archive.read(part))
+        pending = [root]
+        while pending:
+            node = pending.pop()
+            if not node.tag.startswith("{"):
+                raise FullWorkbookError(f"九表 {part} 包含空命名空间节点: {node.tag}")
+            # Extension payloads have their own contracts, outside this targeted guard.
+            if node.tag.startswith(f"{{{MAIN}}}") and node.tag != f"{{{MAIN}}}extLst":
+                pending.extend(node)
+    for part, uri, names in (("[Content_Types].xml", CONTENT, ("Default", "Override")),
+                             ("xl/_rels/workbook.xml.rels", PACKAGE_REL, ("Relationship",))):
+        if any(node.tag not in {f"{{{uri}}}{name}" for name in names}
+               for node in ET.fromstring(archive.read(part))):
+            raise FullWorkbookError(f"九表 {part} 包节点命名空间无效")
+    formats = styles.find(f"{{{MAIN}}}numFmts")
+    ids = [int(node.attrib["numFmtId"]) for node in formats] if formats is not None else []
+    if len(ids) != len(set(ids)):
+        raise FullWorkbookError("九表自定义数字格式 ID 重复")
+    for name in ("cellStyleXfs", "cellXfs"):
+        for xf in styles.find(f"{{{MAIN}}}{name}"):
+            number = int(xf.attrib.get("numFmtId", 0))
+            if number >= 164 and number not in ids:
+                raise FullWorkbookError(f"九表 {name} 引用了不存在的 numFmtId={number}")
+            for attr, section in (("fontId", "fonts"), ("fillId", "fills"),
+                                  ("borderId", "borders"), ("xfId", "cellStyleXfs")):
+                if attr in xf.attrib and not 0 <= int(xf.attrib[attr]) < len(styles.find(f"{{{MAIN}}}{section}")):
+                    raise FullWorkbookError(f"九表 {name} 的 {attr} 引用无效: {xf.attrib[attr]}")
+
+
 def _append_styles(template: ZipFile, calculated: ZipFile) -> tuple[bytes, dict[str, int]]:
     """Append new style indices; source style indices used by unchanged tabs stay stable."""
     with _parsed(template.read("xl/styles.xml")) as original, _parsed(calculated.read("xl/styles.xml")) as fresh:
         prefix = original.documentElement.prefix
-
-        def import_style(node, parent):
-            copied = original.importNode(node, deep=True)
-            # minidom keeps namespaceURI but does not copy inherited xmlns bindings.
-            for element in (copied, *copied.getElementsByTagNameNS(MAIN, "*")):
-                if element.namespaceURI == MAIN:
-                    binding = f"xmlns:{element.prefix}" if element.prefix else "xmlns"
-                    scope = parent
-                    while scope.nodeType == scope.ELEMENT_NODE and not scope.hasAttribute(binding):
-                        scope = scope.parentNode
-                    if scope.nodeType != scope.ELEMENT_NODE or scope.getAttribute(binding) != MAIN:
-                        copied.setAttributeNS(XMLNS_NAMESPACE, binding, MAIN)
-            return copied
 
         offsets = {}
         for name in ("fonts", "fills", "borders", "cellStyleXfs", "cellXfs", "dxfs"):
@@ -134,7 +235,9 @@ def _append_styles(template: ZipFile, calculated: ZipFile) -> tuple[bytes, dict[
             if name == "dxfs" and old is None and new is not None:
                 old = original.createElementNS(MAIN, f"{prefix}:dxfs" if prefix else "dxfs")
                 old.setAttribute("count", "0")
-                original.documentElement.insertBefore(old, _section(original, "tableStyles"))
+                successor = next((_section(original, name) for name in ("tableStyles", "colors", "extLst")
+                                  if _section(original, name) is not None), None)
+                original.documentElement.insertBefore(old, successor)
             if old is None or new is None:
                 if name == "dxfs" and new is None:
                     offsets[name] = 0
@@ -158,7 +261,7 @@ def _append_styles(template: ZipFile, calculated: ZipFile) -> tuple[bytes, dict[
                     number_formats[old_id] = old_id
                     continue
                 number_formats[old_id] = next_id
-                copied = import_style(node, original_formats)
+                copied = _import_node(original, node, original_formats)
                 copied.setAttribute("numFmtId", str(next_id))
                 original_formats.appendChild(copied)
                 next_id += 1
@@ -170,7 +273,7 @@ def _append_styles(template: ZipFile, calculated: ZipFile) -> tuple[bytes, dict[
             if new is None:
                 continue
             for node in _elements(new):
-                copied = import_style(node, old)
+                copied = _import_node(original, node, old)
                 for attr, target in (("fontId", "fonts"), ("fillId", "fills"), ("borderId", "borders")):
                     if copied.hasAttribute(attr):
                         copied.setAttribute(attr, str(int(copied.getAttribute(attr)) + offsets[target]))
@@ -181,7 +284,7 @@ def _append_styles(template: ZipFile, calculated: ZipFile) -> tuple[bytes, dict[
                     copied.setAttribute("xfId", str(int(copied.getAttribute("xfId")) + offsets["cellStyleXfs"]))
                 old.appendChild(copied)
             old.setAttribute("count", str(len(_elements(old))))
-        return original.toxml(encoding="utf-8"), offsets
+        return _serialize_xml(original), offsets
 
 
 def _append_strings(template: ZipFile, calculated: ZipFile) -> tuple[bytes | None, int, bool]:
@@ -195,31 +298,33 @@ def _append_strings(template: ZipFile, calculated: ZipFile) -> tuple[bytes | Non
         root = original.documentElement
         offset = len(_elements(root))
         for item in _elements(fresh.documentElement):
-            root.appendChild(original.importNode(item, deep=True))
+            root.appendChild(_import_node(original, item, root))
         root.setAttribute("uniqueCount", str(len(_elements(root))))
         root.setAttribute("count", str(len(_elements(root))))
-        return original.toxml(encoding="utf-8"), offset, False
+        return _serialize_xml(original), offset, False
 
 
 def _string_part_declarations(template: ZipFile) -> dict[str, bytes]:
     """Add the standard package references when an inline-string template needs an SST."""
     with _parsed(template.read("[Content_Types].xml")) as types:
-        item = types.createElementNS(CONTENT, "Override")
+        prefix = types.documentElement.prefix
+        item = types.createElementNS(CONTENT, f"{prefix}:Override" if prefix else "Override")
         item.setAttribute("PartName", "/xl/sharedStrings.xml")
         item.setAttribute("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml")
         types.documentElement.appendChild(item)
-        content_types = types.toxml(encoding="utf-8")
+        content_types = _serialize_xml(types)
     with _parsed(template.read("xl/_rels/workbook.xml.rels")) as relations:
         existing = {node.getAttribute("Id") for node in relations.getElementsByTagNameNS(PACKAGE_REL, "Relationship")}
         identifier = "rIdLxeSharedStrings"
         if identifier in existing:
             raise FullWorkbookError("工作簿关系 ID 与共享字符串表冲突")
-        item = relations.createElementNS(PACKAGE_REL, "Relationship")
+        prefix = relations.documentElement.prefix
+        item = relations.createElementNS(PACKAGE_REL, f"{prefix}:Relationship" if prefix else "Relationship")
         item.setAttribute("Id", identifier)
         item.setAttribute("Type", REL + "/sharedStrings")
         item.setAttribute("Target", "sharedStrings.xml")
         relations.documentElement.appendChild(item)
-        workbook_rels = relations.toxml(encoding="utf-8")
+        workbook_rels = _serialize_xml(relations)
     return {"[Content_Types].xml": content_types, "xl/_rels/workbook.xml.rels": workbook_rels}
 
 
@@ -301,8 +406,19 @@ def combine_full_workbook(template_path: str | Path, current_path: str | Path, o
                 with ZipFile(destination) as published:
                     if published.testzip() is not None or tuple(_sheet_parts(published)) != REQUIRED_ORDER:
                         raise FullWorkbookError("九表成品文件校验失败")
+                    _validate_merged_xml(published)
                     if any(published.read(source_parts[name]) != template.read(source_parts[name]) for name in UNCHANGED):
                         raise FullWorkbookError("九表成品中的原始业务表发生改变")
+                try:
+                    workbook = load_workbook(destination, read_only=True, data_only=False)
+                    try:
+                        for sheet in workbook:
+                            for _row in sheet.iter_rows():
+                                pass
+                    finally:
+                        workbook.close()
+                except Exception as exc:
+                    raise FullWorkbookError(f"九表成品不可读: {type(exc).__name__}: {exc}") from exc
             except BaseException:
                 if created:
                     destination.unlink(missing_ok=True)
