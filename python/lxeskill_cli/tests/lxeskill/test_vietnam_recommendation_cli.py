@@ -13,10 +13,11 @@ from openpyxl import Workbook, load_workbook
 from lxeskill import cli as lxeskill
 from lxeskill.business import load_catalog
 from services.agent_cli.vietnam_replenishment import generate
-from services.vietnam_replenishment import settings
+from services.vietnam_replenishment import settings, workflow
+from services.vietnam_replenishment.workflow import VietnamRecommendationRun
 from services.vietnam_replenishment.full_workbook import UNCHANGED
 from services.vietnam_replenishment.workbook import RecommendationConfig
-from shared.input_assets import current_asset, previous_asset
+from shared.input_assets import current_asset, previous_asset, load_input_assets
 from shared.workspace import activate_project_workspace
 
 
@@ -78,12 +79,13 @@ def test_catalog_requires_three_reports_and_allows_one_run_template() -> None:
             "template_file": {"type": "string", "minLength": 1, "x-lxe-file-input": {
                 "accepted_extensions": [".xlsx"],
                 "instruction": "请上传完整的东南亚越南备货九表 XLSX 模板，或使用已保存的当前模板。",
-            }, "x-lxe-asset-slot": "vietnam_full_workbook", "x-lxe-asset-promote-on-success": False},
+            }},
         },
         "required": list(INPUTS), "additionalProperties": False,
     }
     assert entry["artifact_paths"] == [{"field": "output_xlsx", "role": "deliverable"}]
     assert entry.get("deliver_artifacts_on_failure") is not True
+    assert load_input_assets()["vietnam_full_workbook"].management == "command"
 
 
 @pytest.mark.parametrize("arguments", [
@@ -134,7 +136,7 @@ def test_success_delivers_only_final_workbook(
     monkeypatch.setattr(
         generate,
         "generate_current_vietnam_recommendation",
-        lambda **_arguments: SimpleNamespace(
+        lambda **_arguments: VietnamRecommendationRun(
             output_xlsx=output, sku_count=2,
             config=RecommendationConfig(
                 day_adjustment_30d=Decimal("0.7"), day_adjustment_15d=Decimal("0.6"),
@@ -143,6 +145,7 @@ def test_success_delivers_only_final_workbook(
             config_source="parameters.json", template_source="business-template.xlsx",
             source_files=({"report": "inventory-sales", "path": "sales.xlsx", "sha256": "0" * 64},),
             validation={"status": "passed", "sku_count": 2},
+            template_asset_source={"slot": "vietnam_full_workbook", "from": "upload", "file_name": "business-template.xlsx"},
         ),
     )
 
@@ -172,6 +175,7 @@ def test_success_delivers_only_final_workbook(
     }
     saved = current_asset("vietnam_full_workbook")
     assert saved is None
+    monkeypatch.setattr(generate, "generate_current_vietnam_recommendation", workflow.generate_current_vietnam_recommendation)
     assert lxeskill.main([*COMMAND, *ARGS]) == lxeskill.EXIT_USAGE
     missing = _record(capsys)
     assert missing["error"]["code"] == "input_required"
@@ -194,14 +198,22 @@ def test_chat_template_is_temporary_across_runs_and_sessions(
     output = tmp_path / "workspace" / ".lxeagent" / "artifacts" / "vietnam" / "result.xlsx"
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_bytes(b"synthetic workbook")
-    selected: list[str] = []
+    selected: list[str | None] = []
 
     def succeed(**arguments):
-        selected.append(arguments["template"])
-        return SimpleNamespace(
+        selected.append(arguments.get("template"))
+        version = current_asset("vietnam_full_workbook")
+        explicit = arguments.get("template")
+        provenance = {"slot": "vietnam_full_workbook", "from": "upload" if explicit else "stored",
+                      "file_name": Path(explicit).name if explicit else version.file_name}
+        if not explicit:
+            provenance["updated_at"] = version.updated_at
+        return VietnamRecommendationRun(
             output_xlsx=output, sku_count=1, config=RecommendationConfig(),
-            config_source="parameters.json", template_source=arguments["template"],
+            config_source="parameters.json",
+            template_source=arguments.get("template") or str(current_asset("vietnam_full_workbook").path),
             source_files=(), validation={"status": "passed", "sku_count": 1},
+            template_asset_source=provenance,
         )
 
     monkeypatch.setattr(generate, "generate_current_vietnam_recommendation", succeed)
@@ -217,7 +229,7 @@ def test_chat_template_is_temporary_across_runs_and_sessions(
     monkeypatch.setenv("LXE_AGENT_SESSION_ID", "chat-two")
     assert lxeskill.main([*COMMAND, *ARGS]) == 0
     _record(capsys)
-    assert selected[-1] == str(current_asset("vietnam_full_workbook").path)
+    assert selected[-1] is None  # Default selection belongs to the protected workflow snapshot.
     assert current_asset("vietnam_full_workbook").path.read_bytes() == template_a.read_bytes()
     assert previous_asset("vietnam_full_workbook") is None
 
@@ -234,7 +246,7 @@ def test_chat_template_is_temporary_across_runs_and_sessions(
     monkeypatch.setattr(generate, "generate_current_vietnam_recommendation", succeed)
     assert lxeskill.main([*COMMAND, *ARGS]) == 0
     _record(capsys)
-    assert selected[-1] == str(current_asset("vietnam_full_workbook").path)
+    assert selected[-1] is None
     assert current_asset("vietnam_full_workbook").path.read_bytes() == template_b.read_bytes()
 
 
@@ -308,9 +320,88 @@ def test_old_no_argument_invocation_reports_missing_paths(tmp_path, monkeypatch,
 
 def test_first_calculation_requires_template_upload(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("LXE_DATA_ROOT", str(tmp_path / "state"))
-    _no_workflow(monkeypatch)
+    monkeypatch.setattr(workflow, "load_vietnam_files", lambda **_: pytest.fail("Reports must not load without a template"))
     assert lxeskill.main([*COMMAND, *ARGS]) == lxeskill.EXIT_USAGE
     result = _record(capsys)
     assert result["error"]["code"] == "input_required"
     assert result["recovery"]["field"] == "template_file"
     assert result["files"] == []
+
+
+@pytest.mark.parametrize("upload_window", ["after_cli_check", "during_reports"])
+def test_current_template_snapshot_survives_real_concurrent_upload(
+    tmp_path, monkeypatch, capsys, upload_window,
+):
+    import os
+    import subprocess
+    import sys
+    from services.vietnam_replenishment import workflow
+
+    monkeypatch.setenv("LXE_DATA_ROOT", str(tmp_path / "state"))
+    monkeypatch.setenv("LXE_WORKSPACE_ROOT", str(tmp_path / "workspace"))
+    activate_project_workspace()
+    a = _valid_template(tmp_path / "A.xlsx", "A")
+    b = _valid_template(tmp_path / "B.xlsx", "B")
+    book = load_workbook(b)
+    book["越南备货清单"]["G2"] = 77
+    book.save(b)
+    book.close()
+    settings.upload_template(a)
+    old = current_asset("vietnam_full_workbook")
+    monkeypatch.setattr(lxeskill, "current_asset", lambda _: pytest.fail("Shared CLI resolved a business-owned template"))
+
+    def upload_from_another_process():
+        child = subprocess.run(
+            [sys.executable, "-I", "-B", "-m", "lxeskill", "vietnam", "replenishment", "settings",
+             "--action", "upload", "--path", str(b)],
+            env=os.environ.copy(), capture_output=True, text=True, timeout=30,
+        )
+        assert child.returncode == 0, (child.stdout, child.stderr)
+
+    if upload_window == "after_cli_check":
+        require = lxeskill._require_uploaded_file_inputs
+        def check_then_replace(*args, **kwargs):
+            require(*args, **kwargs)
+            upload_from_another_process()
+        monkeypatch.setattr(lxeskill, "_require_uploaded_file_inputs", check_then_replace)
+
+    def load_reports(**_paths):
+        if upload_window == "during_reports":
+            # A separate uploader must be able to finish while this run is reading
+            # reports, proving the settings lock is no longer held here.
+            upload_from_another_process()
+        return SimpleNamespace(skus=("VN-A",), artifacts={}, file_hashes={}, in_transit_mismatch=())
+
+    expected = b if upload_window == "after_cli_check" else a
+    seen_snapshots = []
+    def generate_from_snapshot(output, *, template, parameters, **_kwargs):
+        seen_snapshots.append(template)
+        assert template.read_bytes() == expected.read_bytes()
+        assert parameters["VN-A"].cost == (77 if expected == b else 10)
+        assert current_asset("vietnam_full_workbook").file_name == "B.xlsx"
+        assert not old.path.exists()
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_bytes(b"synthetic result")
+        return output
+
+    monkeypatch.setattr(workflow, "load_vietnam_files", load_reports)
+    monkeypatch.setattr(workflow, "generate_vietnam_workbook", generate_from_snapshot)
+    assert lxeskill.main([*COMMAND, *ARGS]) == 0
+    record = _record(capsys)
+    assert record["ok"] is True
+    assert Path(record["data"]["template_source"]).name == expected.name
+    assert record["data"]["asset_sources"]["template_file"]["file_name"] == expected.name
+    assert record["data"]["asset_sources"]["template_file"]["from"] == "stored"
+    assert len(seen_snapshots) == 1 and not seen_snapshots[0].exists()
+    assert current_asset("vietnam_full_workbook").path.read_bytes() == b.read_bytes()
+    assert previous_asset("vietnam_full_workbook").path.read_bytes() == a.read_bytes()
+
+
+def test_shared_cli_has_no_vietnam_business_dependency():
+    import ast
+
+    tree = ast.parse(Path(lxeskill.__file__).read_text())
+    assert not [node.module for node in ast.walk(tree) if isinstance(node, ast.ImportFrom)
+                and (node.module or "").startswith("services.vietnam_replenishment")]
+    assert not [node.value for node in ast.walk(tree) if isinstance(node, ast.Constant)
+                and node.value == "vietnam_full_workbook"]

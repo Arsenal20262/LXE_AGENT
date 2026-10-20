@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import json
 from importlib.resources import files
+import json
 from pathlib import Path
 import subprocess
 import sys
@@ -81,6 +81,7 @@ def test_cli_round_trip_uses_shared_storage_and_preserves_failed_upload(tmp_path
     book.save(source)
     book.close()
     state = invoke("upload", "--path", str(source))["data"]["data"]
+    uploaded = state["template"]
     assert state["template"]["file_name"] == source.name
     assert "sku_map" not in state
     assert Path(state["template"]["path"]).read_bytes() == source.read_bytes()
@@ -91,6 +92,35 @@ def test_cli_round_trip_uses_shared_storage_and_preserves_failed_upload(tmp_path
     failed = invoke("upload", "--path", str(invalid), expected=cli.EXIT_BUSINESS)
     assert "BadZipFile" in failed["error"]["message"]
     assert failed["error"]["message"] == failed["data"]["error"]["message"]
-    output = tmp_path / "导出 当前表.xlsx"
+    assert invoke("read")["data"]["data"]["template"] == uploaded
+    output = tmp_path / "导出 当前模板.xlsx"
     assert invoke("export", "--path", str(output))["data"]["data"] == {"path": str(output)}
     assert output.read_bytes() == source.read_bytes()
+
+
+def test_settings_cli_rejects_retired_export_kind(tmp_path, capsys):
+    assert cli.main([*COMMAND, "--action", "export", "--kind", "template", "--path", str(tmp_path / "out.xlsx")]) == cli.EXIT_USAGE
+    result = json.loads(capsys.readouterr().out)
+    assert "unknown option: --kind" in result["error"]["message"]
+    assert not (tmp_path / "out.xlsx").exists()
+
+
+@pytest.mark.parametrize("action", ["read", "invalid"])
+def test_settings_cli_emits_utf8_even_with_legacy_stdio(tmp_path, monkeypatch, action):
+    monkeypatch.setenv("LXE_DATA_ROOT", str(tmp_path / "中文 数据"))
+    script = """
+import runpy, sys
+sys.stdout.reconfigure(encoding="gbk")
+sys.stderr.reconfigure(encoding="gbk")
+sys.argv = ["lxeskill", "vietnam", "replenishment", "settings", "--action", sys.argv[1]]
+runpy.run_module("lxeskill", run_name="__main__")
+"""
+    child = subprocess.run([sys.executable, "-I", "-B", "-c", script, action], capture_output=True)
+    result = json.loads(child.stdout.decode("utf-8"))
+    if action == "read":
+        assert child.returncode == 0, child.stderr
+        assert "中文 数据" in result["data"]["data"]["directory"]
+    else:
+        assert child.returncode == cli.EXIT_BUSINESS, child.stderr
+        assert result["ok"] is False
+        assert "无效的桌面设置操作" in result["error"]["message"]

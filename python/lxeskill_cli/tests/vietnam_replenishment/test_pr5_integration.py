@@ -10,10 +10,12 @@ from itertools import product
 import json
 import os
 from pathlib import Path
+from xml.etree import ElementTree as ET
 from zipfile import ZipFile
 
 from openpyxl import Workbook, load_workbook
 from openpyxl.worksheet.formula import ArrayFormula
+from openpyxl.utils.datetime import CALENDAR_MAC_1904, CALENDAR_WINDOWS_1900
 import pytest
 
 from lxeskill import cli as lxeskill
@@ -164,6 +166,7 @@ def test_upload_replace_then_generate_one_final_workbook(
 
     book = load_workbook(output, read_only=True, data_only=True)
     try:
+        assert book.epoch == CALENDAR_WINDOWS_1900
         assert tuple(book.sheetnames) == REQUIRED_ORDER
         main = book["越南备货清单"]
         assert main["E2"].value == "VN-A"
@@ -179,6 +182,67 @@ def test_upload_replace_then_generate_one_final_workbook(
     with ZipFile(template) as original, ZipFile(output) as completed:
         names = _sheet_parts(original)
         assert all(original.read(names[name]) == completed.read(names[name]) for name in UNCHANGED)
+
+
+@pytest.mark.skipif(
+    not (os.environ.get("LXE_OFFICE_NODE") and os.environ.get("LXE_OFFICE_CLI")),
+    reason="Host Office Kit paths are not configured",
+)
+@pytest.mark.parametrize("case", ["chat", "legacy_current", "after_office"])
+def test_date_system_failures_never_deliver_a_successful_cli_file(
+    tmp_path, isolated_state, monkeypatch, capsys, case,
+):
+    from services.vietnam_replenishment import recalculation
+    from shared.input_assets import current_asset, promote_asset
+
+    monkeypatch.delenv("LXESKILL_SKILL_SCOPE", raising=False)
+    template = _template(tmp_path / "template.xlsx")
+    settings.upload_template(template)
+    arguments = ["vietnam", "replenishment", "calculate", *_report_arguments(tmp_path, _sources())]
+    seen = []
+    if case in ("chat", "legacy_current"):
+        unsupported = tmp_path / "1904.xlsx"
+        book = load_workbook(template)
+        book.epoch = CALENDAR_MAC_1904
+        book.save(unsupported)
+        book.close()
+        if case == "chat":
+            arguments += ["--template-file", str(unsupported)]
+        else:
+            promote_asset("vietnam_full_workbook", unsupported)
+    else:
+        merge = recalculation.combine_full_workbook
+        def mismatched_office_result(original, calculated, output):
+            # Inject only the epoch flag after real Office calculation and its
+            # numerical validation; the final merge must catch the discrepancy.
+            staged = calculated.with_suffix(".tmp")
+            with ZipFile(calculated) as source, ZipFile(staged, "w") as target:
+                for item in source.infolist():
+                    data = source.read(item.filename)
+                    if item.filename == "xl/workbook.xml":
+                        root = ET.fromstring(data)
+                        root.find("{http://schemas.openxmlformats.org/spreadsheetml/2006/main}workbookPr").set("date1904", "1")
+                        data = ET.tostring(root)
+                    target.writestr(item, data)
+            staged.replace(calculated)
+            book = load_workbook(calculated, read_only=True)
+            assert book.epoch == CALENDAR_MAC_1904
+            book.close()
+            seen.append("real Office result with 1904 flag")
+            return merge(original, calculated, output)
+        monkeypatch.setattr(recalculation, "combine_full_workbook", mismatched_office_result)
+    saved = current_asset("vietnam_full_workbook")
+    before = saved.path.read_bytes()
+    assert lxeskill.main(arguments) == lxeskill.EXIT_BUSINESS
+    records = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.strip()]
+    assert len(records) == 1
+    result = records[0]
+    assert result["ok"] is False and result["files"] == []
+    assert result["data"]["status"] == "failed" and "validation" not in result["data"]
+    assert "日期系统" in result["error"]["message"]
+    assert not list((tmp_path / "workspace" / ".lxeagent" / "artifacts").rglob("*.xlsx"))
+    assert saved.path.read_bytes() == before
+    assert seen == (["real Office result with 1904 flag"] if case == "after_office" else [])
 
 
 @pytest.mark.skipif(

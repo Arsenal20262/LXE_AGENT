@@ -20,6 +20,7 @@ from uuid import uuid4
 from shared.process_lock import interprocess_lock
 from shared.input_assets import current_asset, promote_asset, slot_dir
 from shared.repository import state_root
+from shared.workspace import resolve_workspace_input
 from services.yacang.errors import safe_remote_detail
 from .full_workbook import validate_full_template
 from .validation_diagnostics import validation_diagnostic
@@ -149,6 +150,27 @@ def export_template(destination: Path) -> dict:
         finally:
             temporary.unlink(missing_ok=True)
     return {"path": str(destination)}
+
+
+def snapshot_template(template: str | None, destination: Path) -> tuple[Path, dict[str, str]] | None:
+    """Select and copy this run's template while uploads cannot move current.
+
+    The caller owns the temporary destination. No settings lock is retained
+    while reports are read or Office computes the result.
+    """
+    with _locked():
+        info = {"slot": "vietnam_full_workbook", "from": "upload" if template is not None else "stored"}
+        if template is None:
+            version = current_asset("vietnam_full_workbook")
+            if version is None:
+                return None
+            source = version.path
+            info.update(file_name=version.file_name, updated_at=version.updated_at)
+        else:
+            source = resolve_workspace_input(template)
+            info["file_name"] = source.name
+        shutil.copyfile(source, destination)
+        return source, info
 
 
 @contextmanager

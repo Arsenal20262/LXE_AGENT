@@ -10,7 +10,7 @@ from types import SimpleNamespace
 from xml.etree import ElementTree as ET
 from zipfile import ZipFile
 
-from openpyxl import Workbook, load_workbook
+from openpyxl import load_workbook
 from openpyxl.formula.translate import Translator
 import pytest
 

@@ -40,6 +40,8 @@ module.exports = async ({ win, js, step, load, waitFor, click, settle, state }) 
     await win.setContentSize(480, 900); await open(1, "en");
     await waitFor("document.querySelectorAll('.vietnam-settings-view input').length===7", "narrow parameters loaded");
     assert.equal(await js("document.querySelectorAll('.vietnam-setting-row').length"), 3);
+    assert.equal(await js("document.querySelectorAll('.vietnam-setting-row:last-child input').length"), 3);
+    assert.equal(await js("[...document.querySelectorAll('.vietnam-setting-row:last-child input')].every(input => input.getClientRects().length > 0)"), true);
     await capture("vietnam-narrow-en");
     await win.setContentSize(1200, 900);
   });
@@ -75,6 +77,8 @@ module.exports = async ({ win, js, step, load, waitFor, click, settle, state }) 
     await waitFor("document.querySelectorAll('.asset-slot').length===5", "assets ready");
     assert.equal(await js("document.querySelector('#input-assets-title').textContent"), "FBA模版与数据源");
     assert.equal(await js("document.querySelector('.input-assets-view').textContent.includes('越南备货设置')"), false);
+    assert.equal(await js("document.querySelector('.input-assets-view').textContent.includes('vietnam_full_workbook')"), false);
+    assert.equal(await js("document.querySelector('.input-assets-view').textContent.includes('越南备货完整模板')"), false);
     assert.equal(await js("document.querySelector('.workbench-detail-meta').textContent"), "3 / 5 已就绪");
     assert.equal(await js("document.querySelectorAll('.asset-slot-previous').length"), 1);
     assert.equal(await js("document.querySelectorAll('.asset-slot-empty').length"), 1);

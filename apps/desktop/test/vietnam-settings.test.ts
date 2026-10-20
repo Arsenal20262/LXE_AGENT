@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DesktopVietnamSettingsService } from "../src/main/vietnam-settings";
@@ -18,6 +18,7 @@ test("settings use the lxeskill entrypoint and pass parameters and selections as
     calls.push(args);
     expect(options.env?.LXE_DATA_ROOT).toContain("vietnam-settings-");
     expect(options.env?.LXE_SQLITE_DB_PATH).toEndWith("lxeskill.sqlite3");
+    expect(options.env?.LXE_WORKSPACE_ROOT).toEndWith("workspace");
     return { stdout: JSON.stringify({ type: "result", ok: true, data: { success: true, data: args[10] === "export" ? { path: args[12] } : state } }), stderr: "", error: null };
   });
   await store.read();
@@ -43,7 +44,7 @@ test("actual Python settings survive new service instances without changing ERP 
   expect((await first.read()).parameters?.exchange_rate).toBe("4200");
 });
 test("native settings preserve real structured errors and observed process failures", async () => {
-  await expect(service(async () => ({ stdout: JSON.stringify({ type: "result", ok: false, error: { message: "BadZipFile: synthetic map failure" } }), stderr: "", error: new Error("exit 4") })).read()).rejects.toThrow("BadZipFile: synthetic map failure");
+  await expect(service(async () => ({ stdout: JSON.stringify({ type: "result", ok: false, error: { message: "BadZipFile: synthetic template failure" } }), stderr: "", error: new Error("exit 4") })).read()).rejects.toThrow("BadZipFile: synthetic template failure");
   await expect(service(async () => ({ stdout: "", stderr: "PermissionError: /app/parameters.json", error: new Error("exit 1") })).read()).rejects.toThrow("PermissionError: /app/parameters.json");
 });
 
@@ -55,11 +56,11 @@ test("settings require a successful CLI result and tolerate preceding progress e
   }
 });
 
-test("native template operations use the real unified CLI and retain the saved template after invalid upload", async () => {
+test("actual template upload and export preserve current when a replacement is invalid", async () => {
   const root = mkdtempSync(join(tmpdir(), "vietnam-template-")); roots.push(root);
   const pythonPath = join(process.cwd(), process.platform === "win32" ? ".venv/Scripts/python.exe" : ".venv/bin/python");
   const source = join(root, "中文 九表模板.xlsx");
-  execFileSync(pythonPath, ["-I", "-B", "-c", `
+  execFileSync(pythonPath, ["-I", "-B", "-X", "utf8", "-c", `
 import sys
 from importlib.resources import files
 from openpyxl import load_workbook
@@ -67,17 +68,21 @@ from services.vietnam_replenishment.full_workbook import UNCHANGED
 with files("services.vietnam_replenishment").joinpath("resources/skeleton.xlsx").open("rb") as stream:
     book = load_workbook(stream)
 for index, name in enumerate(UNCHANGED, 1):
-    book.create_sheet(name, index)["A1"] = name
+    book.create_sheet(name, index)["A1"] = "保留内容"
 book.save(sys.argv[1])
 book.close()
 `, source]);
-  const store = new DesktopVietnamSettingsService({ dataRoot: join(root, "app"), pythonPath, managedPath: "", platform: process.platform });
-  expect((await store.uploadTemplate(source)).template?.file_name).toBe("中文 九表模板.xlsx");
-  const output = join(root, "导出 模板.xlsx");
-  expect(await store.exportTemplate(output)).toEqual({ path: output });
-  expect(await Bun.file(output).bytes()).toEqual(await Bun.file(source).bytes());
-  const invalid = join(root, "错误模板.xlsx");
-  await Bun.write(invalid, "not an xlsx");
+  const dataRoot = join(root, "app");
+  const store = new DesktopVietnamSettingsService({ dataRoot, pythonPath, managedPath: "", platform: process.platform });
+  const uploaded = await store.uploadTemplate(source);
+  expect(uploaded.template?.file_name).toBe("中文 九表模板.xlsx");
+  const invalid = join(root, "中文 坏表.xlsx");
+  writeFileSync(invalid, "not an xlsx");
   await expect(store.uploadTemplate(invalid)).rejects.toThrow("BadZipFile");
-  expect((await store.read()).template?.file_name).toBe("中文 九表模板.xlsx");
+  const current = await store.read();
+  expect(current.template).toEqual(uploaded.template);
+  expect(current.template_error).toBeNull();
+  const output = join(root, "导出 当前模板.xlsx");
+  expect(await store.exportTemplate(output)).toEqual({ path: output });
+  expect(readFileSync(output)).toEqual(readFileSync(source));
 });

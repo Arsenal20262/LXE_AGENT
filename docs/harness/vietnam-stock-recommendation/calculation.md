@@ -10,11 +10,13 @@
 
 应用数据目录 `skill-data/vietnam-stock-recommendation/` 只保存全局计算参数 `parameters.json`。设置页把完整九表模板保存在 `vietnam_full_workbook` 输入资产槽，并只提供“导出当前模板表”和“上传/替换模板表”两个操作。每轮计算都从模板首张「越南备货清单」提取本轮 SKU 的热销标记、成本、跨境价和折扣价。没有九表模板时明确失败。
 
-桌面设置页通过 `lxeskill vietnam replenishment settings --action read|save|upload|export` 读写参数及九表模板，使用统一 CLI 的结果和错误格式。该命令是桌面内部入口，不出现在模型命令列表；Electron 不引用 Python 内部业务模块路径。
+桌面设置页通过 `lxeskill vietnam replenishment settings --action read|save|upload|export` 读写参数及九表模板，使用 lxeskillCLI 的结果和错误格式。该命令是桌面内部入口，不出现在模型命令列表；Electron 不引用 Python 内部业务模块路径。
 
 [设置模块](../../../python/lxeskill_cli/services/vietnam_replenishment/settings.py)使用进程锁和原子替换：上传先校验，失败保留原文件；计算在锁内读取本轮参数。九表模板与三份 ERP 报表各自复制为本轮快照，后续修改不影响已固定的输入。文件哈希用于复核内容，不证明报表同批次或数据新鲜度。
 
 设置页上传时先验证九张工作表及主表关键列，再保存原始文件；失败保留旧版。导出当前模板直接复制经验证的完整文件，不改保存的版本；没有已保存模板时导出按钮禁用。
+
+只支持 Excel 1900 日期系统。设置页上传及本轮模板快照校验均拒绝 1904 模板，包括聊天显式模板和历史保存的 current；快照校验在释放设置锁后、读取雅仓报表前完成。合并入口另外比较模板与五张计算表的实际日期系统，不一致或同为不支持的 1904 时失败，不转换日期或切换工作簿标志。
 
 ## 输入校验与缺值
 

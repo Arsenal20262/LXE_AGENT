@@ -247,15 +247,10 @@ def _promote_successful_assets(
     sources: dict[str, dict[str, str]],
     data: dict[str, Any],
 ) -> None:
-    """Promote supplied or generated assets unless the field is one-run only."""
+    """Keep a declared updated output, or otherwise the supplied input, as current."""
     properties = dict(dict(entry.get("input_schema") or {}).get("properties") or {})
     for name, info in sources.items():
-        property_schema = dict(properties.get(name) or {})
-        if property_schema.get("x-lxe-asset-promote-on-success", True) is False:
-            if info.get("from") == "upload":
-                info["file_name"] = os.path.basename(str(arguments[name]))
-            continue
-        output_field = str(property_schema.get("x-lxe-asset-output-field") or "")
+        output_field = str(dict(properties.get(name) or {}).get("x-lxe-asset-output-field") or "")
         updated_path = str(data.get(output_field) or "") if output_field else ""
         if not updated_path and info.get("from") != "upload":
             continue
@@ -424,6 +419,12 @@ def _run_entry(entry: dict[str, Any], argv: list[str]) -> int:
         if asset_sources and isinstance(data, dict):
             data = {**data, "asset_sources": asset_sources}
         if not ok:
+            business_error = data.get("error") if isinstance(data, dict) else None
+            if isinstance(business_error, dict) and business_error.get("code") == "input_required":
+                raise LxeSkillError(
+                    "input_required", str(business_error["message"]),
+                    exit_code=EXIT_USAGE, recovery=data.get("recovery"),
+                )
             failure: dict[str, Any] = {
                     "type": "result",
                     "command": command,
