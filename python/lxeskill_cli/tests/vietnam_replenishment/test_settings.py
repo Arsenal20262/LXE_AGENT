@@ -10,6 +10,7 @@ import subprocess
 import sys
 
 from openpyxl import load_workbook
+from openpyxl.utils.datetime import CALENDAR_MAC_1904
 import pytest
 
 from services.vietnam_replenishment import settings, workflow
@@ -71,6 +72,27 @@ def test_nine_sheet_template_upload_export_and_invalid_replacement(tmp_path):
 def test_nine_sheet_template_export_requires_saved_version(tmp_path):
     with pytest.raises(ValueError, match="模板"):
         settings.export_template(tmp_path / "missing.xlsx")
+
+
+def test_1904_upload_preserves_current_previous_and_export(tmp_path):
+    previous = nine_sheet_template(tmp_path / "previous.xlsx", marker="previous")
+    current = nine_sheet_template(tmp_path / "current.xlsx", marker="current")
+    settings.upload_template(previous)
+    settings.upload_template(current)
+    versions = (current_asset("vietnam_full_workbook"), previous_asset("vietnam_full_workbook"))
+    before = {version.path: sha256(version.path.read_bytes()).hexdigest() for version in versions}
+    unsupported = nine_sheet_template(tmp_path / "1904.xlsx", marker="unsupported")
+    book = load_workbook(unsupported)
+    book.epoch = CALENDAR_MAC_1904
+    book.save(unsupported)
+    book.close()
+    with pytest.raises(ValueError, match="1904.*1900"):
+        settings.upload_template(unsupported)
+    assert (current_asset("vietnam_full_workbook"), previous_asset("vietnam_full_workbook")) == versions
+    assert all(sha256(path.read_bytes()).hexdigest() == digest for path, digest in before.items())
+    exported = tmp_path / "exported.xlsx"
+    settings.export_template(exported)
+    assert exported.read_bytes() == current.read_bytes()
 
 
 @pytest.mark.parametrize("failure", ["copy", "partial_copy", "short_copy", "fsync", "before_replace", "previous_replace"])

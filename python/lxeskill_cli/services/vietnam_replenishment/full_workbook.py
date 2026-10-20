@@ -35,6 +35,14 @@ class FullWorkbookError(ValueError):
     """The supplied business workbook cannot safely preserve all nine tabs."""
 
 
+def _date_system(archive: ZipFile) -> str:
+    properties = ET.fromstring(archive.read("xl/workbook.xml")).find(f"{{{MAIN}}}workbookPr")
+    flag = properties.get("date1904", "0").strip() if properties is not None else "0"
+    if flag not in ("0", "1", "false", "true"):
+        raise FullWorkbookError(f"工作簿日期系统标志 date1904 无效: {flag!r}")
+    return "1904" if flag in ("1", "true") else "1900"
+
+
 def validate_full_template(path: str | Path) -> None:
     """Check that a stored template can supply inputs and preserve four tabs."""
     source = Path(path)
@@ -51,6 +59,8 @@ def validate_full_template(path: str | Path) -> None:
                 raise FullWorkbookError("越南备货模板包含加密内容")
             if archive.testzip() is not None:
                 raise FullWorkbookError("越南备货模板 ZIP 内容损坏")
+            if _date_system(archive) != "1900":
+                raise FullWorkbookError("不支持 1904 日期系统，请使用 1900 日期系统的越南备货模板")
             parts = _sheet_parts(archive)
             if tuple(parts) != REQUIRED_ORDER:
                 raise FullWorkbookError("越南备货模板须包含指定顺序的九张工作表")
@@ -365,6 +375,13 @@ def combine_full_workbook(template_path: str | Path, current_path: str | Path, o
         raise FileExistsError(destination)
     try:
         with ZipFile(template_path) as template, ZipFile(current_path) as current:
+            template_dates, current_dates = _date_system(template), _date_system(current)
+            if template_dates != current_dates:
+                raise FullWorkbookError(
+                    f"九表模板与计算结果的日期系统不一致（模板 {template_dates}，计算结果 {current_dates}），无法安全合并"
+                )
+            if template_dates != "1900":
+                raise FullWorkbookError("九表合并不支持 1904 日期系统，请使用 1900 模板和计算结果")
             source_parts = _sheet_parts(template)
             result_parts = _sheet_parts(current)
             if tuple(source_parts) != REQUIRED_ORDER or tuple(result_parts) != CURRENT:

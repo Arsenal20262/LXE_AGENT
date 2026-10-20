@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from hashlib import sha256
 from importlib.resources import files
 import os
@@ -13,6 +14,7 @@ from zipfile import ZipFile
 from openpyxl import Workbook, load_workbook
 from openpyxl.formatting.rule import CellIsRule
 from openpyxl.styles import Font
+from openpyxl.utils.datetime import CALENDAR_MAC_1904, CALENDAR_WINDOWS_1900
 import pytest
 
 from services.vietnam_replenishment.asset_contract import AssetContractError, load_template_sku_parameters
@@ -87,6 +89,75 @@ def test_bad_sheet_order_is_rejected_without_partial_output(tmp_path: Path) -> N
     with pytest.raises(FullWorkbookError, match="指定顺序的九表"):
         combine_full_workbook(template, current, output)
     assert not output.exists()
+
+
+@pytest.mark.parametrize("flag", ["1", "true"])
+def test_1904_template_is_rejected_during_validation(tmp_path, flag):
+    template, _ = _inputs(tmp_path)
+    with ZipFile(template) as archive:
+        root = ET.fromstring(archive.read("xl/workbook.xml"))
+    root.find(f"{{{MAIN}}}workbookPr").set("date1904", flag)
+    _rewrite_parts(template, {"xl/workbook.xml": ET.tostring(root)})
+    book = load_workbook(template, read_only=True)
+    assert book.epoch == CALENDAR_MAC_1904
+    book.close()
+    with pytest.raises(FullWorkbookError, match="1904.*1900"):
+        validate_full_template(template)
+
+
+@pytest.mark.parametrize("template_epoch,current_epoch", [
+    (CALENDAR_MAC_1904, CALENDAR_WINDOWS_1900),
+    (CALENDAR_WINDOWS_1900, CALENDAR_MAC_1904),
+    (CALENDAR_MAC_1904, CALENDAR_MAC_1904),
+])
+def test_unsupported_date_systems_never_publish_shifted_dates(tmp_path, template_epoch, current_epoch):
+    template, current = _inputs(tmp_path)
+    for path, epoch in ((template, template_epoch), (current, current_epoch)):
+        book = load_workbook(path)
+        book.epoch = epoch
+        if path == current:
+            book["库存商品信息"]["K2"] = datetime(2026, 10, 1)
+        book.save(path)
+        book.close()
+    before = {path: path.read_bytes() for path in (template, current)}
+    output = tmp_path / "final.xlsx"
+    with pytest.raises(FullWorkbookError, match="日期系统"):
+        combine_full_workbook(template, current, output)
+    assert not output.exists()
+    assert all(path.read_bytes() == data for path, data in before.items())
+
+
+@pytest.mark.parametrize("flag", [None, "0", "false"])
+def test_1900_dates_keep_their_values_and_original_business_parts(tmp_path, flag):
+    template, current = _inputs(tmp_path)
+    for path in (template, current):
+        book = load_workbook(path)
+        if path == current:
+            book["库存商品信息"]["K2"] = datetime(2026, 10, 1)
+        else:
+            for name in UNCHANGED:
+                book[name]["A2"] = datetime(2020, 2, 3)
+        book.save(path)
+        book.close()
+        with ZipFile(path) as archive:
+            root = ET.fromstring(archive.read("xl/workbook.xml"))
+        properties = root.find(f"{{{MAIN}}}workbookPr")
+        if flag is None:
+            properties.attrib.pop("date1904", None)
+        else:
+            properties.set("date1904", flag)
+        _rewrite_parts(path, {"xl/workbook.xml": ET.tostring(root)})
+    validate_full_template(template)
+    output = tmp_path / "final.xlsx"
+    combine_full_workbook(template, current, output)
+    with ZipFile(template) as original, ZipFile(output) as exported:
+        parts = _sheet_parts(original)
+        assert all(original.read(parts[name]) == exported.read(parts[name]) for name in UNCHANGED)
+    book = load_workbook(output, data_only=True)
+    assert book.epoch == CALENDAR_WINDOWS_1900
+    assert book["库存商品信息"]["K2"].value == datetime(2026, 10, 1)
+    assert all(book[name]["A2"].value == datetime(2020, 2, 3) for name in UNCHANGED)
+    book.close()
 
 
 def _builtin_template(path: Path) -> Path:

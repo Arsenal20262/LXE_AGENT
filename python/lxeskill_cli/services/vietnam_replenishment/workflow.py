@@ -11,7 +11,7 @@ from shared.datasets import dataset_dir
 from shared.filesystem import display_path
 
 from .asset_contract import load_template_sku_parameters
-from .full_workbook import REQUIRED_ORDER
+from .full_workbook import REQUIRED_ORDER, validate_full_template
 from .settings import run_inputs, snapshot_template
 from .recalculation import generate_vietnam_workbook
 from .workbook import RecommendationConfig
@@ -49,6 +49,7 @@ def generate_current_vietnam_recommendation(
             if selected is None:
                 raise VietnamWorkflowError("template_missing", "未提供越南备货九表模板；请在设置页上传当前模板，或为本轮指定 --template-file")
             template_source, template_asset_source = selected
+            validate_full_template(snapshot)
             sources = load_vietnam_files(sales=sales, inventory=inventory, products=products)
             return _generate_from_sources(
                 sources, config, config_source, snapshot, template_source, template_asset_source,

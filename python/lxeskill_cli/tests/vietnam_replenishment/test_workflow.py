@@ -8,10 +8,11 @@ from importlib.resources import files
 from pathlib import Path
 
 from openpyxl import load_workbook
+from openpyxl.utils.datetime import CALENDAR_MAC_1904
 import pytest
 
 from services.vietnam_replenishment import workflow
-from services.vietnam_replenishment.full_workbook import REQUIRED_ORDER, UNCHANGED
+from services.vietnam_replenishment.full_workbook import REQUIRED_ORDER, UNCHANGED, FullWorkbookError
 from services.vietnam_replenishment.workbook import RecommendationConfig
 from services.vietnam_replenishment.yacang_sources import VietnamSourceError, VietnamSources
 from services.vietnam_replenishment import settings as store
@@ -78,6 +79,33 @@ def test_missing_template_fails_before_loading_reports(tmp_path: Path, monkeypat
             sales="sales.xlsx", inventory="inventory.xlsx", products="products.xlsx",
         )
     assert caught.value.code == "template_missing"
+
+
+@pytest.mark.parametrize("explicit", [True, False])
+def test_1904_chat_or_legacy_current_fails_before_reports(tmp_path, monkeypatch, explicit):
+    from shared.input_assets import current_asset, promote_asset
+
+    good = _template(tmp_path / "good.xlsx")
+    store.upload_template(good)
+    unsupported = _template(tmp_path / "1904.xlsx")
+    book = load_workbook(unsupported)
+    book.epoch = CALENDAR_MAC_1904
+    book.save(unsupported)
+    book.close()
+    if not explicit:
+        # Simulate a current saved by the previous version; bypass the new upload
+        # validation without adding a production compatibility entry point.
+        promote_asset("vietnam_full_workbook", unsupported)
+    saved = current_asset("vietnam_full_workbook")
+    before = saved.path.read_bytes()
+    monkeypatch.setattr(workflow, "load_vietnam_files", lambda **_: pytest.fail("Reports loaded for 1904 input"))
+    monkeypatch.setattr(workflow, "generate_vietnam_workbook", lambda *_, **__: pytest.fail("Generation started for 1904 input"))
+    with pytest.raises(FullWorkbookError, match="1904.*1900"):
+        workflow.generate_current_vietnam_recommendation(
+            sales="sales.xlsx", inventory="inventory.xlsx", products="products.xlsx",
+            template=str(unsupported) if explicit else None,
+        )
+    assert saved.path.read_bytes() == before
 
 
 def test_template_fields_reach_generator_without_old_map(
