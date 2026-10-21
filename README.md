@@ -83,7 +83,7 @@ bun run desktop:dev
 - [Desktop 技术手册](docs/desktop/README.md)：界面、进程、配置与开发方式。
 - [Gateway ↔ Agent 协议](docs/harness/gateway/agent-protocol.md)：JSON-RPC 2.0 通信契约。
 - [Agent Runtime](docs/harness/runtime/README.md)：执行循环、上下文、会话与工具。
-- [Skill 手册](docs/harness/skill/README.md)与[当前 Skill 清单](docs/harness/skill/current_skill_catalog.md)：发现机制、CLI 契约与业务能力。
+- [Skill 手册](docs/harness/skill/README.md)：发现、管理与统计机制；具体任务指引见 [skills/](skills)。
 - [文件预览侧栏](docs/file-preview.md)与[Office 文件能力](docs/office-runtime.md)：桌面预览和文件处理。
 
 ## License
