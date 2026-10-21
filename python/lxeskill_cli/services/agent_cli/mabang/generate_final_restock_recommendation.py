@@ -19,6 +19,8 @@ def run(arguments: dict[str, Any]) -> dict[str, Any]:
             unlinked_shipments_snapshot_path=str(
                 arguments.get("unlinked_shipments_snapshot_path") or ""
             ).strip(),
+            peak_boost_enabled=arguments.get("peak_boost_enabled", False),
+            peak_boost_days=arguments.get("peak_boost_days"),
         )
         return result.to_payload()
     except Exception as exc:  # noqa: BLE001 — business failure includes the real diagnostic.

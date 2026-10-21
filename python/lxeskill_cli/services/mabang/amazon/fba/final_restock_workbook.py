@@ -1,4 +1,4 @@
-"""Build the offline 34-column final restock recommendation workbook."""
+"""Build the offline 35-column final restock recommendation workbook."""
 
 from __future__ import annotations
 
@@ -18,10 +18,9 @@ from openpyxl.utils import column_index_from_string
 from openpyxl.workbook.properties import CalcProperties
 
 from services.mabang.amazon.fba.final_restock_recommendation import final_restock_formulas
+from services.mabang.amazon.fba.final_restock_settings import read_state as read_final_restock_settings
 from services.mabang.amazon.fba.source_verification import (
     SHEET as SOURCE_VERIFICATION_SHEET,
-    TAG_COLUMNS,
-    SourceVerificationError,
     load_verified_source,
     read_report_metadata,
 )
@@ -30,7 +29,6 @@ from services.mabang.amazon.fba.store_msku_actual_inventory import (
     SOURCE_FILE_RE,
 )
 from services.mabang.amazon.fba.store_msku_replenishment import (
-    StoreMskuReplenishmentError,
     parse_weight_grams,
     validate_unlinked_shipments_snapshot_same_day,
 )
@@ -51,7 +49,7 @@ HEADERS = (
     "销量趋势", "加权日销", "可售", "待入库", "预留", "计划入库", "在途", "运营中心转运",
     "运营中心处理中", "FBA总库存（马帮）", "可销售天数", "未发出货件总计", "建议运输方式",
     "空运补货天数", "海运补货天数", "空运计划", "空运实际", "空运总重", "海运计划",
-    "海运实际", "海运总重", "单件重量", "本地SKU名称", "备注", "本地库存", "本地SKU",
+    "海运实际", "海运总重", "单件重量(g)", "本地SKU名称", "备注", "本地库存", "本地SKU", "可供天数",
 )
 
 SOURCE_NUMBER_COLUMNS = (
@@ -76,7 +74,6 @@ OUTPUT_SOURCE_COLUMNS = {
     "调仓中": "运营中心处理中",
 }
 FORMULA_COLUMNS = tuple(final_restock_formulas(2))
-ADVICE_FORMULA_COLUMNS = frozenset(("U", "V", "W", "X", "Y", "Z", "AA", "AB", "AC"))
 EXCEL_ERROR_VALUES = {
     "#NULL!", "#DIV/0!", "#VALUE!", "#REF!", "#NAME?", "#NUM!", "#N/A", "#GETTING_DATA",
 }
@@ -146,9 +143,9 @@ def _strict_number(value: Any, *, row_number: int, column: str) -> int | float:
         raise FinalRestockWorkbookError(
             f"MSKU 源表第 {row_number} 行 {column} 不是有效数值: {value!r}"
         ) from exc
-    if not number.is_finite() or number < 0:
+    if not number.is_finite():
         raise FinalRestockWorkbookError(
-            f"MSKU 源表第 {row_number} 行 {column} 必须是有限非负数: {value!r}"
+            f"MSKU 源表第 {row_number} 行 {column} 必须是有限数: {value!r}"
         )
     if number == number.to_integral_value():
         return int(number)
@@ -186,7 +183,10 @@ def _unique_source_rows(records: list[dict[str, Any]]) -> tuple[list[dict[str, A
     for index, record in enumerate(records, start=2):
         missing = [column for column in SOURCE_REQUIRED_COLUMNS if column not in record]
         if missing:
-            raise FinalRestockWorkbookError(f"MSKU 源表缺少列: {', '.join(missing)}")
+            source_field = "（马帮字段 uq122）" if "本地库存" in missing else ""
+            raise FinalRestockWorkbookError(
+                f"MSKU 源表 MSKU={_text(record.get('MSKU'))!r} 缺少列: {', '.join(missing)}{source_field}"
+            )
         msku = _text(record.get("MSKU"))
         key = normalize_sku_key(msku)
         if not key:
@@ -239,6 +239,7 @@ def _load_shenzhen_rows(
                         f"深圳库存报告存在重复 MSKU: {msku!r}"
                     )
                 actual = cells[indexes[ACTUAL_INVENTORY_QUANTITY_COLUMN]] if indexes[ACTUAL_INVENTORY_QUANTITY_COLUMN] < len(cells) else None
+                # Placeholder rows remain valid report identities; quantities never supply AG.
                 _optional_number(actual, context=f"深圳库存报告 MSKU={msku} 库存", allow_negative=True)
                 local_sku = cells[indexes["本地SKU"]] if indexes["本地SKU"] < len(cells) else None
                 by_key[key] = _text(local_sku)
@@ -263,10 +264,7 @@ def _load_shenzhen_rows(
 
 
 def _shipment_quantities(path: Path, *, store_name: str, source_data_time: str) -> dict[str, int | float]:
-    try:
-        validate_unlinked_shipments_snapshot_same_day(path, source_data_time)
-    except StoreMskuReplenishmentError:
-        raise
+    validate_unlinked_shipments_snapshot_same_day(path, source_data_time)
     quantities = load_unlinked_shipment_quantities(path, store_name=store_name)
     normalized: dict[str, int | float] = {}
     original_for_key: dict[str, str] = {}
@@ -314,43 +312,48 @@ def _rows_for_workbook(
                 record.get(source_column), row_number=source_row_number, column=source_column
             )
         raw_weight = record.get("单品重量(g)(cm)")
-        parsed_weight = (
-            0 if isinstance(raw_weight, (int, float)) and not isinstance(raw_weight, bool) and raw_weight == 0
-            else parse_weight_grams(raw_weight)
-        )
-        if _text(raw_weight) and parsed_weight is None:
+        # A treats blank weights as zero, but malformed nonblank data remains an error.
+        if raw_weight is None or (isinstance(raw_weight, str) and not raw_weight.strip()):
+            parsed_weight = 0
+        else:
+            try:
+                number = Decimal(str(raw_weight).strip().replace(",", ""))
+            except InvalidOperation:
+                parsed_weight = parse_weight_grams(raw_weight)
+            else:
+                parsed_weight = float(number) if number.is_finite() and number >= 0 else None
+        if isinstance(raw_weight, bool) or parsed_weight is None:
             raise FinalRestockWorkbookError(
-                f"MSKU 源表第 {source_row_number} 行 单品重量(g)(cm) 无法解析为克数: {raw_weight!r}"
+                f"AD重量解析阶段失败: MSKU={msku}，源字段=单品重量(g)(cm)，"
+                f"第{source_row_number}行，原值={raw_weight!r}；原因=无法解析为有效克数"
             )
-        out["单件重量"] = parsed_weight
+        out["单件重量(g)"] = parsed_weight
         out["未发出货件总计"] = shipment_by_key.get(key, 0)
         report_local_sku = inventory_by_key[key]
         source_local_sku = _text(record.get("本地SKU"))
-        if report_local_sku and report_local_sku != source_local_sku:
-            raise FinalRestockWorkbookError(
-                f"深圳库存报告 MSKU={msku} 本地SKU与源表不一致: "
-                f"源表={source_local_sku!r}, 报告={report_local_sku!r}"
-            )
+        inventory_context = f"AG本地库存(uq122)，MSKU={msku}，MSKU源表第{source_row_number}行"
         out["本地库存"] = _optional_number(
-            record.get("本地库存"), context=f"MSKU 源表第 {source_row_number} 行 本地库存",
-            allow_negative=True,
+            record.get("本地库存"), context=inventory_context, allow_negative=True,
         )
+        if out["本地库存"] is None:
+            raise FinalRestockWorkbookError(f"{inventory_context} 缺失或为空，不能按0计算")
         out["本地SKU"] = report_local_sku or source_local_sku
-        out["_binding_verified"] = record[TAG_COLUMNS[1]]
         result.append(out)
     return result
 
 
-def _write_workbook(path: Path, rows: list[dict[str, Any]]) -> None:
+def _write_workbook(
+    path: Path, rows: list[dict[str, Any]], *, peak_boost_enabled: bool = True, peak_boost_days: int | None = None,
+) -> None:
     workbook = Workbook()
     worksheet = workbook.active
     worksheet.title = WORKSHEET_NAME
     worksheet.append(list(HEADERS))
     for row_index, row in enumerate(rows, start=2):
         worksheet.append([row.get(header) for header in HEADERS])
-        for column, formula in final_restock_formulas(row_index).items():
-            if not row["_binding_verified"] and column in ADVICE_FORMULA_COLUMNS:
-                continue  # Keep the unverified source row without transport or restock advice.
+        for column, formula in final_restock_formulas(
+            row_index, peak_boost_enabled=peak_boost_enabled, peak_boost_days=peak_boost_days,
+        ).items():
             worksheet[f"{column}{row_index}"] = formula
     for row in worksheet.iter_rows():
         for cell in row:
@@ -360,8 +363,9 @@ def _write_workbook(path: Path, rows: list[dict[str, Any]]) -> None:
     for row_index in range(2, worksheet.max_row + 1):
         worksheet[f"J{row_index}"].number_format = "0.0000"
         worksheet[f"S{row_index}"].number_format = "0.00"
+        worksheet[f"AI{row_index}"].number_format = "0.00"
     worksheet.freeze_panes = "A2"
-    worksheet.auto_filter.ref = f"A1:AH{worksheet.max_row}"
+    worksheet.auto_filter.ref = f"A1:AI{worksheet.max_row}"
     worksheet.sheet_view.zoomScale = 85
     workbook.calculation = CalcProperties(calcMode="auto", fullCalcOnLoad=True, forceFullCalc=True)
     try:
@@ -434,12 +438,6 @@ def _inspect_recalculated(path: Path, *, rows: list[dict[str, Any]]) -> tuple[in
                     )
                 for column, index in formula_indexes.items():
                     formula = formula_row[index].value
-                    if not rows[row_number - 2]["_binding_verified"] and column in ADVICE_FORMULA_COLUMNS:
-                        if formula not in (None, "") or value_row[index].value not in (None, ""):
-                            raise FinalRestockWorkbookError(
-                                f"未通过本地SKU绑定核验的 MSKU 重算后仍有运输或补货建议: {column}{row_number}"
-                            )
-                        continue
                     if not isinstance(formula, str) or not formula.startswith("="):
                         raise FinalRestockWorkbookError(
                             f"重算后公式丢失或改变为非公式单元格: {column}{row_number}={formula!r}"
@@ -476,20 +474,25 @@ def generate_final_restock_recommendation(
     shenzhen_inventory_report_xlsx_path: str | Path,
     unlinked_shipments_snapshot_path: str | Path,
     output_dir: str | Path | None = None,
+    peak_boost_enabled: bool = False,
+    peak_boost_days: int | None = None,
 ) -> FinalRestockWorkbookResult:
     """Validate same-batch offline inputs, then write and recalculate one workbook."""
     clean_store_name = _text(store_name)
     if not clean_store_name:
         raise FinalRestockWorkbookError("store_name 不能为空")
+    settings = read_final_restock_settings()
+    # A chat request is the authority for this run, never a historical saved switch.
+    # Validate before touching inputs; the business formula function owns value bounds.
+    final_restock_formulas(2, peak_boost_enabled=peak_boost_enabled, peak_boost_days=peak_boost_days)
+    settings = {"peak_boost_enabled": peak_boost_enabled,
+                "peak_boost_days": settings["peak_boost_days"] if peak_boost_days is None else peak_boost_days}
     source_path = _path(msku_source_xlsx_path, label="MSKU 源文件")
     inventory_path = _path(shenzhen_inventory_report_xlsx_path, label="深圳库存报告")
     snapshot_path = _path(unlinked_shipments_snapshot_path, label="未关联货件快照")
 
-    try:
-        verified_source = load_verified_source(source_path, store_name=clean_store_name)
-        inventory_metadata = read_report_metadata(inventory_path)
-    except SourceVerificationError:
-        raise
+    verified_source = load_verified_source(source_path, store_name=clean_store_name)
+    inventory_metadata = read_report_metadata(inventory_path)
     if inventory_metadata != verified_source.metadata:
         raise FinalRestockWorkbookError(
             "深圳库存报告与本次 MSKU 源文件核验批次不一致；请使用同一源文件重新导出"
@@ -517,7 +520,7 @@ def generate_final_restock_recommendation(
         temporary = Path(temporary_directory)
         formula_path = temporary / "final-restock-formulas.xlsx"
         recalculated_path = temporary / "final-restock-recalculated.xlsx"
-        _write_workbook(formula_path, rows)
+        _write_workbook(formula_path, rows, **settings)
         _recalculate(formula_path, recalculated_path)
         formula_error_count, formula_error_examples = _inspect_recalculated(
             recalculated_path,
