@@ -116,7 +116,7 @@ Python 代码不能交给 V8 运行，所以它走自己的构建路线：先用
 python.exe -I -m lxeskill ...
 ```
 
-这样不需要用户安装 Python，也不需要临时修改 Python 的查找路径。
+这样不需要用户安装 Python，也不需要临时修改 Python 的查找路径。`-I` 启用导入隔离，`-m` 按模块启动 CLI；运行时也设置 `PYTHONNOUSERSITE=1`，避免用户级 Python 配置和包污染运行环境。导入隔离不提供文件系统沙箱，工具的文件写入限制见 [权限专题](../harness/runtime/permission-policy.md)。
 
 ## 整条流水线
 

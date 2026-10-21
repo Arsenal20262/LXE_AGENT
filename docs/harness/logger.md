@@ -18,14 +18,14 @@ Reducing terminal noise must not remove useful runtime diagnostics. Conversely, 
 
 ## Runtime Projection
 
-Users select the `off`, `standard`, or `diagnostic` logging profile and retention period in Desktop settings. Desktop stores that choice in `var/config/settings.json` and projects the internal `LOG_LEVEL`, `RUNTIME_LOG_LEVEL`, `LOCAL_LOGS_ENABLED`, retention, and trace variables into child processes. Those environment names are process transport, not user-owned configuration files.
+Users select the `off`, `standard`, or `diagnostic` logging profile and retention period in Desktop settings. Desktop stores that choice in `<data-root>/config/settings.json` and projects the internal `LOG_LEVEL`, `RUNTIME_LOG_LEVEL`, `LOCAL_LOGS_ENABLED`, retention, and trace variables into child processes. Those environment names are process transport, not user-owned configuration files.
 
 Terminal logs always use the human-readable pretty format; managed files use JSONL. Local files are written below the active `LXE_DATA_ROOT/logs/` tree with product-owned file names. Trace writers use dated session/turn directories so one failing call can be inspected without scanning an entire process log.
 
 Wire traces use the main-compatible per-attempt layout:
 
 ```text
-var/logs/sse_wire_traces/YYYYMMDD/HHMM_<session>/<turn>/step_<zero-based-step>_attempt_<attempt>.jsonl
+<data-root>/logs/sse_wire_traces/YYYYMMDD/HHMM_<session>/<turn>/step_<zero-based-step>_attempt_<attempt>.jsonl
 ```
 
 Each successful attempt records `request_start`, `response_start`, every SDK `wire_event`, and one `request_end`. A failure before an HTTP response omits `response_start`. Existing legacy `provider.jsonl` files are retained, but new turns do not create them.
@@ -34,19 +34,19 @@ Each successful attempt records `request_start`, `response_start`, every SDK `wi
 
 File responsibilities are intentionally separate:
 
-- Electron Main and Gateway records (JSONL): `var/logs/runtime/YYYYMMDD/desktop.log`.
-- Private `agent-cli` and Runtime records (JSONL): `var/logs/runtime/YYYYMMDD/runtime.log`.
-- Python text logs (standalone `lxeskill` commands): `var/logs/runtime/YYYYMMDD/runtime-py.log`.
-- Browser-auth text logs: `var/logs/browser_auth_service/YYYYMMDD/browser_auth_service.log`.
-- Feishu raw events: `var/logs/feishu_raw_events/YYYYMMDD.jsonl`.
-- Provider wire traces: `var/logs/sse_wire_traces/`.
-- Ziniao diagnostic traces: `var/logs/ziniao_traces/`.
+- Electron Main and Gateway records (JSONL): `<data-root>/logs/runtime/YYYYMMDD/desktop.log`.
+- Private `agent-cli` and Runtime records (JSONL): `<data-root>/logs/runtime/YYYYMMDD/runtime.log`.
+- Python text logs (standalone `lxeskill` commands): `<data-root>/logs/runtime/YYYYMMDD/runtime-py.log`.
+- Browser-auth text logs: `<data-root>/logs/browser_auth_service/YYYYMMDD/browser_auth_service.log`.
+- Feishu raw events: `<data-root>/logs/feishu_raw_events/YYYYMMDD.jsonl`.
+- Provider wire traces: `<data-root>/logs/sse_wire_traces/`.
+- Ziniao diagnostic traces: `<data-root>/logs/ziniao_traces/`.
 
-Runtime execution semantics are intentionally not duplicated into a second per-turn trace. Use `runtime.log` for correlated Turn, Provider-attempt, tool, cancellation, error, and usage summaries; durable usage remains in `turn_usage` SQLite. The retired `var/logs/agent_traces/` directory is no longer written and is removed naturally by the configured retention policy after its dated entries expire.
+Runtime execution semantics are intentionally not duplicated into a second per-turn trace. Use `runtime.log` for correlated Turn, Provider-attempt, tool, cancellation, error, and usage summaries; durable usage remains in `turn_usage` SQLite. The retired `<data-root>/logs/agent_traces/` directory is no longer written and is removed naturally by the configured retention policy after its dated entries expire.
 
-`LXE_DATA_ROOT` is the canonical `var` root. Desktop resolves every path above from it and exposes
-`LXE_DATA_ROOT/logs` as the diagnostics directory. Desktop does not read, migrate, or delete the former
-AppData/Application Support state tree.
+`<data-root>` is the active application data directory supplied through `LXE_DATA_ROOT`.
+Desktop exposes its `logs/` subdirectory as the diagnostics directory. Default locations, overrides
+and upgrade migration are maintained in [Program and user data](../desktop/data-location.md).
 
 ## Record Shape And Context
 
