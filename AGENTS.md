@@ -6,7 +6,7 @@
 - **agentcli**：独立的 Agent Harness。`apps/agent-cli` 是命令行宿主，`packages/agent/runtime` 是 Bun Agent 执行核心，负责模型调用、上下文、工具、会话、执行权限和统计。
 - **lxeskillCLI**：`python/lxeskill_cli` 中按次启动的业务 CLI，通过 `lxeskill` 暴露业务命令，独立管理业务数据、配置和文件产出。
 - **Skill**：`skills/` 存放通用和业务指引，为模型提供任务知识与工作上下文。
-- **文档**：[README](README.md#架构) 提供整体架构，[docs/README.md](docs/README.md) 是专题入口；`docs/harness/` 包含运行时、CLI 契约和外部平台参考。
+- **文档**：[README](README.md#架构) 提供整体架构，[docs/README.md](docs/README.md) 是专题入口；Electron、agentcli 和 lxeskillCLI 的技术手册分别位于 `docs/desktop/`、`docs/harness/` 和 `docs/lxeskill-cli/`，共享能力与外部参考从文档入口查阅。
 
 ## 模块协作与 Skill 工作上下文
 
@@ -77,7 +77,7 @@ When you receive an instruction:
 | **chore** | 构建过程或辅助工具的变动（如更新依赖） | 无 |
 | **ci** | 持续集成配置文件或脚本的变动 | 无 |
 
-版本列仅供发布时参考，不表示每个 commit 都要升级版本。正式版本和更新说明由发布者在 `config/desktop-release.json` 中显式设置；commit 类型不会自动递增版本。详见 [Windows 更新与发布](docs/desktop-updates.md)。
+版本列仅供发布时参考，不表示每个 commit 都要升级版本。正式版本和更新说明由发布者在 `config/desktop-release.json` 中显式设置；commit 类型不会自动递增版本。详见 [Windows 更新与发布](docs/desktop/updates.md)。
 
 ## DOCS 规范
 

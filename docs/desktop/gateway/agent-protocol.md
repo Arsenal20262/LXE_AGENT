@@ -9,7 +9,7 @@ agent-cli serve --input-format stream-json --output-format stream-json
 `serve` 使用标准 [JSON-RPC 2.0](https://www.jsonrpc.org/specification) 封装，stdin/stdout
 仍按 JSONL 分帧：一行一个 JSON 对象或 batch 数组，正文中的换行由 JSON 转义。
 stdout 只写协议消息，日志写 stderr。桌面 Renderer ↔ Electron 的 IPC 不变。
-独立的单次执行接口 `agent-cli exec` 见 [Agent CLI exec](../runtime/agent_cli_exec.md)。
+独立的单次执行接口 `agent-cli exec` 见 [Agent CLI exec](../../harness/runtime/agent_cli_exec.md)。
 
 ## 启动握手
 
@@ -34,7 +34,7 @@ agent-cli 在创建 runtime host 前验证业务版本；Gateway 核对响应后
 
 方法名、参数和通知列表统一以 [`AgentCommandPayloads` 与 `AgentEvent`](../../../packages/foundation/desktop-protocol/src/index.ts) 为准。执行与控制使用 `run_turn`、`cancel_turn`、`steer_turn`，会话状态使用 `session_status`；Dashboard 查询使用 `dashboard_call` 携带 `{ operation, input }`。方法只接受对象参数，省略 params 按空对象校验。
 
-桌面问题通过 `sessions.questions` 查询当前快照、`sessions.answer` 提交答案，均由专用 Dashboard operation 到达 Runtime，不进入普通消息队列。`session.changed` 的 `questions` 变化只通知客户端重新查询，详见 [结构化提问](../tool/ask-user-question.md)。
+桌面问题通过 `sessions.questions` 查询当前快照、`sessions.answer` 提交答案，均由专用 Dashboard operation 到达 Runtime，不进入普通消息队列。`session.changed` 的 `questions` 变化只通知客户端重新查询，详见 [结构化提问](../../harness/runtime/tools/ask-user-question.md)。
 
 Gateway 生成 UUID 请求 ID；通用解析器接受字符串、有限数值与 null，并原样回传。
 成功响应只有 result，失败响应只有 error。无 id 的调用是通知，即使未知方法、
@@ -122,4 +122,4 @@ bun apps/dashboard/test/features/sessions/jsonrpc-fixture-server.ts
 runtime host 和会话存储为内存 fixture。HTTP 仅用于验收页面桥接，不属于生产通信。
 不调用模型、不读写生产数据库。退出 fixture 服务会关闭子进程。
 
-该 fixture 验证消息、展示交接和取消；原生 IPC 与窗口行为另用 Electron fixture。问题卡片的真实窗口验收入口见 [结构化提问](../tool/ask-user-question.md#验证)。
+该 fixture 验证消息、展示交接和取消；原生 IPC 与窗口行为另用 Electron fixture。问题卡片的真实窗口验收入口见 [结构化提问](../../harness/runtime/tools/ask-user-question.md#验证)。

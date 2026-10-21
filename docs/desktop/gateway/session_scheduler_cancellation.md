@@ -34,7 +34,7 @@ Runtime unhealthy 时 scheduler 保留 queued job，不继续 dispatch。start �
 - steering queue 与已接受 cancel 状态。
 - start failure 和 closing/terminal 状态。
 
-Provider、summary、MCP 和 exec/wait 的当前观察都接收同一个 abort signal。exec 进程创建成功后立即归 Session manager，不登记到 RunHandle；取消 turn 只停止观察，进程继续运行。显式 terminate、Session 删除或 Runtime 关闭仍使用完整进程树语义。
+Provider、summary、MCP 和 exec/wait 的当前观察都接收同一个 abort signal。Scheduler 取消的是 run；命令进程的归属、观察和终止规则见 [exec 生命周期](../../harness/runtime/tools/README.md#cancel-与-exec-生命周期)。
 
 ## Completion 校验
 
@@ -60,7 +60,7 @@ Scheduler 只接受 run id、session id 和 job id 与 active handle 完全一�
 
 取消发生在多个 tool use 中间时，Runtime 会为尚未 dispatch 的 tool 写 cancelled result stub，使 provider history 和 transcript 保持 tool-use closure。
 
-主动停止说明的写入条件、技术取消的区分及桌面隐藏规则统一见 [Runtime 取消与失败](../runtime/turn_execution.md#cancel-与失败)。Gateway 不再为停止追加 pending event。
+主动停止说明的写入条件、技术取消的区分及桌面隐藏规则统一见 [Runtime 取消与失败](../../harness/runtime/turn_execution.md#cancel-与失败)。Gateway 不再为停止追加 pending event。
 
 ## Steering
 

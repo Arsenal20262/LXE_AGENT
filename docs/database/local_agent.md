@@ -2,23 +2,25 @@
 
 ## 先说结论
 
-Desktop 不再把所有状态塞进一个 `local_agent.sqlite3`。Electron Main、私有 `agent-cli` 和 Python 业务命令各自拥有自己的数据库，避免两个进程同时写同一个 SQLite 文件。
+Electron / Gateway、agentcli 和 lxeskillCLI 分别管理自己的数据，通过约定接口协作，不把其他模块的数据库当作集成接口。数据库按职责分开；各模块内部的并发访问由其存储实现管理，不代表每个数据库只能由一个操作系统进程写入。
 
 会话正文也不放在 SQLite 里，而是写入 append-only 的 Transcript v2 JSONL。SQLite 保存适合查询和更新的状态，JSONL 保存按时间追加的会话事件。
 
 ## 当前存储分工
 
-| 文件 | 谁写入 | 保存什么 |
+| 文件 | 所属模块／维护方 | 保存什么 |
 | --- | --- | --- |
 | `db/gateway.sqlite3` | Electron Main / Gateway | Gateway session、平台来源和 response route |
 | `db/agent.sqlite3` | 私有 `agent-cli` / Runtime | Agent session（含独立的 `permission_mode`）、pending event、usage、模型信息和 transcript 索引 |
 | `db/exec-sessions/<thread-id>/agent.sqlite3` | 一次性 `agent-cli exec` / Runtime | 单个 CLI thread 的 session、usage、模型信息和 transcript 索引 |
-| `db/lxeskill.sqlite3` | 一次性 Python `lxeskill` 命令 | Python 业务侧状态与可丢弃的紫鸟会话缓存；浏览器真实状态以紫鸟客户端实时接口为准 |
+| `db/lxeskill.sqlite3` | lxeskillCLI | 业务状态与可丢弃的紫鸟会话缓存；浏览器真实状态以紫鸟客户端实时接口为准 |
 | `db/sessions.json` | Gateway | 平台 source 到 session id 的稳定绑定 |
 | `db/session_transcripts/<session>.jsonl` | Runtime | 原始消息、turn metadata 和 `context_patch` |
-| `db/machine_identity.json` | Desktop 与 Runtime maintenance（共用 Core 实现） | Cloud、WireGuard 和可选 Data Server 共用的本机身份 |
+| `db/machine_identity.json` | Desktop 与 agentcli 用量同步服务（共用 Core 实现） | Cloud、WireGuard 和可选 Data Server 共用的本机身份 |
 
-这些路径都位于规范 `var` 根。每个持久化的 CLI thread 还在自己的目录内使用 `session_transcripts/`，并用独占锁保证同一时刻只有一个 `exec resume` 写该数据库。`--ephemeral` 改用系统临时目录并在结束时删除。Desktop dev/preview 使用仓库或 worktree 的 `var/`，Windows 安装包使用安装目录的 `var/`；`LXE_DATA_ROOT` 下发的就是这个目录本身。
+表中路径均相对于宿主实际使用的数据目录。Desktop 的默认位置、`LXE_DATA_ROOT` 和升级迁移统一见 [程序与用户数据](../desktop/data-location.md)；不要按程序安装目录推导数据库位置。
+
+每个持久化的 CLI thread 还在自己的目录内使用 `session_transcripts/`，并用独占锁保证同一时刻只有一个 `exec resume` 写该数据库。`--ephemeral` 改用系统临时目录并在结束时删除。独立 CLI 的目录参数与默认值见 [Agent CLI exec](../harness/runtime/agent_cli_exec.md#会话与存储)。
 
 测试 fixture 或旧源码环境里仍可能出现 `local_agent.sqlite3` 这个文件名；它不是 Desktop 当前默认的单库布局。
 
@@ -26,8 +28,8 @@ Desktop 不再把所有状态塞进一个 `local_agent.sqlite3`。Electron Main�
 
 - Gateway 必须在 Runtime 重启时继续知道消息来自哪里、结果应该发到哪里。
 - Runtime 需要独立维护模型上下文、pending event 和 usage。
-- Python 命令是按需启动的短进程，只写自己负责的业务状态。
-- 每个数据库只有一个明确的写入方，减少锁冲突和跨进程耦合。
+- lxeskillCLI 按需启动业务命令，独立管理业务数据与配置。
+- 数据归属清晰，模块协作不依赖对方的表结构或存储布局。
 
 Gateway 创建 session 时，会同时让 Gateway store 和 Agent store 建立对应记录；response route 留在 Gateway，pending event 留在 Agent。两边通过稳定的 session id 关联，不通过共享 SQLite 表通信。
 
@@ -44,11 +46,11 @@ Gateway 创建 session 时，会同时让 Gateway store 和 Agent store 建立�
 - session、route、pending event 和 usage 更新使用各自数据库事务。
 - tool call 与 tool result 必须在 transcript 中保持闭合。
 - 轻量查询只读 SQLite metadata；需要模型历史时才 replay transcript。
-- 数据库所有权是程序设计约束，不是文件系统隔离。模型文件工具和 Shell 使用宿主用户权限，workspace 只是路径基准；Runtime 没有对 `var/db`、日志或配置提供写保护。边界见 [工具信任模型](../harness/runtime/tools/README.md#本机信任模型)。
-- 公司身份和集成凭证由桌面安全存储保存；用户本地模型 Key 明文写入 `var/config/auth.json`。具体存储与访问规则见 [桌面配置](../desktop/README.md#桌面配置与安全)。
+- 数据归属见 [架构简介](../architecture/README.md#3-数据归属)。工具的文件写入范围由 [权限策略](../harness/runtime/permission-policy.md)控制；数据目录不另设统一写保护，位于所选工作区内的应用数据也进入工作区写入范围。
+- 公司身份和集成凭证由桌面安全存储保存；用户本地模型 Key 明文写入数据目录下的 `config/auth.json`。具体存储与访问规则见 [桌面配置](../desktop/README.md#桌面配置与安全)。
 - Workspace Skill、AGENTS Instructions 和搜索服务只做进程内缓存，不新增数据库表或磁盘解析缓存。
 
-待回答问题及其唤醒回调只存在 Bun Runtime 内存中，问题和最终工具结果进入会话历史。界面刷新重新查询当前问题；Agent 重启不会恢复旧等待，未闭合调用沿用历史修复机制处理。详见 [结构化提问](../harness/tool/ask-user-question.md)。
+待回答问题及其唤醒回调只存在 Bun Runtime 内存中，问题和最终工具结果进入会话历史。界面刷新重新查询当前问题；Agent 重启不会恢复旧等待，未闭合调用沿用历史修复机制处理。详见 [结构化提问](../harness/runtime/tools/ask-user-question.md)。
 
 ## 备份与恢复
 
@@ -67,5 +69,5 @@ Gateway 创建 session 时，会同时让 Gateway store 和 Agent store 建立�
 
 消息路由错误先看 `gateway.sqlite3` 和 `sessions.json`；模型历史错误看 transcript 与 `context_patch`；后台任务或 usage 错误看 `agent.sqlite3`；紫鸟会话状态错误再看 `lxeskill.sqlite3`。
 
-当前路径装配见 [Desktop Gateway](/apps/desktop/src/main/desktop-gateway.ts)，Transcript 实现见 [Runtime storage](/packages/agent/runtime/src/state/storage.ts)。
-Machine identity 的唯一实现见 [Core machine identity](/packages/foundation/core/src/machine-identity.ts)；移动代码不会迁移或重写现有 JSON 文件。
+当前路径装配见 [Desktop Gateway](../../apps/desktop/src/main/desktop-gateway.ts)，Transcript 实现见 [Runtime storage](../../packages/agent/runtime/src/state/storage.ts)。
+Machine identity 的唯一实现见 [Core machine identity](../../packages/foundation/core/src/machine-identity.ts)；移动代码不会迁移或重写现有 JSON 文件。
