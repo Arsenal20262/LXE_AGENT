@@ -502,3 +502,8 @@ Amazon 业务已明确且用户明确要求“最终备货建议”时进入 `re
 - 最终分支处理 6 个冲突文件：Desktop IPC/protocol 保留 main 越南模板接口和 Amazon 设置接口；Runtime 测试采用 main 公开 lxeskill 契约并保留 Skill 契约覆盖；深圳库存 CLI/Skill 保留 main 认证失败停止和脱敏规则，同时传递显式本轮 MSKU 源表路径。CLI 错误诊断增加既有 `diagnostic()` 脱敏，认证终态仍不触发额外恢复或重试。
 - 兼容验证：Python 定向 **424 passed**；Runtime/Desktop Bun 定向 **86 passed**；Desktop 全测 **475 passed、3 skipped**；Desktop 与 Dashboard TypeScript 检查通过；`desktop:build` 通过。PR1 公式测试 **159 passed**；PR2 Python/CLI 定向 **766 passed、4 skipped**，Runtime CLI 定向 **10 passed**。所有测试均为离线验证，未调用生产 ERP。
 - 本地分支合并不等于推送或创建远端 PR。最新 main 已进入 PR 堆栈的合并候选；远端 fork 的新分支头仍需用户单独授权后推送。
+
+## 2026-10-21 main 后续两项测试提交同步
+
+- main 在上次同步后推进到 `36130265`（合并 PR #100），只改动 Dashboard `sidebar-context.cjs` 与 Desktop `file-preview.test.ts` 两个测试文件。已按 PR1 → PR2 → 最终功能分支顺序同步，均无冲突；当前 HEAD 分别为 PR1 `979c33e8`、PR2 `bcd4c04b`、最终功能分支 `f8478e04`，三者都以 `36130265` 为祖先。
+- 当前变更直接相关测试通过：Desktop `file-preview.test.ts` **16 passed**；Dashboard renderer 的 sidebar 场景 **1 passed**（24 项过滤）。首次 Dashboard 测试因沙箱禁止临时回环端口失败，允许本机回环后重跑通过。
