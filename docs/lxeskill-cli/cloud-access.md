@@ -1,6 +1,6 @@
 # lxeskillCLI 云端通信与自检
 
-lxeskillCLI 通过公司 WireGuard 和服务器地址访问云端业务，不要求 Electron 或 agentcli 正在运行，也不要求先执行自检。服务器根据当前设备逐次鉴权；桌面权限缓存不是业务授权凭证。Electron 的调用关系和缓存规则见 [桌面云端接入](desktop/cloud-access.md)。
+lxeskillCLI 通过公司 WireGuard 和服务器地址访问云端业务，不要求 Electron 或 agentcli 正在运行，也不要求先执行自检。服务器根据当前设备逐次鉴权；桌面权限缓存不是业务授权凭证。Electron 的调用关系和缓存规则见 [桌面云端接入](../desktop/cloud-access.md)。
 
 ## 权限查询与连接自检
 
@@ -20,11 +20,11 @@ lxeskill cloud-status --server http://10.88.0.1:8000
 
 stdout 输出一个协议版本 `1` 的 JSON 结果。`cloud-context` 成功结果的 `data.device_context` 为 `lxe.device-context.v1`；`cloud-status` 的 `data.checks` 保存每一步的 HTTP 状态与耗时。失败保留实际诊断，做必要脱敏和明确截断。退出码为成功 `0`、参数错误 `2`、连接失败 `3`、HTTP／响应契约错误 `4`、取消 `130`。
 
-两条命令都不自动重试，响应上限均为 1 MiB；`cloud-context` 超时 10 秒，`cloud-status` 每次请求使用客户端默认的 15 秒超时。Electron 的 CLI 桥接另设进程总超时和输出上限，非零退出仍解析结构化错误；无效、矛盾或超限输出不能当作成功。数值与启动实现见 [cloud-context.ts](../apps/desktop/src/main/cloud-context.ts)。
+两条命令都不自动重试，响应上限均为 1 MiB；`cloud-context` 超时 10 秒，`cloud-status` 每次请求使用客户端默认的 15 秒超时。Electron 的 CLI 桥接另设进程总超时和输出上限，非零退出仍解析结构化错误；无效、矛盾或超限输出不能当作成功。数值与启动实现见 [cloud-context.ts](../../apps/desktop/src/main/cloud-context.ts)。
 
 ## CLI 内部通信层
 
-[CloudClient](../python/lxeskill_cli/shared/infra/cloud_client.py) 和 [AsyncCloudClient](../python/lxeskill_cli/shared/infra/cloud_async.py) 是 lxeskillCLI 内部公共通信模块。它们负责 HTTP 传输，不缓存授权，不处理业务规则，不依赖桌面状态。
+[CloudClient](../../python/lxeskill_cli/shared/infra/cloud_client.py) 和 [AsyncCloudClient](../../python/lxeskill_cli/shared/infra/cloud_async.py) 是 lxeskillCLI 内部公共通信模块。它们负责 HTTP 传输，不缓存授权，不处理业务规则，不依赖桌面状态。
 
 ```python
 from shared.infra.cloud_client import CloudClient, diagnostic
@@ -51,8 +51,8 @@ ERP 请求需要服务器的 `erp` 能力及相应动作权限，马帮查询需
 
 上线前确认服务器支持对应原生业务接口，再更新 CLI；回滚不兼容的服务端前先协调客户端版本，不添加隐式凭据回退。旧客户端的兼容方式由服务器维护，本 CLI 不申请旧业务 Token。
 
-- [CLI 分流入口](../python/lxeskill_cli/lxeskill/cli.py)、[权限查询](../python/lxeskill_cli/lxeskill/cloud_context.py)、[连接自检](../python/lxeskill_cli/lxeskill/cloud_status.py)。
-- [ERP HTTP 适配](../python/lxeskill_cli/services/agent_cli/mabang/erp_http.py)、[异步马帮查询](../python/lxeskill_cli/services/mabang/official_api.py)。
-- [查询测试](../python/lxeskill_cli/tests/lxeskill/test_cloud_context.py)、[自检测试](../python/lxeskill_cli/tests/lxeskill/test_cloud_status.py)、[通信测试](../python/lxeskill_cli/tests/infra/test_cloud_client.py)、[业务传输测试](../python/lxeskill_cli/tests/infra/test_cloud_business_transport.py)。
+- [CLI 分流入口](../../python/lxeskill_cli/lxeskill/cli.py)、[权限查询](../../python/lxeskill_cli/lxeskill/cloud_context.py)、[连接自检](../../python/lxeskill_cli/lxeskill/cloud_status.py)。
+- [ERP HTTP 适配](../../python/lxeskill_cli/services/agent_cli/mabang/erp_http.py)、[异步马帮查询](../../python/lxeskill_cli/services/mabang/official_api.py)。
+- [查询测试](../../python/lxeskill_cli/tests/lxeskill/test_cloud_context.py)、[自检测试](../../python/lxeskill_cli/tests/lxeskill/test_cloud_status.py)、[通信测试](../../python/lxeskill_cli/tests/infra/test_cloud_client.py)、[业务传输测试](../../python/lxeskill_cli/tests/infra/test_cloud_business_transport.py)。
 
-原业务验收的证据范围和未完成项见 [历史说明](acceptance/cli-cloud-access.md)。线上权限变更验收应使用明确的测试设备并恢复配置，不修改共享模板影响其他设备。
+原业务验收的证据范围和未完成项见 [历史说明](../acceptance/cli-cloud-access.md)。线上权限变更验收应使用明确的测试设备并恢复配置，不修改共享模板影响其他设备。

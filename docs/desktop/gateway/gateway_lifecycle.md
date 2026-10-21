@@ -16,7 +16,7 @@ flowchart LR
     Main -->|"公开命令"| CLI
 ```
 
-桌面对话通过 IPC 接入，生产环境没有 Dashboard HTTP listener。同会话任务串行、跨会话派发和取消策略由 [Scheduler](session_scheduler_cancellation.md) 维护；步骤循环见 [Runtime 执行流程](../runtime/turn_execution.md)。
+桌面对话通过 IPC 接入，生产环境没有 Dashboard HTTP listener。同会话任务串行、跨会话派发和取消策略由 [Scheduler](session_scheduler_cancellation.md) 维护；步骤循环见 [Runtime 执行流程](../../harness/runtime/turn_execution.md)。
 
 ## 事实来源
 
@@ -61,4 +61,4 @@ Health snapshot 汇总 Runtime readiness、channel health、ingress 状态和最
 
 `AgentRuntimeHost` 负责宿主级服务，Runtime 先打开 Agent store，再启动已注册的进程管理、统计同步、Skill 初始化和 MCP 等服务。启动失败时回收已经启动的服务并关闭 store；正常停止时清理服务、Workspace 缓存和存储，宿主同时结束提问、审批及图片上传等资源。
 
-Runtime 不自行接管 Gateway 尚未完成的接入任务。已启动的 `exec` 进程归 Session 所有，单次 turn 取消与进程终止不是同一操作，见 [工具生命周期](../runtime/tools/README.md#cancel-与-exec-生命周期)。
+Runtime 不自行接管 Gateway 尚未完成的接入任务。已启动的 `exec` 进程归 Session 所有，单次 turn 取消与进程终止不是同一操作，见 [工具生命周期](../../harness/runtime/tools/README.md#cancel-与-exec-生命周期)。

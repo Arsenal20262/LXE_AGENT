@@ -6,17 +6,17 @@
 
 | 需要了解什么 | 阅读入口 |
 | --- | --- |
-| 工作区、新对话、目录操作与历史窗口 | [工作区与对话](../harness/conversation-window.md) |
-| 输入框文件引用与技能选择 | [输入框引用](../composer-references.md) |
-| 文件预览、手动终端与浏览器 | [侧边栏与文件预览](../file-preview.md) |
-| 会话状态、问题卡片 | [会话状态](session-status.md)、[结构化提问](../harness/tool/ask-user-question.md) |
-| 进程启停、调度与通信 | [Gateway](../harness/gateway/README.md)、[生命周期](../harness/gateway/gateway_lifecycle.md)、[JSON-RPC 协议](../harness/gateway/agent-protocol.md) |
+| 工作区、新对话、目录操作与历史窗口 | [工作区与对话](conversation-window.md) |
+| 输入框文件引用与技能选择 | [输入框引用](composer-references.md) |
+| 文件预览、手动终端与浏览器 | [侧边栏与文件预览](file-preview.md) |
+| 会话状态、问题卡片 | [会话状态](session-status.md)、[结构化提问](../harness/runtime/tools/ask-user-question.md) |
+| 进程启停、调度与通信 | [Gateway](gateway/README.md)、[生命周期](gateway/gateway_lifecycle.md)、[JSON-RPC 协议](gateway/agent-protocol.md) |
 | 公司设备发现、云端授权与凭据 | [云端接入手册](cloud-access.md) |
 | 文件写入权限与单次提权 | [权限专题](../harness/runtime/permission-policy.md) |
 | 程序资源、打包与安装 | [打包手册](packaging-pipeline.md) |
-| 版本发布与客户端更新 | [Windows 更新与发布](../desktop-updates.md) |
+| 版本发布与客户端更新 | [Windows 更新与发布](updates.md) |
 | 数据目录、升级迁移与数据库 | [程序与用户数据](data-location.md)、[数据库说明](../database/local_agent.md) |
-| 日志、诊断与实测证据 | [日志与诊断](../harness/logger.md)、[验收记录](../acceptance/README.md) |
+| 日志、诊断与实测证据 | [日志与诊断](../logging.md)、[验收记录](../acceptance/README.md) |
 
 ## 本地开发
 
@@ -37,7 +37,7 @@ uv sync --frozen --all-groups --python 3.12.10
 
 源码资源位于 `build/desktop-runtime/<平台>-<架构>/`，Windows 沙箱启动器位于 `build/exec-sandbox/`。资源准备与 Desktop 共用路径解析；具体输入、缓存和打包布局见 [打包手册](packaging-pipeline.md)。
 
-验证范围按 [AGENTS.md](../../AGENTS.md#工具链)选择。新 checkout 执行真实 `find` 测试前先运行 `bun run desktop:tools:fd`；正式发布的构建和验收要求见 [Windows 更新与发布](../desktop-updates.md)。
+验证范围按 [AGENTS.md](../../AGENTS.md#工具链)选择。新 checkout 执行真实 `find` 测试前先运行 `bun run desktop:tools:fd`；正式发布的构建和验收要求见 [Windows 更新与发布](updates.md)。
 
 独立 TUI 的安装和运行说明以 [`lxe-agent-TUI` 分支](https://github.com/LXE123/LXE_AGENT/tree/lxe-agent-TUI)为准。`main` 也提供 [一次性 Agent CLI exec](../harness/runtime/agent_cli_exec.md)，可独立从终端调用。
 
@@ -85,4 +85,4 @@ macOS 源码启动自动准备并校验项目自己的 ExifTool，缓存于 `bui
 
 ## 日志与诊断
 
-设置页提供 Gateway、agentcli、lxeskillCLI 的状态、后台重启和日志入口。日志位置、档位、脱敏与保留规则见 [日志与诊断](../harness/logger.md)。关闭窗口隐藏到托盘；完整退出时由 Main 按 [生命周期](../harness/gateway/gateway_lifecycle.md)停止后台组件及相关子进程。
+设置页提供 Gateway、agentcli、lxeskillCLI 的状态、后台重启和日志入口。日志位置、档位、脱敏与保留规则见 [日志与诊断](../logging.md)。关闭窗口隐藏到托盘；完整退出时由 Main 按 [生命周期](gateway/gateway_lifecycle.md)停止后台组件及相关子进程。

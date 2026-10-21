@@ -16,7 +16,7 @@ Runtime 只 dispatch 当前 assistant message 中结构有效的 tool use。每�
 
 未知或未暴露工具不能通过直接构造 name 绕过 schema。
 
-执行按原调用顺序分组：相邻且声明 `supportsParallelCalls=true` 的调用可并行；其他调用独占执行，不能跨它们合并并行组。结果按原调用顺序闭合。`ask_user_question` 不参加并行执行，详见 [结构化提问](../../tool/ask-user-question.md)。
+执行按原调用顺序分组：相邻且声明 `supportsParallelCalls=true` 的调用可并行；其他调用独占执行，不能跨它们合并并行组。结果按原调用顺序闭合。`ask_user_question` 不参加并行执行，详见 [结构化提问](ask-user-question.md)。
 
 ## Native 工具
 

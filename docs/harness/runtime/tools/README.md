@@ -19,7 +19,7 @@ Registry 保存工具定义和 handler，Runtime 按当前回合及步骤生成�
 
 - [Tool Schema](tool_schema.md)：definition、命名、JSON schema 和 exposure。
 - [Tool Execution](tool_execution.md)：dispatch、cancel、result、artifact 与错误语义。
-- [Ask User Question](../../tool/ask-user-question.md)：问题卡片、专用答复接口和失效规则。
+- [Ask User Question](ask-user-question.md)：问题卡片、专用答复接口和失效规则。
 
 ## 常用行为
 

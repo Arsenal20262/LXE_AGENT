@@ -16,7 +16,7 @@ Canonical message 是 storage、ContextPipeline、provider 和 tool loop 共享�
 - `image`，保存图片 source，由 provider 按能力转换请求
 - `local_file`，用户提供的本地附件引用
 
-Tool result 位于独立 `tool` message。各 Provider adapter 转换为对应 wire 格式，例如 Anthropic 的 `user + tool_result/tool_use_id`；响应先还原为 canonical `tool_call/arguments` 再进入 Runtime 和 transcript。统一 AssistantMessage 的来源字段和流事件见 [模型消息流](../../assistant-message-stream.md)。
+Tool result 位于独立 `tool` message。各 Provider adapter 转换为对应 wire 格式，例如 Anthropic 的 `user + tool_result/tool_use_id`；响应先还原为 canonical `tool_call/arguments` 再进入 Runtime 和 transcript。统一 AssistantMessage 的来源字段和流事件见 [模型消息流](../../llm/assistant-message-stream.md)。
 
 ## Tool closure
 

@@ -45,7 +45,7 @@ Schema 应描述：
 
 ## 结构化提问 ask_user_question
 
-输入为 `questions`，结果为 `answers[{id, selected, custom?}]`。Bun Runtime 负责问题归属、验证、一次性结算和取消；工具等待不采用普通短超时。完整输入输出与桌面协议见 [结构化提问](../../tool/ask-user-question.md)。
+输入为 `questions`，结果为 `answers[{id, selected, custom?}]`。Bun Runtime 负责问题归属、验证、一次性结算和取消；工具等待不采用普通短超时。完整输入输出与桌面协议见 [结构化提问](ask-user-question.md)。
 
 ## 内容搜索 grep
 

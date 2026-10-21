@@ -81,10 +81,10 @@ bun run desktop:dev
 - [架构简介](docs/architecture/README.md)：三模块关系、数据归属及各模块介绍。
 - [文档入口](docs/README.md)：专题手册、架构契约、验收记录和外部参考。
 - [Desktop 技术手册](docs/desktop/README.md)：界面、进程、配置与开发方式。
-- [Gateway ↔ Agent 协议](docs/harness/gateway/agent-protocol.md)：JSON-RPC 2.0 通信契约。
+- [Gateway ↔ Agent 协议](docs/desktop/gateway/agent-protocol.md)：JSON-RPC 2.0 通信契约。
 - [Agent Runtime](docs/harness/runtime/README.md)：执行循环、上下文、会话与工具。
 - [Skill 手册](docs/harness/skill/README.md)：发现、管理与统计机制；具体任务指引见 [skills/](skills)。
-- [文件预览侧栏](docs/file-preview.md)与[Office 文件能力](docs/office-runtime.md)：桌面预览和文件处理。
+- [文件预览侧栏](docs/desktop/file-preview.md)与[Office 文件能力](docs/office-runtime.md)：桌面预览和文件处理。
 
 ## License
 

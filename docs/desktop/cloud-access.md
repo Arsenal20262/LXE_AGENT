@@ -6,7 +6,7 @@
 
 电脑已连接公司 WireGuard 时，安装版、源码开发和预览目录都可自动识别设备，无需每个目录重复导入接入包。未配置接入信息时使用公司默认地址；已接入目录使用自己的服务器地址；切换绑定期间暂停查询和地址注入。地址选择以 [company-server.ts](../../apps/desktop/src/main/company-server.ts) 为准。
 
-建立或更换受管连接仍需接入包：v5 用于受管 WireGuard，v4 用于已有手工隧道或更换凭据。Windows 通过 UAC 安装或复用隧道，关闭桌面不卸载系统隧道；macOS 源码环境见 [WireGuard 服务](../harness/desktop/macos-wireguard-service.md)。旧身份的恢复流程见 [身份迁移](identity-migration.md)。
+建立或更换受管连接仍需接入包：v5 用于受管 WireGuard，v4 用于已有手工隧道或更换凭据。Windows 通过 UAC 安装或复用隧道，关闭桌面不卸载系统隧道；macOS 源码环境见 [WireGuard 服务](macos-wireguard-service.md)。旧身份的恢复流程见 [身份迁移](identity-migration.md)。
 
 自动识别不会伪造接入配置、激活本目录或自动开启统计上传、赛狐 MCP。统计启用仍由本目录接入配置决定；MCP 有自己的开关。各目录分别保存配置和缓存，不复制聊天、工作区、实例 ID 或上传进度。
 
@@ -23,7 +23,7 @@
 
 这些原生公司请求使用 `X-LXE-Client: cli`，不携带旧业务 Token、Authorization 或 Cookie，不使用系统代理，不跟随重定向。该请求头是公开标记，设备身份由服务器根据实际 WireGuard 来源识别。接入包激活、身份检查和旧身份迁移仍有独立的凭据流程，不能把两条链路混为一谈。
 
-`cloud-context` 的 CLI 输出和诊断契约见 [CLI 云端通信](../lxeskill-cloud-access.md#权限查询与连接自检)。`device-context` 只返回权限，不返回模型密钥；模型凭据不经 CLI stdout 或 Renderer。
+`cloud-context` 的 CLI 输出和诊断契约见 [CLI 云端通信](../lxeskill-cli/cloud-access.md#权限查询与连接自检)。`device-context` 只返回权限，不返回模型密钥；模型凭据不经 CLI stdout 或 Renderer。
 
 ## 权限刷新与缓存
 

@@ -50,7 +50,7 @@ Gateway 创建 session 时，会同时让 Gateway store 和 Agent store 建立�
 - 公司身份和集成凭证由桌面安全存储保存；用户本地模型 Key 明文写入数据目录下的 `config/auth.json`。具体存储与访问规则见 [桌面配置](../desktop/README.md#桌面配置与安全)。
 - Workspace Skill、AGENTS Instructions 和搜索服务只做进程内缓存，不新增数据库表或磁盘解析缓存。
 
-待回答问题及其唤醒回调只存在 Bun Runtime 内存中，问题和最终工具结果进入会话历史。界面刷新重新查询当前问题；Agent 重启不会恢复旧等待，未闭合调用沿用历史修复机制处理。详见 [结构化提问](../harness/tool/ask-user-question.md)。
+待回答问题及其唤醒回调只存在 Bun Runtime 内存中，问题和最终工具结果进入会话历史。界面刷新重新查询当前问题；Agent 重启不会恢复旧等待，未闭合调用沿用历史修复机制处理。详见 [结构化提问](../harness/runtime/tools/ask-user-question.md)。
 
 ## 备份与恢复
 

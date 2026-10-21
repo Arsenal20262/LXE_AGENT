@@ -25,4 +25,4 @@
 
 图片在 transcript 中保留原始内容，不因被模型处理过一次就删除。展示、摘要和供应商请求使用各自的投影。思考签名与不透明数据的保存和展示边界见 [Canonical Message](canonical_message.md)。
 
-上下文模块不负责渠道发送、文件写入权限或工具进程控制，这些分别见 [Gateway](../../gateway/README.md)、[权限专题](../permission-policy.md)和[工具手册](../tools/README.md)。摘要提示词与策略变更的审查要求统一见 [PR 审查规范](../../../pr-review.md)。
+上下文模块不负责渠道发送、文件写入权限或工具进程控制，这些分别见 [Gateway](../../../desktop/gateway/README.md)、[权限专题](../permission-policy.md)和[工具手册](../tools/README.md)。摘要提示词与策略变更的审查要求统一见 [PR 审查规范](../../../pr-review.md)。

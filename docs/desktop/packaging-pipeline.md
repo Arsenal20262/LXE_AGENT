@@ -37,7 +37,7 @@ Mac 第一次运行 `desktop:dev` 或 `desktop:preview` 时，会自动下载约
 
 正式安装包的版本和更新说明来自已提交的 `config/desktop-release.json`。构建不会自动加版本，也不会修改仓库的占位版本；通过 `LXE_DESKTOP_PRODUCT_VERSION` 注入 electron-builder。源码和说明必须已提交，构建中不得改变。
 
-日常发布使用 `bun run release:build` 和 `bun run release:publish`：前者同步冻结依赖、验证和打包并记录当前候选；后者校验并展示候选后等待输入 `y` 发布。构建失败或中断不回退旧包，源码变化后需重新构建。详见 [Windows 更新与发布](../desktop-updates.md)。
+日常发布使用 `bun run release:build` 和 `bun run release:publish`：前者同步冻结依赖、验证和打包并记录当前候选；后者校验并展示候选后等待输入 `y` 发布。构建失败或中断不回退旧包，源码变化后需重新构建。详见 [Windows 更新与发布](updates.md)。
 
 `desktop:dist:win` 保留为独立 NSIS 打包入口，生成候选但不更新默认待发布记录。`desktop:pack:win` 是开发用 Unpacked 路线，仍使用本地开发版本选择文件，不属于正式发布流程。
 

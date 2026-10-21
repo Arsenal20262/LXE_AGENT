@@ -46,7 +46,7 @@ Runtime execution semantics are intentionally not duplicated into a second per-t
 
 `<data-root>` is the active application data directory supplied through `LXE_DATA_ROOT`.
 Desktop exposes its `logs/` subdirectory as the diagnostics directory. Default locations, overrides
-and upgrade migration are maintained in [Program and user data](../desktop/data-location.md).
+and upgrade migration are maintained in [Program and user data](desktop/data-location.md).
 
 ## Record Shape And Context
 
@@ -97,16 +97,16 @@ Successful health polling and repetitive stream updates should not dominate INFO
 
 | 阶段 | 查看内容与实现入口 |
 | --- | --- |
-| 回合与模型调用 | `turn_started` / `turn_completed`、Provider attempt 和工具执行；[Runtime](../../packages/agent/runtime/src/engine/runtime.ts) |
-| 入站路由与调度 | session、route、排队、steering 和取消；[Router](../../apps/gateway/src/orchestration/router.ts)、[Scheduler](../../apps/gateway/src/orchestration/scheduler.ts) |
-| Heartbeat | 唤醒、合并、延后或丢弃的原因；[Heartbeat bridge](../../apps/gateway/src/orchestration/heartbeat-bridge.ts) |
-| 飞书接入与交付 | 连接、消息归一化、资源获取和卡片交付；[飞书适配](../../apps/gateway/src/channels/feishu/) |
-| exec 进程 | 创建、等待、退出、终止和后台完成通知；[Process manager](../../packages/agent/runtime/src/tooling/coding/process-manager.ts) |
-| 用量同步 | `data_sync_uploaded`、`data_sync_skipped`、`data_sync_failed`；[TurnUsageSyncService](../../packages/agent/runtime/src/operations/turn-usage-sync.ts) |
-| MCP 与 Skill | 连接及工具注册、Skill 发现与刷新；[MCP](../../packages/agent/runtime/src/tooling/mcp.ts)、[Skill](../../packages/agent/runtime/src/tooling/skills.ts) |
-| 启动与关闭 | 组件 ready、停止和失败回滚；[生命周期手册](gateway/gateway_lifecycle.md) |
+| 回合与模型调用 | `turn_started` / `turn_completed`、Provider attempt 和工具执行；[Runtime](../packages/agent/runtime/src/engine/runtime.ts) |
+| 入站路由与调度 | session、route、排队、steering 和取消；[Router](../apps/gateway/src/orchestration/router.ts)、[Scheduler](../apps/gateway/src/orchestration/scheduler.ts) |
+| Heartbeat | 唤醒、合并、延后或丢弃的原因；[Heartbeat bridge](../apps/gateway/src/orchestration/heartbeat-bridge.ts) |
+| 飞书接入与交付 | 连接、消息归一化、资源获取和卡片交付；[飞书适配](../apps/gateway/src/channels/feishu/) |
+| exec 进程 | 创建、等待、退出、终止和后台完成通知；[Process manager](../packages/agent/runtime/src/tooling/coding/process-manager.ts) |
+| 用量同步 | `data_sync_uploaded`、`data_sync_skipped`、`data_sync_failed`；[TurnUsageSyncService](../packages/agent/runtime/src/operations/turn-usage-sync.ts) |
+| MCP 与 Skill | 连接及工具注册、Skill 发现与刷新；[MCP](../packages/agent/runtime/src/tooling/mcp.ts)、[Skill](../packages/agent/runtime/src/tooling/skills.ts) |
+| 启动与关闭 | 组件 ready、停止和失败回滚；[生命周期手册](desktop/gateway/gateway_lifecycle.md) |
 
-用量同步属于 agentcli；马帮登录态维护由 lxeskillCLI 按需处理，排障入口见 [CLI 云端通信](../lxeskill-cloud-access.md)。
+用量同步属于 agentcli；马帮登录态维护由 lxeskillCLI 按需处理，排障入口见 [CLI 云端通信](lxeskill-cli/cloud-access.md)。
 
 Desktop Renderer 通过 preload IPC 与 Main 通信，不启动 Dashboard HTTP listener。启动与可用性排障查看 Gateway lifecycle、agent-cli 握手及桌面健康状态；不使用旧的 `dashboard_listening` 或浏览器自动打开事件。
 

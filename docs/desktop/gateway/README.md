@@ -4,7 +4,7 @@
 
 Gateway 是桌面应用里的“接待和调度中心”。它运行在 Electron Main 中，负责接收桌面任务和飞书消息、检查权限、找到会话、安排执行顺序，再把结果送回对应入口。
 
-真正调用模型和工具的是私有 `agent-cli` 子进程里的 Runtime。宿主装配由 agentcli 自己管理，服务分工见 [Runtime 总览](../runtime/README.md)。Gateway 不直接执行 turn，也不依赖 Runtime package；它通过 JSON-RPC 2.0 向宿主发任务、取消和查询请求，使用 stdin/stdout 传输和 JSONL（NDJSON）分帧。业务协议版本通过 `initialize` 单独校验，详见 [Gateway ↔ Agent 协议](agent-protocol.md)。
+真正调用模型和工具的是私有 `agent-cli` 子进程里的 Runtime。宿主装配由 agentcli 自己管理，服务分工见 [Runtime 总览](../../harness/runtime/README.md)。Gateway 不直接执行 turn，也不依赖 Runtime package；它通过 JSON-RPC 2.0 向宿主发任务、取消和查询请求，使用 stdin/stdout 传输和 JSONL（NDJSON）分帧。业务协议版本通过 `initialize` 单独校验，详见 [Gateway ↔ Agent 协议](agent-protocol.md)。
 
 ## 当前主链路
 
@@ -43,7 +43,7 @@ Dashboard 也不直接连接 Runtime。Renderer 先通过白名单 IPC 发送类
 - Runtime 子进程短暂异常时，Gateway 停止接收新任务并按受控策略重启；不会偷偷切换到同进程 Runtime。
 - 平台发送失败只影响 delivery，不回滚 transcript，也不重跑已完成工具。
 - exec 完成只发送 `background_task.changed` 刷新工具卡，不写 pending event，也不唤醒模型；heartbeat/wake 保留给其他自主调度来源。
-- 结构化答案通过 `sessions.answer` 直接提交给 Runtime，不能进入普通任务或 steering 队列。查询和生命周期见 [结构化提问](../tool/ask-user-question.md)。
+- 结构化答案通过 `sessions.answer` 直接提交给 Runtime，不能进入普通任务或 steering 队列。查询和生命周期见 [结构化提问](../../harness/runtime/tools/ask-user-question.md)。
 
 ## 专题导航
 

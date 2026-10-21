@@ -23,10 +23,10 @@ Provider 不执行工具，不持有会话数据库，也不决定桌面或飞�
 - [模型目录与选择](provider_catalog.md)：本地与公司模型、能力、凭据边界和发布兼容。
 - [DeepSeek 图片请求](deepseek-images.md)：Files 上传、预算、回退与请求内省略。
 - [Streaming Adapter](streaming_adapter.md)：协议事件归一化、取消、超时与错误。
-- [统一模型消息流](../assistant-message-stream.md)：三类协议共享的内容与事件契约。
+- [统一模型消息流](assistant-message-stream.md)：三类协议共享的内容与事件契约。
 - [Runtime Context](../runtime/context/README.md)：模型历史、预算与压缩。
 - [Tool Schema](../runtime/tools/tool_schema.md)：工具定义和暴露范围。
 
 ## 排障
 
-先区分配置错误、请求格式不支持、传输失败、上下文溢出和工具历史不闭合。错误保留脱敏、显式截断后的实际诊断；不要把所有失败归结为网络或权限问题。认证信息及不透明推理数据不得原样进入日志，具体日志边界见 [Logging](../logger.md)。
+先区分配置错误、请求格式不支持、传输失败、上下文溢出和工具历史不闭合。错误保留脱敏、显式截断后的实际诊断；不要把所有失败归结为网络或权限问题。认证信息及不透明推理数据不得原样进入日志，具体日志边界见 [Logging](../../logging.md)。
