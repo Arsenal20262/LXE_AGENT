@@ -13,13 +13,90 @@ from services.mabang.amazon.fba.final_restock_recommendation import final_restoc
 
 def test_formula_contract():
     formulas = final_restock_formulas(2)
-    assert tuple(formulas) == ("I", "J", "R", "S", "U", "V", "W", "X", "Y", "Z", "AA", "AB", "AC")
+    assert tuple(formulas) == ("I", "J", "R", "S", "U", "V", "W", "X", "Y", "Z", "AA", "AB", "AC", "AI")
     assert formulas["J"] == "=E2/7*0.6+F2/14*0.3+G2/30*0.1"
     assert formulas["R"] == "=K2+L2+M2+O2+P2+Q2"
     assert formulas["S"] == '=IF(J2=0,"",R2/J2)'
     # The confirmed XLSX rules guard both shipping days and sea-weight inputs.
     assert formulas["AA"] == '=IF(OR(V2="",W2=""),"",IF((J2*W2-(R2+T2)-IF(Y2="",0,Y2))<=0,"",ROUND(J2*W2-(R2+T2)-IF(Y2="",0,Y2),0)))'
     assert formulas["AC"] == '=IF(OR(AB2="",AD2=""),"",AB2*AD2)'
+    assert formulas["AI"] == '=IF(OR(J2="",J2=0),"",(R2+T2+IF(Y2="",0,Y2)+IF(AB2="",0,AB2))/J2)'
+
+
+def test_seasonal_boost_is_on_by_default_and_can_be_disabled():
+    enabled = final_restock_formulas(2)
+    disabled = final_restock_formulas(2, peak_boost_enabled=False)
+    assert enabled["V"] == final_restock_formulas(2, peak_boost_enabled=True)["V"]
+    assert 'SEARCH("热销",AF2)' in enabled["V"]
+    assert 'SEARCH("热销",AF2)' not in disabled["V"]
+    assert "+0,120" in disabled["V"] and "+0,120" in disabled["W"]
+    assert {column: enabled[column] for column in ("I", "J", "R", "S", "U", "X", "Y", "Z", "AA", "AB", "AC", "AI")} == {
+        column: disabled[column] for column in ("I", "J", "R", "S", "U", "X", "Y", "Z", "AA", "AB", "AC", "AI")
+    }
+
+
+def test_seasonal_boost_setting_requires_a_boolean():
+    with pytest.raises(ValueError, match="peak_boost_enabled"):
+        final_restock_formulas(2, peak_boost_enabled=1)
+
+
+@pytest.mark.parametrize("days", [0, 20, 120])
+def test_custom_days_replace_only_the_existing_seasonal_bonus(days):
+    default = final_restock_formulas(2)
+    custom = final_restock_formulas(2, peak_boost_days=days)
+    for column, formula in default.items():
+        assert custom[column] == (formula.replace(",30,0))", f",{days},0))") if column in ("V", "W") else formula)
+    assert final_restock_formulas(2, peak_boost_days=None) == default
+    assert final_restock_formulas(2, peak_boost_days=30) == default
+    assert final_restock_formulas(2, peak_boost_enabled=False, peak_boost_days=days) == final_restock_formulas(2, peak_boost_enabled=False)
+
+
+@pytest.mark.parametrize("days", [-1, 121, 1.5, True, "20"])
+def test_formula_rejects_invalid_custom_days(days):
+    with pytest.raises(ValueError, match="peak_boost_days"):
+        final_restock_formulas(2, peak_boost_days=days)
+
+
+@pytest.mark.parametrize("enabled,days,remark,expected", [
+    (False, 20, "热销", (90, 95)),
+    (True, None, "热销", (120, 120)),
+    (True, 20, "热销", (110, 115)),
+    (True, 0, "热销", (90, 95)),
+    (True, 120, "热销", (120, 120)),
+    (True, 20, "", (90, 95)),
+    (True, 20, "不补，热销", (90, 95)),
+    (True, 20, "清货，热销", (None, None)),
+])
+def test_configured_seasonal_boost_excel_recalculation(tmp_path, enabled, days, remark, expected):
+    executable = shutil.which("soffice") or shutil.which("libreoffice")
+    if executable is None:
+        pytest.skip("NOT VERIFIED: LibreOffice is unavailable for formula evaluation")
+    source = tmp_path / "seasonal-off.xlsx"
+    book = Workbook()
+    sheet = book.active
+    sheet["I2"] = "平稳"
+    sheet["J2"] = 11
+    sheet["S2"] = 80
+    sheet["AF2"] = remark
+    formulas = final_restock_formulas(2, peak_boost_enabled=enabled, peak_boost_days=days)
+    sheet["V2"] = formulas["V"]
+    sheet["W2"] = formulas["W"]
+    book.save(source)
+    book.close()
+    output = tmp_path / "recalculated"
+    output.mkdir()
+    result = subprocess.run(
+        [executable, f"-env:UserInstallation={(tmp_path / 'profile').as_uri()}", "--headless",
+         "--convert-to", "xlsx", "--outdir", str(output), str(source)],
+        capture_output=True, text=True, timeout=60,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    calculated = load_workbook(output / source.name, data_only=True)
+    try:
+        assert calculated.active["V2"].value == expected[0]
+        assert calculated.active["W2"].value == expected[1]
+    finally:
+        calculated.close()
 
 
 @pytest.mark.parametrize("row", [3, 2004, 1_048_576])
@@ -42,6 +119,11 @@ def test_invalid_data_row_is_rejected(row):
 # None denotes an empty cached result; formula-empty and truly empty inputs
 # are deliberately distinguished in the AC cases below.
 CASES = [
+    ("supply-empty-daily", {"J": None, "R": 100, "T": 20, "Y": 30, "AB": 40}, {"AI": None}),
+    ("supply-zero-daily", {"J": 0, "R": 100, "T": 20, "Y": 30, "AB": 40}, {"AI": None}),
+    ("supply-empty-advice", {"J": 2, "R": 100, "T": 20, "Y": '=""', "AB": '=""'}, {"AI": 60}),
+    ("supply-with-advice", {"J": 2, "R": 100, "T": 20, "Y": 30, "AB": 40}, {"AI": 95}),
+    ("supply-unrounded", {"J": 3, "R": 1, "T": 0, "Y": None, "AB": None}, {"AI": 1 / 3}),
     ("sample-9", {"E": 7, "F": 14, "G": 9}, {"I": "样本不足"}),
     ("sample-10", {"E": 0, "F": 0, "G": 10}, {"I": "下降"}),
     ("zero-baseline-sales", {"E": 10, "F": 10, "G": 10}, {"I": "增长"}),
