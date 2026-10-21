@@ -311,17 +311,13 @@ def _require_uploaded_file_inputs(entry: dict[str, Any], arguments: dict[str, An
 
 def _execute_mabang_auth() -> dict[str, Any]:
     bootstrap_network_policy(label="lxeskill_mabang_auth", emit=logger.info)
+    from browser_auth_service.client import format_auth_failure
     from browser_auth_service.service import BrowserAuthRefreshError, refresh_auth
 
     try:
         return refresh_auth()
     except BrowserAuthRefreshError as exc:
-        payload = exc.to_payload()
-        raise RuntimeError(
-            "browser_auth_service 刷新失败: "
-            f"stage={payload['stage']} current_url={payload['current_url'] or '-'} "
-            f"exception_type={payload['exception_type']} error={payload['message']}"
-        ) from exc
+        raise RuntimeError(format_auth_failure(exc.to_payload(), operation="刷新")) from exc
 
 
 def _skill_scope() -> set[str] | None:

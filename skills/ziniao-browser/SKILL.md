@@ -11,6 +11,8 @@ commands:
 
 # 紫鸟浏览器
 
+本 Skill 操作紫鸟店铺会话。马帮 ERP CLI 的认证使用独立的 Electron 窗口或绑定的 Chrome/Edge 会话，与紫鸟不共享登录态；马帮认证报错、缺少 `freeToken` 不能作为转来紫鸟登录或打开页面的依据。
+
 ## 硬性规则
 
 - 只通过 `exec` 独立调用上方两个 canonical `lxeskill` 命令；禁止直接调用 Python 模块、旧工具名或 shell 包装。

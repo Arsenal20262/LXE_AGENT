@@ -91,6 +91,8 @@ flowchart TD
 | 单 SP 备货单兼容生成 | 单个 FBA 发货单 CSV + 出口退税总表 + 毛利率 -> `fba-restock-workbook-create` |
 | 出口退税 | `fba-export-tax-products-manage` -> `fba-export-tax-delivery-summary` |
 
+马帮发货单和 WMS 装箱下载的认证由 CLI 内部完成，使用独立的 Electron 或已绑定 Chrome/Edge 临时会话；它们不共享紫鸟登录态。上表装箱与货件创建流程中的紫鸟用于后续 Amazon Seller Central 操作，不用于修复马帮认证失败。
+
 ERP 实发量应使用仓库回填后重新导出的 FBA 发货单 CSV；同一 SP 有多份导出时，CLI 取最新一份。WMS 装箱 Excel 用于创建货件、发票和报关，不作为 ERP 实发量上传来源。
 
 日常正式采购流程应走 `fba-purchase-summary-create`，默认先由 ERP 确认 FIFO 库存抵扣；只有用户明确要求不使用留存库存或按计划全量采购时才使用 `--inventory-deduction-mode none`，不能自行推断，也不需要每次固定询问。随后由本地一次生成采购汇总表、备货单和正式合同；需要先看结果时用同一 Skill 的 `--preview`，但正式执行必须重新计算并保持同一库存路线。正飞 `均价` 只按整批 SP 的本次新采购量计算。`fba-restock-workbook-create` 只作为单 SP 备货单兼容入口，旧采购汇总表不再提供单独生成合同的入口。

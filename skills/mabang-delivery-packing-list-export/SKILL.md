@@ -22,6 +22,12 @@ commands:
 - 不要猜测本地路径；以 CLI 返回的 `excel_path` 和 `split_excel_paths` 为准。
 - CLI 失败时保留 `exception` 原文；返回空内容或空文件时，按下方规则追问。
 
+## 认证与失败诊断
+
+马帮 ERP 命令在内部按需恢复认证：桌面使用 Electron 认证窗口，独立 CLI 使用已绑定的 Chrome/Edge，均为独立临时会话，不复用个人浏览器或紫鸟登录态。在紫鸟中登录或打开页面不会补充这份认证状态。
+
+认证路线会先读取 FBA `freeToken`，再进入 WMS；因此装箱下载也可能在 `stage=fba_delivery` 失败。保留 `error.message` 中的 `auth_environment`、阶段和实际异常；有 `details` 时结合 frame、读取次数及 `last_read_error` 说明观察结果，不凭 token 缺失断定马帮改版或要求人工点击。终态失败后不自行刷新、重跑或转去紫鸟补救，再次尝试由用户决定。
+
 ## Required Input
 
 - `delivery_no`：必须是 `SP` 开头的发货单号。
