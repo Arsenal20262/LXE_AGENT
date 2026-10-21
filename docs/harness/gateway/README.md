@@ -4,7 +4,7 @@
 
 Gateway 是桌面应用里的“接待和调度中心”。它运行在 Electron Main 中，负责接收桌面任务和飞书消息、检查权限、找到会话、安排执行顺序，再把结果送回对应入口。
 
-真正调用模型和工具的是私有 `agent-cli` 子进程里的 Runtime。`agent-cli` 自己拥有 `AgentRuntimeHost` composition root，装配 Agent store、provider、Runtime、MCP、Python CLI、Workspace、工具和 Dashboard 查询。Gateway 不直接执行 turn，也不依赖 Runtime package；它只通过版本化 NDJSON 协议向宿主发任务、取消和查询请求。
+真正调用模型和工具的是私有 `agent-cli` 子进程里的 Runtime。`agent-cli` 自己拥有 `AgentRuntimeHost` composition root，装配 Agent store、provider、Runtime、MCP、Python CLI、Workspace、工具和 Dashboard 查询。Gateway 不直接执行 turn，也不依赖 Runtime package；它通过 JSON-RPC 2.0 向宿主发任务、取消和查询请求，使用 stdin/stdout 传输和 JSONL（NDJSON）分帧。业务协议版本通过 `initialize` 单独校验，详见 [Gateway ↔ Agent 协议](agent-protocol.md)。
 
 ## 当前主链路
 
@@ -13,7 +13,7 @@ flowchart LR
     A["飞书事件"] --> B["Electron Main<br/>Gateway"]
     UI["桌面会话 / 问题卡片"] <-->|"preload IPC"| B
     B --> C["权限 / 会话 / 调度"]
-    C <-->|"NDJSON"| D["私有 agent-cli"]
+    C <-->|"JSON-RPC 2.0<br/>JSONL 分帧 / stdin / stdout"| D["私有 agent-cli"]
     D --> E["TypeScript Runtime<br/>模型 / Context / Tools"]
     E --> D
     D --> B

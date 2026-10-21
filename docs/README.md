@@ -4,20 +4,23 @@
 
 ## 使用与开发
 
+- [PR 审查规范](pr-review.md)：团队协作流程、AI 技术检查与人工审核要求；[开发脚本](../scripts/README.md)介绍 worktree 的领取和归还。
 - [Desktop 技术手册](desktop/README.md)：桌面交互、进程边界、配置和开发入口。
 - [构建、打包、安装与启动](desktop/packaging-pipeline.md)：源码验证、Windows 分发和安装验收。
 - [桌面对话窗口](harness/conversation-window.md)、[会话状态](desktop/session-status.md)、[结构化提问](harness/tool/ask-user-question.md)：聊天、附件、等待回答和停止任务。
 - [客户端身份与后台登录](record/20260910-client-identity-v1.md)、[Mac WireGuard 服务](harness/desktop/macos-wireguard-service.md)：设备接入与身份边界。
 - [马帮浏览器认证](../python/lxeskill_cli/browser_auth_service/README.md)：Electron 认证窗口、独立 CLI 浏览器绑定和排障。
 - [日志与诊断](harness/logger.md)、[事故记录](incidents/README.md)：日志位置、脱敏和未解决问题。
+- [验收记录](acceptance/README.md)：按主题查看已执行的验证、当时环境与未完成事项。
 
 ## 架构与契约
 
+- [架构简介](architecture/README.md)：整体关系和数据归属；模块介绍分为 [Electron](architecture/electron.md)、[agentcli](architecture/agentcli.md) 和 [lxeskillCLI](architecture/lxeskill-cli.md)。
 - [桌面事件循环](eventloop.md)：进程、任务所有权和退出顺序。
 - [Gateway](harness/gateway/README.md)：平台接入、路由、调度、取消和出站。
-- [Gateway ↔ Agent 协议](record/20260715-agent-cli-stream-json.md)：JSON-RPC、握手、事件和错误。
+- [Gateway ↔ Agent 协议](harness/gateway/agent-protocol.md)：JSON-RPC、握手、事件和错误。
 - [会话权限与工作区目录](harness/runtime/permission-policy.md)：模式存储、产物位置、目录属主与受限执行的接入条件。
-- [Runtime](harness/runtime/README.md)：执行回合、上下文、持久化和工具。
+- [Runtime](harness/runtime/README.md)、[执行流程](harness/runtime/turn_execution.md)：执行回合、上下文、持久化和工具。
 - [Agent CLI exec](harness/runtime/agent_cli_exec.md)：一次性终端调用与独立会话存储。
 - [LLM 适配](harness/llm/README.md)：模型目录、三类协议适配和流式响应。
 - [工具](harness/runtime/tools/README.md)：可见性、宿主机权限、执行和进程生命周期。
@@ -38,6 +41,7 @@
 
 - 产品行为以当前代码及测试为准；文档说明稳定边界，易变版本和参数链接到对应契约。
 - 每个主题维护一个主要入口。行为变更时同步更新相关手册和导航，不只追加日期记录。
+- 当前协议随所属模块维护；项目验收记录集中在 `acceptance/`，只说明当时的验证结果。设计归档和外部参考中的原始证据保持原位。
 - 已被取代的草稿、重复迁移说明和阶段清单直接删除，历史从 Git 查询。
 - 外部参考标明来源，未完成事故保留调查状态；不要给未经核对的文档盖上 `Current` 标签。
 - 不复制完整 Skill 提示词，不在文档中保存实际凭据或业务数据。

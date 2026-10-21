@@ -2,11 +2,60 @@
 .permission-error { color: var(--danger); white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
 .permission-picker > .permission-error { position: absolute; bottom: 100%; background: var(--surface); padding: 10px; width: 300px; box-shadow: 0 4px 20px #0002; border-radius: 8px; z-index: 10; }
 
-.session-delete-dialog.permission-confirm-dialog { padding: 20px; border-radius: 14px; }
-.session-delete-dialog.permission-confirm-dialog > h2 { font-size: 1rem; font-weight: 650; line-height: 1.5; }
-.session-delete-dialog.permission-confirm-dialog > p { margin-top: 8px; font-size: .8125rem; line-height: 1.6; }
-.session-delete-dialog.permission-confirm-dialog > footer { margin-top: 16px; }
-.session-delete-dialog.permission-confirm-dialog > footer > button { min-width: 64px; min-height: 32px; padding: 6px 12px; border-radius: 8px; font-size: .8125rem; line-height: 18px; }
+.session-delete-backdrop.permission-confirm-backdrop { background: rgb(0 0 0 / 40%); }
+.session-delete-dialog.permission-confirm-dialog {
+  --confirm-surface: #fff;
+  --confirm-ink: #0b0b0b;
+  --confirm-description: #52514e;
+  --confirm-border: #d1d1d1;
+  --confirm-hover: #f0f0ef;
+  --confirm-focus: #1677ff;
+  width: min(440px, 100%);
+  max-height: calc(100dvh - 48px);
+  overflow: auto;
+  padding: 24px;
+  border: 1px solid var(--confirm-border);
+  border-radius: 16px;
+  background: var(--confirm-surface);
+  color: var(--confirm-ink);
+  box-shadow: 0 16px 48px rgb(0 0 0 / 16%), 0 2px 8px rgb(0 0 0 / 8%);
+}
+.session-delete-dialog.permission-confirm-dialog > h2 { margin: 0; color: var(--confirm-ink); font-size: 1.125rem; font-weight: 500; line-height: 1.5; }
+.session-delete-dialog.permission-confirm-dialog > p { margin: 8px 0 0; color: var(--confirm-description); font-size: .875rem; line-height: 1.6; overflow-wrap: anywhere; text-wrap: wrap; }
+.session-delete-dialog.permission-confirm-dialog > .permission-confirm-error { margin-top: 16px; color: var(--danger); white-space: pre-wrap; font-size: .875rem; }
+.session-delete-dialog.permission-confirm-dialog > footer { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 24px; }
+.session-delete-dialog.permission-confirm-dialog > footer > button {
+  justify-content: center;
+  min-width: 60px;
+  min-height: 32px;
+  max-width: 100%;
+  padding: 5px 11px;
+  border: 1px solid var(--confirm-border);
+  border-radius: 8px;
+  background: var(--confirm-surface);
+  color: var(--confirm-ink);
+  font-size: .8125rem;
+  font-weight: 400;
+  line-height: 1.4;
+}
+.session-delete-dialog.permission-confirm-dialog > footer > button:hover:not(:disabled) { background: var(--confirm-hover); }
+.session-delete-dialog.permission-confirm-dialog > footer > .permission-confirm-primary { border-color: var(--confirm-ink); background: var(--confirm-ink); color: var(--confirm-surface); }
+.session-delete-dialog.permission-confirm-dialog > footer > .permission-confirm-primary:hover:not(:disabled) { background: var(--confirm-description); border-color: var(--confirm-description); }
+.session-delete-dialog.permission-confirm-dialog > footer > button:focus-visible { outline: 2px solid var(--confirm-focus); outline-offset: 2px; }
+/* Cancel receives initial focus even when the dialog is opened with a mouse. */
+.session-delete-dialog.permission-confirm-dialog > footer > button:first-child:focus {
+  outline: none;
+  border-color: var(--confirm-focus);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--confirm-focus) 12%, transparent), 0 0 10px color-mix(in srgb, var(--confirm-focus) 22%, transparent);
+}
+:root[data-theme="dark"] .permission-confirm-dialog {
+  --confirm-surface: #2c2c2c;
+  --confirm-ink: #f3f3f3;
+  --confirm-description: #c5c4c1;
+  --confirm-border: #494949;
+  --confirm-hover: #383838;
+  --confirm-focus: #7aaaff;
+}
 
 .permission-approval { min-width: 0; overflow: hidden; border: 1px solid var(--warning-border-strong); border-radius: 14px; background: var(--surface); box-shadow: var(--shadow-card); }
 .permission-approval-status { display: flex; align-items: center; gap: 8px; padding: 10px 16px; background: var(--warning-soft); color: var(--warning); font-size: 13px; line-height: 18px; }
