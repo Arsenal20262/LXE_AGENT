@@ -2,6 +2,8 @@
 
 三种权限模式、控制范围和单次提权的基本规则见 [agentcli 模块介绍](../../architecture/agentcli.md#5-权限管理模块)。本文补充策略生效时机、路径检查、平台后端、审批生命周期和旧产物迁移，供实现与排查时查阅。
 
+云端设备授权决定业务能力和 Skill 范围，本文的会话权限限制 Tool 写入与单次提权，两者分别生效。云端查询、凭据和缓存见 [桌面云端接入](../../desktop/cloud-access.md)。
+
 ## 模式与生效时机
 
 Runtime 在 `agent_sessions.permission_mode` 保存会话权限模式，不写入 `source` 或工具 `state_patch`。新建普通会话和空白会话使用 [默认值](../../../packages/foundation/protocol/src/permissions.ts) Workspace Write；[存储迁移](../../../packages/agent/runtime/src/state/storage.ts)为旧数据库补列时初始化为 Full access。恢复、再次收消息、更新元数据和复用空白会话都保留已有模式。各模块的数据归属见 [架构简介](../../architecture/README.md#3-数据归属)。

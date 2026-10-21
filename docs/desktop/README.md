@@ -11,6 +11,7 @@
 | 文件预览、手动终端与浏览器 | [侧边栏与文件预览](../file-preview.md) |
 | 会话状态、问题卡片 | [会话状态](session-status.md)、[结构化提问](../harness/tool/ask-user-question.md) |
 | 进程启停、调度与通信 | [Gateway](../harness/gateway/README.md)、[生命周期](../harness/gateway/gateway_lifecycle.md)、[JSON-RPC 协议](../harness/gateway/agent-protocol.md) |
+| 公司设备发现、云端授权与凭据 | [云端接入手册](cloud-access.md) |
 | 文件写入权限与单次提权 | [权限专题](../harness/runtime/permission-policy.md) |
 | 程序资源、打包与安装 | [打包手册](packaging-pipeline.md) |
 | 版本发布与客户端更新 | [Windows 更新与发布](../desktop-updates.md) |
@@ -64,9 +65,7 @@ POSIX 创建配置目录时使用 `0700`，`auth.json` 和锁文件使用 `0600`
 
 ### 公司云端设备接入
 
-需要建立受管 WireGuard 连接时，在云端接入页导入接入包：v5 用于受管接入，v4 用于已有手工隧道或更换凭据。Windows 由 Main 请求 UAC，安装或复用 WireGuard，并建立 `WireGuardTunnel$lxe-agent` 服务；只路由公司私网目标，切换绑定失败时恢复旧配置。关闭应用不卸载系统隧道，macOS 源码环境的安装与排障见 [Mac WireGuard 服务](../harness/desktop/macos-wireguard-service.md)。
-
-已有公司网络连接时的设备发现、模型与网页登录见 [自动云端访问](../desktop-native-cloud-access.md)和 [设备与权限发现](../harness/runtime/desktop-device-context-discovery.md)。接入配置、Skill 范围和具体业务授权分别处理；统计上传的启用与恢复机制见 [统计上传](../harness/runtime/native-statistics-upload.md)。
+已有公司网络连接时可自动识别设备并获取获准能力；需要建立或切换受管连接时导入接入包。接入、模型、网页登录、凭据和缓存统一见 [云端接入手册](cloud-access.md)，统计上传的启用与恢复见 [统计上传](../harness/runtime/native-statistics-upload.md)。
 
 ## 私有运行时与工具
 

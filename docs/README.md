@@ -31,7 +31,7 @@
 - [侧边栏与文件预览](file-preview.md)：文件查看、手动终端与浏览器。
 - [Gateway](harness/gateway/README.md)、[生命周期](harness/gateway/gateway_lifecycle.md)：渠道接入、路由、调度、结果交付和启停；[桌面事件循环](eventloop.md)提供进程视图。
 - [Gateway ↔ agentcli 协议](harness/gateway/agent-protocol.md)：JSON-RPC、握手、事件和错误。
-- [自动云端访问](desktop-native-cloud-access.md)、[设备与权限发现](harness/runtime/desktop-device-context-discovery.md)、[Mac WireGuard 服务](harness/desktop/macos-wireguard-service.md)：云端连接和设备接入。
+- [云端接入、凭据与权限](desktop/cloud-access.md)：自动设备发现、公司模型与网页登录；[旧身份迁移](desktop/identity-migration.md)、[权限兼容与迁移](desktop/permission-migration.md)、[Mac WireGuard 服务](harness/desktop/macos-wireguard-service.md)补充维护操作。
 - [程序与用户数据](desktop/data-location.md)：数据目录、安装与升级迁移。
 
 ### agentcli
@@ -41,13 +41,13 @@
 - [工具](harness/runtime/tools/README.md)、[权限专题](harness/runtime/permission-policy.md)：注册、执行、写入范围与单次审批。
 - [LLM 适配](harness/llm/README.md)：模型目录、协议适配和流式响应。
 - [Agent CLI exec](harness/runtime/agent_cli_exec.md)：一次性终端调用与独立会话存储。
-- [统计上传](harness/runtime/native-statistics-upload.md)：用量同步、确认和失败恢复。
+- [统计上传](harness/runtime/native-statistics-upload.md)：用量同步、确认和失败恢复；[赛狐 MCP](saihu-device-access.md)：连接配置与设备鉴权。
 
 ### lxeskillCLI、Skill 与共享能力
 
 - [Skill 手册](harness/skill/README.md)：发现与加载机制；业务指引正文位于 [skills/](../skills)，可从 [Skill 清单](harness/skill/current_skill_catalog.md)、[FBA](../skills/fba-workflow-map/SKILL.md)和 [补货](../skills/replenishment-workflow-map/SKILL.md)入口查找。
 - [马帮浏览器认证](../python/lxeskill_cli/browser_auth_service/README.md)：桌面认证窗口、独立 CLI 浏览器绑定和排障。
-- [CLI 云端自检](cloud-self-check.md)、[业务云端通信](business-cloud-access.md)：连接诊断与业务请求。
+- [CLI 云端通信与自检](lxeskill-cloud-access.md)：权限查询、连接诊断、公共 HTTP 模块和业务请求。
 - [越南备货实现说明](harness/vietnam-stock-recommendation/calculation.md)：输入快照、设置保存、校验和工作簿生成。
 - [Office 文件能力](office-runtime.md)：Electron、模型与业务 CLI 的 Office 接口及运行依赖。
 - [本地状态与数据库](database/local_agent.md)、[日志与诊断](harness/logger.md)：存储布局、备份和排障。
