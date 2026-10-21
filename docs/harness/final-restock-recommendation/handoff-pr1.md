@@ -1,6 +1,16 @@
 # 最终备货建议：PR1 计算公式交接
 
-## 目的与当前状态
+## 2026-10-21 修复归位：当前公式契约
+
+- 归位前 HEAD 为 `70bc0568`，该提交已推送到用户 fork。本轮只把最终功能中已验证的公式实现放回本层；不改写已发布提交，不自动 push 或更新 PR。
+- 当前返回 I/J/R/S/U–AC/AI，共 **14 个公式字段**。AI 为 `(R+T+Y+AB)/J`，J 为空或 0 时留空，Y/AB 为空按 0；原 13 列算法不另写一份。
+- `final_restock_formulas(row_number, *, peak_boost_enabled=True, peak_boost_days=None)` 支持现有旺季开关及 0～120 整数天数，空值使用 30 天，保留备注规则及 120 天上限。函数保留既有默认行为；PR2 正式生成入口明确传入每轮参数，默认关闭，历史持久开关不能自动启用。
+- 归位文件只有公式服务、对应测试、本 handoff。实现和测试取自已验证的 pool-9，未增加读取配置、取数、文件生成、CLI、Skill 或 Desktop 依赖。
+- 本轮执行 `UV_CACHE_DIR=/private/tmp/amazon-review-uv-cache PYTHONDONTWRITEBYTECODE=1 uv run --frozen --no-sync pytest -p no:cacheprovider -q -rs --tb=short python/lxeskill_cli/tests/mabang/test_final_restock_recommendation.py`：**159 passed，无 skip**，包含实际 LibreOffice 重算及 AI 空值、0、建议数量和精度场景。后续须从本层向 PR2 同步公式契约，不能在下游另提交重复公式补丁。
+- 工作区备份、暂存前检查及提交状态以本轮最终报告为准；现有 main 和 pool-9 合并候选保持原样。
+- 用户已于本轮分别批准 PR1/PR2 精确 add/commit 及 PR1→PR2→pool-7 本地依赖 merge；仅追加提交，不 rebase，不 push。远端分支仍需另行授权更新。
+
+## 原阶段目的与状态（历史，13 字段契约已由上文替代）
 
 为新「最终备货建议」提供独立的 13 列计算公式，保持旧备货算法与报表契约。
 本阶段交付内部公式服务；文件读取、34 列 XLSX、CLI 和 Skill 分别在后续阶段接入。
