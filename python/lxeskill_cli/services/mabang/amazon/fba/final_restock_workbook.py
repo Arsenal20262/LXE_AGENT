@@ -350,7 +350,12 @@ def _write_workbook(
     worksheet.title = WORKSHEET_NAME
     worksheet.append(list(HEADERS))
     for row_index, row in enumerate(rows, start=2):
-        worksheet.append([row.get(header) for header in HEADERS])
+        for column_index, header in enumerate(HEADERS, start=1):
+            value = row.get(header)
+            cell = worksheet.cell(row_index, column_index, value)
+            if isinstance(value, str):
+                # Platform text may start with '='; only the formulas below are executable.
+                cell.data_type = "s"
         for column, formula in final_restock_formulas(
             row_index, peak_boost_enabled=peak_boost_enabled, peak_boost_days=peak_boost_days,
         ).items():
@@ -437,12 +442,17 @@ def _inspect_recalculated(path: Path, *, rows: list[dict[str, Any]]) -> tuple[in
                         f"Office 重算后 I{row_number} 没有公式结果，不能确认重算已执行"
                     )
                 for column, index in formula_indexes.items():
-                    formula = formula_row[index].value
-                    if not isinstance(formula, str) or not formula.startswith("="):
+                    formula_cell = formula_row[index]
+                    formula = formula_cell.value
+                    if formula_cell.data_type != "f" or not isinstance(formula, str) or not formula.startswith("="):
                         raise FinalRestockWorkbookError(
                             f"重算后公式丢失或改变为非公式单元格: {column}{row_number}={formula!r}"
                         )
-            for cell in value_row:
+            for formula_cell, cell in zip(formula_row, value_row, strict=True):
+                if formula_cell.data_type == "f" and (row_number == 1 or formula_cell.column_letter not in FORMULA_COLUMNS):
+                    raise FinalRestockWorkbookError(
+                        f"重算后非计算单元格包含公式: {formula_cell.coordinate}"
+                    )
                 value = cell.value
                 if cell.data_type == "e" or (isinstance(value, str) and value in EXCEL_ERROR_VALUES):
                     error_count += 1
