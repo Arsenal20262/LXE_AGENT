@@ -1,4 +1,3 @@
-// Usage statistics view (turns / skills / tools aggregates).
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import { BookOpen, Coins, MessagesSquare, TriangleAlert, Wrench, Zap } from "lucide-react";
