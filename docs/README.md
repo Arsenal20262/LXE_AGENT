@@ -4,6 +4,7 @@
 
 ## 使用与开发
 
+- [PR 审查规范](pr-review.md)：团队协作流程、AI 技术检查与人工审核要求；[开发脚本](../scripts/README.md)介绍 worktree 的领取和归还。
 - [Desktop 技术手册](desktop/README.md)：桌面交互、进程边界、配置和开发入口。
 - [构建、打包、安装与启动](desktop/packaging-pipeline.md)：源码验证、Windows 分发和安装验收。
 - [桌面对话窗口](harness/conversation-window.md)、[会话状态](desktop/session-status.md)、[结构化提问](harness/tool/ask-user-question.md)：聊天、附件、等待回答和停止任务。
@@ -14,6 +15,7 @@
 
 ## 架构与契约
 
+- [架构简介](architecture/README.md)：整体关系和数据归属；模块介绍分为 [Electron](architecture/electron.md)、[agentcli](architecture/agentcli.md) 和 [lxeskillCLI](architecture/lxeskill-cli.md)。
 - [桌面事件循环](eventloop.md)：进程、任务所有权和退出顺序。
 - [Gateway](harness/gateway/README.md)：平台接入、路由、调度、取消和出站。
 - [Gateway ↔ Agent 协议](harness/gateway/agent-protocol.md)：JSON-RPC、握手、事件和错误。

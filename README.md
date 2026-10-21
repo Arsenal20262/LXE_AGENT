@@ -77,6 +77,8 @@ bun run desktop:dev
 
 ## 文档
 
+- [PR 审查规范](docs/pr-review.md)：团队协作流程、AI 技术检查与人工审核要求。
+- [架构简介](docs/architecture/README.md)：三模块关系、数据归属及各模块介绍。
 - [文档入口](docs/README.md)：专题手册、架构契约、验收记录和外部参考。
 - [Desktop 技术手册](docs/desktop/README.md)：界面、进程、配置与开发方式。
 - [Gateway ↔ Agent 协议](docs/harness/gateway/agent-protocol.md)：JSON-RPC 2.0 通信契约。
