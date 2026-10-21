@@ -54,7 +54,7 @@
 ### 共享能力与诊断
 
 - [Office 文件能力](office-runtime.md)：Electron、模型与业务 CLI 的 Office 接口及运行依赖。
-- [本地状态与数据库](database/README.md)、[日志与诊断](logging.md)：存储布局、备份和排障。
+- [本地数据与存储](storage/README.md)、[日志与诊断](logging.md)：存储布局、备份和排障。
 
 ### 参考资料
 
