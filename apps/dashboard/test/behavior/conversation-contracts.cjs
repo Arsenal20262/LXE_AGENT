@@ -82,7 +82,7 @@ module.exports = async ({suite,win,url,js,step,load,waitFor,click,key,focus,sett
     await settle();
     await click('[data-fixture-row=answer] .message-meta-copy');
     assert.ok((await js('copiedText')).includes('const answer = 42;'));
-    assert.ok(await js("document.querySelector('code .hljs-keyword')?.textContent==='const'"));
+    await waitFor("document.querySelector('code .hljs-keyword')?.textContent==='const'", 'code highlighting completed');
     const table = await js("({text:document.querySelector('td:last-child').textContent,width:document.documentElement.scrollWidth,viewport:innerWidth})");
     assert.equal(table.text,'long-cell-'.repeat(80));
     assert.ok(table.width<=table.viewport+1,'table does not overflow the page');
