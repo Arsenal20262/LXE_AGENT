@@ -27,7 +27,6 @@ import {
   WorkspaceFileSearch, DEFAULT_FILE_SEARCH_EXCLUDED_DIRECTORIES,
   UserSkillFiles,
   type McpConfig,
-  type LxeSkillCommandDefinition,
   type RuntimeProviderManager,
   type RuntimeModelSelection,
   type SkillManifest,
@@ -72,7 +71,6 @@ interface DashboardServiceOptions {
   managedLlmState?: () => ManagedLlmState | undefined;
   skillCatalog?: SkillCatalog;
   allowedSkillTypes?: ReadonlySet<string>;
-  cliCommands?: LxeSkillCommandDefinition[];
   reloadWorkspace?: (sessionId: string) => Promise<JsonObject>;
 }
 
@@ -295,7 +293,6 @@ export class DashboardService {
       return this.skillPayload(skill, true) as DashboardRpcResult<"skills.content">;
     },
     "skills.reference": (input) => this.skillReference(input.name, input.path) as DashboardRpcResult<"skills.reference">,
-    "commands.list": () => this.listPayload(this.options.cliCommands ?? []) as DashboardRpcResult<"commands.list">,
     "toolsets.list": () => this.listPayload(this.toolsets()) as DashboardRpcResult<"toolsets.list">,
     "mcp.servers.list": () => this.mcpServers() as DashboardRpcResult<"mcp.servers.list">,
     "mcp.servers.update": (input) => this.updateMcp(input) as Promise<DashboardRpcResult<"mcp.servers.update">>,

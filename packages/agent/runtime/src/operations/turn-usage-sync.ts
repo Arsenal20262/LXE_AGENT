@@ -3,7 +3,6 @@ import { hostname } from "node:os";
 import { nativeCloudFetch, readCloudReceipt } from "../tooling/cloud-http";
 import { createLogger, sanitizeLogValue } from "@lxe/core";
 import type { JsonObject } from "@lxe/protocol";
-import type { OneShotCliRunnerPort } from "../tooling/one-shot-cli";
 import type { SqliteRuntimeStore } from "../state/storage";
 import { resolveMachineIdentity } from "@lxe/core/machine-identity";
 
@@ -26,14 +25,14 @@ class DataServerUploadError extends Error {
   }
 }
 
-export interface MaintenanceClock {
+export interface TurnUsageSyncClock {
   setTimeout(callback: () => void, delayMs: number): unknown;
   clearTimeout(id: unknown): void;
   setInterval(callback: () => void, delayMs: number): unknown;
   clearInterval(id: unknown): void;
 }
 
-const systemClock: MaintenanceClock = {
+const systemClock: TurnUsageSyncClock = {
   setTimeout: (callback, delayMs) => {
     const timer = setTimeout(callback, delayMs);
     timer.unref?.();
@@ -48,15 +47,13 @@ const systemClock: MaintenanceClock = {
   clearInterval: (id) => clearInterval(id as ReturnType<typeof setInterval>),
 };
 
-interface MaintenanceSchedulerOptions {
+interface TurnUsageSyncServiceOptions {
   environment: Environment;
   store: SqliteRuntimeStore;
   gatewayId: string;
-  authRunner: OneShotCliRunnerPort;
   fetch?: (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
-  clock?: MaintenanceClock;
+  clock?: TurnUsageSyncClock;
   stopTimeoutMs?: number;
-  authEnabled?: boolean;
 }
 
 const envText = (env: Environment, name: string, fallback = ""): string => String(env[name] ?? fallback).trim();
@@ -72,24 +69,23 @@ const TURN_USAGE_BATCH_TARGET_BYTES = 1024 * 1024;
 const TURN_USAGE_MAX_BATCHES_PER_RUN = 10;
 const TURN_USAGE_BACKLOG_DELAY_MS = 60_000;
 const INITIAL_DATA_SYNC_DELAY_MS = 5 * 60_000;
-const AUTH_REFRESH_INTERVAL_MS = 2 * 60 * 60_000;
 const DATA_SYNC_INTERVAL_MS = 3_600_000;
 const DATA_SERVER_REQUEST_TIMEOUT_MS = 30_000;
 
-export class MaintenanceScheduler {
-  private readonly logger = createLogger("runtime.maintenance");
+export class TurnUsageSyncService {
+  private readonly logger = createLogger("runtime.turn-usage-sync");
   private readonly fetch: (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
-  private readonly clock: MaintenanceClock;
+  private readonly clock: TurnUsageSyncClock;
   private readonly intervalTimers: unknown[] = [];
   private readonly active = new Set<Promise<unknown>>();
   private readonly controllers = new Set<AbortController>();
-  private readonly flights = new Map<"auth" | "data", { running?: Promise<void>; rerun: boolean }>();
+  private readonly flight: { running?: Promise<void>; rerun: boolean } = { rerun: false };
   private readonly initialTimers: unknown[] = [];
   private backlogTimer: unknown | undefined;
   private stopped = true;
   private uploadFailures = 0;
 
-  constructor(private readonly options: MaintenanceSchedulerOptions) {
+  constructor(private readonly options: TurnUsageSyncServiceOptions) {
     this.fetch = options.fetch ?? ((input, init) => nativeCloudFetch(String(input))(input, init));
     this.clock = options.clock ?? systemClock;
   }
@@ -97,43 +93,22 @@ export class MaintenanceScheduler {
   async start(): Promise<void> {
     if (!this.stopped) return;
     this.stopped = false;
-    const authEnabled = this.options.authEnabled ?? true;
     const dataEnabled = envBoolean(this.options.environment, "LXE_DATA_SERVER_ENABLED");
-    this.logger.info("maintenance_configured", {
-      auth_enabled: authEnabled,
-      auth_interval_ms: AUTH_REFRESH_INTERVAL_MS,
+    this.logger.info("turn_usage_sync_configured", {
       data_sync_enabled: dataEnabled,
       data_sync_interval_ms: DATA_SYNC_INTERVAL_MS,
     });
-    if (authEnabled) {
-      const authTimer = this.clock.setInterval(
-        () => { void this.requestSingleFlight("auth", () => this.refreshAuth()); },
-        AUTH_REFRESH_INTERVAL_MS,
-      );
-      this.intervalTimers.push(authTimer);
-    }
     if (dataEnabled) {
       const syncTimer = this.clock.setInterval(
-        () => { void this.requestSingleFlight("data", () => this.syncDataServer()); },
+        () => { void this.requestSingleFlight(); },
         DATA_SYNC_INTERVAL_MS,
       );
       this.intervalTimers.push(syncTimer);
-    }
-    if (authEnabled) {
       const timer = this.clock.setTimeout(() => {
         const index = this.initialTimers.indexOf(timer);
         if (index >= 0) this.initialTimers.splice(index, 1);
         if (this.stopped) return;
-        void this.requestSingleFlight("auth", () => this.refreshAuth());
-      }, 0);
-      this.initialTimers.push(timer);
-    }
-    if (dataEnabled) {
-      const timer = this.clock.setTimeout(() => {
-        const index = this.initialTimers.indexOf(timer);
-        if (index >= 0) this.initialTimers.splice(index, 1);
-        if (this.stopped) return;
-        void this.requestSingleFlight("data", () => this.syncDataServer());
+        void this.requestSingleFlight();
       }, INITIAL_DATA_SYNC_DELAY_MS);
       this.initialTimers.push(timer);
     }
@@ -145,8 +120,8 @@ export class MaintenanceScheduler {
     if (this.backlogTimer !== undefined) this.clock.clearTimeout(this.backlogTimer);
     this.backlogTimer = undefined;
     for (const timer of this.intervalTimers.splice(0)) this.clock.clearInterval(timer);
-    for (const flight of this.flights.values()) flight.rerun = false;
-    for (const controller of this.controllers) controller.abort(new Error("maintenance stopped"));
+    this.flight.rerun = false;
+    for (const controller of this.controllers) controller.abort(new Error("turn usage sync stopped"));
     const active = Promise.allSettled([...this.active]);
     const timeoutMs = Math.max(1, Math.trunc(this.options.stopTimeoutMs ?? 5_000));
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -159,7 +134,7 @@ export class MaintenanceScheduler {
       }),
     ]);
     if (timer) clearTimeout(timer);
-    if (!completed) this.logger.warn("maintenance_stop_timed_out", {
+    if (!completed) this.logger.warn("turn_usage_sync_stop_timed_out", {
       timeout_ms: timeoutMs,
       active_tasks: this.active.size,
     });
@@ -321,23 +296,8 @@ export class MaintenanceScheduler {
     if (this.stopped || this.backlogTimer !== undefined) return;
     this.backlogTimer = this.clock.setTimeout(() => {
       this.backlogTimer = undefined;
-      if (!this.stopped) void this.requestSingleFlight("data", () => this.syncDataServer());
+      if (!this.stopped) void this.requestSingleFlight();
     }, delayMs);
-  }
-
-  private async refreshAuth(): Promise<void> {
-    const controller = new AbortController();
-    this.controllers.add(controller);
-    try {
-      const response = await this.options.authRunner.execute(
-        ["auth", "refresh"],
-        controller.signal,
-      );
-      if (!response.ok) throw new Error(response.error?.message ?? "browser auth refresh failed");
-      this.logger.info("auth_refresh_succeeded");
-    } finally {
-      this.controllers.delete(controller);
-    }
   }
 
   private machineId(): string {
@@ -351,37 +311,31 @@ export class MaintenanceScheduler {
     }
   }
 
-  private requestSingleFlight(
-    kind: "auth" | "data",
-    operation: () => Promise<unknown>,
-  ): Promise<void> {
+  private requestSingleFlight(): Promise<void> {
     if (this.stopped) return Promise.resolve();
-    const state = this.flights.get(kind) ?? { rerun: false };
-    this.flights.set(kind, state);
+    const state = this.flight;
     if (state.running) {
-      if (!state.rerun) this.logger.debug("maintenance_single_flight_coalesced", { task: kind });
+      if (!state.rerun) this.logger.debug("turn_usage_sync_single_flight_coalesced");
       state.rerun = true;
       return state.running;
     }
     const runOnce = async (): Promise<void> => {
       const startedAt = Date.now();
-      this.logger.info("maintenance_task_started", { task: kind });
+      this.logger.info("turn_usage_sync_task_started");
       try {
-        await operation();
-        this.logger.info("maintenance_task_completed", {
-          task: kind,
+        await this.syncDataServer();
+        this.logger.info("turn_usage_sync_task_completed", {
           status: "completed",
           duration_ms: Date.now() - startedAt,
         });
       } catch (error) {
-        this.logger.warn(kind === "auth" ? "auth_refresh_failed" : "data_sync_failed", {
-          ...(kind === "data" && error instanceof DataServerUploadError
+        this.logger.warn("data_sync_failed", {
+          ...(error instanceof DataServerUploadError
             ? { target: error.target }
             : {}),
           error,
         });
-        this.logger.info("maintenance_task_completed", {
-          task: kind,
+        this.logger.info("turn_usage_sync_task_completed", {
           status: "failed",
           duration_ms: Date.now() - startedAt,
         });
@@ -392,7 +346,7 @@ export class MaintenanceScheduler {
       await runOnce();
       if (!this.stopped && state.rerun) {
         state.rerun = false;
-        this.logger.debug("maintenance_single_flight_rerun", { task: kind });
+        this.logger.debug("turn_usage_sync_single_flight_rerun");
         await runOnce();
       }
     })().finally(() => {

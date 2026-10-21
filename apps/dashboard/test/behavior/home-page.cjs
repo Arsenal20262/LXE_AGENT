@@ -29,6 +29,7 @@ module.exports = async ({ win, js, step, load, waitFor, click, key, focus, settl
     assert.ok(calls.some(c => c.operation === "stats.skills.list" && c.input.days === 7));
     assert.equal(await js("document.querySelector('.home-tile-value').textContent"), "32");
     assert.equal(await js("document.querySelectorAll('.home-page h1').length"), 1);
+    assert.equal(await js("document.querySelector('.home-tile:nth-child(3) .home-tile-value').textContent"), "9");
     await focus(".home-session-row"); await key("Enter");
     await waitFor("Boolean(document.querySelector('.conversation-compose-box'))", "recent session opened by keyboard");
     assert.ok((await state()).calls.some(c => c.operation === "sessions.detail" && c.input.session_id === "Default chat"));
@@ -44,8 +45,8 @@ module.exports = async ({ win, js, step, load, waitFor, click, key, focus, settl
     for (const theme of ["light", "dark"]) {
       await js(`document.documentElement.dataset.theme='${theme}'`); await settle();
       await noOverflow();
-      const colors = await js("Array.from(document.querySelectorAll('.home-skill-row .rate-cell-fill')).map(e=>getComputedStyle(e).backgroundColor)");
-      assert.equal(new Set(colors).size, 3, "success, warning and failure are distinguishable");
+      assert.equal(await js("document.querySelectorAll('.home-skill-row .rate-cell-fill').length"), 0, "Skill outcomes are not inferred from command calls");
+      assert.equal(await js("document.querySelectorAll('.home-skill-count').length"), 3);
       await screenshot("home-" + theme);
     }
     await click(".sidebar-toggle-button");

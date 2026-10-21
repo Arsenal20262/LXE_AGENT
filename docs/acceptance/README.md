@@ -8,6 +8,7 @@
 - [文件预览](file-preview-acceptance.md)：HTML、文档查看器及文件失效状态。
 - [工作区用应用打开](20261002-workspace-applications.md)：应用检测、原生启动、图标及两平台验证。
 - [Office 运行能力](office-runtime-20260930.md)：文档实测、Windows 前置依赖和证据位置。
+- [Office 接口简化与 Kit 0.1.5](office-integration-20261020.md)：Node API、CLI、业务适配及 macOS / Windows 实测。
 
 ## 运行环境、数据与更新
 
@@ -23,3 +24,5 @@
 - [马帮巴西海外仓](mabang-brazil-export-validation.md)：真实接口、文件校验和兼容处理。
 - [马帮 TMS](mabang-tms-export-validation.md)：自动化验证、真实验收和未确认事项。
 - [雅仓](yacang-export-validation.md)：真实文件与网页对照、字段口径和未完成事项。
+- [上马启用商品](shangman-enabled-export-validation.md)：筛选样本、XLSX 范围修复及生产失败记录。
+- [越南备货九表](vietnam-nine-sheet-validation.md)：工作簿保真、模板换版、日期系统及跨平台验证。

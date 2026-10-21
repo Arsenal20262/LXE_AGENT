@@ -5,7 +5,6 @@ from typing import Any
 
 from services.agent_cli._shared.json_cli import exception_text as _exception_text
 from services.mabang.amazon.fba.store_msku_actual_inventory import export_store_msku_actual_inventory
-from services.mabang.errors import MabangAuthError
 from services.mabang.official_api import diagnostic
 
 
@@ -23,5 +22,5 @@ def run(arguments: dict[str, Any]) -> dict[str, Any]:
             "success": False,
             "store_name": store_name,
             "exception": diagnostic(_exception_text(exc)),
-            "auth_refresh_required": isinstance(exc, MabangAuthError),
+            "auth_refresh_required": False,
         }

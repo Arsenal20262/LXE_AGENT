@@ -7,7 +7,6 @@ import {
   useSkillStatsQuery,
   useStatsOverviewQuery,
 } from "../../api/queries";
-import { SuccessRateCell, successRateText } from "../../shared/components";
 import { formatDate, formatNumber } from "../../shared/format";
 import { useUiText } from "../../shared/i18n";
 import type { SessionPayload } from "../../api/payloads";
@@ -64,11 +63,7 @@ export function DashboardHome({
   const tiles = [
     { label: t.home.todayTurns, value: totals ? formatNumber(totals.turns) : "—", tone: "" },
     { label: t.home.todayExecutions, value: totals ? formatNumber(totals.skill_executions) : "—", tone: "" },
-    {
-      label: t.home.todayFailures,
-      value: totals ? formatNumber(totals.skill_failures) : "—",
-      tone: totals && totals.skill_failures > 0 ? "tone-danger" : "tone-zero"
-    },
+    { label: t.usage.totalsReads, value: totals ? formatNumber(totals.skill_activations ?? 0) : "—", tone: "" },
     {
       label: t.home.todayTokens,
       value: totals ? formatNumber(totals.input_tokens + totals.output_tokens) : "—",
@@ -147,10 +142,6 @@ export function DashboardHome({
                 <div className="home-skill-row" key={skill.name}>
                   <span className="home-skill-name" title={skill.name}>{t.skillDisplayName(skill.name)}</span>
                   <span className="home-skill-meta">
-                    <span className="home-skill-rate" aria-label={t.usage.successRateBadge(successRateText(skill.executions, skill.failures))}>
-                      <span className="home-skill-rate-label">{t.usage.columnSuccessRate}</span>
-                      <SuccessRateCell executions={skill.executions} failures={skill.failures} />
-                    </span>
                     <span className="home-skill-count">{t.home.executionsUnit(formatNumber(skill.executions))}</span>
                   </span>
                 </div>

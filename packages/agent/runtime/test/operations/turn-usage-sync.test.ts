@@ -4,20 +4,11 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SqliteRuntimeStore } from "../../src/state/storage";
-import { MaintenanceScheduler, type MaintenanceClock } from "../../src/operations/maintenance";
-import type { CliTerminalResult } from "../../src/tooling/one-shot-cli";
+import { TurnUsageSyncService, type TurnUsageSyncClock } from "../../src/operations/turn-usage-sync";
 import { removeTemporaryRoot } from "../temp-directory";
 import { testWorkspace } from "../workspace";
 
-const cliSuccess = (): CliTerminalResult => ({
-  protocol_version: "1",
-  type: "result",
-  command: "auth refresh",
-  ok: true,
-  data: {},
-  files: [],
-});
-class ManualMaintenanceClock implements MaintenanceClock {
+class ManualTurnUsageSyncClock implements TurnUsageSyncClock {
   readonly timeouts: Array<{ callback: () => void; delayMs: number }> = [];
   readonly intervals: Array<{ callback: () => void; delayMs: number }> = [];
 
@@ -173,8 +164,8 @@ const ackingFetch = (
 const schedulerFor = (
   store: SqliteRuntimeStore,
   fetch: (input: string | URL | Request, init?: RequestInit) => Promise<Response>,
-  options: { clock?: ManualMaintenanceClock; environment?: Record<string, string> } = {},
-): MaintenanceScheduler => new MaintenanceScheduler({
+  options: { clock?: ManualTurnUsageSyncClock; environment?: Record<string, string> } = {},
+): TurnUsageSyncService => new TurnUsageSyncService({
   environment: {
     LXE_DATA_SERVER_ENABLED: "1",
     LXE_DATA_SERVER_URL: "https://cloud.example/",
@@ -183,43 +174,46 @@ const schedulerFor = (
   },
   store,
   gatewayId: "gateway-one",
-  authEnabled: false,
   ...(options.clock ? { clock: options.clock } : {}),
-  authRunner: { execute: async () => cliSuccess() },
   fetch,
 });
 
-describe("MaintenanceScheduler", () => {
-  test("runs auth immediately but delays the first data sync for five minutes", async () => {
+describe("TurnUsageSyncService", () => {
+  test("disabled sync schedules no work", async () => {
+    const store = await createStore("lxe-usage-sync-disabled-");
+    const clock = new ManualTurnUsageSyncClock();
+    const uploads: UploadedBatch[] = [];
+    const scheduler = schedulerFor(store, ackingFetch(uploads), { clock, environment: { LXE_DATA_SERVER_ENABLED: "0" } });
+    try {
+      await scheduler.start();
+      expect(clock.timeouts).toHaveLength(0);
+      expect(clock.intervals).toHaveLength(0);
+      expect(uploads).toHaveLength(0);
+    } finally { await scheduler.stop(); await store.stop(); }
+  });
+
+  test("delays the first sync for five minutes and repeats hourly", async () => {
     const store = await createStore("lxe-maintenance-schedule-");
     await recordTurn(store, "turn-1");
-    const clock = new ManualMaintenanceClock();
+    const clock = new ManualTurnUsageSyncClock();
     const uploads: UploadedBatch[] = [];
-    let authCalls = 0;
-    const scheduler = new MaintenanceScheduler({
+    const scheduler = new TurnUsageSyncService({
       environment: {
         LXE_DATA_SERVER_ENABLED: "1",
         LXE_DATA_SERVER_URL: "https://cloud.example",
         LXE_DATA_SERVER_API_KEY: "secret",
-        LXE_MAINTENANCE_AUTH_ENABLED: "0",
         LXE_DATA_SERVER_SYNC_INTERVAL_SECONDS: "30",
       },
       store,
       gatewayId: "gateway-one",
       clock,
-      authRunner: { execute: async (arguments_) => {
-        expect(arguments_).toEqual(["auth", "refresh"]);
-        authCalls += 1;
-        return cliSuccess();
-      } },
       fetch: ackingFetch(uploads),
     });
 
     await scheduler.start();
-    expect(clock.timeouts.map((timer) => timer.delayMs)).toEqual([0, 300_000]);
-    expect(clock.intervals.map((timer) => timer.delayMs)).toEqual([7_200_000, 3_600_000]);
-    await clock.fireTimeout();
-    await waitFor(() => authCalls === 1, "initial auth refresh");
+    await scheduler.start();
+    expect(clock.timeouts.map((timer) => timer.delayMs)).toEqual([300_000]);
+    expect(clock.intervals.map((timer) => timer.delayMs)).toEqual([3_600_000]);
     expect(uploads).toHaveLength(0);
     await clock.fireTimeout();
     await waitFor(() => uploads.length === 1, "delayed data sync");
@@ -268,7 +262,11 @@ describe("MaintenanceScheduler", () => {
       "secret command arguments",
       testWorkspace.directory,
     ]) expect(serialized).not.toContain(forbidden);
-    expect(uploads[0]?.body.turns[0].items[2]).not.toHaveProperty("detail");
+    expect(uploads[0]?.body.turns[0].items).toEqual([
+      { kind: "tool", name: "tool-0", module: "", calls: 1, errors: 0, duration_ms: 3 },
+      { kind: "skill_activation", name: "inventory", module: "fba", calls: 1 },
+      { kind: "skill_execution", name: "inventory", module: "fba", calls: 1 },
+    ]);
     await store.stop();
   });
 
@@ -380,8 +378,8 @@ describe("MaintenanceScheduler", () => {
       return Response.json({ accepted_count: 1, accepted_through_sequence: 1 });
     } });
     const url = server.url.origin;
-    const scheduler = new MaintenanceScheduler({ store, gatewayId: "native-gateway", authEnabled: false,
-      authRunner: { execute: async () => cliSuccess() }, environment: { LXE_DATA_SERVER_URL: url } });
+    const scheduler = new TurnUsageSyncService({ store, gatewayId: "native-gateway",
+      environment: { LXE_DATA_SERVER_URL: url } });
     try {
       await expect(scheduler.syncDataServer()).rejects.toThrow("fixture unavailable");
       expect(store.turnUsageAcknowledgedSequence(url)).toBe(0);
@@ -396,7 +394,7 @@ describe("MaintenanceScheduler", () => {
   test("ownership conflicts retry on a bounded timer and recover without restarting", async () => {
     const store = await createStore("lxe-maintenance-conflict-");
     await recordTurn(store, "pending");
-    const clock = new ManualMaintenanceClock();
+    const clock = new ManualTurnUsageSyncClock();
     const bodies: string[] = [];
     let refused = true;
     const scheduler = schedulerFor(store, async (_input, init) => {
@@ -488,7 +486,7 @@ describe("MaintenanceScheduler", () => {
   test("stops after ten batches and schedules backlog continuation after 60 seconds", async () => {
     const store = await createStore("lxe-maintenance-backlog-");
     seedTurnUsage(store, 2_001);
-    const clock = new ManualMaintenanceClock();
+    const clock = new ManualTurnUsageSyncClock();
     const uploads: UploadedBatch[] = [];
     const scheduler = schedulerFor(store, ackingFetch(uploads), { clock });
 
@@ -504,7 +502,7 @@ describe("MaintenanceScheduler", () => {
   test("keeps data ticks single-flight and performs one coalesced rerun", async () => {
     const store = await createStore("lxe-maintenance-single-flight-");
     await recordTurn(store, "turn-1");
-    const clock = new ManualMaintenanceClock();
+    const clock = new ManualTurnUsageSyncClock();
     let calls = 0;
     let active = 0;
     let maxActive = 0;

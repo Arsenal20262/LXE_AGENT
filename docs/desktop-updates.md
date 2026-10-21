@@ -37,13 +37,19 @@ bun run release:publish
 
 ## 发布与暂停
 
-检查安装包后运行 `release:publish`。它核对当前工作区干净、源码提交/版本/说明与当前候选一致，以及安装包和 blockmap 的大小、SHA-512；随后显示版本、时间、提交、说明、大小。输入 `y` 才上传并激活正式渠道，其他输入取消，非交互终端拒绝发布。确认后再次校验，避免等待期间发生变化。
+检查安装包后运行 `release:publish`。它核对当前工作区干净、源码提交/版本/说明与当前候选一致，以及安装包和 blockmap 的大小、SHA-512；随后显示版本、时间、提交、说明、大小。输入 `y` 才上传并激活正式渠道，再记录 GitHub Release；其他输入取消，非交互终端拒绝发布。确认后再次校验，避免等待期间发生变化。
 
-构建后再次修改代码或 `git pull` 得到新提交，默认发布要求重新构建。上传失败可重试同一命令；收到 `Published ...` 才确认发布成功。发布不会删除当前候选，重复发布同一构建沿用既有幂等规则。
+构建后再次修改代码或 `git pull` 得到新提交，默认发布要求重新构建。上传失败可重试同一命令；`Published ...` 表示 COS 渠道发布成功，随后 `GitHub Release: <地址>` 表示 GitHub 记录完成。发布不会删除当前候选，重复发布同一构建沿用既有幂等规则。
+
+Windows 发布机需安装 [GitHub CLI](https://cli.github.com/)，执行一次 `gh auth login --hostname github.com`，登录对仓库有发布权限的账号，并提前将候选包对应的源码提交推送到 `origin`。脚本从 `origin` 的 GitHub 地址确定仓库，不自动推送源码。构建命令不依赖 GitHub CLI。
+
+COS 发布成功后，`release:publish` 自动创建 `v<版本号>` 标签和同名 GitHub Release。版本号与正文沿用已校验的候选记录（来自 `config/desktop-release.json`），标签指向候选包的 `source_commit`，不会使用当时最新的 `main`。安装包和 blockmap 继续只上传 COS。已有同标签、同源码提交的正式 Release 直接复用，保留人工编辑过的说明；标签指向其他提交或已有记录仍是草稿/预发布时，报错并留给发布者处理，不移动标签或覆盖记录。
+
+如果 GitHub 创建失败，命令以非零退出码明确报告“COS 已发布成功”，保留实际错误。客户端仍可更新，不回滚 COS。修复 GitHub CLI 登录、网络、权限或源码未推送的问题后，在源码和候选保持不变的情况下重跑 `bun run release:publish` 即可补建；不需要为了补记 GitHub 重新构建或升级版本。请求返回前断线时也可这样重试，已创建的 Release 会被复用。
 
 同一工作区用 `dist/desktop-candidates/workflow.lock` 防止两个新入口并发。异常退出遗留锁时，先确认构建或发布进程已经停止，再手动移除该锁；不要在另一流程仍运行时删除。
 
-旧入口仍有明确用途：`verify:platform:win` 是 `release:build` 的兼容别名；`desktop:dist:win` 只打包，不更新默认待发布记录。需要显式选择历史候选包时使用高级入口（仍遵守渠道版本冻结和文件校验）：
+旧入口仍有明确用途：`verify:platform:win` 是 `release:build` 的兼容别名；`desktop:dist:win` 只打包，不更新默认待发布记录。需要显式选择历史候选包时使用高级入口（仅发布 COS，不自动创建 GitHub Release，仍遵守渠道版本冻结和文件校验）：
 
 ```powershell
 .\scripts\publish-desktop-windows.ps1 -Candidate 'D:\projects\LXE_AGENT\dist\desktop-candidates\<build-id>\candidate.json'

@@ -7,6 +7,7 @@ export function createWorkbenchDetailsFixture(calls: { operation: string; input?
   let release: (() => void) | undefined;
   const version = (file_name: string, date = "2026-10-18") => ({ file_name, path: "/fixture/inputs/" + file_name, size_bytes: 482304, updated_at: date });
   const slots: DesktopInputAssetSlot[] = [
+    { slot: "vietnam_full_workbook", display_name: "越南备货完整模板", used_by: ["越南备货"], current: version("越南备货清单.xlsx"), previous: null },
     { slot: "export_tax_master", display_name: "出口退税总表", used_by: ["采购汇总", "备货工作簿"], current: version("出口退税总表_2026-10.xlsx"), previous: version("出口退税总表_2026-09.xlsx", "2026-09-20") },
     { slot: "purchase_template", display_name: "采购订单模板", used_by: ["采购订单"], current: version("采购订单模板.xlsx"), previous: null },
     { slot: "shipping_template", display_name: "发货单模板", used_by: ["发货单"], current: version("shipment-template-for-international-orders-and-regional-warehouses-2026.xlsx"), previous: null },

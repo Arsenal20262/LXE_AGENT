@@ -495,3 +495,10 @@ Amazon 业务已明确且用户明确要求“最终备货建议”时进入 `re
 - 本次精确提交 8 个文件：本 handoff；Service `store_msku.py`、`sku_catalog.py`、`official_api.py`；测试 `test_mabang_store_msku_api.py`、`test_sku_catalog.py`、`test_mabang_official_combo.py`、`test_sku_catalog_session.py`。没有新增 Skill、客户端实现、路由、配置、缓存或日志框架；没有修改 CLI、Runtime、34 列、13 列公式、AG/AH/T 或普通备货算法。提交前检查完整/暂存 diff、敏感信息及 `git diff --cached --check`，提交后检查工作区干净。
 - 正式仍按三个 PR 串行提审：PR1（公式，Base `main`）→ PR2（计算引擎，Base PR1）→ 最终功能 PR（原 PR3＋pool-7，Base 最新 PR2 `894a413e`，Head `codex/final-restock-auto-data`）。原 PR3 不单独发布，已有 searchToken 脱敏提交保留。不 push、merge 或创建远端 PR。
 - 本轮开发到此停止，回到既定提审流程。线上复用收益仍 **NOT VERIFIED**，仅作为后续获授权的正常业务运行观察项，不作为本次本地提交阻塞；不追加性能研究或优化任务。
+
+## 2026-10-21 最新 main 本地同步收口
+
+- 同步基线为 `origin/main` `ec421163a6c69d10a84438e363373845e59b8c21`。按既定 Stacked PR 顺序在功能分支同步：PR1 `codex/final-restock-formulas`（HEAD `34747dc7`）包含最新 main；PR2 `codex/final-restock-cli`（HEAD `ff9f7f52`）包含 PR1；最终功能分支 `codex/final-restock-auto-data` 正在合并 PR2。根工作区 `main` 未修改，pool-9 兼容候选未修改。
+- 最终分支处理 6 个冲突文件：Desktop IPC/protocol 保留 main 越南模板接口和 Amazon 设置接口；Runtime 测试采用 main 公开 lxeskill 契约并保留 Skill 契约覆盖；深圳库存 CLI/Skill 保留 main 认证失败停止和脱敏规则，同时传递显式本轮 MSKU 源表路径。CLI 错误诊断增加既有 `diagnostic()` 脱敏，认证终态仍不触发额外恢复或重试。
+- 兼容验证：Python 定向 **424 passed**；Runtime/Desktop Bun 定向 **86 passed**；Desktop 全测 **475 passed、3 skipped**；Desktop 与 Dashboard TypeScript 检查通过；`desktop:build` 通过。PR1 公式测试 **159 passed**；PR2 Python/CLI 定向 **766 passed、4 skipped**，Runtime CLI 定向 **10 passed**。所有测试均为离线验证，未调用生产 ERP。
+- 本地分支合并不等于推送或创建远端 PR。最新 main 已进入 PR 堆栈的合并候选；远端 fork 的新分支头仍需用户单独授权后推送。

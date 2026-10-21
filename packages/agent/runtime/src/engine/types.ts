@@ -169,8 +169,8 @@ export interface SkillExecutionUsage extends JsonObject {
   skill: string;
   module: string;
   command: string;
-  success: boolean;
-  duration_ms: number;
+  success?: boolean;
+  duration_ms?: number;
 }
 
 export interface RuntimeTurnUsageRecord extends JsonObject {
