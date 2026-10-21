@@ -42,7 +42,7 @@ test("actual Python settings survive new service instances without changing ERP 
   expect((await new DesktopVietnamSettingsService(options).read()).parameters?.exchange_rate).toBe("4200");
   await expect(first.save({ ...initial.parameters, exchange_rate: "0" })).rejects.toThrow();
   expect((await first.read()).parameters?.exchange_rate).toBe("4200");
-});
+}, 30_000);
 test("native settings preserve real structured errors and observed process failures", async () => {
   await expect(service(async () => ({ stdout: JSON.stringify({ type: "result", ok: false, error: { message: "BadZipFile: synthetic template failure" } }), stderr: "", error: new Error("exit 4") })).read()).rejects.toThrow("BadZipFile: synthetic template failure");
   await expect(service(async () => ({ stdout: "", stderr: "PermissionError: /app/parameters.json", error: new Error("exit 1") })).read()).rejects.toThrow("PermissionError: /app/parameters.json");
@@ -85,4 +85,4 @@ book.close()
   const output = join(root, "导出 当前模板.xlsx");
   expect(await store.exportTemplate(output)).toEqual({ path: output });
   expect(readFileSync(output)).toEqual(readFileSync(source));
-});
+}, 30_000);

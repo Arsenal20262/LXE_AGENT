@@ -1,6 +1,10 @@
 const assert = require("node:assert/strict");
 
-module.exports = async ({ win, js, step, settle }) => {
+module.exports = async ({ win, js, step, settle, waitFor }) => {
+  const resize = async (width, height) => {
+    win.setContentSize(width, height);
+    await waitFor(`innerWidth === ${width}`, `Markdown viewport width ${width}`);
+  };
   const mount = async (surface, content) => {
     await js(`behavior.mountMarkdown(${JSON.stringify(surface)}, ${JSON.stringify(content)})`);
     await js("document.fonts.ready.then(() => undefined)");
@@ -14,7 +18,7 @@ module.exports = async ({ win, js, step, settle }) => {
     const partial = `${prose}\n\n${header}\n| 标题尺寸 | ${cell}`;
     const complete = `${partial} | 测试页 | 14px | 对照 |\n\n${prose}`;
     for (const width of [1280, 380]) {
-      win.setContentSize(width, 820);
+      await resize(width, 820);
       for (const theme of ['light', 'dark']) {
         await js(`document.documentElement.dataset.theme=${JSON.stringify(theme)}`);
         for (const [surface, content] of [['streaming', partial], ['streaming', complete], ['conversation', complete]]) {
@@ -40,7 +44,7 @@ module.exports = async ({ win, js, step, settle }) => {
       }
     }
     await js("document.documentElement.dataset.theme='light'");
-    win.setContentSize(1280, 820);
+    await resize(1280, 820);
   });
   for (const surface of ["conversation", "skill"]) {
     await step(`${surface}: all six heading levels render with a readable hierarchy`, async () => {
@@ -90,7 +94,7 @@ module.exports = async ({ win, js, step, settle }) => {
       const paragraph = "长引用内容".repeat(30) + "UnbrokenQuotedWord".repeat(35);
       // Desktop default and minimum content viewports; no exact aesthetic spacing.
       for (const [width, height] of [[1280, 820], [960, 640]]) {
-        win.setContentSize(width, height);
+        await resize(width, height);
         await mount(surface, `## ${heading}\n\n> ${paragraph}`);
         const layout = await js(`(() => {
           const root = document.querySelector('.message-markdown');

@@ -65,7 +65,7 @@ describe("skill context", () => {
     const map = catalog.get("southeast-asia-replenishment-workflow-map")!;
     expect(map.description).toContain("越南仓、菲律宾仓");
     expect(map.commands).toEqual([]);
-    const form = JSON.parse(map.content.match(/```json\n([\s\S]*?)\n```/)![1]!);
+    const form = JSON.parse(map.content.match(/```json\r?\n([\s\S]*?)\r?\n```/)![1]!);
     expect(form.questions).toEqual([{ id: "erp", question: "请选择数据来源", multi_select: false,
       options: [{ label: "雅仓" }, { label: "马帮 TMS" }] }]);
   });

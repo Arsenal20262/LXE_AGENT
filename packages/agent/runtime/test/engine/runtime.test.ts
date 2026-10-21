@@ -170,7 +170,7 @@ describe("TypeScriptAgentRuntime", () => {
     const skill = readFileSync(join(workspace.directory, "skills/mabang-tms-products-export/SKILL.md"), "utf8");
     const yacang = readFileSync(join(workspace.directory, "skills/yacang-reports-export/SKILL.md"), "utf8");
     const map = readFileSync(join(workspace.directory, "skills/southeast-asia-replenishment-workflow-map/SKILL.md"), "utf8");
-    const question = JSON.parse((questionKind === "erp" ? map : skill).match(/```json\n([\s\S]*?)\n```/)![1]!);
+    const question = JSON.parse((questionKind === "erp" ? map : skill).match(/```json\r?\n([\s\S]*?)\r?\n```/)![1]!);
     const labels: Record<string, string> = { PH1: "菲律宾 PH1", VN1: "越南 VN1", all: "当前账号全部仓库" };
     const erpLabels: Record<string, string> = { tms: "马帮 TMS", yacang: "雅仓" };
     const command = erp === "yacang" ? `lxeskill yacang reports export --report inventory-sales --warehouse ${scope}`

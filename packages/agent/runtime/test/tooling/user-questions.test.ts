@@ -43,7 +43,7 @@ describe("runtime user question ownership", () => {
 
   test.each(["菲律宾 PH1", "越南 VN1", "当前账号全部仓库", ""])("TMS skill question waits for explicit choice: %s", async label => {
     const skill = readFileSync(join(repositoryRoot(import.meta.dir), "skills/mabang-tms-products-export/SKILL.md"), "utf8");
-    const question = JSON.parse(skill.match(/```json\n([\s\S]*?)\n```/)![1]!);
+    const question = JSON.parse(skill.match(/```json\r?\n([\s\S]*?)\r?\n```/)![1]!);
     const service = new UserQuestionService(() => {});
     const registry = new ToolRegistry();
     registerUserQuestionTool(registry, service);
