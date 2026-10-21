@@ -1,5 +1,14 @@
 # 最终备货建议：自动取数衔接交接
 
+## 2026-10-21 PR3：已验证 Skill 契约修复归入正式分支
+
+- **现场与范围**：pool-7 / `codex/final-restock-auto-data`，起始 HEAD `b5b0cbd7`、工作区干净。本轮只将 pool-9 已验证的四份 Skill 文案及其必要 Python/Bun 契约测试归入正式分支，共 7 文件（含本交接）；不搬入 pool-9 整批暂存候选，不改 Service、CLI、Runtime 生产代码、catalog、Desktop 或公式。保留正式分支当前 main 认证失败停止和 CRLF 兼容测试，不覆盖为旧候选版本。
+- **修复内容**：最终 Skill 用 `lxeskill list/describe` 查询公开契约，不把内部设置命令暴露为模型业务入口；MSKU/深圳 Skill 将未核验排除、继续销量分析等规则限定为普通备货，最终 A 规则保留全部 MSKU 的 14 个公式；货件 Skill 分别指明普通 `--unlinked-shipments-snapshot` 和最终 `--unlinked-shipments-snapshot-path`，使用本轮终态快照路径。
+- **本轮验证**：先移入测试而不改 Skill，实际复现 **3 failed、27 passed**，失败对应缺少公开查询和两条货件交接规则。修正文案后，使用本 checkout 自身环境、临时 `UV_CACHE_DIR`，执行 `uv run --frozen --no-sync pytest -p no:cacheprovider`，覆盖 `tests/lxeskill/test_final_restock_skill.py`、最终工作簿 CLI、A 规则、普通备货 CLI、深圳库存 CLI、MSKU CLI、货件 CLI，共 **121 passed、1 skipped**。跳过项为本轮未配置 Office Kit 的 AI 实际重算用例；本轮不把此前 Office 证据当作新运行结果。新增交接测试从 Skill 表格提取命令和参数，经真实 CLI 分发至模拟 Service，核对本轮路径、对应计算器只调用一次、另一计算器/普通销量分析未调用，以及参数混用在执行前失败。A 规则测试确认未核验商品仍保留全部公式。
+- **Runtime 验证**：`bun test packages/agent/runtime/test/tooling/skills.test.ts packages/agent/runtime/test/tooling/lxeskill-command.test.ts` 为 **42 pass、0 fail、295 assertions**，覆盖发现、权限、公开命令查询、自然语言入口及参数契约。静态/Mock 契约不等于真实模型行为；本轮未调用生产 ERP、外部模型或真实附件交付，原生 Windows/Microsoft Excel 未验证。公式与生产实现无修改，不重复无关全量回归。
+- **Git 与兼容边界**：PR2 `bcd4c04b` 及本地 `origin/main=36130265` 均已是当前分支祖先；本轮未修改 main 或其他 PR 分支。远端 main 的新一次 `ls-remote` 因 GitHub SSL 连接错误未完成，不能据此宣称远端此刻仍未更新。合入上游的正式顺序仍为 PR1→PR2→最终功能 PR，最终 PR 到本层时对照已合并上游的 main 复核差异；GitHub 实际可合并状态取决于届时远端基线和 Review。
+- **保护与提交边界**：本轮前文件备份及 pool-9 的 status、index、暂存/未暂存 diff 哈希位于 `/private/tmp/pr3-skill-closeout-current-path` 指向的目录，pool-9 四类哈希已复核一致。用户已分别明确授权：精确 add/commit 本轮 7 文件，提交标题 `fix: align final restock skill handoff contracts`；提交检查后普通推送 `codex/final-restock-auto-data` 到 `Arsenal20262/LXE_AGENT`。提交前复核完整 cached diff/check，提交与推送结果以最终 Git 输出为准；不强推、不创建 PR、不合并，也不修改其他分支或既有历史。
+
 ## 2026-10-21 上游修复归位与本地依赖同步
 
 - PR1 已追加 `2ee6fb19`：14 个公式字段及旺季参数归公式层；PR2 通过 `20dc63ec` 继承 PR1 后追加 `f9ef4801`：35 列工作簿、A 规则、配置快照、内部生成参数及定向测试归文件生成层。各层 handoff 已说明当前契约，旧阶段内容作为历史保留。

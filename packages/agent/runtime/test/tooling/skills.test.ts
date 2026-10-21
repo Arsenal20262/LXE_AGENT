@@ -129,6 +129,11 @@ describe("skill context", () => {
     expect(finalRestock?.description).toContain("普通备货");
     expect(finalRestock?.description).toContain("确认最终流程后");
     const finalPolicy = finalRestock?.content ?? "";
+    expect(finalPolicy).toContain("lxeskill list");
+    expect(finalPolicy).toContain("lxeskill describe");
+    expect(finalPolicy).not.toContain("catalog.json");
+    expect(finalPolicy).toContain("`internal` 命令默认不出现在 `list` 中");
+    expect(finalPolicy).not.toContain("lxeskill replenish final-restock settings");
     expect(finalPolicy).toContain("入口确认后，用户只需提供店铺名");
     const acquisitionSection = finalPolicy.split("## 仅给店铺名时的本轮取数")[1]?.split("## 输入与调用")[0] ?? "";
     const acquisitionCommands = [
@@ -192,6 +197,22 @@ describe("skill context", () => {
     const currentSkillCatalog = readFileSync(join(repositoryRoot(import.meta.dir), "docs/harness/skill/current_skill_catalog.md"), "utf8");
     expect(currentSkillCatalog).toContain("入口确认后，用户只需提供店铺名");
     expect(currentSkillCatalog).not.toContain("明确指定整套离线输入时仍可直接计算");
+    const inventoryPolicy = skills.find((item) => item.name === "mabang-store-shenzhen-inventory-export")?.content ?? "";
+    expect(inventoryPolicy).toContain("普通备货按原核验规则排除未通过商品");
+    expect(inventoryPolicy).toContain("保留全部 MSKU 并写入完整 14 个公式字段");
+    expect(inventoryPolicy).toContain("商品类型核验未通过本身不阻断最终备货");
+    expect(inventoryPolicy).toContain("文件级来源异常仍须失败停止");
+    const mskuPolicy = skills.find(skill => skill.name === "mabang-store-msku-export")?.content ?? "";
+    expect(mskuPolicy).toContain("普通备货流程中");
+    expect(mskuPolicy).toContain("普通备货没有可计算记录时");
+    expect(mskuPolicy).toContain("保留全部 MSKU，并为所有行生成完整 14 个公式字段");
+    expect(mskuPolicy).toContain("按 `replenishment-final-restock` 继续");
+    expect(mskuPolicy).toContain("不额外运行普通备货销量分析");
+    const shipmentPolicy = skills.find(skill => skill.name === "mabang-store-unlinked-shipments-export")?.content ?? "";
+    expect(shipmentPolicy).toContain("| 普通备货 | `replenishment-calculate` / `lxeskill replenish calculate` | `--unlinked-shipments-snapshot` |");
+    expect(shipmentPolicy).toContain("| Amazon 最终备货 | `replenishment-final-restock` / `lxeskill replenish final-restock generate` | `--unlinked-shipments-snapshot-path` |");
+    expect(shipmentPolicy).toContain("lxeskill describe replenish calculate");
+    expect(shipmentPolicy).toContain("lxeskill describe replenish final-restock generate");
     const shenzhenInventoryPolicy = skills.find((item) => item.name === "mabang-store-shenzhen-inventory-export")?.content ?? "";
     expect(finalPolicy).toContain("终态失败后保留实际诊断，不额外刷新或重试业务");
     expect(finalPolicy).toContain("深圳库存终态失败时立即结束本轮");

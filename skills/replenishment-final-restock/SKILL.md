@@ -36,7 +36,7 @@ commands:
 
 ## 仅给店铺名时的本轮取数
 
-按下表顺序读取对应业务 Skill，通过 `exec` 调用其已声明的 CLI；完整参数以各 Skill 和 `python/lxeskill_cli/lxeskill/catalog.json` 为准。这里只说明本流程需要的输入及交接字段，不额外维护可选参数。
+按下表顺序读取对应业务 Skill，通过 `exec` 调用其已声明的 CLI；需要确认命令或参数时，使用 `lxeskill list` 和 `lxeskill describe <业务命令路径>` 查询公开契约，不直接读取 CLI 内部目录文件。`internal` 命令默认不出现在 `list` 中；桌面设置命令不属于本 Skill 的模型业务入口。这里只说明本流程需要的输入及交接字段，不额外维护可选参数。
 
 | 顺序与能力 | 业务用途、何时调用及输入 | 返回结果与下一步 |
 |---|---|---|
