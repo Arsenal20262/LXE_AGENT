@@ -23,7 +23,7 @@ Runtime 只 dispatch 当前 assistant message 中结构有效的 tool use。每�
 Native handler 与 Runtime 同进程执行。Coding tools 包括 read、write、edit、grep、find、ls、exec、wait 和 send_files：
 
 - 路径先相对 Session working directory 解析；绝对路径、`~`、`..` 和跨 workspace 符号链接都交给宿主文件系统处理。
-- read/write/edit/grep/find/ls/send_files 和 `exec.cwd` 可以访问 LXE Agent 进程用户有权访问的任意宿主路径；OS 拒绝时只对敏感值做统一脱敏和显式截断，`EACCES`、`EPERM` 等实际系统错误不会改写成泛化提示。
+- 读取、搜索、文件交付和 `exec.cwd` 的路径访问受宿主用户的操作系统权限约束；`exec`、`write`、`edit` 的写入还需应用 [会话权限策略](../permission-policy.md)。指定工作区外的 cwd 不会扩大写入范围。`EACCES`、`EPERM` 等实际系统错误按 [AGENTS.md](../../../../AGENTS.md#红线违反--生产事故)保留，不改写成泛化提示。
 - read 输出稳定行号，并记录 session read version。
 - 修改现有文件要求 read-before-modify；外部 mtime/content 变化导致 stale edit。
 - binary 不通过文本 read；一个或多个 artifact 使用 `send_files(paths=[...])` 一次交付。
