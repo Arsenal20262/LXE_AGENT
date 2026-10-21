@@ -44,8 +44,7 @@ When you receive an instruction:
 - 测试必须从仓库根运行，Python 定向测试使用 `uv run --frozen pytest <测试文件或目录>`。从子目录运行会因相对路径假失败。
 - **验证必须拿真实结果，警惕假通过**：管道会吞掉退出码（`cmd | tail` 的退出码是 tail 的，不是 cmd 的——用 `set -o pipefail` 或先落盘再查 `$?`）；扫描类校验匹配到空集也会"通过"（cwd 漂移、glob 写错时扫了 0 个文件照样报绿）。报告通过之前，先确认命令真的执行了、扫描真的扫到了东西。
 - agentcli 的统计适配通过 `lxeskill list` 查询命令归属。修改命令契约时，两端定向测试都要跑：`uv run --frozen pytest python/lxeskill_cli/tests/lxeskill python/lxeskill_cli/tests/infra` 加 `bun test packages/agent/runtime/test/tooling/lxeskill-command.test.ts`。
-- 开发过程中按影响范围运行必要的定向检查；纯文档修改检查内容、链接和涉及的命令，不因完成任务而机械运行全量测试。代码任务在最终 rebase 到最新 `origin/main` 后、PR 合并前运行一次完整验证；代码和基线均未变化时不得重复执行。
-- 如果全量测试后代码发生修改，或 `main` 的变化实际进入了当前分支，则原验证结果失效，自己决定要重新全量测试还是定向测试；无变化的 rebase 不构成重复测试理由。
+- 按改动的实际影响范围完成必要验证，局部改动优先做定向检查；影响广泛或难以界定时，再扩大验证范围，必要时运行全量验证。合并前确认验证仍适用于当前代码和最新基线，避免无变化的重复验证。
 
 ## 开发与 PR 流程
 
