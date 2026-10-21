@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
-import type { DesktopVietnamMapExportKind, DesktopVietnamMapExportResult, DesktopVietnamSettingsState } from "@lxe/desktop-protocol";
+import type { DesktopVietnamSettingsState, DesktopVietnamTemplateExportResult } from "@lxe/desktop-protocol";
 import { redactAndBound, type DesktopInputAssetsOptions } from "./input-assets";
 
 /** Desktop consumes the lxeskill contract; Python owns validation and storage. */
@@ -41,8 +41,8 @@ export class DesktopVietnamSettingsService {
     if (serialized.length > 4096) throw new Error("越南备货参数过长");
     return this.call("save", "--parameters", serialized);
   }
-  upload(path: string): Promise<DesktopVietnamSettingsState> { return this.call("upload", "--path", path); }
-  exportMap(kind: DesktopVietnamMapExportKind, path: string): Promise<DesktopVietnamMapExportResult> {
-    return this.call<DesktopVietnamMapExportResult>("export", "--kind", kind, "--path", path);
+  uploadTemplate(path: string): Promise<DesktopVietnamSettingsState> { return this.call("upload", "--path", path); }
+  exportTemplate(path: string): Promise<DesktopVietnamTemplateExportResult> {
+    return this.call<DesktopVietnamTemplateExportResult>("export", "--path", path);
   }
 }
