@@ -21,7 +21,6 @@ from services.mabang.amazon.fba.final_restock_recommendation import final_restoc
 from services.mabang.amazon.fba.final_restock_settings import read_state as read_final_restock_settings
 from services.mabang.amazon.fba.source_verification import (
     SHEET as SOURCE_VERIFICATION_SHEET,
-    SourceVerificationError,
     load_verified_source,
     read_report_metadata,
 )
@@ -30,7 +29,6 @@ from services.mabang.amazon.fba.store_msku_actual_inventory import (
     SOURCE_FILE_RE,
 )
 from services.mabang.amazon.fba.store_msku_replenishment import (
-    StoreMskuReplenishmentError,
     parse_weight_grams,
     validate_unlinked_shipments_snapshot_same_day,
 )
@@ -266,10 +264,7 @@ def _load_shenzhen_rows(
 
 
 def _shipment_quantities(path: Path, *, store_name: str, source_data_time: str) -> dict[str, int | float]:
-    try:
-        validate_unlinked_shipments_snapshot_same_day(path, source_data_time)
-    except StoreMskuReplenishmentError:
-        raise
+    validate_unlinked_shipments_snapshot_same_day(path, source_data_time)
     quantities = load_unlinked_shipment_quantities(path, store_name=store_name)
     normalized: dict[str, int | float] = {}
     original_for_key: dict[str, str] = {}
@@ -496,11 +491,8 @@ def generate_final_restock_recommendation(
     inventory_path = _path(shenzhen_inventory_report_xlsx_path, label="深圳库存报告")
     snapshot_path = _path(unlinked_shipments_snapshot_path, label="未关联货件快照")
 
-    try:
-        verified_source = load_verified_source(source_path, store_name=clean_store_name)
-        inventory_metadata = read_report_metadata(inventory_path)
-    except SourceVerificationError:
-        raise
+    verified_source = load_verified_source(source_path, store_name=clean_store_name)
+    inventory_metadata = read_report_metadata(inventory_path)
     if inventory_metadata != verified_source.metadata:
         raise FinalRestockWorkbookError(
             "深圳库存报告与本次 MSKU 源文件核验批次不一致；请使用同一源文件重新导出"

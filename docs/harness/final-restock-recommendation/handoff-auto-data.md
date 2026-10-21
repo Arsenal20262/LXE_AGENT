@@ -1,5 +1,16 @@
 # 最终备货建议：自动取数衔接交接
 
+## 2026-10-21 上游修复归位与本地依赖同步
+
+- PR1 已追加 `2ee6fb19`：14 个公式字段及旺季参数归公式层；PR2 通过 `20dc63ec` 继承 PR1 后追加 `f9ef4801`：35 列工作簿、A 规则、配置快照、内部生成参数及定向测试归文件生成层。各层 handoff 已说明当前契约，旧阶段内容作为历史保留。
+- 最终功能 PR 直接依赖最新 PR2，继续包含原 PR3 的 Skill 与 pool-7 自动取数和 Desktop 设置能力。原 PR3 分支保留为历史技术阶段，不单独发布，也未为了同步改写该分支。
+- 用户分别批准本轮精确 add/commit 和 PR1→PR2→pool-7 本地 merge，全部追加提交，没有 rebase、push 或修改 main。两处预检冲突仅为无用异常导入及“不触发普通销量分析”测试断言，按已验证版本保留清理及断言，没有调整业务算法。
+- 同步后的 CLI 定向测试按阶段核对命令归属：PR2 保持 internal/no owner，本层保持 business/`replenishment-final-restock`。只调整本层测试断言，catalog、CLI 执行路径和正式入口未改变。
+- 自动合并曾重复插入同一段旺季测试，已最小去重并核对公式测试与 PR1 完全一致；相关 9 个 Python 文件无同名顶层定义，去重后公式定向重新运行 **159 passed，无 skip**。该重复没有改变生产代码，不能以测试通过掩盖自动合并残留。
+- pool-9 仍保留原有 251 个暂存路径和 7 个未暂存文件，其 main 兼容及 Skill 修复未被覆盖或整体提交。后续最终 PR 须在新依赖上复用该候选的有效差异；不能把本轮依赖同步当作最新 main 已正式合入。
+- 上游归位验证：PR1 159 passed；PR2 定向 226 passed，catalog/infra 477 passed、4 Windows skipped，Bun 12 passed。PR2 实际离线 CLI→Office 重算 2002 行、35 列、28028 公式、0 错误，与已验证候选的缓存值差异 0。下游同步后公式、工作簿、A 规则、配置、CLI 和 Skill Python 定向 **295 passed，无 skip**（含 Office 重算），Bun Runtime/Skill **36 pass、0 fail**。四个归位生产文件与 PR2 及 pool-9 已验证文件逐字相同。
+- 可恢复备份和证据由 `/private/tmp/amazon-restock-fixup-20261021-current-path` 指向。原生 Windows、Microsoft Excel、生产新轮 ERP 及真实模型未在本轮验证；未将模拟、历史文件或静态契约当作生产验收。
+
 ## 2026-10-20 已授权本地提交收口
 
 - 用户本轮已明确批准pool-7 A规则的精确暂存及1个本地Commit，提交标题为`feat: align Amazon final restock with confirmed A rules`。范围严格为已准备清单的20个文件：A规则生成/公式/设置及CLI、catalog、UI说明、Skill/导航、对应测试和本handoff；不含PR #90、main、其他Pool或普通备货运行代码。

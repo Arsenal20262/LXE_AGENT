@@ -50,6 +50,9 @@ def generate(tmp_path, monkeypatch, **kwargs):
 
 def test_unverified_rows_keep_all_fourteen_formulas_and_negative_source_stock(tmp_path, monkeypatch):
     files = inputs(tmp_path)
+    def unexpected_sales_analysis(*_args, **_kwargs):
+        pytest.fail("unverified final-restock rows must not trigger ordinary sales analysis")
+    monkeypatch.setattr("services.mabang.amazon.fba.store_msku_sales_analysis.analyze_store_msku_sales", unexpected_sales_analysis)
     assert verification.load_verified_source(files["msku_source_xlsx_path"], store_name=STORE).records[0]["是否通过绑定核验"] is False
     result = generate(tmp_path, monkeypatch, **files)
     book = load_workbook(result.output_xlsx_path, data_only=False)

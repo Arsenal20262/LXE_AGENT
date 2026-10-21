@@ -20,6 +20,7 @@ def test_formula_contract():
     # The confirmed XLSX rules guard both shipping days and sea-weight inputs.
     assert formulas["AA"] == '=IF(OR(V2="",W2=""),"",IF((J2*W2-(R2+T2)-IF(Y2="",0,Y2))<=0,"",ROUND(J2*W2-(R2+T2)-IF(Y2="",0,Y2),0)))'
     assert formulas["AC"] == '=IF(OR(AB2="",AD2=""),"",AB2*AD2)'
+    assert formulas["AI"] == '=IF(OR(J2="",J2=0),"",(R2+T2+IF(Y2="",0,Y2)+IF(AB2="",0,AB2))/J2)'
 
 
 def test_seasonal_boost_is_on_by_default_and_can_be_disabled():
@@ -118,6 +119,11 @@ def test_invalid_data_row_is_rejected(row):
 # None denotes an empty cached result; formula-empty and truly empty inputs
 # are deliberately distinguished in the AC cases below.
 CASES = [
+    ("supply-empty-daily", {"J": None, "R": 100, "T": 20, "Y": 30, "AB": 40}, {"AI": None}),
+    ("supply-zero-daily", {"J": 0, "R": 100, "T": 20, "Y": 30, "AB": 40}, {"AI": None}),
+    ("supply-empty-advice", {"J": 2, "R": 100, "T": 20, "Y": '=""', "AB": '=""'}, {"AI": 60}),
+    ("supply-with-advice", {"J": 2, "R": 100, "T": 20, "Y": 30, "AB": 40}, {"AI": 95}),
+    ("supply-unrounded", {"J": 3, "R": 1, "T": 0, "Y": None, "AB": None}, {"AI": 1 / 3}),
     ("sample-9", {"E": 7, "F": 14, "G": 9}, {"I": "样本不足"}),
     ("sample-10", {"E": 0, "F": 0, "G": 10}, {"I": "下降"}),
     ("zero-baseline-sales", {"E": 10, "F": 10, "G": 10}, {"I": "增长"}),
