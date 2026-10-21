@@ -60,7 +60,7 @@ Scheduler 只接受 run id、session id 和 job id 与 active handle 完全一�
 
 取消发生在多个 tool use 中间时，Runtime 会为尚未 dispatch 的 tool 写 cancelled result stub，使 provider history 和 transcript 保持 tool-use closure。
 
-主动停止说明的写入条件、技术取消的区分及桌面隐藏规则统一见 [Runtime 取消与失败](../runtime/runtime_flow.md#cancel-与失败)。Gateway 不再为停止追加 pending event。
+主动停止说明的写入条件、技术取消的区分及桌面隐藏规则统一见 [Runtime 取消与失败](../runtime/turn_execution.md#cancel-与失败)。Gateway 不再为停止追加 pending event。
 
 ## Steering
 

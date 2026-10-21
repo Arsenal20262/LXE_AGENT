@@ -1,4 +1,6 @@
-# Logging And Runtime Traces
+# 日志与诊断
+
+本文统一维护日志位置、级别、关联字段、事件、脱敏和故障隔离规则。托管文件使用 JSONL，Desktop 配置后的终端输出使用 pretty 格式；日志只提供诊断证据，持久用量和会话状态以 SQLite 为准。
 
 The shared logging implementation is `packages/foundation/core/src/logging.ts`. Provider wire-trace sanitization and file layout are implemented by `packages/agent/runtime/src/providers/wire-trace.ts`.
 
@@ -52,29 +54,64 @@ The sink emits structured JSONL records to managed files. Records include timest
 
 Use module-scoped logger names and stable event messages. Put high-cardinality IDs and details in fields rather than interpolating them into the message text.
 
+Core `AsyncLocalStorage` propagates these fields across asynchronous calls:
+
+- `session_id`
+- `turn_id`
+- `response_route_id`
+- `message_id`
+- `task_id`
+
+Active context overrides child-logger and call-site fields so a nested operation cannot accidentally change its parent correlation IDs. A background completion callback must explicitly restore its saved context because it may run after the originating turn has ended.
+
+Typical accepted-message chain:
+
+```text
+feishu_inbound_normalized(message_id, response_route_id)
+  -> inbound_received(session_id)
+  -> message_queued(turn_id)
+  -> scheduler_job_dispatched
+  -> turn_started
+  -> provider_attempt_started/completed
+  -> tool_started/completed
+  -> turn_completed
+  -> scheduler_job_released
+```
+
+Each Runtime turn has exactly one `turn_started` and exactly one terminal `turn_completed`. The terminal status is `completed`, `cancelled`, or `error`.
+
 ## Level Guidance
 
 - `INFO`: process lifecycle, accepted user work, concise turn/tool summaries, recoverable operator actions.
 - `WARN`: degraded but continuing behavior, optional integration failures, retry exhaustion with fallback.
-- `ERROR`: required operation failed or process health is compromised.
-- `DEBUG`: request IDs, routes, tool arguments summaries, timing internals, provider and adapter diagnostics.
+- `ERROR`: required operation failed or process health is compromised; emit the terminal failure once from the module responsible for the final outcome.
+- `DEBUG`: request IDs, routes, timing internals, provider and adapter decisions; use counts and status instead of tool payloads.
 
 `gateway.event_loop` samples timer lateness every 500ms and emits an `event_loop_lag` warning when a sample fires 500ms late or more. Sustained records mean synchronous work is starving the event loop — WebSocket pings, card streaming, and heartbeats stall together — so treat them as a performance signal, not noise.
 
 Successful health polling and repetitive stream updates should not dominate INFO output. Raw inbound content, credentials, cookies, headers, and complete tool payloads do not belong at any unsanitized level. Explicitly enabled wire traces are the only surface allowed to retain sanitized Provider request and stream content.
 
-## Dashboard Lifecycle Events
+## Event families
 
-| Event | Level | Meaning |
-| --- | --- | --- |
-| `dashboard_listening` | `INFO` | Dashboard bound successfully; `url` and `port` are the actual listener values. |
-| `dashboard_port_fallback` | `WARN` | The requested fixed port failed and a dynamic port was selected. |
-| `dashboard_available` | `INFO` | Gateway, Runtime, channels, and Dashboard are ready for use. |
-| `dashboard_browser_opened` | `INFO` | The URL was handed to the operating system's default browser. |
-| `dashboard_browser_open_failed` | `WARN` | Browser launch failed or timed out; Gateway remains ready. |
-| `dashboard_browser_skipped` | `DEBUG` | Dashboard or automatic browser opening is disabled, or opening was already attempted. |
+| Boundary | Stable events |
+|---|---|
+| Runtime turn | `turn_started`, `provider_attempt_started`, `provider_stream_heartbeat`, `provider_attempt_completed`, `provider_attempt_failed`, `tool_started`, `tool_completed`, `heartbeat_noop`, `pending_events_popped`, `pending_events_attached`, `turn_completed` |
+| Routing | `inbound_received`, `permission_denied`, `session_created`, `session_rebound`, `message_queued`, `message_steered`, `control_completed` |
+| Scheduler | `scheduler_job_enqueued`, `scheduler_job_dispatched`, `scheduler_job_released`, `scheduler_stop_requested`, `scheduler_pending_cleared`, `scheduler_steering_requeued` |
+| Heartbeat | `heartbeat_requested`, `heartbeat_deduplicated`, `heartbeat_deferred`, `heartbeat_dropped`, `heartbeat_enqueued` |
+| Feishu ingress | `feishu_inbound_rejected`, `feishu_inbound_normalized`, `feishu_inbound_sink_completed`, `feishu_inbound_failed`, `feishu_quote_lookup_failed`, `feishu_card_content_fetch_failed` |
+| Feishu connection | `feishu_connection_starting`, `feishu_connected`, `feishu_reconnecting`, `feishu_reconnected`, `feishu_connection_failed`, `feishu_connection_stopped` |
+| CardKit delivery | `card_created`, `card_frame_coalesced`, `card_reference_retry_scheduled`, `card_reference_retry_succeeded`, `card_reference_retry_exhausted`, `card_send_completed`, `card_dead`, `card_finalized` |
+| Stream fallback | `stream_fallback_started`, `stream_fallback_completed`, `stream_fallback_failed` |
+| Idle restart | `feishu_restart_scheduled`, `feishu_restart_deferred`, `feishu_restart_started`, `feishu_restart_completed`, `feishu_restart_failed`, `feishu_restart_stop_timed_out` |
+| Session exec | `process_started`, `process_yielded`, `process_completed`, `process_killed`, `process_force_killed`, `process_evicted`, `process_notification_failed` |
+| Maintenance | `maintenance_configured`, `maintenance_task_started`, `maintenance_task_completed`, `maintenance_single_flight_coalesced`, `maintenance_single_flight_rerun`, `auth_refresh_succeeded`, `auth_refresh_failed`, `data_sync_uploaded`, `data_sync_skipped`, `data_sync_failed` |
+| MCP and skills | `mcp_enabled`, `mcp_connected`, `mcp_startup_failed`, `mcp_disabled`, `mcp_disconnected`, `skill_catalog_loaded`, `skill_external_skipped` |
+| Gateway lifecycle | `gateway_starting`, `gateway_ready`, `gateway_start_failed`, `gateway_stopping`, `gateway_stopped`, `startup_component_ready`, `shutdown_component_stopping`, `shutdown_component_stopped`, `shutdown_component_failed` |
 
-`gateway_ready` includes `dashboard_url` when the Dashboard is enabled. Browser-opening failures are optional integration failures and must never change Gateway health.
+Heartbeat drop/defer reasons are restricted to `autonomy_suspended`, `no_pending_events`, `session_busy`, `session_missing`, and `invalid_source`. Feishu normalize rejection reasons are restricted to `duplicate`, `stale`, `bot_app_id_mismatch`, `group_bot_identity_missing`, `group_without_bot_mention`, `missing_sender_open_id`, and `empty_content`.
+
+Desktop Renderer 通过 preload IPC 与 Main 通信，不启动 Dashboard HTTP listener。启动与可用性排障查看 Gateway lifecycle、agent-cli 握手及桌面健康状态；不使用旧的 `dashboard_listening` 或浏览器自动打开事件。
 
 ## Sanitization
 
@@ -85,13 +122,19 @@ Runtime tracing recursively redacts secret-like keys including authorization, AP
 - absolute local paths;
 - strings beyond the trace size limit.
 
-Sanitization is defense in depth, not permission to log arbitrary inputs. Call sites should still prefer summaries such as byte count, item count, status, and elapsed time.
+Sanitization is defense in depth, not permission to log arbitrary inputs. Normal logs must not include full user text, Provider bodies, tool inputs/outputs, command text, process output, credentials, HTTP headers, cookies, or Axios objects. Call sites should prefer byte count, item count, status, and elapsed time. Explicitly enabled wire traces are the single exception for sanitized Provider request and stream content.
 
-## Retention And Shutdown
+Core serialization handles sensitive keys, binary values, cycles and `BigInt`; only safe Error fields and a bounded cause chain survive. Depth, item and string budgets are defined in [`logging.ts`](/packages/foundation/core/src/logging.ts), with explicit truncation markers.
+
+The official Feishu SDK logger is suppressed to avoid duplicate Axios diagnostics. The adapter records connection lifecycle, CardKit records operation/state decisions, and Runtime owns the final outbound-delivery warning. Lookup/download failures retain endpoint, HTTP status, provider code, subcode and log ID when available. They distinguish observations from verified causes and never translate an unmapped status or SDK message into an invented permissions, expiration, network or client-version diagnosis.
+
+## Failure Isolation, Retention And Shutdown
+
+Logger writers, traces, retention cleanup and local-file sinks must never change a business result. A local sink disables itself after its first write failure, reports `logging_sink_failed` once, and exposes `disabledReason="sink_failed"` plus a safe `lastError` in logging status.
 
 Retention cleanup deletes only managed dated log directories older than the configured period. It must not traverse unrelated user paths. File sinks are flushed during orderly shutdown and fatal-error handling so the final diagnostic record is not lost.
 
-Business CLI commands reserve stdout for their JSON protocol. Their diagnostics go through logging/stderr; writing log prose to stdout would corrupt agent parsing.
+`agent-cli serve` and business CLI commands reserve stdout for their JSON protocol. Their diagnostics go through logging/stderr; writing log prose to stdout would corrupt agent parsing.
 
 ## Troubleshooting
 

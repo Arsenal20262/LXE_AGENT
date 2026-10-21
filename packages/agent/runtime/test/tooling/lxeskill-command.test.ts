@@ -1,220 +1,122 @@
-import { describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { expect, test } from "bun:test";
 import { join } from "node:path";
-import {
-  loadLxeSkillCommandCatalog,
-  loadLxeSkillDatasets,
-  matchLxeSkillInvocation,
-} from "../../src/tooling/lxeskill-command";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { queryLxeSkill, repositoryRoot } from "@lxe/core";
+import { queryLxeSkillCommandSkills } from "../../src/statistics/lxeskill";
+import { TurnStatistics } from "../../src/statistics/turn-statistics";
+import { skillPathKey } from "../../src/tooling/skill-files";
 import { buildToolDisplayStep } from "../../src/tooling/tool-display";
 
-describe("lxeskill command recognition", () => {
-  test("matches only a leading known command and chooses the longest path", () => {
-    const known = new Map([
-      ["lxeskill mabang store shenzhen-inventory export", ["inventory"]],
-      ["lxeskill mabang store", ["short"]],
-    ]);
-
-    expect(matchLxeSkillInvocation(
-      "lxeskill mabang store shenzhen-inventory export --store-name Demo --token secret",
-      known,
-    )).toEqual({
-      command: "lxeskill mabang store shenzhen-inventory export",
-      commandId: "mabang store shenzhen-inventory export",
-      ownerSkills: ["inventory"],
-    });
-    expect(matchLxeSkillInvocation("echo lxeskill mabang store shenzhen-inventory export", known)).toBeUndefined();
-    expect(matchLxeSkillInvocation("lxeskill unknown command", known)).toBeUndefined();
-  });
-
-  test("renders an exec call as a business skill with its complete command", () => {
-    const command = "lxeskill fba shipment prepare-upload --context-file secret.json --token raw-secret";
-    const step = buildToolDisplayStep(
-      "tool-1",
-      "exec",
-      { command },
-      "running",
-      0,
-    );
-
-    expect(step.title).toBe("业务技能：fba shipment prepare-upload");
-    expect(step.detail).toBe(command);
-  });
-
-  test("loads the artifact dataset registry with module-partitioned directories", () => {
-    const catalogPath = join(process.cwd(), "python", "lxeskill_cli", "lxeskill", "catalog.json");
-    const datasets = loadLxeSkillDatasets(catalogPath);
-
-    expect(datasets.length).toBeGreaterThan(0);
-    expect(datasets.find((entry) => entry.id === "fba_delivery_csv")?.dir).toBe("fba/delivery_csv");
-    // Every directory is owned by exactly one business module — the property the
-    // <module>/<data-type> layout depends on.
-    const modules = new Set(datasets.map((entry) => entry.dir.split("/")[0]));
-    expect([...modules].sort()).toEqual(["amazon", "browser", "fba", "mabang", "mabang_tms", "replenish", "shangman", "vietnam", "yacang"]);
-    expect(new Set(datasets.map((entry) => entry.dir)).size).toBe(datasets.length);
-    expect(datasets.every((entry) => entry.holds.length > 0)).toBe(true);
-  });
-
-  test("loads stable commands, owners, modules, and artifact declarations", () => {
-    const catalogPath = join(process.cwd(), "python", "lxeskill_cli", "lxeskill", "catalog.json");
-    const entries = loadLxeSkillCommandCatalog(catalogPath);
-
-    expect(entries.find((entry) => entry.name === "browser_auth_refresh")).toEqual({
-      command: "lxeskill auth refresh",
-      name: "browser_auth_refresh",
-      visibility: "maintenance",
-      ownerSkills: ["ziniao-browser"],
-      attributionSkill: "ziniao-browser",
-    });
-    expect(entries.find((entry) => entry.name === "mabang_download_fba_delivery_csv"))
-      .toMatchObject({
-        command: "lxeskill mabang delivery export",
-        module: "services.agent_cli.mabang.download_fba_delivery_csv",
-        ownerSkills: ["mabang-delivery-export"],
-        attributionSkill: "mabang-delivery-export",
-      });
-    expect(entries.find((entry) => entry.name === "mabang_regenerate_purchase_files"))
-      .toMatchObject({
-        command: "lxeskill fba purchase files-regenerate",
-        module: "services.agent_cli.mabang.regenerate_purchase_files",
-        ownerSkills: ["fba-purchase-files-regenerate"],
-        attributionSkill: "fba-purchase-files-regenerate",
-        artifactPaths: [
-          { field: "purchase_summary_xlsx", role: "deliverable" },
-          { field: "restock_xlsx_paths[]", role: "deliverable" },
-          { field: "contract_xlsx_paths[]", role: "deliverable" },
-        ],
-      });
-    expect(entries.find((entry) => entry.name === "ziniao_page")).toMatchObject({
-      ownerSkills: ["ziniao-browser"],
-      artifactPaths: [{ field: "screenshot_path", role: "model_input" }],
-      attributionSkill: "ziniao-browser",
-    });
-    expect(entries.find((entry) => entry.name === "mabang_resolve_fba_store"))
-      .toMatchObject({
-        attributionSkill: "replenishment-store-resolve",
-        ownerSkills: expect.arrayContaining([
-          "replenishment-store-resolve",
-          "mabang-store-unlinked-shipments-export",
-        ]),
-      });
-  });
-});
-
-test("Shangman login commands belong to the login skill and expose only the captcha as model input", () => {
-  const entries = loadLxeSkillCommandCatalog(join(process.cwd(), "python/lxeskill_cli/lxeskill/catalog.json"));
-  const commands = entries.filter(entry => entry.name.startsWith("shangman_login_"));
-  expect(commands).toHaveLength(4);
-  for (const entry of commands) expect(entry.ownerSkills).toEqual(["shangman-login"]);
-  expect(commands.find(entry => entry.name === "shangman_login_prepare")?.artifactPaths).toEqual([{ field: "image_path", role: "model_input" }]);
-});
-
-test("Shangman export is a separate command delivering one workbook", () => {
-  const path = join(process.cwd(), "python/lxeskill_cli/lxeskill/catalog.json");
-  const entries = loadLxeSkillCommandCatalog(path);
-  const entry = entries.find(entry => entry.name === "shangman_goods_export");
-  expect(entry).toMatchObject({
-    command: "lxeskill shangman products export",
-    module: "services.agent_cli.shangman.goods_export",
-    ownerSkills: ["shangman-products-export"],
-    artifactPaths: [{ field: "artifact_path", role: "deliverable" }],
-  });
-  expect(loadLxeSkillDatasets(path).find(entry => entry.id === "shangman_goods_export")?.dir)
-    .toBe("shangman/indonesia");
-});
-
-test("Yacang exposes one export command with its own deliverable dataset", () => {
-  const path = join(process.cwd(), "python/lxeskill_cli/lxeskill/catalog.json");
-  const entries = loadLxeSkillCommandCatalog(path).filter(entry => entry.name.startsWith("yacang_"));
-  expect(entries).toHaveLength(1);
-  expect(entries[0]).toMatchObject({
-    command: "lxeskill yacang reports export",
-    module: "services.agent_cli.yacang.export_run",
-    ownerSkills: ["yacang-reports-export"],
-    artifactPaths: [{ field: "artifacts[].path", role: "deliverable" }],
-  });
-  expect(loadLxeSkillDatasets(path).find(entry => entry.id === "yacang_exports")?.dir).toBe("yacang/exports");
-});
-
-test("Vietnam recommendation and delivers only the final workbook", () => {
-  const path = join(process.cwd(), "python/lxeskill_cli/lxeskill/catalog.json");
-  const entries = loadLxeSkillCommandCatalog(path);
-  const entry = entries.find(entry => entry.name === "vietnam_replenishment_generate");
-  expect(entry).toMatchObject({
-    command: "lxeskill vietnam replenishment calculate",
-    module: "services.agent_cli.vietnam_replenishment.generate",
-    ownerSkills: ["vietnam-replenishment"],
-    artifactPaths: [{ field: "output_xlsx", role: "deliverable" }],
-  });
-  expect(loadLxeSkillDatasets(path).find(entry => entry.id === "vietnam_recommendations")?.dir)
-    .toBe("vietnam/recommendations");
-});
-
-test("Vietnam calculation requires three local reports and an optional map", () => {
-  const path = join(process.cwd(), "python/lxeskill_cli/lxeskill/catalog.json");
-  const document = JSON.parse(readFileSync(path, "utf8"));
-  expect(document.entries.filter((entry: any) => entry.managed_execution !== undefined)).toEqual([]);
-  expect(document.entries.filter((entry: any) => entry.name.startsWith("vietnam_replenishment_")).map((entry: any) => entry.name)).toEqual(["vietnam_replenishment_generate"]);
-  expect(document.entries.find((entry: any) => entry.name === "vietnam_replenishment_generate").input_schema).toEqual({
-    type: "object",
-    properties: {
-      sales_file: { type: "string", minLength: 1 }, inventory_file: { type: "string", minLength: 1 },
-      products_file: { type: "string", minLength: 1 }, sku_map_file: { type: "string", minLength: 1 },
-    },
-    required: ["sales_file", "inventory_file", "products_file"], additionalProperties: false,
-  });
-});
-
-test("Mabang TMS exposes one export command with its own deliverable dataset", () => {
-  const path = join(process.cwd(), "python/lxeskill_cli/lxeskill/catalog.json");
-  const entries = loadLxeSkillCommandCatalog(path).filter(entry => entry.name.startsWith("mabang_tms_"));
-  expect(entries).toHaveLength(1);
-  expect(entries[0]).toMatchObject({
-    command: "lxeskill mabang-tms products export",
-    module: "services.agent_cli.mabang_tms.export_run",
-    ownerSkills: ["mabang-tms-products-export"],
-    artifactPaths: [{ field: "artifacts[].path", role: "deliverable" }],
-  });
-  expect(loadLxeSkillDatasets(path).find(entry => entry.id === "mabang_tms_exports")?.dir).toBe("mabang_tms/exports");
-});
-
-test("Mabang Brazil delivers original batches through a separate ERP skill", () => {
-  const path = join(process.cwd(), "python/lxeskill_cli/lxeskill/catalog.json");
-  const entries = loadLxeSkillCommandCatalog(path).filter(entry => entry.name === "mabang_brazil_overseas_export");
-  expect(entries).toHaveLength(1);
-  expect(entries[0]).toMatchObject({
-    command: "lxeskill mabang brazil reports export",
-    module: "services.agent_cli.mabang.brazil_overseas_export",
-    ownerSkills: ["mabang-brazil-reports-export"],
-    artifactPaths: [{ field: "artifacts[].path", role: "deliverable" }],
-  });
-  expect(loadLxeSkillDatasets(path).find(entry => entry.id === "mabang_brazil_exports")?.dir).toBe("mabang/brazil/exports");
-});
-
-
-test("flags-only export contracts have matching skill ownership and reject invalid modes", () => {
-  const path = join(process.cwd(), "python/lxeskill_cli/lxeskill/catalog.json");
-  const document = JSON.parse(readFileSync(path, "utf8"));
-  const entries = loadLxeSkillCommandCatalog(path);
-  const scoped = document.entries.filter((entry: any) => entry.input_modes !== undefined);
-  expect(scoped).toHaveLength(12);
-  const known = new Map(entries.map(entry => [entry.command, entry.ownerSkills]));
-  for (const raw of scoped) {
-    expect(raw.input_modes).toEqual(["flags"]);
-    expect(raw.legacy_aliases).toBeUndefined();
-    const command = `lxeskill ${raw.command_path.join(" ")}`;
-    expect(matchLxeSkillInvocation(`${command} --example value`, known)?.ownerSkills).toEqual(raw.owner_skills);
-  }
-  expect(matchLxeSkillInvocation("lxeskill vietnam stock recommend", known)).toBeUndefined();
-  expect(matchLxeSkillInvocation("lxeskill fba shipment delivery-csv-download", known)).toBeUndefined();
-  const root = mkdtempSync(join(tmpdir(), "lxe-input-modes-"));
+const root = repositoryRoot(import.meta.dir);
+test("queries command attribution and datasets through the installed public CLI", async () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), "lxe-cli-query-"));
+  const options = { cwd: root, pythonPath: join(root, process.platform === "win32" ? ".venv/Scripts/python.exe" : ".venv/bin/python"),
+    environment: { ...process.env, LXE_DATA_ROOT: dataRoot, LXESKILL_SKILL_SCOPE: '["unrelated"]' } };
   try {
-    for (const modes of [[], "flags", ["stdin-json"], ["flags", "flags"]]) {
-      const invalid = { protocol_version: "1", entries: [{ ...scoped[0], input_modes: modes }] };
-      const fixture = join(root, "catalog.json");
-      writeFileSync(fixture, JSON.stringify(invalid));
-      expect(() => loadLxeSkillCommandCatalog(fixture)).toThrow("invalid lxeskill input modes");
-    }
-  } finally { rmSync(root, { recursive: true, force: true }); }
+    const commands = await queryLxeSkillCommandSkills(options);
+    expect(commands.length).toBeGreaterThan(0);
+    expect(commands).toContainEqual({ command: "lxeskill replenish store resolve", skill: "replenishment-store-resolve" });
+    expect(commands.every(item => !item.command.startsWith("services."))).toBe(true);
+    expect(commands).toContainEqual({ command: "lxeskill vietnam replenishment calculate", skill: "vietnam-replenishment" });
+    const contract = await queryLxeSkill("list", options);
+    expect(contract.commands).toContainEqual(expect.objectContaining({
+      name: "vietnam_replenishment_generate", command: "vietnam replenishment calculate",
+      owner_skills: ["vietnam-replenishment"], input_modes: ["flags"],
+      input_schema: {
+        type: "object",
+        properties: {
+          sales_file: { type: "string", minLength: 1 }, inventory_file: { type: "string", minLength: 1 },
+          products_file: { type: "string", minLength: 1 },
+          template_file: { type: "string", minLength: 1, "x-lxe-file-input": {
+            accepted_extensions: [".xlsx"],
+            instruction: "请上传完整的东南亚越南备货九表 XLSX 模板，或使用已保存的当前模板。",
+          } },
+        },
+        required: ["sales_file", "inventory_file", "products_file"], additionalProperties: false,
+      },
+    }));
+    const data = await queryLxeSkill("datasets list", options);
+    expect(data.datasets).toContainEqual(expect.objectContaining({ id: "fba_delivery_csv", dir: "fba/delivery_csv" }));
+    expect(data.datasets).toContainEqual(expect.objectContaining({ id: "vietnam_recommendations", dir: "vietnam/recommendations" }));
+  } finally { rmSync(dataRoot, { recursive: true, force: true }); }
+});
+
+test("Mabang TMS exposes one export command with optional warehouse scope and its own deliverable dataset", async () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), "lxe-tms-query-"));
+  const options = { cwd: root, pythonPath: join(root, process.platform === "win32" ? ".venv/Scripts/python.exe" : ".venv/bin/python"),
+    environment: { ...process.env, LXE_DATA_ROOT: dataRoot } };
+  try {
+    const data = await queryLxeSkill("list", options);
+    const commands = (data.commands as Record<string, unknown>[]).filter(entry => String(entry.name).startsWith("mabang_tms_"));
+    expect(commands).toHaveLength(1);
+    expect(commands[0]).toMatchObject({
+      command: "mabang-tms products export",
+      owner_skills: ["mabang-tms-products-export"],
+      attribution_skill: "mabang-tms-products-export",
+      artifact_paths: [{ field: "artifacts[].path", role: "deliverable" }],
+      input_schema: { properties: { warehouse: { type: "string", enum: ["PH1", "VN1", "all"] } } },
+    });
+    expect(commands[0]?.input_schema).not.toHaveProperty("required"); // Unscoped external CLI compatibility.
+    const datasets = await queryLxeSkill("datasets list", options);
+    expect(datasets.datasets).toContainEqual(expect.objectContaining({ id: "mabang_tms_exports", dir: "mabang_tms/exports" }));
+  } finally { rmSync(dataRoot, { recursive: true, force: true }); }
+});
+
+test.each([
+  ["mabang-tms products export", "PH1", "mabang-tms-products-export"],
+  ["mabang-tms products export", "VN1", "mabang-tms-products-export"],
+  ["mabang-tms products export", "all", "mabang-tms-products-export"],
+  ["yacang reports export --report inventory-sales", "PH8805", "yacang-reports-export"],
+  ["yacang reports export --report inventory-sales", "VN8806", "yacang-reports-export"],
+])("country export command keeps ERP ownership: %s --warehouse %s", async (command, warehouse, owner) => {
+  const dataRoot = mkdtempSync(join(tmpdir(), "lxe-erp-query-"));
+  try {
+    const stats = new TurnStatistics({ directory: root, commandSkills: () => queryLxeSkillCommandSkills({
+      cwd: root, pythonPath: join(root, process.platform === "win32" ? ".venv/Scripts/python.exe" : ".venv/bin/python"),
+      environment: { ...process.env, LXE_DATA_ROOT: dataRoot },
+    }) });
+    stats.observe("exec", { command: `lxeskill ${command} --warehouse ${warehouse}` });
+    expect((await stats.snapshot()).executions).toEqual([
+      expect.objectContaining({ command: command.split(" --")[0], skill: owner }),
+    ]);
+  } finally { rmSync(dataRoot, { recursive: true, force: true }); }
+});
+
+test("records repeated Skill reads and longest matching command calls without execution outcomes", async () => {
+  let queries = 0;
+  const stats = new TurnStatistics({ directory: root, commandSkills: async () => { queries++; return [
+    { command: "lxeskill demo", skill: "short" }, { command: "lxeskill demo run", skill: "demo" },
+  ]; } });
+  stats.setSkills({ [skillPathKey(join(root, "skills/demo/SKILL.md"))]: "demo" }, { demo: "default" });
+  stats.observe("read", { path: "skills/demo/SKILL.md" });
+  stats.observe("read", { path: "skills/demo/SKILL.md" });
+  stats.observe("read", { path: "other/SKILL.md" });
+  stats.observe("read", { path: "skills/demo/SKILL.md" }, false);
+  stats.observe("exec", { command: "lxeskill demo run --token private" });
+  stats.finish("exec", 25, true);
+  stats.observe("exec", { command: "lxeskill.cmd demo run > result.txt" });
+  stats.observe("exec", { command: "echo lxeskill demo run" });
+  expect(queries).toBe(0);
+  const result = await stats.snapshot();
+  expect(queries).toBe(1);
+  expect(result.activations).toEqual(Array(2).fill({ skill: "demo", module: "default" }));
+  expect(result.executions).toEqual(Array(2).fill({ skill: "demo", module: "default", command: "demo run" }));
+  expect(result.tools).toContainEqual({ name: "exec", calls: 3, errors: 1, duration_ms: 25 });
+  expect(JSON.stringify(result)).not.toContain("private");
+});
+
+test("failed optional attribution preserves generic tool and read statistics", async () => {
+  const errors: unknown[] = [];
+  const stats = new TurnStatistics({ directory: root, commandSkills: async () => { throw new Error("CLI missing"); }, onError: error => errors.push(error) });
+  stats.observe("exec", { command: "lxeskill demo run" });
+  expect(await stats.snapshot()).toMatchObject({ tools: [{ name: "exec", calls: 1 }], executions: [] });
+  expect(errors).toHaveLength(1);
+});
+
+test("exec cards retain the actual command without inferring a business skill", () => {
+  const command = "lxeskill fba shipment prepare-upload --context-file report.json";
+  const step = buildToolDisplayStep("tool-1", "exec", { command }, "running", 0);
+  expect(step.title).toBe("Run command");
+  expect(step.detail).toBe(command);
 });

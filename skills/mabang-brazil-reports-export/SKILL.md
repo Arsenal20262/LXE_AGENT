@@ -6,6 +6,8 @@ commands:
   - lxeskill mabang brazil reports export
 ---
 
+需要查询 lxeskill 产物目录时，运行 `lxeskill datasets list`；返回的 `dir` 相对于当前环境的 `artifact_root`。
+
 # 马帮巴西海外仓导出
 
 ## 业务范围
@@ -29,7 +31,7 @@ commands:
 lxeskill mabang brazil reports export --report inventory-sales
 ```
 
-`--report` 必填，可重复，选项见上表；可在一次命令中选择多类报表。命令复用现有马帮 ERP 配置与登录态，和马帮 TMS 的认证独立。
+`--report` 必填，可重复，选项见上表；可在一次命令中选择多类报表。命令使用当前马帮 ERP 配置，开始业务前按需恢复登录态，和马帮 TMS 的认证独立。认证失败或导出中途失败时保留实际诊断及已完成文件，不额外刷新或重跑整段导出。
 
 结果提供文件路径、库存记录数、调拨单据数、文件明细行数、批次数及完成情况，这些数量口径不同。调拨报表每批一份 XLS，可能产生多份文件；各文件保留平台原样，不合并、裁列或转换格式。部分成功时，`files` 只包含已完成的可交付文件，不代表全部报表齐全。
 

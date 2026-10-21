@@ -52,11 +52,11 @@ Add skill and Use in conversation append a natural-language prompt to a new conv
 
 Business skills declare versioned `lxeskill ...` commands from `python/lxeskill_cli/lxeskill/catalog.json`. Catalog protocol version 1 records the command path, schema, handler/module, owner skills, timeout, visibility and artifact declarations.
 
-Runtime skills invoke their owned command through native `exec` as one standalone `lxeskill ...` call. They must not instruct the model to invoke internal Python modules or compose the command with shell operators. Runtime owns process control, while the CLI owns authorization, parameter validation, JSONL output and business dispatch.
+Skills document the public `lxeskill ...` commands to run through `exec`. Runtime applies generic permissions and process control; the CLI owns authorization, validation, JSONL output and dispatch. Runtime does not load catalog.json or impose CLI-specific shell restrictions. Callers query `lxeskill list`, `lxeskill describe ...` and `lxeskill datasets list` as needed.
 
 ## Usage Tracking
 
-Runtime records which skills were activated and used during a turn. This supports diagnostics and Dashboard visibility without copying complete skill text into logs or persisted usage records.
+The statistics component counts each native read request targeting a discovered Skill file. It also observes leading lxeskill exec calls and queries the public command list for attribution at turn completion. These are call counts, independent of outcomes. Generic tools retain their error and duration metrics; existing usage tables and upload cursors are reused.
 
 ## Documentation Classes
 
