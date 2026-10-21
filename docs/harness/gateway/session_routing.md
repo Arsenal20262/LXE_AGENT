@@ -33,7 +33,7 @@ App ID 不一致或群聊未 @Bot 的事件不会创建 session、response route
 - `/clear` 在无 active work 时旋转到新 session。
 - 无效根结构或重复/残缺 entry 不会被默默接受。
 
-binding 文件默认与 SQLite 位于同一 `user_session_db` 目录，也可由 `AGENT_SESSION_BINDINGS_PATH` 覆盖。
+Desktop 将 binding 文件设为实际数据目录下的 `db/sessions.json`，与 Gateway 数据库同目录；数据根位置见 [程序与用户数据](../../desktop/data-location.md)。独立装配可显式传入 `bindingsPath`，其次使用 `AGENT_SESSION_BINDINGS_PATH`；其余回退规则见 [Gateway composition](../../../apps/gateway/src/orchestration/composition.ts)。
 
 ## Response route
 

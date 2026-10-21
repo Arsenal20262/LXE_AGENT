@@ -2,21 +2,21 @@
 
 ## 先说结论
 
-Desktop 不再把所有状态塞进一个 `local_agent.sqlite3`。Electron Main、私有 `agent-cli` 和 Python 业务命令各自拥有自己的数据库，避免两个进程同时写同一个 SQLite 文件。
+Electron / Gateway、agentcli 和 lxeskillCLI 分别管理自己的数据，通过约定接口协作，不把其他模块的数据库当作集成接口。数据库按职责分开；各模块内部的并发访问由其存储实现管理，不代表每个数据库只能由一个操作系统进程写入。
 
 会话正文也不放在 SQLite 里，而是写入 append-only 的 Transcript v2 JSONL。SQLite 保存适合查询和更新的状态，JSONL 保存按时间追加的会话事件。
 
 ## 当前存储分工
 
-| 文件 | 谁写入 | 保存什么 |
+| 文件 | 所属模块／维护方 | 保存什么 |
 | --- | --- | --- |
 | `db/gateway.sqlite3` | Electron Main / Gateway | Gateway session、平台来源和 response route |
 | `db/agent.sqlite3` | 私有 `agent-cli` / Runtime | Agent session（含独立的 `permission_mode`）、pending event、usage、模型信息和 transcript 索引 |
 | `db/exec-sessions/<thread-id>/agent.sqlite3` | 一次性 `agent-cli exec` / Runtime | 单个 CLI thread 的 session、usage、模型信息和 transcript 索引 |
-| `db/lxeskill.sqlite3` | 一次性 Python `lxeskill` 命令 | Python 业务侧状态与可丢弃的紫鸟会话缓存；浏览器真实状态以紫鸟客户端实时接口为准 |
+| `db/lxeskill.sqlite3` | lxeskillCLI | 业务状态与可丢弃的紫鸟会话缓存；浏览器真实状态以紫鸟客户端实时接口为准 |
 | `db/sessions.json` | Gateway | 平台 source 到 session id 的稳定绑定 |
 | `db/session_transcripts/<session>.jsonl` | Runtime | 原始消息、turn metadata 和 `context_patch` |
-| `db/machine_identity.json` | Desktop 与 Runtime maintenance（共用 Core 实现） | Cloud、WireGuard 和可选 Data Server 共用的本机身份 |
+| `db/machine_identity.json` | Desktop 与 agentcli 用量同步服务（共用 Core 实现） | Cloud、WireGuard 和可选 Data Server 共用的本机身份 |
 
 表中路径均相对于宿主实际使用的数据目录。Desktop 的默认位置、`LXE_DATA_ROOT` 和升级迁移统一见 [程序与用户数据](../desktop/data-location.md)；不要按程序安装目录推导数据库位置。
 
@@ -28,8 +28,8 @@ Desktop 不再把所有状态塞进一个 `local_agent.sqlite3`。Electron Main�
 
 - Gateway 必须在 Runtime 重启时继续知道消息来自哪里、结果应该发到哪里。
 - Runtime 需要独立维护模型上下文、pending event 和 usage。
-- Python 命令是按需启动的短进程，只写自己负责的业务状态。
-- 每个数据库只有一个明确的写入方，减少锁冲突和跨进程耦合。
+- lxeskillCLI 按需启动业务命令，独立管理业务数据与配置。
+- 数据归属清晰，模块协作不依赖对方的表结构或存储布局。
 
 Gateway 创建 session 时，会同时让 Gateway store 和 Agent store 建立对应记录；response route 留在 Gateway，pending event 留在 Agent。两边通过稳定的 session id 关联，不通过共享 SQLite 表通信。
 

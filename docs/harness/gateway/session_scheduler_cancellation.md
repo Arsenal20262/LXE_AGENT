@@ -34,7 +34,7 @@ Runtime unhealthy 时 scheduler 保留 queued job，不继续 dispatch。start �
 - steering queue 与已接受 cancel 状态。
 - start failure 和 closing/terminal 状态。
 
-Provider、summary、MCP 和 exec/wait 的当前观察都接收同一个 abort signal。exec 进程创建成功后立即归 Session manager，不登记到 RunHandle；取消 turn 只停止观察，进程继续运行。显式 terminate、Session 删除或 Runtime 关闭仍使用完整进程树语义。
+Provider、summary、MCP 和 exec/wait 的当前观察都接收同一个 abort signal。Scheduler 取消的是 run；命令进程的归属、观察和终止规则见 [exec 生命周期](../runtime/tools/README.md#cancel-与-exec-生命周期)。
 
 ## Completion 校验
 

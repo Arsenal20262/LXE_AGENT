@@ -62,6 +62,7 @@
 
 - [验收记录](acceptance/README.md)：按主题查看已执行的验证、当时环境及未完成事项。
 - [事故记录](incidents/README.md)：已知事实、调查状态和待解决问题。
+- [历史分叉整合](record/repository-sync-integration.md)：Mac／Windows 来源提交与当时处理范围；日常操作见仓库同步手册。
 - [决策记录](record/)：例如 [仓库结构](record/20260714-repo-structure-contract.md)、[导出流水线边界](record/20260714-mabang-export-pipeline-evaluation.md)、[Transcript v2](record/20260715-transcript-v2.md)、[产品分支](record/20260716-product-lines-branch-migration.md)、[宿主装配](record/20260718-agent-host-composition-boundary.md)、[Workspace Instance](record/20260718-workspace-instance-domain.md)和 [模型消息领域](record/20260905-assistant-message-domain.md)。[早期客户端身份方案](record/20260910-client-identity-v1.md)保留历史背景，当前云端访问从技术手册进入。
 - 版本更新说明随 [发布配置](../config/desktop-release.json)维护，发布操作见 [Windows 更新与发布](desktop-updates.md)。
 

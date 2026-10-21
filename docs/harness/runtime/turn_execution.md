@@ -66,7 +66,7 @@ context overflow 独立走一次强制 compaction；压缩成功且预算回到�
 
 工具 dispatch 前发现 steering 时，当前及剩余未执行调用写 skipped/error 结果。Runtime 先闭合这批工具，再追加 steering，开始下一 step；已完成工具不重跑，已发送 artifact 不撤回。
 
-`RunHandle` 的 signal 中断 provider、summary、MCP、问题等待和当前 exec/wait 观察。未执行调用写 cancelled 结果，取消后的 step 不再调用 provider。已创建的 exec 属于 Session，只有显式 terminate、Session 删除或 Runtime 关闭才终止进程树；剩余 steering 由 Scheduler 按 run 状态处理。
+`RunHandle` 的 signal 中断 provider、summary、MCP、问题等待和当前 exec/wait 观察。未执行调用写 cancelled 结果，取消后的 step 不再调用 provider。剩余 steering 由 Scheduler 按 run 状态处理；命令进程与观察的生命周期见 [工具手册](tools/README.md#cancel-与-exec-生命周期)。
 
 `ask_user_question` 只对本轮来自桌面的任务开放，独占等待专用答案，不额外请求模型；普通 steering 不能解除问题等待。
 

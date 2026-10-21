@@ -30,7 +30,7 @@ Native handler 与 Runtime 同进程执行。Coding tools 包括 read、write、
 - `exec` 观察到 `yield-time-ms` 后仍未结束会返回 `status=running` 和 `exec_id`；Session manager 继续持有命令。
 - `wait` 对同一 `exec_id` 串行观察，对不同 id 可并发；终态只返回一次，之后模型侧句柄关闭。
 
-Process stdout/stderr 使用有界内存尾部和落盘截断机制。Turn cancel 只中止本次观察，不终止已经创建的 exec；Session 删除、Runtime 停止或 `wait(terminate=true)` 才终止完整进程树。
+Process stdout/stderr 使用有界内存尾部和落盘截断机制。取消观察、进程终止及后台完成通知统一见 [exec 生命周期](README.md#cancel-与-exec-生命周期)。
 
 ## MCP 工具
 
@@ -65,7 +65,7 @@ Artifact delivery 与工具业务执行分离。发送失败会报告 delivery e
 
 成功 result 使用原 `tool_call_id`。异常转换为 `is_error=true`。未分类异常把经过脱敏和有界截断的实际 `Error.message` 放入统一 `ToolFailureDetails.observed_message`，同时标记 `cause_known=false`、`retryability=unknown` 和 `inference_policy=verified_reason_only`；它不会用“原因未知”等占位文本替换实际错误。只有本地确定性错误码，或 operation 加明确 provider code/subcode 的 fixture-backed 精确映射，才允许设置 `cause_known=true`、`verified_reason` 与 `mapping_id`。多个调用的 results 作为一个 tool message append；cancel 或 steering 会为尚未执行的调用生成 closure stub。Anthropic 的 `tool_use_id` 只存在于 Provider adapter 生成的 wire request。
 
-Oversized content 在 append 前由 ContextPipeline 以总文本 10k token 预算裁剪。Image block 保留给当前 turn，并单独计 token。
+Oversized content 在 append 前由 ContextPipeline 以总文本 10k token 预算裁剪。Image block 单独计 token，原始内容按 [图片持久化规则](../context/context_persistence.md#图片与敏感数据)保存；后续模型视图由上下文处理决定。
 
 ## Display 与日志
 
@@ -90,7 +90,6 @@ Runtime 的独立统计组件在工具执行前观察调用：`read` 命中已�
 - 原因未知必须明确写成未知；不能为了“可读”而补写未经验证的归因。
 - 已分类错误保留确定的 `verified_reason` 和 retryability，模型可以据此采取下一步。
 - Abort 不继续 dispatch 剩余调用。
-- 异步 exec 完成只发 UI 事件更新原工具卡，不进入模型消息，不创建 pending event，也不唤醒模型。
 - MCP/server failure 隔离到对应 connector。
 - `lxeskill` 非零退出或非法调用不接受为成功结果。
 - Artifact send failure 不改变 canonical tool result 已执行事实。

@@ -91,25 +91,22 @@ Each Runtime turn has exactly one `turn_started` and exactly one terminal `turn_
 
 Successful health polling and repetitive stream updates should not dominate INFO output. Raw inbound content, credentials, cookies, headers, and complete tool payloads do not belong at any unsanitized level. Explicitly enabled wire traces are the only surface allowed to retain sanitized Provider request and stream content.
 
-## Event families
+## 排障入口
 
-| Boundary | Stable events |
-|---|---|
-| Runtime turn | `turn_started`, `provider_attempt_started`, `provider_stream_heartbeat`, `provider_attempt_completed`, `provider_attempt_failed`, `tool_started`, `tool_completed`, `heartbeat_noop`, `pending_events_popped`, `pending_events_attached`, `turn_completed` |
-| Routing | `inbound_received`, `permission_denied`, `session_created`, `session_rebound`, `message_queued`, `message_steered`, `control_completed` |
-| Scheduler | `scheduler_job_enqueued`, `scheduler_job_dispatched`, `scheduler_job_released`, `scheduler_stop_requested`, `scheduler_pending_cleared`, `scheduler_steering_requeued` |
-| Heartbeat | `heartbeat_requested`, `heartbeat_deduplicated`, `heartbeat_deferred`, `heartbeat_dropped`, `heartbeat_enqueued` |
-| Feishu ingress | `feishu_inbound_rejected`, `feishu_inbound_normalized`, `feishu_inbound_sink_completed`, `feishu_inbound_failed`, `feishu_quote_lookup_failed`, `feishu_card_content_fetch_failed` |
-| Feishu connection | `feishu_connection_starting`, `feishu_connected`, `feishu_reconnecting`, `feishu_reconnected`, `feishu_connection_failed`, `feishu_connection_stopped` |
-| CardKit delivery | `card_created`, `card_frame_coalesced`, `card_reference_retry_scheduled`, `card_reference_retry_succeeded`, `card_reference_retry_exhausted`, `card_send_completed`, `card_dead`, `card_finalized` |
-| Stream fallback | `stream_fallback_started`, `stream_fallback_completed`, `stream_fallback_failed` |
-| Idle restart | `feishu_restart_scheduled`, `feishu_restart_deferred`, `feishu_restart_started`, `feishu_restart_completed`, `feishu_restart_failed`, `feishu_restart_stop_timed_out` |
-| Session exec | `process_started`, `process_yielded`, `process_completed`, `process_killed`, `process_force_killed`, `process_evicted`, `process_notification_failed` |
-| Maintenance | `maintenance_configured`, `maintenance_task_started`, `maintenance_task_completed`, `maintenance_single_flight_coalesced`, `maintenance_single_flight_rerun`, `auth_refresh_succeeded`, `auth_refresh_failed`, `data_sync_uploaded`, `data_sync_skipped`, `data_sync_failed` |
-| MCP and skills | `mcp_enabled`, `mcp_connected`, `mcp_startup_failed`, `mcp_disabled`, `mcp_disconnected`, `skill_catalog_loaded`, `skill_external_skipped` |
-| Gateway lifecycle | `gateway_starting`, `gateway_ready`, `gateway_start_failed`, `gateway_stopping`, `gateway_stopped`, `startup_component_ready`, `shutdown_component_stopping`, `shutdown_component_stopped`, `shutdown_component_failed` |
+按会话、turn、job 或 tool 标识串联日志，再定位负责该阶段的实现。下表提供常用入口；具体事件名和 reason 字段以对应日志调用为准，不在手册中复制完整枚举。
 
-Heartbeat drop/defer reasons are restricted to `autonomy_suspended`, `no_pending_events`, `session_busy`, `session_missing`, and `invalid_source`. Feishu normalize rejection reasons are restricted to `duplicate`, `stale`, `bot_app_id_mismatch`, `group_bot_identity_missing`, `group_without_bot_mention`, `missing_sender_open_id`, and `empty_content`.
+| 阶段 | 查看内容与实现入口 |
+| --- | --- |
+| 回合与模型调用 | `turn_started` / `turn_completed`、Provider attempt 和工具执行；[Runtime](../../packages/agent/runtime/src/engine/runtime.ts) |
+| 入站路由与调度 | session、route、排队、steering 和取消；[Router](../../apps/gateway/src/orchestration/router.ts)、[Scheduler](../../apps/gateway/src/orchestration/scheduler.ts) |
+| Heartbeat | 唤醒、合并、延后或丢弃的原因；[Heartbeat bridge](../../apps/gateway/src/orchestration/heartbeat-bridge.ts) |
+| 飞书接入与交付 | 连接、消息归一化、资源获取和卡片交付；[飞书适配](../../apps/gateway/src/channels/feishu/) |
+| exec 进程 | 创建、等待、退出、终止和后台完成通知；[Process manager](../../packages/agent/runtime/src/tooling/coding/process-manager.ts) |
+| 用量同步 | `data_sync_uploaded`、`data_sync_skipped`、`data_sync_failed`；[TurnUsageSyncService](../../packages/agent/runtime/src/operations/turn-usage-sync.ts) |
+| MCP 与 Skill | 连接及工具注册、Skill 发现与刷新；[MCP](../../packages/agent/runtime/src/tooling/mcp.ts)、[Skill](../../packages/agent/runtime/src/tooling/skills.ts) |
+| 启动与关闭 | 组件 ready、停止和失败回滚；[生命周期手册](gateway/gateway_lifecycle.md) |
+
+用量同步属于 agentcli；马帮登录态维护由 lxeskillCLI 按需处理，排障入口见 [CLI 云端通信](../lxeskill-cloud-access.md)。
 
 Desktop Renderer 通过 preload IPC 与 Main 通信，不启动 Dashboard HTTP listener。启动与可用性排障查看 Gateway lifecycle、agent-cli 握手及桌面健康状态；不使用旧的 `dashboard_listening` 或浏览器自动打开事件。
 

@@ -4,6 +4,7 @@
 
 ## 桌面交互与文件
 
+- [对话界面历史验证](conversation-window-validation.md)：原生附件、历史窗口、过程折叠与排版；原记录未统一注明日期和提交。
 - [输入框引用](composer-references-acceptance.md)：文件与 Skill 引用、候选菜单及两平台验证。
 - [文件预览](file-preview-acceptance.md)：HTML、文档查看器及文件失效状态。
 - [工作区用应用打开](20261002-workspace-applications.md)：应用检测、原生启动、图标及两平台验证。
