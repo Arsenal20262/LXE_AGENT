@@ -44,32 +44,16 @@ When you receive an instruction:
 - 测试必须从仓库根运行，Python 定向测试使用 `uv run --frozen pytest <测试文件或目录>`。从子目录运行会因相对路径假失败。
 - **验证必须拿真实结果，警惕假通过**：管道会吞掉退出码（`cmd | tail` 的退出码是 tail 的，不是 cmd 的——用 `set -o pipefail` 或先落盘再查 `$?`）；扫描类校验匹配到空集也会"通过"（cwd 漂移、glob 写错时扫了 0 个文件照样报绿）。报告通过之前，先确认命令真的执行了、扫描真的扫到了东西。
 - agentcli 的统计适配通过 `lxeskill list` 查询命令归属。修改命令契约时，两端定向测试都要跑：`uv run --frozen pytest python/lxeskill_cli/tests/lxeskill python/lxeskill_cli/tests/infra` 加 `bun test packages/agent/runtime/test/tooling/lxeskill-command.test.ts`。
-- 开发过程中按影响范围运行必要的定向检查；纯文档修改检查内容、链接和涉及的命令，不因完成任务而机械运行全量测试。使用 worktree 开发的代码任务，在最终 rebase 到最新 `main` 后、合并前运行一次完整验证；代码和基线均未变化时不得重复执行。
-- 如果全量测试后代码发生修改，或 `main` 的变化实际进入了当前分支，则原验证结果失效，自己决定要重新全量测试还是定向测试；无变化的 rebase 不构成重复测试理由。
+- 按改动的实际影响范围完成必要验证，局部改动优先做定向检查；影响广泛或难以界定时，再扩大验证范围，必要时运行全量验证。合并前确认验证仍适用于当前代码和最新基线，避免无变化的重复验证。
 
-## 工作区选择与开发流程
+## 开发与 PR 流程
 
-### 工作区选择
-
-AI 根据改动范围、验证成本和并行冲突风险，自行判断在主工作区修改，还是使用独立 worktree。局部、独立、容易验证的修改通常可直接在主工作区完成并提交；需要隔离开发或避免干扰其他任务时，使用 worktree。常规选择无需额外询问用户，用户已有明确安排时按其安排执行。
-
-开发过程中应根据实际情况调整判断。原本简单的修改扩大了范围，或出现并行冲突风险时，及时转到独立 worktree。是否有人实时跟进，不单独决定工作区选择。
-
-无论选择哪种方式，都必须保护已有改动，只提交本任务涉及的内容。主工作区保持在 `main`；需要 worktree 时，通过 `scripts/wt-claim` 或其 Windows 版本 `scripts/wt-claim.ps1` 领取和归还。不要自行执行 `git worktree add` 或删除 worktree。脚本会同步各自的依赖并复用可用缓存，首次使用或缓存失效时可能需要下载。
-
-### 使用 worktree 时的流程
-
-1. **领取**：在仓库任意位置执行 `scripts/wt-claim <task-slug>`；Windows PowerShell 执行 `scripts/wt-claim.ps1 <task-slug>`（slug 用 kebab-case 描述任务，如 `fix-store-lock`）。脚本输出的最后一行是 worktree 路径，分支自动建为 `codex/<task-slug>`，bun/uv 依赖已同步好。之后所有开发、测试都在这个目录里进行。
-2. **开发与提交**：修改 → 完成与改动相关的定向检查（Python 测试使用该 worktree 自己的 `.venv`）→ commit；开发阶段不重复跑全量测试。
-3. **合并前验证**：把 worktree 分支 rebase 到最新 `main` → 按上述验证规则完成检查（代码任务执行一次完整验证，纯文档做相关检查）→ 在主工作区 fast-forward 合并。若 rebase 无变化，不在验证前后额外重复测试；多任务并行开发，但必须依次合并，后合并者先 rebase。
-4. **归还**：合并完成后 Bash 执行 `scripts/wt-claim release <task-slug>`，Windows PowerShell 执行 `scripts/wt-claim.ps1 release <task-slug>`。脚本会自动删除已合并的分支并把 slot 还给池子；未合并的分支会保留并提示。若 release 后才发现分支没合并成（比如合并被拒），直接再次 `wt-claim <task-slug>`——脚本会把这条分支重新附着到空闲 slot，在池子里继续修，不要在主工作区 checkout 任务分支。
-
-### 操作约束
-
-- 直接修改 `main` 前必须检查 `git status`，确认当前改动及并行任务不会受到干扰。
-- 一个分支只属于一个任务；禁止动别的任务已领取的 slot（Bash 用 `scripts/wt-claim status`，Windows PowerShell 用 `scripts/wt-claim.ps1 status` 查占用）。
-- 释放前必须工作区干净（committed 或 discard）；`release` 会强制检查。
-- 池子默认 4 个 slot；Bash 用 `WT_POOL_MAX=6 scripts/wt-claim <slug>`，Windows PowerShell 用 `$env:WT_POOL_MAX=6; scripts/wt-claim.ps1 <slug>` 临时扩容。
+- 所有仓库改动在任务分支完成，通过 PR 合并到 `main`。主工作区保持在 `main`，用于同步和检查。
+- AI 根据任务情况选择合适的工作区；需要独立 worktree 时，通过 `scripts/wt-claim` 或 Windows 版本 `scripts/wt-claim.ps1` 领取和归还，不占用其他任务的工作区。用法见 [worktree 脚本说明](scripts/README.md#worktree-池)。
+- 修改和提交前检查 `git status`，保护已有改动，只提交当前任务涉及的内容。
+- 按改动范围完成必要验证，并遵循 [PR 审查规范](docs/pr-review.md)。AI 说明实际验证结果和未确认事项；需要人工审核的改动，经审核通过后合并。
+- 修改已提交、推送并创建 PR 后，可以归还干净的 worktree，保留任务分支；需要继续修改时重新领取。
+- AI 代为合并 PR 时，需要已有明确授权。
 
 ## Windows 编辑安全
 
