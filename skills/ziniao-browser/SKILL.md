@@ -1,6 +1,6 @@
 ---
 name: ziniao-browser
-description: 通过受控 lxeskill 命令管理紫鸟店铺会话，用于登录和操作电商平台的卖家店铺后台。用户要求打开、查看或退出紫鸟店铺，读取后台网页结构或截图，或执行点击、输入、滚动和跳转时使用；马帮 ERP 认证由马帮 CLI 管理。
+description: 通过受控 lxeskill 命令管理紫鸟店铺会话，用于登录和操作电商平台的卖家店铺后台。用户要求打开、查看或退出紫鸟店铺，读取后台网页结构或截图，或执行点击、输入、滚动和跳转时使用。
 type: ziniao_browser
 commands:
   - lxeskill browser store
@@ -11,7 +11,7 @@ commands:
 
 # 紫鸟浏览器
 
-紫鸟在本项目中只用于登录和操作电商平台的卖家店铺后台，如 Amazon Seller Central。马帮是独立的 ERP，其认证由马帮 CLI 管理，在单独的临时浏览器会话中完成；因此，马帮缺少 `freeToken` 等认证错误应根据马帮命令的诊断处理，在紫鸟里登录或打开页面无法补充那份认证状态。
+紫鸟在本项目中只用于登录和操作电商平台的卖家店铺后台，如 Amazon Seller Central。
 
 ## 硬性规则
 

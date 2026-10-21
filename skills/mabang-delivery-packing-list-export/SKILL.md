@@ -19,7 +19,7 @@ commands:
 
 ## 认证与失败诊断
 
-本命令下载马帮 WMS 装箱数据，认证由马帮 CLI 管理。紫鸟在本项目中只用于登录和操作电商平台的卖家店铺后台，如 Amazon Seller Central。马帮需要刷新认证时，桌面使用 Electron 认证窗口，独立 CLI 使用已绑定的 Chrome/Edge；认证在独立临时会话中完成，因此在紫鸟里登录或打开页面不会补充马帮命令所需的认证状态。
+CLI 使用当前配置的马帮账号，按需在独立临时会话中恢复认证：桌面使用 Electron 认证窗口，独立 CLI 使用已绑定的 Chrome/Edge。
 
 认证刷新先读取 FBA `freeToken`，再进入 WMS，因此装箱下载也可能在 `stage=fba_delivery` 失败。认证诊断附在 `error.message` 中，包括 `auth_environment`、阶段和实际异常；等待 token 失败时还有 `details`，可结合 frame、读取次数及 `last_read_error` 判断观察结果，不能凭 token 缺失断定马帮改版或需要人工点击。
 

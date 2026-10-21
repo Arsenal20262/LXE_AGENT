@@ -20,7 +20,7 @@ commands:
 
 ## 认证与失败诊断
 
-本命令导出马帮 ERP 数据，使用马帮账号。紫鸟在本项目中只用于登录和操作电商平台的卖家店铺后台，如 Amazon Seller Central。马帮认证由 CLI 按需恢复：桌面使用 Electron 认证窗口，独立 CLI 使用已绑定的 Chrome/Edge；认证在独立临时会话中完成，因此在紫鸟里登录或打开页面不会补充马帮命令所需的认证状态。
+CLI 使用当前配置的马帮账号，按需在独立临时会话中恢复认证：桌面使用 Electron 认证窗口，独立 CLI 使用已绑定的 Chrome/Edge。
 
 认证失败时，`error.message` 包含 `stage`、实际 URL、异常和 `auth_environment`；等待 FBA token 失败还包含 `details`。`target_frame_missing` 表示等待期间没有匹配的页面 frame；`storage_read_failed` 表示读取均失败；`storage_value_empty` 表示有读取完成但未得到 token，仍需结合 `read_error_count` 和 `last_read_error` 看实际异常。以上都不能单独证明马帮改版或需要人工点击。
 
