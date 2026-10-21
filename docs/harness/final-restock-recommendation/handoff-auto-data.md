@@ -1,5 +1,13 @@
 # 最终备货建议：自动取数衔接交接
 
+## 2026-10-21 PR3 继承 PR2 源文本保真 P2 修复
+
+- **归位与依赖**：PR2 在 pool-4 追加 `af0d7b8b fix: preserve source text in final restock workbooks`，只含工作簿服务、对应测试和 PR2 handoff。用户已确认先修复 PR2，再让第三分支继承同一个提交并更新已有 PR2/PR3 的源分支。pool-7 起始 `13215efe` 干净；PR2→PR3 本地依赖 merge 自动无冲突，不复制/重复提交修复，不改 PR1、main 或 pool-9。
+- **行为**：以 `=` 开头的店铺/MSKU/ASIN/名称/备注/本地 SKU 等源字符串写为真正文本，不加转义前缀、不改变内容；只有设计的 14 个计算列写为公式。重算后非计算单元格若出现意外公式则按坐标明确失败，正式输出替换之前停止，已有同日成功文件保持不变。AG、AH、AD、AI、35 列、全部 MSKU 公式和本轮显式旺季规则不变。
+- **PR2 新证据**：3 个新增回归在旧代码均失败、修复后均通过，覆盖真实源核验→行映射→写表→Office重算，以及发布保护；影响范围 **221 passed、无 skip**。既有 2002 行同源历史三文件通过真实 PR2 CLI→Office Kit，**35 列、28028 公式、0 Excel 错误、与此前合格文件缓存值差异 0**，输入和保存设置前后不变。仅为离线验收，没有生产请求。
+- **PR3 衔接验证**：在本 checkout 自身 `.venv`，执行新增 3 个回归、最终 Skill、最终生成 CLI、A 规则和设置 CLI 定向用例，**90 passed、无 skip**，包含真实 Office 重算。`bun test packages/agent/runtime/test/tooling/skills.test.ts packages/agent/runtime/test/tooling/lxeskill-command.test.ts` 为 **42 pass、0 fail、295 assertions**。两个 Python 数字包含重叠测试，不累加为全量结果。此前 4 份 Skill 修复及 `13215efe` 完整保留；没有改 catalog、Runtime 或 Desktop 生产代码。
+- **收口与边界**：本组只新增依赖 merge 和本节记录，提交前核对 staged diff/check，两个分支只普通 push 到 `Arsenal20262/LXE_AGENT` 更新既有 PR，不创建新 PR、不强推、不修改 PR 内容或擅自合并上游。备份和离线产物见 `/private/tmp/pr2-literal-text-current-path` 指向目录。原生 Windows、Microsoft Excel、生产 ERP 与真实模型交付仍不属于本轮验收；提交及远端 SHA 以最终 Git 输出为准。
+
 ## 2026-10-21 PR3：已验证 Skill 契约修复归入正式分支
 
 - **现场与范围**：pool-7 / `codex/final-restock-auto-data`，起始 HEAD `b5b0cbd7`、工作区干净。本轮只将 pool-9 已验证的四份 Skill 文案及其必要 Python/Bun 契约测试归入正式分支，共 7 文件（含本交接）；不搬入 pool-9 整批暂存候选，不改 Service、CLI、Runtime 生产代码、catalog、Desktop 或公式。保留正式分支当前 main 认证失败停止和 CRLF 兼容测试，不覆盖为旧候选版本。

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+import hashlib
 import os
 from pathlib import Path
 from shutil import copyfile
@@ -91,6 +92,10 @@ def _write_source(
     sheet.append(headers)
     for row in rows:
         sheet.append([row.get(header) for header in headers])
+        # Model an authoritative source whose strings remain literal text.
+        for cell in sheet[sheet.max_row]:
+            if isinstance(cell.value, str):
+                cell.data_type = "s"
     workbook.save(path)
     workbook.close()
     if local_skus is None:
@@ -164,6 +169,97 @@ def _generate(tmp_path: Path, *, source_path: Path | None = None, inventory_path
         output_dir=tmp_path / "out",
         **generation_settings,
     )
+
+
+def test_workbook_preserves_literal_strings_and_only_writes_designed_formulas(tmp_path: Path) -> None:
+    literals = {
+        "店铺名称": "=store", "MSKU": "=msku", "父ASIN": "=parent", "ASIN": "=asin",
+        "本地SKU名称": "=2+2", "备注": "=1+1", "本地SKU": "=local-sku",
+    }
+    path = tmp_path / "literal-text.xlsx"
+    final_workbook._write_workbook(path, [{**literals, "本地库存": -4, "单件重量(g)": 0}])
+    book = load_workbook(path, data_only=False)
+    try:
+        sheet = book.active
+        for header, expected in literals.items():
+            cell = sheet.cell(2, final_workbook.HEADERS.index(header) + 1)
+            assert (cell.value, cell.data_type) == (expected, "s")
+        assert sheet["AG2"].value == -4 and sheet["AG2"].data_type == "n"
+        assert sheet["AD2"].value == 0 and sheet["AD2"].data_type == "n"
+        assert {cell.column_letter for cell in sheet[2] if cell.data_type == "f"} == set(final_restock_formulas(2))
+    finally:
+        book.close()
+
+
+def test_verified_literal_text_survives_full_office_generation(tmp_path: Path) -> None:
+    if not os.environ.get("LXE_OFFICE_NODE"):
+        pytest.skip("LXE Office runtime is not configured; literal-text recalculation remains NOT VERIFIED")
+    rows = _source_rows()[:3]
+    rows[0].update({"本地SKU名称": "=2+2", "备注": "=1+1"})
+    rows[1] = {**rows[0], "MSKU": "LITERAL-2", "本地SKU": "SKU-LITERAL-2",
+               "本地SKU名称": "=UNKNOWN_SOURCE_TEXT(1)", "备注": "=UNICHAR(28165)&UNICHAR(36135)"}
+    rows[2] = {**rows[0], "MSKU": "CONTROL-3", "本地SKU": "SKU-CONTROL-3", "本地SKU名称": "Control", "备注": ""}
+    source = _write_source(tmp_path / "202610131000-Amazon-Test_店铺MSKU数据.xlsx", rows)
+    verified = source_verification.load_verified_source(source, store_name=STORE)
+    assert verified.records[0]["本地SKU名称"] == "=2+2"
+    assert verified.records[0]["备注"] == "=1+1"
+    report = _write_inventory_report(tmp_path / "inventory.xlsx", source, rows)
+    snapshot = _write_confirmed_empty_snapshot(tmp_path / "snapshot")
+    inputs = [source, report, snapshot]
+    before = [hashlib.sha256(path.read_bytes()).hexdigest() for path in inputs]
+    result = _generate(tmp_path, source_path=source, inventory_path=report, snapshot_path=snapshot)
+    assert result.success and result.formula_error_count == 0 and result.row_count == 3
+    formulas = load_workbook(result.output_xlsx_path, data_only=False)
+    values = load_workbook(result.output_xlsx_path, data_only=True)
+    try:
+        sheet, cached = formulas.active, values.active
+        assert sheet.max_column == 35 and sheet.max_row == 4
+        for number, row in enumerate(rows, 2):
+            for column, header in (("AE", "本地SKU名称"), ("AF", "备注")):
+                expected = row[header] or None
+                assert sheet[f"{column}{number}"].value == expected
+                assert sheet[f"{column}{number}"].data_type != "f"
+                assert cached[f"{column}{number}"].value == expected
+                if expected is not None:
+                    assert sheet[f"{column}{number}"].data_type == cached[f"{column}{number}"].data_type == "s"
+            expected_formulas = final_restock_formulas(number, peak_boost_enabled=False)
+            assert {cell.column_letter for cell in sheet[number] if cell.data_type == "f"} == set(expected_formulas)
+            assert all(sheet[f"{column}{number}"].value == formula for column, formula in expected_formulas.items())
+        # Literal UNICHAR text must not evaluate to 清货 and suppress the shipping-day formulas.
+        for column in ("V", "W"):
+            assert cached[f"{column}3"].value == cached[f"{column}4"].value
+            assert cached[f"{column}3"].value is not None
+        assert not any(cell.data_type == "e" for row in cached for cell in row)
+    finally:
+        formulas.close()
+        values.close()
+    assert [hashlib.sha256(path.read_bytes()).hexdigest() for path in inputs] == before
+
+
+def test_unexpected_source_formula_after_office_stops_publication(tmp_path: Path, monkeypatch) -> None:
+    if not os.environ.get("LXE_OFFICE_NODE"):
+        pytest.skip("LXE Office runtime is not configured; formula trust-boundary check remains NOT VERIFIED")
+    source = _write_source(tmp_path / "202610131000-Amazon-Test_店铺MSKU数据.xlsx")
+    report = _write_inventory_report(tmp_path / "inventory.xlsx", source)
+    snapshot = _write_confirmed_empty_snapshot(tmp_path / "snapshots")
+    first = _generate(tmp_path, source_path=source, inventory_path=report, snapshot_path=snapshot)
+    official = Path(first.output_xlsx_path)
+    original_output = official.read_bytes()
+    recalculate = final_workbook._recalculate
+
+    def inject_unexpected_formula(input_path: Path, output_path: Path) -> None:
+        book = load_workbook(input_path)
+        try:
+            book.active["AE2"] = "=2+2"
+            book.save(input_path)
+        finally:
+            book.close()
+        recalculate(input_path, output_path)
+
+    monkeypatch.setattr(final_workbook, "_recalculate", inject_unexpected_formula)
+    with pytest.raises(FinalRestockWorkbookError, match="非计算单元格.*AE2"):
+        _generate(tmp_path, source_path=source, inventory_path=report, snapshot_path=snapshot)
+    assert official.read_bytes() == original_output
 
 
 @pytest.mark.parametrize("initial_enabled,initial_days,next_enabled,next_days", [
