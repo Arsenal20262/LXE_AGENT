@@ -15,7 +15,7 @@
 | 文件写入权限与单次提权 | [权限专题](../harness/runtime/permission-policy.md) |
 | 程序资源、打包与安装 | [打包手册](packaging-pipeline.md) |
 | 版本发布与客户端更新 | [Windows 更新与发布](updates.md) |
-| 数据目录、升级迁移与数据库 | [程序与用户数据](data-location.md)、[数据库说明](../database/local_agent.md) |
+| 数据目录、升级迁移与数据库 | [程序与用户数据](data-location.md)、[数据库说明](../database/README.md) |
 | 日志、诊断与实测证据 | [日志与诊断](../logging.md)、[验收记录](../acceptance/README.md) |
 
 ## 本地开发

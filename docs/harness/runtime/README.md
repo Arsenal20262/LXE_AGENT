@@ -24,6 +24,6 @@ Runtime 是 agentcli 的执行核心，负责模型调用、上下文、工具�
 | Tool 如何暴露、执行和管理进程 | [工具手册](tools/README.md) |
 | 文件写入范围、权限模式和单次提权 | [权限专题](permission-policy.md) |
 | 工作区指令与 Skill 元数据如何缓存、刷新 | [Workspace Instance](workspace_instances.md)、[Skill 手册](../skill/README.md) |
-| 状态、统计与诊断存在哪里 | [本地状态与数据库](../../database/local_agent.md)、[统计上传](native-statistics-upload.md)、[日志与诊断](../../logging.md) |
+| 状态、统计与诊断存在哪里 | [本地状态与数据库](../../database/README.md)、[统计上传](native-statistics-upload.md)、[日志与诊断](../../logging.md) |
 
 实现入口为 [`runtime.ts`](../../../packages/agent/runtime/src/engine/runtime.ts)。工具、策略与架构变更的审查要求统一见 [PR 审查规范](../../pr-review.md)。

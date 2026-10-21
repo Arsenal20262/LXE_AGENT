@@ -33,7 +33,7 @@ Instance 默认最多保留 32 个，空闲 30 分钟后可回收。正在被 Tu
 
 ## 持久化边界
 
-`WorkspaceInstance` 是进程内的指令、Skill 元数据与搜索缓存，不是工作区登记或会话记录本身。会话的 WorkspaceContext 与工作区登记由 Agent store 管理；完整数据分工见 [本地状态与数据库](../../database/local_agent.md)。
+`WorkspaceInstance` 是进程内的指令、Skill 元数据与搜索缓存，不是工作区登记或会话记录本身。会话的 WorkspaceContext 与工作区登记由 Agent store 管理；完整数据分工见 [本地状态与数据库](../../database/README.md)。
 
 内部强制刷新入口是 Dashboard RPC `sessions.workspace.reload`，输入只包含 `session_id`，通过会话找到已绑定的工作区，不接受调用者另传目录。
 
