@@ -14,21 +14,17 @@ commands:
 
 - 必须通过 exec 调用 frontmatter commands 中声明的 lxeskill 命令；禁止直接执行对应 Python 业务模块。
 - 使用命令行选项传参，不接受 --input-json、--stdin-json 或旧命令别名。
-- 先检查 terminal 的 `ok`；成功时读取 `data` 和 `files`，失败时读取 `error.message` 及可选的 `data.context`。
-
-- 只使用固定 CLI。
 - 不要直接拼马帮 API 请求，不要手写、复用或展示 bearer/freeToken。
 - 当前 v1 交付马帮导出的 CSV，不要转换成 xlsx。
 - CLI 可能运行几十秒；命令仍在运行时不要频繁轮询或重复启动。
-- CLI 失败时保留 terminal 的 `error.message`；需要定位阶段时可读取 `data.context`。
 
 ## 认证与失败诊断
 
-马帮 ERP 命令在内部按需恢复认证：桌面使用 Electron 认证窗口，独立 CLI 使用已绑定的 Chrome/Edge，均为独立临时会话，不复用个人浏览器或紫鸟登录态。在紫鸟中登录或手动打开 FBA 页面不会补充这份认证状态。
+本命令导出马帮 ERP 数据，使用马帮账号。紫鸟在本项目中只用于登录和操作电商平台的卖家店铺后台，如 Amazon Seller Central。马帮认证由 CLI 按需恢复：桌面使用 Electron 认证窗口，独立 CLI 使用已绑定的 Chrome/Edge；认证在独立临时会话中完成，因此在紫鸟里登录或打开页面不会补充马帮命令所需的认证状态。
 
 认证失败时，`error.message` 包含 `stage`、实际 URL、异常和 `auth_environment`；等待 FBA token 失败还包含 `details`。`target_frame_missing` 表示等待期间没有匹配的页面 frame；`storage_read_failed` 表示读取均失败；`storage_value_empty` 表示有读取完成但未得到 token，仍需结合 `read_error_count` 和 `last_read_error` 看实际异常。以上都不能单独证明马帮改版或需要人工点击。
 
-保留实际诊断，说明已确认的失败阶段。命令已终态失败时，不自行追加刷新、重跑导出或转去紫鸟补救；再次尝试由用户决定。
+认证获取或恢复失败后，未经用户授权再次尝试，不追加刷新或重跑导出。
 
 ## Required Input
 
@@ -41,10 +37,10 @@ commands:
 lxeskill mabang delivery export --delivery-no <delivery_no>
 ```
 
-只把最后一条 `type="result"` 记录作为 terminal；业务字段位于 `data`，附件位于 `files`。
-
 ## Result Handling
 
-- `success=true`：告诉用户 FBA 发货单 CSV 已下载完成，并提供 `csv_path`。
+只把最后一条 `type="result"` 记录作为 terminal，先看 `ok`；业务字段位于 `data`，附件位于 `files`。
+
+- `ok=true`：告诉用户 FBA 发货单 CSV 已下载完成，业务文件路径见 `data.csv_path`。
 - terminal `files` 非空时一次调用 `send_files(paths=<terminal.files>)`；不要直接发送未经校验的 `data.csv_path`。
-- `ok=false`：保留 terminal `error.message` 中的实际诊断；`data.exception` 是业务层错误，不另行猜测原因。
+- `ok=false`：保留 `error.message` 中的实际诊断，说明已确认的失败阶段，不另行猜测原因。

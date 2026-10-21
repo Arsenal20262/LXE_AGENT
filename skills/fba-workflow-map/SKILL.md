@@ -91,7 +91,7 @@ flowchart TD
 | 单 SP 备货单兼容生成 | 单个 FBA 发货单 CSV + 出口退税总表 + 毛利率 -> `fba-restock-workbook-create` |
 | 出口退税 | `fba-export-tax-products-manage` -> `fba-export-tax-delivery-summary` |
 
-马帮发货单和 WMS 装箱下载的认证由 CLI 内部完成，使用独立的 Electron 或已绑定 Chrome/Edge 临时会话；它们不共享紫鸟登录态。上表装箱与货件创建流程中的紫鸟用于后续 Amazon Seller Central 操作，不用于修复马帮认证失败。
+紫鸟在本项目中只用于登录和操作电商平台的卖家店铺后台；在上述 FBA 流程中，它用于后续 Amazon Seller Central 的货件创建。马帮 ERP 发货单和 WMS 装箱下载使用马帮 CLI 自己的认证流程，认证失败仍由对应下载 Skill 根据命令诊断处理。
 
 ERP 实发量应使用仓库回填后重新导出的 FBA 发货单 CSV；同一 SP 有多份导出时，CLI 取最新一份。WMS 装箱 Excel 用于创建货件、发票和报关，不作为 ERP 实发量上传来源。
 
