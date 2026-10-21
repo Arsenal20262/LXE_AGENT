@@ -48,7 +48,7 @@
 - [Skill 手册](harness/skill/README.md)：发现、加载、用户管理和统计机制；业务指引正文位于 [skills/](../skills)，可从 [FBA](../skills/fba-workflow-map/SKILL.md)和 [补货](../skills/replenishment-workflow-map/SKILL.md)入口查找。
 - [马帮浏览器认证](../python/lxeskill_cli/browser_auth_service/README.md)：桌面认证窗口、独立 CLI 浏览器绑定和排障。
 - [CLI 云端通信与自检](lxeskill-cloud-access.md)：权限查询、连接诊断、公共 HTTP 模块和业务请求。
-- [越南备货实现说明](harness/vietnam-stock-recommendation/calculation.md)：输入快照、设置保存、校验和工作簿生成。
+- [越南备货实现说明](lxeskill-cli/vietnam-replenishment.md)：输入快照、设置保存、校验和工作簿生成。
 - [Office 文件能力](office-runtime.md)：Electron、模型与业务 CLI 的 Office 接口及运行依赖。
 - [本地状态与数据库](database/local_agent.md)、[日志与诊断](harness/logger.md)：存储布局、备份和排障。
 
