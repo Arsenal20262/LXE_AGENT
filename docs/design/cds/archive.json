@@ -123,6 +123,13 @@
       "screenshots": 9,
       "verification": "examples/conversation-sidebar-layout/verification.json",
       "scope": "LXE spacious conversation sidebar layout: typography hierarchy, aligned groups, disclosure chevrons, ellipsis and reserved action column; CDS semantic colors retained. Dimensions are LXE adaptations, not new upstream evidence."
+    },
+    {
+      "date": "2026-10-23",
+      "document": "examples/conversation-sidebar-layout.md",
+      "screenshots": 4,
+      "verification": "examples/conversation-empty-state/verification.json",
+      "scope": "LXE unselected conversation empty state: full-width transparent canvas and centered secondary text, with no decorative icon. Independent from the shared empty-state component."
     }
   ]
 }

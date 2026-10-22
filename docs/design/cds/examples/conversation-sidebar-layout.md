@@ -46,3 +46,15 @@ bun test apps/dashboard/test/behavior/renderer.test.ts --test-name-pattern 'side
 类型检查通过；3 组测试、29 个行为场景通过。另做本地 Electron 亮暗渲染检查，保存 9 张截图。未做真实 Windows 设备或完整读屏、触屏审计。[总表](../current-adaptation.md)的 2026-10-20 展示页记录仍是当日快照，不冒充本轮复测结果。
 
 源码：[侧栏样式](../../../../apps/dashboard/src/features/sessions/sidebar-theme.css)、[工作区分组](../../../../apps/dashboard/src/features/sessions/workspaces.tsx)。
+
+## 未选择会话时的空状态
+
+同日补充：通用 `EmptyState` 卡片在横向 flex 容器内按内容取宽、纵向被拉伸，形成一根长圆角底板。会话页改用独立空状态，占满剩余内容区域，背景透明，只有居中的 14px 次要文字；按用户要求移除图标。窄窗口自然换行，不改动其他页面的通用空状态或会话加载、错误提示。
+
+CDS 提供语义文字与中性表面的原则；无图标、14px 和居中布局是 LXE 选择。源码：[ConversationPage.tsx](../../../../apps/dashboard/src/features/sessions/ConversationPage.tsx)、[conversation-theme.css](../../../../apps/dashboard/src/features/sessions/conversation-theme.css)。
+
+- [浅色宽窗口](conversation-empty-state/wide-light.png)、[暗色宽窗口](conversation-empty-state/wide-dark.png)
+- [浅色窄窗口](conversation-empty-state/narrow-light.png)、[暗色窄窗口](conversation-empty-state/narrow-dark.png)
+- [实测值](conversation-empty-state/verification.json)：1200px／420px × 亮暗主题，共 4 个渲染场景，核对透明背景、无图标、占满父容器宽度、文字居中和无横向溢出。
+
+该补充完成 Dashboard 构建与类型检查，工作区行为组的 15 个场景通过。最终展示通过 `bun run desktop:preview` 启动真正的 Electron 窗口；测试页面的临时 HTTP 服务与 Electron 检查进程已关闭。
