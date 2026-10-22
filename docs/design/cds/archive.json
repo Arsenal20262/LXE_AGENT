@@ -116,6 +116,12 @@
       "document": "examples/conversation-colors.md",
       "screenshots": 5,
       "scope": "Match dark tool-row hover to the existing light-theme text-contrast behavior; background, layout, status colors and keyboard focus outline preserved"
+    },
+    {
+      "date": "2026-10-22",
+      "document": "examples/permission-approval.md",
+      "screenshots": 8,
+      "scope": "LXE permission approval card color adaptation using existing shared CDS tokens. Approval decisions and frozen previews unchanged; light/dark hover, keyboard focus, narrow, actual-error and busy states checked."
     }
   ]
 }

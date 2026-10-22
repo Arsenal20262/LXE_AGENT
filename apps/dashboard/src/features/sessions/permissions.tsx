@@ -87,7 +87,7 @@ export function ApprovalCard({ request, count, onChanged, onBusy }: { request: P
     catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
     finally { lock.current = false; setBusy(false); onBusy?.(false); onChanged?.(); }
   };
-  return <section className="permission-approval" aria-label={t.waiting} aria-busy={busy} data-request-id={request.request_id}>
+  return <section className="permission-approval conversation-chrome-theme" aria-label={t.waiting} aria-busy={busy} data-request-id={request.request_id}>
     <header className="permission-approval-status"><span className="permission-status-dot" aria-hidden="true" />{t.waiting}
       {count > 1 ? <span className="permission-approval-count">{count} {t.pending}</span> : null}</header>
     <div className="permission-approval-body">
