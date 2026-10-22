@@ -58,7 +58,7 @@
 
 ## 导航行
 
-会话侧边栏的 SessionsIndex。2026-10-23 补充选中配方及参考截图后的文字层级，实测见 examples/conversation-sidebar-reference/verification.json；展示页截图仍为 2026-10-20 快照。不是所有导航组件的完整审计。
+会话侧边栏的 SessionsIndex。2026-10-23 补充选中配方、文字层级及 32px 会话行，最新实测见 examples/conversation-sidebar-density/verification.json；展示页截图仍为 2026-10-20 快照。不是所有导航组件的完整审计。
 
 复用方式：**生产 SessionsIndex**。点击切换当前会话；悬停选中与未选中的行；用 Tab / Enter 导航。更多菜单沿用生产组件，动作只修改当前样本数据。
 

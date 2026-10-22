@@ -15,7 +15,7 @@
 | 工作区分区标题 | 12px、400 字重、浅灰标签色；与上方操作留出 12px 间距 |
 | 工作区名称 | 12px、400 字重、浅灰标签色；点击名称展开／折叠，不显示箭头 |
 | 会话标题 | 13px／20px 行高，均为 400 字重；普通为次要文字色，选中、悬停及键盘焦点为主文字色 |
-| 会话行 | 36px 最小高度，行间 2px；工作区之间 20px |
+| 会话行 | 32px 最小高度，上下各 6px 留白，行间 2px；工作区标题保留 36px，工作区之间 20px |
 | 对齐 | 8px 行内留白、16px 会话图标列、8px 图文间距；组名与工作区分区标题对齐，会话名与加载更多沿缩进后的文字轴对齐 |
 | 长标题与菜单 | 省略号 + 固定 32px 操作列；鼠标悬停不移动标题，也不再用渐变遮挡文字 |
 | 配色与宽度 | 延续原语义颜色，5% 悬停；选中浅色 6% 墨色、暗色 10% 墨色；保留默认 256px、拖动范围及记忆宽度 |
@@ -24,7 +24,7 @@
 
 ## 渲染记录
 
-截图为生产组件配示例数据，不连接真实会话或运行任务，也不是 Claude 原始证据。下表保留首次布局验收快照（选中 10%、字重 500）；当前效果见下方“参考 Claude 截图的文字层级”。
+截图为生产组件配示例数据，不连接真实会话或运行任务，也不是 Claude 原始证据。下表保留首次布局验收快照（选中 10%、字重 500）；最新效果见下方“缩小会话行高度”。
 
 | 状态 | 浅色 | 暗色 |
 | --- | --- | --- |
@@ -73,7 +73,7 @@ CDS 提供语义文字与中性表面的原则；无图标、14px 和居中布�
 普通会话用 `--cds-secondary`；选中、悬停和键盘焦点使用 `--cds-ink`，字重均为 400。组名和分区标题的浅灰标签色由 40% secondary 与 60% muted 混合，避免直接使用低对比度的 muted；本轮核对了标签及普通会话在默认导航底色上的对比度，未做全站无障碍审计。
 
 - [参考来源说明](conversation-sidebar-reference/reference.json)：用户提供的 Claude 局部截图只在本地比对，不随仓库发布；验收图使用虚构会话。
-- LXE 当前效果：[浅色](conversation-sidebar-reference/light.png)、[暗色](conversation-sidebar-reference/dark.png)、[浅色窄窗口](conversation-sidebar-reference/narrow-light.png)、[暗色窄窗口](conversation-sidebar-reference/narrow-dark.png)
+- 字号调整时的效果（历史快照）：[浅色](conversation-sidebar-reference/light.png)、[暗色](conversation-sidebar-reference/dark.png)、[浅色窄窗口](conversation-sidebar-reference/narrow-light.png)、[暗色窄窗口](conversation-sidebar-reference/narrow-dark.png)
 - [实测记录](conversation-sidebar-reference/verification.json)：字号、字重、文字层级、默认对比度、悬停、真实 Tab 焦点、菜单列间隔及窄窗口溢出检查。截图使用示例会话，不是 Claude 运行时证据。
 
 ## 移除工作区折叠箭头
@@ -81,3 +81,10 @@ CDS 提供语义文字与中性表面的原则；无图标、14px 和居中布�
 同日按用户要求移除工作区名称前的箭头和占位。组名左移，与“工作区”分区标题对齐。保留原按钮、`aria-expanded` 和点击处理，仍可点击名称或通过 Tab 后按 Enter／空格展开、折叠。字号、颜色和会话行间距不变；上方历史截图仍保留当时的箭头。
 
 验证：已有工作区行为组 15 个场景通过；`desktop:preview` 完成构建与类型检查。桌面实测点击名称折叠、Enter 展开、空格折叠及再次点击展开，最终保持展开供用户查看。
+
+## 缩小会话行高度
+
+同日按用户要求，将单行会话从 36px 缩到 32px，上下留白由 8px 改为 6px；保持 13px 字号、20px 文字行高、2px 行间距及 28px 菜单按钮。工作区标题继续使用 36px 高度，分组间距保留 20px。使用最小高度，含工作区副标题的搜索结果仍可自然增高。
+
+- 当前效果：[浅色](conversation-sidebar-density/light.png)、[暗色](conversation-sidebar-density/dark.png)
+- [实测记录](conversation-sidebar-density/verification.json)：行高、标题与菜单居中、分组尺寸、搜索结果、亮暗与窄窗口。

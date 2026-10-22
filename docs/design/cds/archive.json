@@ -150,6 +150,13 @@
       "date": "2026-10-23",
       "document": "examples/conversation-sidebar-layout.md",
       "scope": "Remove the workspace disclosure icon at user request. Keep the native button, aria-expanded and existing click handler; workspace names align with the section label. Earlier screenshots remain historical."
+    },
+    {
+      "date": "2026-10-23",
+      "document": "examples/conversation-sidebar-layout.md",
+      "screenshots": 4,
+      "verification": "examples/conversation-sidebar-density/verification.json",
+      "scope": "LXE session rows reduced from 36px to 32px with 6px vertical padding at user request. Group headings remain 36px; typography, 2px row gaps, 20px group gaps and selected colors retained. Search results can grow to fit their workspace subtitle."
     }
   ]
 }

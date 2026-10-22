@@ -14,7 +14,8 @@
   --sidebar-action-bg: var(--sidebar-hover);
   --sidebar-shadow: var(--shadow-strong);
   --focus-ring: var(--cds-accent);
-  --sidebar-row-height: 36px;
+  --sidebar-row-height: 32px;
+  --sidebar-group-height: 36px;
   --sidebar-row-pad: 8px;
   --sidebar-icon-column: 16px;
   padding-inline: 12px;
@@ -58,12 +59,12 @@
   margin-bottom: 8px;
 }
 .app-sidebar.conversation-chrome-theme .workspace-group-header {
-  min-height: var(--sidebar-row-height);
+  min-height: var(--sidebar-group-height);
   margin-bottom: 4px;
   padding-right: 4px;
 }
 .app-sidebar.conversation-chrome-theme .workspace-group-toggle {
-  min-height: var(--sidebar-row-height);
+  min-height: var(--sidebar-group-height);
   gap: 8px;
   padding: 6px var(--sidebar-row-pad);
   color: var(--sidebar-label);
@@ -96,7 +97,7 @@
   min-height: var(--sidebar-row-height);
   grid-template-columns: var(--sidebar-icon-column) minmax(0, 1fr);
   gap: 8px;
-  padding: 8px 0 8px var(--sidebar-row-pad);
+  padding: 6px 0 6px var(--sidebar-row-pad);
   border-radius: 8px;
 }
 .app-sidebar.conversation-chrome-theme .session-index-icon {
