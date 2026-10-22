@@ -154,6 +154,9 @@ describe("skill context", () => {
     expect(finalPolicy).toContain("旺季加成每轮默认关闭");
     expect(finalPolicy).toContain("不自动弹旺季询问窗口");
     expect(finalPolicy).toContain("--peak-boost-enabled");
+    expect(finalPolicy).toContain("裸开关 `--peak-boost-enabled`，不附带值");
+    expect(finalPolicy).toContain("未明确要求时必须省略该参数，不传 `false`");
+    expect(finalPolicy).not.toContain("省略或传 false");
     expect(finalPolicy).toContain("共 14 个公式字段");
     expect(acquisitionSection).toContain('--msku-source-xlsx-path "<步骤2返回的xlsx_path>"');
     expect(acquisitionSection).toContain("不回退历史文件或省略参数重试");
@@ -194,9 +197,6 @@ describe("skill context", () => {
     expect(workflowMap).toContain("普通备货仍按本流程");
     expect(workflowMap).toContain("replenishment-calculate");
     expect(workflowMap).not.toContain("离线输入模式");
-    const currentSkillCatalog = readFileSync(join(repositoryRoot(import.meta.dir), "docs/harness/skill/current_skill_catalog.md"), "utf8");
-    expect(currentSkillCatalog).toContain("入口确认后，用户只需提供店铺名");
-    expect(currentSkillCatalog).not.toContain("明确指定整套离线输入时仍可直接计算");
     const inventoryPolicy = skills.find((item) => item.name === "mabang-store-shenzhen-inventory-export")?.content ?? "";
     expect(inventoryPolicy).toContain("普通备货按原核验规则排除未通过商品");
     expect(inventoryPolicy).toContain("保留全部 MSKU 并写入完整 14 个公式字段");

@@ -1,5 +1,14 @@
 # 最终备货建议：自动取数衔接交接
 
+## 2026-10-22 PR #103：旺季裸开关 P2 与退役文档冲突
+
+- **现场与范围**：pool-7 / `codex/final-restock-auto-data`，起始工作区干净，HEAD 与远端 PR #103 均为 `d91049370ca69ccd83cce18ea1152e5b7eb9570a`；PR2 修复基线为 `af0d7b8b`。本轮 fetch 后固定 `origin/main=7802c187c3eeda7eac367dd01bee4bbdd05ade0f`，本地 main 仍为 `36130265`；不合并主线、不改其他分支或 pool-9 候选。
+- **复现与最小修复**：旧 Skill 的“省略或传 false”与真实裸开关不符；旧 CLI 把 `--peak-boost-enabled=false`、`=true`、空内联值均解释为 True。先新增定向用例，旧代码为 4 failed、5 passed（包含文案断言失败），分隔的 `false` 原本已拒绝。现明确只在当前请求要求旺季时传裸开关，否则省略；同步公开 `describe` 描述。在现有 `_arguments_from_flags` 的布尔分支只对最终备货命令这一字段拒绝内联值，复用 `invalid_arguments` 标准终态，不重构公共解析器、不改变其他布尔选项。省略仍为 False，裸开关为 True；非法写法在调用生成 Service 前退出且无附件。天数、配置快照、历史设置不自动启用及 120 天上限不变。
+- **文档冲突**：`git merge-tree --write-tree --name-only HEAD origin/main` 确认唯一文本冲突为 `docs/harness/skill/current_skill_catalog.md` 的 modify/delete。主线 `f9c227e850aa4a2dcc5d0f4343a80acbeebf217b` 明确删去重复清单，并更新现有 Skill README 与导航；本轮沿用删除，不恢复 PR 的 137 行版本。清单中的最终流程、来源分工和入口选择已在各 Skill 中维护，无独有内容需要重复迁移。Runtime 测试改为继续验证真实 Skill，移除读取退役清单的三行；主线已有 README 重组保持原样，不把其他文档改写混入本轮。当前旧基线工作区 README 的原清单链接由主线已存在的导航修改处理，不能据此恢复清单。
+- **测试证据**：修复后旺季小组 9 passed；按仓库契约运行 `tests/lxeskill` 与 `tests/infra`，沙箱最初禁止本机模拟服务绑定端口，原命令在沙箱外离线重跑后 **560 passed、4 skipped**（Windows 长路径 2、Job 清理 2），日志 `/private/tmp/pr103-cli-infra-regression.log`。工作簿、生成 CLI、A 规则和设置 **114 passed、无 skip**，使用本 checkout 已有 Office Kit 运行时，含源文本保真与意外公式停止发布的真实重算回归。Bun Skill 与公开 CLI 归属测试 **42 pass、0 fail、296 assertions**。定向小组包含在较大组中，不累计为新全量数字。
+- **保留与边界**：工作簿实现、公式与源文本回归文件对 PR2 `af0d7b8b` 的 diff 为零；保留 35 列、14 公式、AG uq122、AH/AD/AI、全部 MSKU 及旧普通备货能力。未调用生产 ERP，不将静态 Skill/Mock 契约当作真实模型执行；原生 Windows、Microsoft Excel 仍 NOT VERIFIED。无新框架、存储或执行入口。
+- **Git/下一步**：修复完成时共 7 个未暂存路径（含清单删除及本交接），无 unmerged index 或冲突标记，删除后的清单路径与 main 一致。用户随后明确授权：核对 HEAD 仍为 `d9104937`、暂存区为空且仅这 7 个路径后，精确暂存并完成 1 个本地 fix Commit，计划标题 `fix: correct final restock boost flag contract`；提交前检查完整 staged diff、敏感信息、删除范围与 `git diff --cached --check`，实际 SHA 和提交后状态以 Git 输出为准。尚未授权 push/merge/新建 PR；GitHub 仍为旧 HEAD，查询时 `mergeable=false`，本地提交不代表远端已解冲突。后续须单独授权推送，再由 GitHub 重新计算合并状态。
+
 ## 2026-10-21 PR3 继承 PR2 源文本保真 P2 修复
 
 - **归位与依赖**：PR2 在 pool-4 追加 `af0d7b8b fix: preserve source text in final restock workbooks`，只含工作簿服务、对应测试和 PR2 handoff。用户已确认先修复 PR2，再让第三分支继承同一个提交并更新已有 PR2/PR3 的源分支。pool-7 起始 `13215efe` 干净；PR2→PR3 本地依赖 merge 自动无冲突，不复制/重复提交修复，不改 PR1、main 或 pool-9。

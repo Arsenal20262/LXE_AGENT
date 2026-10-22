@@ -68,6 +68,7 @@ def test_final_restock_is_exposed_with_one_owner_and_the_existing_inputs(capsys)
     described = _terminal(capsys)["data"]
     assert described["owner_skills"] == [SKILL]
     assert described["input_schema"]["required"] == list(INPUTS)
+    assert "传裸开关 --peak-boost-enabled，不附带值；否则省略" in described["input_schema"]["properties"]["peak_boost_enabled"]["description"]
 
 
 def test_skills_use_public_queries_and_distinguish_unverified_calculation_rules() -> None:
@@ -275,6 +276,9 @@ def test_skill_describes_a_rules_without_suppressing_unverified_advice() -> None
     assert "每轮默认关闭" in skill
     assert "不自动弹旺季询问窗口" in skill
     assert "--peak-boost-enabled" in skill
+    assert "未明确要求时必须省略该参数" in skill
+    assert "裸开关" in skill
+    assert "省略或传 false" not in skill
     assert "U–AC" in skill
     assert "13 列公式" in skill
     assert "绑定核验未通过" in skill
@@ -332,7 +336,10 @@ def test_terminal_preserves_success_or_formula_failure_and_file(
     generate.assert_called_once_with("Amazon-Test", **{key: value for key, value in INPUTS.items() if key != "store_name"}, peak_boost_enabled=False, peak_boost_days=None)
 
 
-def test_explicit_current_request_boost_flags_reach_existing_generator(tmp_path, monkeypatch, capsys):
+@pytest.mark.parametrize("days_flags,expected_days", [([], None), (["--peak-boost-days", "20"], 20)])
+def test_explicit_current_request_boost_flags_reach_existing_generator(
+    tmp_path, monkeypatch, capsys, days_flags, expected_days,
+):
     from services.agent_cli.mabang import generate_final_restock_recommendation as adapter
     output = tmp_path / "workspace/.lxeagent/artifacts/replenish/final_restock_recommendation/result.xlsx"
     output.parent.mkdir(parents=True)
@@ -342,10 +349,27 @@ def test_explicit_current_request_boost_flags_reach_existing_generator(tmp_path,
     result = FinalRestockWorkbookResult("Amazon-Test", "202610201000", str(output), 1, 0, ())
     generate = Mock(return_value=result)
     monkeypatch.setattr(adapter, "generate_final_restock_recommendation", generate)
-    assert lxeskill.main([*_args(INPUTS), "--peak-boost-enabled", "--peak-boost-days", "20"]) == 0
+    assert lxeskill.main([*_args(INPUTS), "--peak-boost-enabled", *days_flags]) == 0
     assert _terminal(capsys)["ok"] is True
     assert generate.call_args.kwargs["peak_boost_enabled"] is True
-    assert generate.call_args.kwargs["peak_boost_days"] == 20
+    assert generate.call_args.kwargs["peak_boost_days"] == expected_days
+
+
+@pytest.mark.parametrize("flags", [
+    ["--peak-boost-enabled=false"],
+    ["--peak-boost-enabled=true"],
+    ["--peak-boost-enabled="],
+    ["--peak-boost-enabled", "false"],
+])
+def test_boost_flag_values_fail_before_business_execution(flags, monkeypatch, capsys):
+    generate = Mock(side_effect=AssertionError("invalid flag values must not generate a workbook"))
+    monkeypatch.setattr(adapter, "generate_final_restock_recommendation", generate)
+    assert lxeskill.main([*_args(INPUTS), *flags]) == lxeskill.EXIT_USAGE
+    terminal = _terminal(capsys)
+    assert terminal["ok"] is False
+    assert terminal["error"]["code"] == "invalid_arguments"
+    assert terminal["files"] == []
+    generate.assert_not_called()
 
 
 @pytest.mark.parametrize("days", ["-1", "121", "1.5", "invalid"])
