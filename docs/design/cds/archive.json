@@ -145,6 +145,11 @@
       "reference": "examples/conversation-sidebar-reference/reference.json",
       "verification": "examples/conversation-sidebar-reference/verification.json",
       "scope": "LXE sidebar typography and neutral text hierarchy adapted from a user-supplied Claude screenshot. 13px regular titles and 12px group labels; spacious row/group geometry and selected fills retained. User reference retained locally outside this archive; validation screenshots use fictional sessions. Not claimed as recovered CSS rules."
+    },
+    {
+      "date": "2026-10-23",
+      "document": "examples/conversation-sidebar-layout.md",
+      "scope": "Remove the workspace disclosure icon at user request. Keep the native button, aria-expanded and existing click handler; workspace names align with the section label. Earlier screenshots remain historical."
     }
   ]
 }

@@ -71,14 +71,6 @@
   font-weight: 400;
   line-height: 20px;
 }
-.app-sidebar.conversation-chrome-theme .workspace-group-chevron {
-  width: var(--sidebar-icon-column);
-  flex-shrink: 0;
-  color: var(--cds-muted);
-}
-.app-sidebar.conversation-chrome-theme .workspace-group-toggle[aria-expanded="false"] .workspace-group-chevron {
-  transform: rotate(-90deg);
-}
 .app-sidebar.conversation-chrome-theme .workspace-icon-button {
   width: 28px;
   height: 30px;
