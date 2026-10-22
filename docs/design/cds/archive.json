@@ -137,6 +137,14 @@
       "screenshots": 2,
       "verification": "examples/conversation-sidebar-selection/verification.json",
       "scope": "LXE selected conversation row: light fill reduced to 6% ink, dark remains 10%; selected title weight restored to 400 in both themes, preserving spacious layout. Prior snapshots retained as historical observations."
+    },
+    {
+      "date": "2026-10-23",
+      "document": "examples/conversation-sidebar-layout.md",
+      "screenshots": 4,
+      "reference": "examples/conversation-sidebar-reference/reference.json",
+      "verification": "examples/conversation-sidebar-reference/verification.json",
+      "scope": "LXE sidebar typography and neutral text hierarchy adapted from a user-supplied Claude screenshot. 13px regular titles and 12px group labels; spacious row/group geometry and selected fills retained. User reference retained locally outside this archive; validation screenshots use fictional sessions. Not claimed as recovered CSS rules."
     }
   ]
 }

@@ -58,7 +58,7 @@
 
 ## 导航行
 
-会话侧边栏的 SessionsIndex。此轮不覆盖所有设置导航、工作区标题或菜单状态。2026-10-23 仅补充选中配方与字重，实测见 examples/conversation-sidebar-selection/verification.json；展示页截图仍为 2026-10-20 快照。
+会话侧边栏的 SessionsIndex。2026-10-23 补充选中配方及参考截图后的文字层级，实测见 examples/conversation-sidebar-reference/verification.json；展示页截图仍为 2026-10-20 快照。不是所有导航组件的完整审计。
 
 复用方式：**生产 SessionsIndex**。点击切换当前会话；悬停选中与未选中的行；用 Tab / Enter 导航。更多菜单沿用生产组件，动作只修改当前样本数据。
 
@@ -66,7 +66,7 @@
 
 | 状态 | CDS 依据 | LXE 当前实现 | 分类 |
 | --- | --- | --- | --- |
-| 默认／悬停 | S1、S5-nav | 导航面 --cds-surface-nav；悬停为背景 95% + 前景 5% 的不透明混色。 | LXE 适配 |
+| 默认／悬停 | S1、S5-nav | 导航面 --cds-surface-nav；悬停为背景 95% + 前景 5% 的不透明混色。会话标题 13px、400 字重，默认 secondary，悬停或键盘焦点为 ink。 | LXE 适配 |
 | 选中／选中＋悬停 | S5-nav | 浅色背景 94% + 前景 6%，暗色背景 90% + 前景 10%；选中标题均为 400 字重。与设置导航暗色白 15% 不同，是会话行的局部选择。 | LXE 适配 |
 | 键盘焦点／选中＋焦点 | S1 | 使用现有导航焦点规则与蓝色 --focus-ring。 | LXE 适配 |
 | 禁用／错误行 | 无专用上游依据／本地接口 | 当前 SessionsIndex 没有整行 disabled 或 invalid 接口；运行结果状态图标是另一维度。 | 不适用 |

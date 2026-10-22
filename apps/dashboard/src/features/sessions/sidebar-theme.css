@@ -7,6 +7,7 @@
   --sidebar-border: var(--cds-alpha-2);
   --sidebar-ink: var(--cds-ink);
   --sidebar-ink-soft: var(--cds-secondary);
+  --sidebar-label: color-mix(in srgb, var(--cds-secondary) 40%, var(--cds-muted));
   --sidebar-accent: var(--cds-accent);
   --sidebar-hover: color-mix(in srgb, var(--sidebar-bg) 95%, var(--sidebar-ink));
   --sidebar-active: color-mix(in srgb, var(--sidebar-bg) 94%, var(--sidebar-ink));
@@ -25,7 +26,7 @@
 .app-sidebar.conversation-chrome-theme .sidebar-list-header {
   min-height: 40px;
   padding-inline: var(--sidebar-row-pad) 2px;
-  font-size: 1rem;
+  font-size: 0.875rem;
   font-weight: 600;
 }
 .app-sidebar.conversation-chrome-theme .sidebar-session-section {
@@ -39,16 +40,16 @@
   flex-shrink: 0;
   gap: 8px;
   padding: 8px var(--sidebar-row-pad);
-  font-size: 0.875rem;
-  font-weight: 500;
+  font-size: 0.8125rem;
+  font-weight: 400;
 }
 .app-sidebar.conversation-chrome-theme .workspace-index-heading {
   min-height: 32px;
   margin-top: 12px;
   padding-inline: var(--sidebar-row-pad) 4px;
-  color: var(--cds-secondary);
+  color: var(--sidebar-label);
   font-size: 0.75rem;
-  font-weight: 500;
+  font-weight: 400;
 }
 .app-sidebar.conversation-chrome-theme .workspace-group {
   margin-bottom: 20px;
@@ -65,9 +66,9 @@
   min-height: var(--sidebar-row-height);
   gap: 8px;
   padding: 6px var(--sidebar-row-pad);
-  color: var(--cds-secondary);
-  font-size: 0.8125rem;
-  font-weight: 500;
+  color: var(--sidebar-label);
+  font-size: 0.75rem;
+  font-weight: 400;
   line-height: 20px;
 }
 .app-sidebar.conversation-chrome-theme .workspace-group-chevron {
@@ -110,16 +111,20 @@
   justify-self: center;
 }
 .app-sidebar.conversation-chrome-theme .session-index-item .primary-cell {
-  color: var(--cds-ink);
-  font-size: 0.875rem;
+  color: var(--cds-secondary);
+  font-size: 0.8125rem;
   font-weight: 400;
   line-height: 20px;
   text-overflow: ellipsis;
   -webkit-mask-image: none;
   mask-image: none;
 }
+.app-sidebar.conversation-chrome-theme .session-index-item:is(:hover, :focus-within) .primary-cell {
+  color: var(--cds-ink);
+}
 .app-sidebar.conversation-chrome-theme .session-index-item.active .primary-cell {
-  font-size: 0.875rem;
+  color: var(--cds-ink);
+  font-size: 0.8125rem;
   font-weight: 400;
   text-overflow: ellipsis;
   -webkit-mask-image: none;

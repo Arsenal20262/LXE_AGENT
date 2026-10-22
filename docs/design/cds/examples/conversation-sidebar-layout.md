@@ -10,11 +10,11 @@
 
 | 项目 | 本次实现 |
 | --- | --- |
-| 应用标题 | 16px、600 字重，40px 高标题行 |
-| 新对话 | 14px、500 字重，40px 最小高度 |
-| 工作区分区标题 | 12px、次要文字色；与上方操作留出 12px 间距 |
-| 工作区名称 | 13px、500 字重、次要文字色；始终可见的折叠箭头 |
-| 会话标题 | 14px／20px 行高，普通与选中均为 400 字重；正文保持主文字色 |
+| 应用标题 | 14px、600 字重，40px 高标题行 |
+| 新对话 | 13px、400 字重，40px 最小高度 |
+| 工作区分区标题 | 12px、400 字重、浅灰标签色；与上方操作留出 12px 间距 |
+| 工作区名称 | 12px、400 字重、浅灰标签色；始终可见的折叠箭头 |
+| 会话标题 | 13px／20px 行高，均为 400 字重；普通为次要文字色，选中、悬停及键盘焦点为主文字色 |
 | 会话行 | 36px 最小高度，行间 2px；工作区之间 20px |
 | 对齐 | 8px 行内留白、16px 图标列、8px 图文间距；组名、会话名、加载更多沿同一文字轴对齐 |
 | 长标题与菜单 | 省略号 + 固定 32px 操作列；鼠标悬停不移动标题，也不再用渐变遮挡文字 |
@@ -24,7 +24,7 @@
 
 ## 渲染记录
 
-截图为生产组件配示例数据，不连接真实会话或运行任务，也不是 Claude 原始证据。下表保留首次布局验收快照（选中 10%、字重 500）；当前选中效果见下方“减轻选中强调”。
+截图为生产组件配示例数据，不连接真实会话或运行任务，也不是 Claude 原始证据。下表保留首次布局验收快照（选中 10%、字重 500）；当前效果见下方“参考 Claude 截图的文字层级”。
 
 | 状态 | 浅色 | 暗色 |
 | --- | --- | --- |
@@ -51,7 +51,7 @@ bun test apps/dashboard/test/behavior/renderer.test.ts --test-name-pattern 'side
 
 2026-10-23 后续调整：用户对照 Claude 后，选择将浅色选中背景从 10% 墨色调至 6%（背景 94% + 前景 6%，约 `#eeeeed`），暗色仍为 10%。两种主题的会话标题选中字重均恢复 400，保持 36px 行高、2px 行间距以及既有宽松布局。5% 悬停配方不变。这些比例与字重是 LXE 的局部适配，不是已证实的 Claude 会话侧栏规范。
 
-- [当前浅色](conversation-sidebar-selection/light.png)、[当前暗色](conversation-sidebar-selection/dark.png)
+- [选中配色调整时的浅色](conversation-sidebar-selection/light.png)、[暗色](conversation-sidebar-selection/dark.png)
 - [实测值](conversation-sidebar-selection/verification.json)：亮暗选中与选中＋悬停背景、400 字重，以及行高、字号和间距。
 
 ## 未选择会话时的空状态
@@ -65,3 +65,13 @@ CDS 提供语义文字与中性表面的原则；无图标、14px 和居中布�
 - [实测值](conversation-empty-state/verification.json)：1200px／420px × 亮暗主题，共 4 个渲染场景，核对透明背景、无图标、占满父容器宽度、文字居中和无横向溢出。
 
 该补充完成 Dashboard 构建与类型检查，工作区行为组的 15 个场景通过。最终展示通过 `bun run desktop:preview` 启动真正的 Electron 窗口；测试页面的临时 HTTP 服务与 Electron 检查进程已关闭。
+
+## 参考 Claude 截图的文字层级
+
+2026-10-23 后续调整：参考用户提供的 Claude 侧栏截图，将工作区标签、普通会话与当前会话分成三层。截图只能支持视觉比较，无法确定系统缩放、实际 CSS 字号和字体；13px 会话、12px 组名、14px 应用标题均为 LXE 适配值。保持既有字体、36px 会话行、2px 行间距、20px 分组间距、固定菜单列以及 6%／10% 选中背景。
+
+普通会话用 `--cds-secondary`；选中、悬停和键盘焦点使用 `--cds-ink`，字重均为 400。组名和分区标题的浅灰标签色由 40% secondary 与 60% muted 混合，避免直接使用低对比度的 muted；本轮核对了标签及普通会话在默认导航底色上的对比度，未做全站无障碍审计。
+
+- [参考来源说明](conversation-sidebar-reference/reference.json)：用户提供的 Claude 局部截图只在本地比对，不随仓库发布；验收图使用虚构会话。
+- LXE 当前效果：[浅色](conversation-sidebar-reference/light.png)、[暗色](conversation-sidebar-reference/dark.png)、[浅色窄窗口](conversation-sidebar-reference/narrow-light.png)、[暗色窄窗口](conversation-sidebar-reference/narrow-dark.png)
+- [实测记录](conversation-sidebar-reference/verification.json)：字号、字重、文字层级、默认对比度、悬停、真实 Tab 焦点、菜单列间隔及窄窗口溢出检查。截图使用示例会话，不是 Claude 运行时证据。
