@@ -1,0 +1,42 @@
+{
+  "date": "2026-10-23",
+  "kind": "LXE production component with example sessions; not Claude upstream evidence",
+  "electron": "43.7.0",
+  "checks": [
+    {
+      "theme": "light",
+      "background": "color(srgb 0.931529 0.931529 0.927843)",
+      "fontSize": "14px",
+      "fontWeight": "400",
+      "lineHeight": "20px",
+      "rowHeight": 36,
+      "sidebarWidth": 256,
+      "gap": "2px",
+      "rowPadding": "8px 0px 8px 8px",
+      "groupGap": "20px",
+      "selected": true,
+      "x": 65.1875,
+      "y": 238.796875,
+      "width": 231,
+      "selectedHover": "same color, type and geometry"
+    },
+    {
+      "theme": "dark",
+      "background": "color(srgb 0.170196 0.169804 0.167059)",
+      "fontSize": "14px",
+      "fontWeight": "400",
+      "lineHeight": "20px",
+      "rowHeight": 36,
+      "sidebarWidth": 256,
+      "gap": "2px",
+      "rowPadding": "8px 0px 8px 8px",
+      "groupGap": "20px",
+      "selected": true,
+      "x": 65.1875,
+      "y": 238.796875,
+      "width": 231,
+      "selectedHover": "same color, type and geometry"
+    }
+  ],
+  "consoleErrors": []
+}

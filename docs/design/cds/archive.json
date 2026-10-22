@@ -130,6 +130,13 @@
       "screenshots": 4,
       "verification": "examples/conversation-empty-state/verification.json",
       "scope": "LXE unselected conversation empty state: full-width transparent canvas and centered secondary text, with no decorative icon. Independent from the shared empty-state component."
+    },
+    {
+      "date": "2026-10-23",
+      "document": "examples/conversation-sidebar-layout.md",
+      "screenshots": 2,
+      "verification": "examples/conversation-sidebar-selection/verification.json",
+      "scope": "LXE selected conversation row: light fill reduced to 6% ink, dark remains 10%; selected title weight restored to 400 in both themes, preserving spacious layout. Prior snapshots retained as historical observations."
     }
   ]
 }
