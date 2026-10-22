@@ -231,7 +231,7 @@ dist/agent-cli/agent-cli.exe
 build/desktop-publish/python-site-packages/
 ```
 
-electron-builder 组装时，再把这个 overlay 合并到私有 Python 的 `Lib/site-packages`。因此每次打包都会带上当前 Python 源码，同时可以复用那套很大的基础 Python Runtime。基础缓存不保存项目 wheel，wheel 构建输出每次重新生成，避免发布旧业务代码。
+electron-builder 组装时，再把这个 overlay 合并到私有 Python 的 `Lib/site-packages`。因此每次打包都会带上当前 Python 源码，同时可以复用那套很大的基础 Python 解释器与依赖。基础缓存不保存项目 wheel，wheel 构建输出每次重新生成，避免发布旧业务代码。
 
 资源装配从模块各自的生产输出直接生成 `extraResources`。最终不携带 wheel 文件、旧冻结版 `runtime/lxeskill`、构建用 `uv.exe`、npm/npx 和 npm 缓存。Playwright 控制库复用私有 Node，移除其重复 Node；安装包不包含 `runtime/playwright` 浏览器目录。Electron 启动时执行 `lxeskill list` 检查 CLI 入口，打包成功不能代替这项检查，检查成功也不代表各业务服务均可用。
 

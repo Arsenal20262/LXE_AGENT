@@ -6,7 +6,7 @@ Context 持久化解决两个问题：进程重启后还能继续对话，以及
 
 普通消息写一次；压缩、修复和重置通过最小 `context_patch` 改变“当前模型视图”。这样既能保留完整审计轨迹，也能让下一次模型请求使用更短的上下文。
 
-数据库和文件的完整分工见 [本地状态与数据库](../../../database/local_agent.md)。本篇只解释 transcript 如何写入和 replay。
+数据库和文件的完整分工见 [本地数据与存储](../../../storage/README.md)。本篇只解释 transcript 如何写入和 replay。
 
 ## Transcript v2 事件
 
