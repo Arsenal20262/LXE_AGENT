@@ -58,7 +58,7 @@
 
 ## 导航行
 
-会话侧边栏的 SessionsIndex。选中配方、文字层级、32px 会话行和 16px 工作区间距见侧栏案例；最新实测见 examples/conversation-sidebar-density/verification.json。展示页验证时间以 showcase/verification.json 为准，不是所有导航组件的完整审计。
+会话侧边栏的 SessionsIndex。32px 会话行、16px 工作区间距与文字层级是 LXE 适配，当前实现见下方生产源码。组件状态实测见 showcase/verification.json，不是所有导航组件的完整审计。
 
 复用方式：**生产 SessionsIndex**。点击切换当前会话；悬停选中与未选中的行；用 Tab / Enter 导航。更多菜单沿用生产组件，动作只修改当前样本数据。
 

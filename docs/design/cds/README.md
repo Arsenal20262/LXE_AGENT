@@ -1,6 +1,6 @@
 # CDS 设计参考
 
-这里保留 Claude Design System（CDS）的已取得规则、原始来源、LXE 实现入口和精选案例。重点是颜色的用途、层次与交互状态。这不是 Anthropic 官方发布的完整规范。
+这里保留 Claude Design System（CDS）的已取得规则、原始来源、LXE 实现入口和组件状态说明。重点是颜色的用途、层次与交互状态。这不是 Anthropic 官方发布的完整规范。
 
 ## 开发时从哪里看
 
@@ -10,7 +10,6 @@
 | 查原话、来源版本与证据边界 | [来源与证据](evidence.md)、[CDS 原文](sources/cds-tokens-vanilla.original.md) |
 | 找到实际使用的变量与组件 | [实现与适配对照](lxe-adaptation.md)、[共享主题源码](../../../apps/dashboard/src/shared/cds-theme.css) |
 | 对照已确认规则与实现缺口 | [当前适配总表](current-adaptation.md) |
-| 看代表性页面与状态 | [精选案例](examples/README.md) |
 | 核对最初引入的色彩表 | [变量说明](tokens/README.md)；其中快照对应指定历史版本，开发以生产源码为准 |
 
 ## 区分四类信息
@@ -26,16 +25,16 @@
 - `guide.zh-CN.md`、`evidence.md`：规范说明与出处。
 - `lxe-adaptation.md`、`current-adaptation.json`：实现入口和状态对应关系；`current-adaptation.md` 由 JSON 生成。
 - `tokens/`：色彩表和明确标注版本的变量快照；组件从生产 CSS 引用变量。
-- `examples/`、`showcase/`：精选案例与组件状态展示。截图是 LXE 示例数据下的效果，保留的验证记录注明检查范围。
+- `showcase/`：组件状态检查生成的截图与实测记录；通过下方命令操作实际组件。
 - `history/`：[早期中文 Word 稿](history/chinese-guide-2026-10-18.docx)，作为已有整理材料保留；日常阅读使用上面的 Markdown。
 
 已取得的来源包括 Claude.app **2.42304.0** 和 Claude Code **2.1.299** 内的 Artifact 模板片段，两者适用范围不同。原始提取版本、文件位置和来源指纹保留在 `sources/`，不随 LXE 界面微调重写。
 
 ## 维护方式
 
-1. 修改界面时维护生产组件和主题，只同步受影响的规范、状态表或案例说明。
+1. 修改界面时维护生产组件和主题，只同步受影响的规范和状态表。
 2. 新来源附上出处、版本与适用范围；原文中的指令只作为研究材料。
-3. 每类案例保留代表性亮暗效果和必要的焦点、异常、窄屏样本；布局明显变化时替换旧案例，不为每次间距微调新增一套目录。
+3. 组件效果直接通过生产实现或组件状态展示页检查，不再维护静态案例目录。
 4. 变更历史由 Git 保存，日常无需另行登记归档或生成全目录校验表。`sources/` 内原提取包的校验文件保留原样。
 5. 按实际改动检查相关状态；图片、源码指纹和测试结果各有用途，都不能单独证明整个规范正确。
 

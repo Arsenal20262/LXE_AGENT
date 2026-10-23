@@ -1,7 +1,7 @@
 {
   "status": "passed",
-  "verifiedAt": "2026-10-23T01:41:16.611Z",
-  "sourceHead": "7f931d1b8308c08a4f0959e936c32cbdfa1bbdfd",
+  "verifiedAt": "2026-10-23T01:51:10.479Z",
+  "sourceHead": "9eaff82d819ef3d8db3c22dce8bc48c703fce628",
   "sourceIdentification": "HEAD is the pre-commit baseline; SHA-256 identifies the actual working files checked.",
   "sourceHashes": {
     "apps/dashboard/src/desktop/shell.tsx": "228eeba5af423bd593926707f203ff80a253f55185dc513b2f014b44b27791ad",
@@ -16,7 +16,7 @@
     "apps/dashboard/test/behavior/cds-gallery.css": "d3b767dc545d14933616cdec7c2bc8de8fbe0b3ba1ab3f5759c093d8c2b56d8c",
     "apps/dashboard/test/behavior/cds-gallery-runner.cjs": "8965554b3094ebaa5f4e3600e550332f0bb4362dc59bb318f1fba9216e7bff64",
     "scripts/cds-gallery.ts": "0a3cdb4ea87e5aa1bd760d07c5bc8663a1092aa20a8f031c885eccc3502aaf02",
-    "docs/design/cds/current-adaptation.json": "db29821f77499faf4751f297ead384859be836bee6e1629925958909dc57ed84"
+    "docs/design/cds/current-adaptation.json": "a191ba8f8b4bc53738dffc1f26ec41eb4897ea5c32e68995ce49653c9a3c4b4b"
   },
   "evidenceExcerptsVerified": 7,
   "passed": [
