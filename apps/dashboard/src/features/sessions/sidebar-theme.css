@@ -89,11 +89,19 @@
   gap: 1px;
   margin-right: 0;
 }
-/* Keep the menu in its own column: hover never hides or shifts the title. */
+/* Titles use the full row. Revealing the overlay menu moves only the fade edge,
+   so text, status markers and neighboring rows never shift. */
 .app-sidebar.conversation-chrome-theme .session-index-item {
+  --sidebar-title-end: 0px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 32px;
+  grid-template-columns: minmax(0, 1fr);
   border-radius: 8px;
+}
+.app-sidebar.conversation-chrome-theme .session-index-item:is(:hover, :focus-within, .menu-open) {
+  --sidebar-title-end: 36px;
+}
+.app-sidebar.conversation-chrome-theme .session-index-item.menu-open {
+  background: var(--sidebar-hover);
 }
 .app-sidebar.conversation-chrome-theme .sidebar-session-section .session-index-open {
   min-height: var(--sidebar-row-height);
@@ -111,8 +119,8 @@
   font-weight: 400;
   line-height: 20px;
   text-overflow: clip;
-  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent);
-  mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent);
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - var(--sidebar-title-end) - 20px), transparent calc(100% - var(--sidebar-title-end)));
+  mask-image: linear-gradient(to right, #000 calc(100% - var(--sidebar-title-end) - 20px), transparent calc(100% - var(--sidebar-title-end)));
 }
 .app-sidebar.conversation-chrome-theme .session-index-item:is(:hover, :focus-within) .primary-cell {
   color: var(--cds-ink);
@@ -126,12 +134,18 @@
   text-overflow: clip;
 }
 .app-sidebar.conversation-chrome-theme .sidebar-session-section .session-index-item .session-index-actions {
-  position: static;
+  position: absolute;
+  top: 50%;
+  right: 4px;
   width: 28px;
   height: 28px;
-  transform: none;
+  transform: translateY(-50%);
+  pointer-events: none;
   background: transparent;
   box-shadow: none;
+}
+.app-sidebar.conversation-chrome-theme .sidebar-session-section .session-index-item:is(:hover, :focus-within, .menu-open) .session-index-actions {
+  pointer-events: auto;
 }
 .app-sidebar.conversation-chrome-theme .sidebar-session-section .session-index-item .session-index-actions:is(:hover, :focus-visible) {
   background: var(--cds-alpha-2);
