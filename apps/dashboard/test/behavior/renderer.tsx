@@ -509,7 +509,7 @@ const fixture = {
   mountAmazonSettings(language: "en" | "zh") {
     reset();
     flushSync(() => root!.render(<I18nContext.Provider value={UI_TEXT[language]}>
-      <AmazonFinalRestockSettingsWorkbench onBack={() => {}} />
+      <div className="workbench-theme"><AmazonFinalRestockSettingsWorkbench onBack={() => {}} /></div>
     </I18nContext.Provider>));
   },
   assets: workbenchDetailsFixture.controls,
@@ -527,7 +527,7 @@ const fixture = {
   mountVietnam(language: "en" | "zh") {
     reset();
     flushSync(() => root!.render(<I18nContext.Provider value={UI_TEXT[language]}>
-      <div style={{ padding: 24, maxWidth: 900, margin: "auto" }}><VietnamSettingsWorkbench onBack={() => {}} /></div>
+      <div className="workbench-theme" style={{ padding: 24, maxWidth: 900, margin: "auto" }}><VietnamSettingsWorkbench onBack={() => {}} /></div>
     </I18nContext.Provider>));
   },
   chooseFile(value: string) { chosenFile = value; },

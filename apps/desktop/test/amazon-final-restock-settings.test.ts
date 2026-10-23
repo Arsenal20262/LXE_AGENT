@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { DesktopAmazonFinalRestockSettingsService } from "../src/main/amazon-final-restock-settings";
@@ -34,7 +34,7 @@ describe("Amazon final-restock settings bridge", () => {
     rmSync(dataRoot, { recursive: true, force: true });
   });
 
-  test("real managed Python persists across service restarts and reports corrupt settings", async () => {
+  test.each([false, true])("real managed Python preserves legacy switch %s when only days change", async enabled => {
     const dataRoot = mkdtempSync(join(tmpdir(), "amazon-restock-settings-process-"));
     const options = { platform: "darwin" as const,
       pythonPath: resolve(import.meta.dirname, "../../../.venv", process.platform === "win32" ? "Scripts/python.exe" : "bin/python"),
@@ -42,11 +42,15 @@ describe("Amazon final-restock settings bridge", () => {
     try {
       const first = new DesktopAmazonFinalRestockSettingsService(options);
       expect(await first.read()).toEqual({ peak_boost_enabled: false, peak_boost_days: null });
-      writeFileSync(join(dataRoot, "skill-data/amazon-final-restock/parameters.json"), '{"peak_boost_enabled":false}');
-      expect(await first.read()).toEqual({ peak_boost_enabled: false, peak_boost_days: null });
-      await first.save({ peak_boost_enabled: false, peak_boost_days: 20 });
+      const path = join(dataRoot, "skill-data/amazon-final-restock/parameters.json");
+      const original = JSON.stringify({ peak_boost_enabled: enabled });
+      writeFileSync(path, original);
+      const legacy = await first.read();
+      expect(legacy).toEqual({ peak_boost_enabled: enabled, peak_boost_days: null });
+      expect(readFileSync(path, "utf8")).toBe(original);
+      await first.save({ ...legacy, peak_boost_days: 20 });
       const restarted = new DesktopAmazonFinalRestockSettingsService(options);
-      expect(await restarted.read()).toEqual({ peak_boost_enabled: false, peak_boost_days: 20 });
+      expect(await restarted.read()).toEqual({ peak_boost_enabled: enabled, peak_boost_days: 20 });
       await restarted.save({ peak_boost_enabled: true, peak_boost_days: 20 });
       expect(await new DesktopAmazonFinalRestockSettingsService(options).read()).toEqual({ peak_boost_enabled: true, peak_boost_days: 20 });
       writeFileSync(join(dataRoot, "skill-data/amazon-final-restock/parameters.json"), '{"peak_boost_enabled":"false"}');
