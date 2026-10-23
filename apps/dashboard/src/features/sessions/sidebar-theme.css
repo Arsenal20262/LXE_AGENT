@@ -190,6 +190,7 @@
 /* Extend only the real scroller into the sidebar's end padding. The 8px gutter
    and 2px content gap preserve row width and keep the thumb off selected rows. */
 .app-sidebar.conversation-chrome-theme .sidebar-session-section .sidebar-scroll-area {
+  --sidebar-scrollbar-fill: transparent;
   margin-right: -10px;
   padding-right: 2px;
   overflow-x: hidden;
@@ -199,6 +200,10 @@
      inherited native scrollbar-color / scrollbar-width overrides. */
   scrollbar-color: auto;
   scrollbar-width: auto;
+}
+/* Mouse focus alone must not leave the thumb visible after leaving the list. */
+.app-sidebar.conversation-chrome-theme .sidebar-session-section .sidebar-scroll-area:is(:hover, :has(:focus-visible)) {
+  --sidebar-scrollbar-fill: var(--cds-alpha-3);
 }
 .app-sidebar.conversation-chrome-theme .sidebar-scroll-area::-webkit-scrollbar {
   width: 8px;
@@ -210,7 +215,7 @@
   min-height: 32px;
   border: 1px solid transparent;
   border-radius: 999px;
-  background: var(--cds-alpha-3);
+  background: var(--sidebar-scrollbar-fill);
   background-clip: padding-box;
 }
 .app-sidebar.conversation-chrome-theme .sidebar-scroll-area::-webkit-scrollbar-thumb:hover {
