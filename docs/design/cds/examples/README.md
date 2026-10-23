@@ -1,5 +1,7 @@
 # LXE 落地案例
 
+2026-10-23：[权限审查卡片](permission-approval.md)。操作标题、独立权限与原始理由、中性命令区、左拒绝／右允许；保留审批逻辑，含当前 10 张亮暗状态截图与历史配色记录。
+
 2026-10-20：[组件状态展示与当前适配总表](../current-adaptation.md)。首批输入框、会话导航行、工具调用条可并排检查亮暗交互；[实测记录](../showcase/verification.json)包含源码哈希与检查范围。[输入框总览](../showcase/field-overview.png)、[导航行总览](../showcase/navigation-overview.png)、[工具条总览](../showcase/tool-overview.png)。
 
 以下是本次设置页与能力页改版的 **LXE 适配案例**。截图使用本地预览中的示例数据，展示视觉和交互状态；不代表真实账号、服务连接或线上配置，也不是 Claude 官方截图。

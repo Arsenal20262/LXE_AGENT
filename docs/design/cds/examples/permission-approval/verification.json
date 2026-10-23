@@ -1,0 +1,160 @@
+{
+  "date": "2026-10-22",
+  "kind": "LXE fixture observations, not Claude runtime evidence",
+  "electron": "43.7.0",
+  "chromium": "150.0.7871.250",
+  "checks": [
+    {
+      "theme": "light",
+      "card": {
+        "background": "rgb(255, 255, 255)",
+        "color": "rgb(11, 11, 11)",
+        "border": "rgba(11, 11, 11, 0.1)",
+        "outline": "none",
+        "outlineWidth": "3px",
+        "opacity": "1"
+      },
+      "status": {
+        "background": "rgb(252, 252, 251)",
+        "color": "rgb(128, 92, 19)",
+        "border": "rgb(128, 92, 19) rgb(128, 92, 19) rgba(11, 11, 11, 0.05)",
+        "outline": "none",
+        "outlineWidth": "3px",
+        "opacity": "1"
+      },
+      "primary": {
+        "background": "rgb(24, 79, 149)",
+        "color": "rgb(255, 255, 255)",
+        "border": "rgb(24, 79, 149)",
+        "outline": "none",
+        "outlineWidth": "3px",
+        "opacity": "1"
+      },
+      "primaryHover": {
+        "background": "rgb(18, 62, 119)",
+        "color": "rgb(255, 255, 255)",
+        "border": "rgb(18, 62, 119)",
+        "outline": "none",
+        "outlineWidth": "3px",
+        "opacity": "1"
+      },
+      "secondaryHover": {
+        "background": "rgba(11, 11, 11, 0.05)",
+        "color": "rgb(11, 11, 11)",
+        "border": "rgba(11, 11, 11, 0.2)",
+        "outline": "none",
+        "outlineWidth": "3px",
+        "opacity": "1"
+      },
+      "focus": {
+        "background": "rgba(11, 11, 11, 0.05)",
+        "color": "rgb(11, 11, 11)",
+        "border": "rgba(11, 11, 11, 0.2)",
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "opacity": "1"
+      },
+      "busy": {
+        "background": "rgb(24, 79, 149)",
+        "color": "rgb(255, 255, 255)",
+        "border": "rgb(24, 79, 149)",
+        "outline": "none",
+        "outlineWidth": "3px",
+        "opacity": "0.4"
+      },
+      "contrast": {
+        "body": 19.682627652657427,
+        "status": 5.915460279401501,
+        "primary": 8.104302721063917
+      },
+      "checks": [
+        "exact command and original preserved",
+        "neutral surfaces and readable text",
+        "native hover",
+        "native Tab focus",
+        "narrow expanded command without horizontal overflow",
+        "actual error fixture retained",
+        "busy buttons disabled"
+      ]
+    },
+    {
+      "theme": "dark",
+      "card": {
+        "background": "rgb(26, 26, 25)",
+        "color": "rgb(245, 244, 237)",
+        "border": "rgba(255, 255, 255, 0.1)",
+        "outline": "none",
+        "outlineWidth": "3px",
+        "opacity": "1"
+      },
+      "status": {
+        "background": "rgb(21, 21, 21)",
+        "color": "rgb(222, 199, 127)",
+        "border": "rgb(222, 199, 127) rgb(222, 199, 127) rgba(255, 255, 255, 0.05)",
+        "outline": "none",
+        "outlineWidth": "3px",
+        "opacity": "1"
+      },
+      "primary": {
+        "background": "rgb(109, 167, 236)",
+        "color": "rgb(11, 11, 11)",
+        "border": "rgb(109, 167, 236)",
+        "outline": "none",
+        "outlineWidth": "3px",
+        "opacity": "1"
+      },
+      "primaryHover": {
+        "background": "rgb(146, 191, 242)",
+        "color": "rgb(11, 11, 11)",
+        "border": "rgb(146, 191, 242)",
+        "outline": "none",
+        "outlineWidth": "3px",
+        "opacity": "1"
+      },
+      "secondaryHover": {
+        "background": "rgba(255, 255, 255, 0.05)",
+        "color": "rgb(245, 244, 237)",
+        "border": "rgba(255, 255, 255, 0.2)",
+        "outline": "none",
+        "outlineWidth": "3px",
+        "opacity": "1"
+      },
+      "focus": {
+        "background": "rgba(255, 255, 255, 0.05)",
+        "color": "rgb(245, 244, 237)",
+        "border": "rgba(255, 255, 255, 0.2)",
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "opacity": "1"
+      },
+      "busy": {
+        "background": "rgb(109, 167, 236)",
+        "color": "rgb(11, 11, 11)",
+        "border": "rgb(109, 167, 236)",
+        "outline": "none",
+        "outlineWidth": "3px",
+        "opacity": "0.4"
+      },
+      "contrast": {
+        "body": 15.79611454288094,
+        "status": 10.940836214231409,
+        "primary": 7.862698366449699
+      },
+      "checks": [
+        "exact command and original preserved",
+        "neutral surfaces and readable text",
+        "native hover",
+        "native Tab focus",
+        "narrow expanded command without horizontal overflow",
+        "actual error fixture retained",
+        "busy buttons disabled"
+      ]
+    }
+  ],
+  "sourceSha256": {
+    "apps/dashboard/src/features/sessions/permissions.tsx": "a915df38eea9143fc69146d9bf95f1824ffe581481205582ff36672424bf0e8e",
+    "apps/dashboard/src/features/sessions/permissions.css": "09d4224875aa71105ca36a6fca227eea7b750797c38db40c5bd03077535a2552",
+    "apps/dashboard/src/shared/cds-theme.css": "949f3c356da42490d9f226cca7faa928fddccef57bd90cccfed066208a9afc09",
+    "apps/dashboard/src/styles.css": "983932403ca91cfd7294271e18655ea0e1eddfdb0b609af69aec310a813f208c"
+  }
+}
