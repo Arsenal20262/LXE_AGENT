@@ -28,7 +28,7 @@
     {
       "id": "navigation",
       "title": "导航行",
-      "scope": "会话侧边栏的 SessionsIndex。2026-10-23 补充选中配方、文字层级及 32px 会话行，最新实测见 examples/conversation-sidebar-density/verification.json；展示页截图仍为 2026-10-20 快照。不是所有导航组件的完整审计。",
+      "scope": "会话侧边栏的 SessionsIndex。选中配方、文字层级、32px 会话行和 16px 工作区间距见侧栏案例；最新实测见 examples/conversation-sidebar-density/verification.json。展示页验证时间以 showcase/verification.json 为准，不是所有导航组件的完整审计。",
       "implementation": ["apps/dashboard/src/features/sessions/view.tsx", "apps/dashboard/src/features/sessions/sidebar-theme.css", "apps/dashboard/src/styles.css"],
       "reuse": "生产 SessionsIndex",
       "instructions": "点击切换当前会话；悬停选中与未选中的行；用 Tab / Enter 导航。更多菜单沿用生产组件，动作只修改当前样本数据。",

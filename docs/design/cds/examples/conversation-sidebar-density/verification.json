@@ -38,7 +38,7 @@
         "titleCenterDelta": 0,
         "menuCenterDelta": 0,
         "menuHeight": 28,
-        "groupGap": "20px",
+        "groupGap": "16px",
         "titleClear": true,
         "overflow": false
       },
@@ -86,7 +86,7 @@
         "titleCenterDelta": 0,
         "menuCenterDelta": 0,
         "menuHeight": 28,
-        "groupGap": "20px",
+        "groupGap": "16px",
         "titleClear": true,
         "overflow": false
       },

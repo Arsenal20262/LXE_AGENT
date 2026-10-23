@@ -21,9 +21,7 @@
 | 状态 | 截图 |
 | --- | --- |
 | 亮色／暗色 | [亮色](runtime-status/status-light.png) · [暗色](runtime-status/status-dark.png) |
-| 开关悬停／条目键盘焦点 | [悬停](runtime-status/status-hover-dark.png) · [焦点](runtime-status/status-focus-dark.png) |
 | 正常、启动中、异常与未配置并存 | [暗色](runtime-status/status-mixed-dark.png) |
-| 窄窗口 | [暗色](runtime-status/status-narrow-dark.png) |
 
 亮暗主题、Kimi／DeepSeek、混合状态和窄窗口共 441 组元素采样与移除主题时的布局一致；另核对了模型异常提示、Escape 关闭与焦点返回、五个条目的导航目的地。[实测颜色与结果](runtime-status/geometry-and-colors.json)保留供复查。截图只覆盖所列状态，不等于完整的读屏或所有尺寸验证。
 

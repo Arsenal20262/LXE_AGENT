@@ -1,67 +1,23 @@
-# LXE 落地案例
+# LXE 精选案例
 
-2026-10-23：[会话侧边栏宽松布局](conversation-sidebar-layout.md)。整理字号、间距、分组箭头和标题操作列，保留 CDS 配色，附亮暗、焦点、搜索、折叠及窄窗口截图。
+按设计问题查案例，不按每次修改日期堆记录。这里的截图使用示例数据，展示 LXE 的适配效果；原规则与未验证部分在各案例中标明。历史版本通过 Git 查阅。验证记录保留当时的检查范围，图片只精选其中有代表性的状态。
 
-2026-10-20：[组件状态展示与当前适配总表](../current-adaptation.md)。首批输入框、会话导航行、工具调用条可并排检查亮暗交互；[实测记录](../showcase/verification.json)包含源码哈希与检查范围。[输入框总览](../showcase/field-overview.png)、[导航行总览](../showcase/navigation-overview.png)、[工具条总览](../showcase/tool-overview.png)。
+## 页面与组件
 
-以下是本次设置页与能力页改版的 **LXE 适配案例**。截图使用本地预览中的示例数据，展示视觉和交互状态；不代表真实账号、服务连接或线上配置，也不是 Claude 官方截图。
-
-本目录保留全部 22 张验证截图。实现提交：设置 `d40cc1b8`；能力页及共享变量 `7e2bef2d`。
-
-2026-10-19 追加：[活动页与工作台](activity-workbench.md)，包含规则对应、适配边界与 8 张新截图。上面的 22 张与历史样式快照保持原样。
-
-2026-10-19 继续追加：[工作台的三个功能页面](workbench-details.md)，包含设置、媒体处理和文件版本管理的规则对应、适配说明与 16 张截图。
-
-2026-10-19 追加：[首页运行概览](home.md)，包含指标、会话、活跃技能的规则对应，以及亮暗、侧栏、窄窗口和数据状态的 8 张截图。
-
-2026-10-19 追加：[对话输入框与文件块配色](conversation-colors.md)，保留原布局，记录语义配色、亮暗交互状态和尺寸核对结果，含 13 张组件截图。
-
-2026-10-19 追加：[对话欢迎页统计卡片](conversation-statistics.md)，沿用中性表面与蓝色热力图，保留指标和网格布局，含 4 张截图。
-
-2026-10-19 追加：[对话侧边栏配色](conversation-sidebar.md)，保留会话列表布局，统一导航表面、文字层次和交互状态，含 6 张截图。
-
-2026-10-19 追加：[运行状态浮层](runtime-status.md)，统一面板、图标和开关配色，保留状态分类与导航，含 6 张截图。
-
-## 设置页
-
-![设置页亮色](settings/appearance-light.png)
-
-![设置页暗色](settings/appearance-dark.png)
-
-观察点：连续内容面、轻导航选中、文字分级、分段控件、固定保存区域。左导航宽度和表单结构属于 LXE 的布局决定。
-
-| 页面或状态 | 亮色 | 暗色 |
+| 设计问题 | 案例／实现入口 | 代表性效果 |
 | --- | --- | --- |
-| 外观 | [截图](settings/appearance-light.png) | [截图](settings/appearance-dark.png) |
-| 模型配置 | [截图](settings/models-light.png) | [截图](settings/models-dark.png) |
-| ERP | [截图](settings/erp-light.png) | [截图](settings/erp-dark.png) |
-| 状态 | [截图](settings/status-light.png) | [截图](settings/status-dark.png) |
-| 键盘焦点 | [截图](settings/focus-light.png) | 未单独存图 |
+| 设置导航、连续表单与文字层级 | [适配说明](../lxe-adaptation.md)、[设置样式](../../../../apps/dashboard/src/desktop/settings-theme.css)、[设置结构](../../../../apps/dashboard/src/desktop/shell.tsx) | [浅色](settings/appearance-light.png) · [暗色](settings/appearance-dark.png) · [焦点](settings/focus-light.png) |
+| 技能、工具目录与详情 | [能力主题](../../../../apps/dashboard/src/features/capabilities/theme.css)、[页面](../../../../apps/dashboard/src/features/capabilities/CapabilitiesPage.tsx)、[详情](../../../../apps/dashboard/src/features/details/view.tsx) | [技能浅色](capabilities/skills-light.png) · [技能暗色](capabilities/skills-dark.png) · [工具详情](capabilities/tools-detail-light.png) |
+| MCP 状态和模型设置 | 同上，品牌图标保留原色，普通内容使用中性层次 | [MCP 浅色](capabilities/connections-light.png) · [MCP 暗色](capabilities/connections-dark.png) · [模型浅色](capabilities/models-light.png) · [模型暗色](capabilities/models-dark.png) |
+| 侧栏分组、行高、选中与空状态 | [会话侧边栏](conversation-sidebar-layout.md) | [浅色](conversation-sidebar-density/light.png) · [暗色](conversation-sidebar-density/dark.png) |
+| 审批内容层级、主次操作 | [权限审查卡片](permission-approval.md) | [浅色](permission-approval-layout/write-light.png) · [暗色](permission-approval-layout/write-dark.png) |
+| 输入、附件、消息与浮动控件 | [对话配色](conversation-colors.md) | [输入框](conversation/composer-focused-light.png) · [文件块](conversation/artifact-dark.png) · [消息气泡](conversation-bubble/bubble-dark.png) |
+| 首页信息概览 | [首页](home.md) | [浅色](home-restored/home-light.png) · [暗色](home-restored/home-dark.png) |
+| 数据图表与功能目录 | [活动与工作台](activity-workbench.md)、[三个功能页](workbench-details.md) | [活动](activity-workbench/activity-light.png) · [设置](workbench-details/vietnam-dark.png) · [文件版本](workbench-details/assets-light.png) |
+| 统计与语义状态 | [统计卡片](conversation-statistics.md)、[运行状态浮层](runtime-status.md) | [统计](conversation-statistics/statistics-dark.png) · [混合状态](runtime-status/status-mixed-dark.png) |
 
-源码：[设置页样式](../../../../apps/dashboard/src/desktop/settings-theme.css)、[设置页结构](../../../../apps/dashboard/src/desktop/shell.tsx)；[样式快照](styles/settings-theme.snapshot.css)。
+## 状态怎么检查
 
-## 能力页
+优先使用[组件状态展示页与适配总表](../current-adaptation.md)，从仓库根运行 `bun run cds:preview`。首批覆盖输入框、导航行、工具调用条，可以实际操作 hover、Tab 焦点、选择和展开。
 
-![技能目录暗色](capabilities/skills-dark.png)
-
-![模型亮色](capabilities/models-light.png)
-
-观察点：技能／工具从嵌套卡片变为目录行；MCP 状态只占小面积；模型保留品牌 Logo、选择器和参数，背景回归中性。目录列数、标签形式和模型布局属于 LXE 适配。
-
-| 页面 | 亮色 | 暗色 |
-| --- | --- | --- |
-| 技能 | [截图](capabilities/skills-light.png) | [截图](capabilities/skills-dark.png) |
-| 工具 | [截图](capabilities/tools-light.png) | [截图](capabilities/tools-dark.png) |
-| MCP 服务 | [截图](capabilities/connections-light.png) | [截图](capabilities/connections-dark.png) |
-| 模型 | [截图](capabilities/models-light.png) | [截图](capabilities/models-dark.png) |
-| 技能详情 | [截图](capabilities/skills-detail-light.png) | [截图](capabilities/skills-detail-dark.png) |
-| 工具详情 | [截图](capabilities/tools-detail-light.png) | [截图](capabilities/tools-detail-dark.png) |
-| 用户技能详情 | [截图](capabilities/user-skill-detail-light.png) | 未单独存图 |
-
-源码：[能力页样式](../../../../apps/dashboard/src/features/capabilities/theme.css)、[能力页入口](../../../../apps/dashboard/src/features/capabilities/CapabilitiesPage.tsx)、[详情入口](../../../../apps/dashboard/src/features/details/view.tsx)；[样式快照](styles/capabilities-theme.snapshot.css)。
-
-## 如何复用案例
-
-配色从[共享主题源码](../../../../apps/dashboard/src/shared/cds-theme.css)引用；设计意图看[适配说明](../lxe-adaptation.md)。不要只凭截图重新吸色，也不要把保存的样式快照当作另一份生产主题。
-
-截图能证明当时渲染出来的样子，不能单独证明保存、删除、连接服务等行为正常；那些行为需要各自的测试。亮暗截图也不能代替对比度审计、读屏验证或每一种窗口尺寸的检查。
+色彩从[共享主题](../../../../apps/dashboard/src/shared/cds-theme.css)引用。截图帮助判断视觉效果，组件源码决定当前实现；测试与实测记录说明当时检查过什么。保存、删除、连接等业务行为仍由各自测试验证。

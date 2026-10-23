@@ -1,0 +1,158 @@
+{
+  "date": "2026-10-23",
+  "kind": "LXE fixture observations, not Claude runtime evidence",
+  "electron": "43.7.0",
+  "chromium": "150.0.7871.250",
+  "checks": [
+    {
+      "theme": "light",
+      "card": {
+        "background": "rgb(255, 255, 255)",
+        "color": "rgb(11, 11, 11)",
+        "border": "rgba(11, 11, 11, 0.1)",
+        "outline": "none",
+        "outlineWidth": "3px",
+        "opacity": "1"
+      },
+      "reason": {
+        "background": "rgba(0, 0, 0, 0)",
+        "color": "rgb(82, 81, 78)",
+        "border": "rgb(82, 81, 78)",
+        "outline": "none",
+        "outlineWidth": "3px",
+        "opacity": "1"
+      },
+      "primary": {
+        "background": "rgb(11, 11, 11)",
+        "color": "rgb(255, 255, 255)",
+        "border": "rgb(11, 11, 11)",
+        "outline": "none",
+        "outlineWidth": "3px",
+        "opacity": "1"
+      },
+      "primaryHover": {
+        "background": "rgb(82, 81, 78)",
+        "color": "rgb(255, 255, 255)",
+        "border": "rgb(82, 81, 78)",
+        "outline": "none",
+        "outlineWidth": "3px",
+        "opacity": "1"
+      },
+      "secondaryHover": {
+        "background": "rgba(11, 11, 11, 0.05)",
+        "color": "rgb(11, 11, 11)",
+        "border": "rgba(11, 11, 11, 0.2)",
+        "outline": "none",
+        "outlineWidth": "3px",
+        "opacity": "1"
+      },
+      "focus": {
+        "background": "rgba(11, 11, 11, 0.05)",
+        "color": "rgb(11, 11, 11)",
+        "border": "rgba(11, 11, 11, 0.2)",
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "opacity": "1"
+      },
+      "busy": {
+        "background": "rgb(11, 11, 11)",
+        "color": "rgb(255, 255, 255)",
+        "border": "rgb(11, 11, 11)",
+        "outline": "none",
+        "outlineWidth": "3px",
+        "opacity": "0.4"
+      },
+      "contrast": {
+        "body": 19.682627652657427,
+        "reason": 7.937254310998762,
+        "primary": 19.682627652657427
+      },
+      "checks": [
+        "exact command and original preserved",
+        "exact write path, contents and justification preserved",
+        "operation-specific heading and separate requested mode",
+        "neutral surfaces and readable text",
+        "native hover",
+        "native Tab focus",
+        "narrow expanded command without horizontal overflow",
+        "actual error fixture retained",
+        "busy buttons disabled"
+      ]
+    },
+    {
+      "theme": "dark",
+      "card": {
+        "background": "rgb(26, 26, 25)",
+        "color": "rgb(245, 244, 237)",
+        "border": "rgba(255, 255, 255, 0.1)",
+        "outline": "none",
+        "outlineWidth": "3px",
+        "opacity": "1"
+      },
+      "reason": {
+        "background": "rgba(0, 0, 0, 0)",
+        "color": "rgb(191, 189, 181)",
+        "border": "rgb(191, 189, 181)",
+        "outline": "none",
+        "outlineWidth": "3px",
+        "opacity": "1"
+      },
+      "primary": {
+        "background": "rgb(245, 244, 237)",
+        "color": "rgb(26, 26, 25)",
+        "border": "rgb(245, 244, 237)",
+        "outline": "none",
+        "outlineWidth": "3px",
+        "opacity": "1"
+      },
+      "primaryHover": {
+        "background": "rgb(191, 189, 181)",
+        "color": "rgb(26, 26, 25)",
+        "border": "rgb(191, 189, 181)",
+        "outline": "none",
+        "outlineWidth": "3px",
+        "opacity": "1"
+      },
+      "secondaryHover": {
+        "background": "rgba(255, 255, 255, 0.05)",
+        "color": "rgb(245, 244, 237)",
+        "border": "rgba(255, 255, 255, 0.2)",
+        "outline": "none",
+        "outlineWidth": "3px",
+        "opacity": "1"
+      },
+      "focus": {
+        "background": "rgba(255, 255, 255, 0.05)",
+        "color": "rgb(245, 244, 237)",
+        "border": "rgba(255, 255, 255, 0.2)",
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "opacity": "1"
+      },
+      "busy": {
+        "background": "rgb(245, 244, 237)",
+        "color": "rgb(26, 26, 25)",
+        "border": "rgb(245, 244, 237)",
+        "outline": "none",
+        "outlineWidth": "3px",
+        "opacity": "0.4"
+      },
+      "contrast": {
+        "body": 15.79611454288094,
+        "reason": 9.257184654192882,
+        "primary": 15.79611454288094
+      },
+      "checks": [
+        "exact command and original preserved",
+        "exact write path, contents and justification preserved",
+        "operation-specific heading and separate requested mode",
+        "neutral surfaces and readable text",
+        "native hover",
+        "native Tab focus",
+        "narrow expanded command without horizontal overflow",
+        "actual error fixture retained",
+        "busy buttons disabled"
+      ]
+    }
+  ]
+}

@@ -2,7 +2,7 @@
 
 本页主体记录 `d40cc1b8`（设置页）与 `7e2bef2d`（能力页、共享变量）的历史设计决定。它们是 CDS-inspired 实现，没有安装或调用官方 `@ant/cds` 组件库。**当前状态**请先看[适配总表](current-adaptation.md)和后续[案例](examples/README.md)，不要把下方历史覆盖范围当成今天的全貌。
 
-## 当前覆盖范围（2026-10-20）
+## 覆盖范围
 
 2026-10-23 补充：[会话侧边栏的宽松布局与文字层级](examples/conversation-sidebar-layout.md)。具体字号、间距和标题操作列属于 LXE 适配；没有新增上游专用规则证据。
 
@@ -12,15 +12,22 @@
 - 工具调用条的悬停文字已统一，默认态、状态图标和焦点边框仍含旧变量；不能把它视为完整主题迁移。
 - 原变量快照仍对应 `7e2bef2d`，作为历史证据保留。当前生产源码是维护入口。
 
+2026-10-23 更新：[权限审查卡片](examples/permission-approval.md)使用共享会话主题；参考用户截图调整操作标题、权限与原因层级、命令区及左右按钮。完整审批内容和决策流程保留，不新增快捷键。这是 LXE 适配，Claude 审批卡专用完整规则仍未确认。
+
 ## 实现入口
 
-| 职责 | 当前源码 | 归档快照 |
-| --- | --- | --- |
-| 共用色彩、亮暗主题和旧变量映射 | [cds-theme.css](../../../apps/dashboard/src/shared/cds-theme.css) | [变量快照](tokens/lxe-theme.snapshot.css) |
-| 设置页布局与控件 | [settings-theme.css](../../../apps/dashboard/src/desktop/settings-theme.css) | [设置样式快照](examples/styles/settings-theme.snapshot.css) |
-| 能力页与相关详情弹层 | [theme.css](../../../apps/dashboard/src/features/capabilities/theme.css) | [能力样式快照](examples/styles/capabilities-theme.snapshot.css) |
+| 职责 | 当前源码 |
+| --- | --- |
+| 共享色彩与亮暗主题 | [cds-theme.css](../../../apps/dashboard/src/shared/cds-theme.css) |
+| 设置页 | [settings-theme.css](../../../apps/dashboard/src/desktop/settings-theme.css) |
+| 能力页与详情 | [theme.css](../../../apps/dashboard/src/features/capabilities/theme.css) |
+| 会话输入、文件、消息与空状态 | [conversation-theme.css](../../../apps/dashboard/src/features/sessions/conversation-theme.css) |
+| 会话侧栏 | [sidebar-theme.css](../../../apps/dashboard/src/features/sessions/sidebar-theme.css) |
+| 权限审批 | [permissions.tsx](../../../apps/dashboard/src/features/sessions/permissions.tsx)、[permissions.css](../../../apps/dashboard/src/features/sessions/permissions.css) |
+| 首页 | [home/theme.css](../../../apps/dashboard/src/features/home/theme.css) |
+| 活动与工作台 | [stats/theme.css](../../../apps/dashboard/src/features/stats/theme.css)、[workbench/detail-theme.css](../../../apps/dashboard/src/features/workbench/detail-theme.css) |
 
-页面样式快照保留原内容，包括原相对 `@import`；它们用于历史核对，不是从文档目录直接运行的页面。完整 JSX 和业务逻辑由 Git 中上述提交保存。
+组件和页面样式只在生产代码中维护，历史版本由 Git 保存。[变量表](tokens/README.md)保留最初引入时的快照及其版本说明。
 
 ## 规则如何落地
 
@@ -72,4 +79,4 @@
 
 设置任务的全量验证通过。能力任务的全量验证中有一项未改动的文件预览测试首次超时，独立重跑通过；Python 部分另行完成，2401 通过、14 跳过。不能把首次全量运行描述成零失败。
 
-本次收藏任务只核对文件、哈希、引用和快照，不重新运行应用测试。没有据此宣称每个颜色组合都满足某个对比度标准；后续改变表面、文字大小或状态，需要针对实际组合检查。
+上述验证是对应实现阶段的记录；后续改变表面、文字大小或状态，需要检查受影响的实际组合，不能仅凭已有截图宣称全部通过。

@@ -29,9 +29,8 @@
 | 媒体，选择来源 | [截图](workbench-details/media-start-light.png) | [截图](workbench-details/media-start-dark.png) |
 | 媒体，检查与输出区域 | [截图](workbench-details/media-review-light.png) | [截图](workbench-details/media-review-dark.png) |
 | 模板与数据源 | [截图](workbench-details/assets-light.png) | [截图](workbench-details/assets-dark.png) |
-| 媒体执行中／部分失败结束 | — | [执行中](workbench-details/media-running-dark.png) · [部分失败](workbench-details/media-complete-dark.png) |
-| 资产为空／尚未上传与缺失文件 | — | [空列表](workbench-details/assets-empty-dark.png) · [状态区域](workbench-details/assets-states-dark.png) |
-| 480px 英文界面 | — | [设置](workbench-details/vietnam-narrow-en.png) · [媒体](workbench-details/media-narrow-en.png) · [媒体结果](workbench-details/media-results-narrow-en.png) · [资产](workbench-details/assets-narrow-en.png) |
+| 媒体部分失败结束 | — | [部分失败](workbench-details/media-complete-dark.png) |
+| 资产尚未上传与文件缺失 | — | [状态区域](workbench-details/assets-states-dark.png) |
 
 ## 实现与检查
 
@@ -39,4 +38,4 @@
 - [设置页](../../../../apps/dashboard/src/features/workbench/vietnam-settings-view.tsx)、[媒体流程](../../../../apps/dashboard/src/features/workbench/view.tsx)、[文件版本页](../../../../apps/dashboard/src/features/workbench/input-assets-view.tsx)。数据读写接口、参数换算、媒体任务与取消机制保持原有实现。
 - [新增 Electron 检查](../../../../apps/dashboard/test/behavior/workbench-details.cjs)：深浅主题、480px 英文布局、局部表格滚动、进度与任务状态、资产刷新等待／失败／恢复、按文件标识打开目录。原有设置与媒体流程测试继续覆盖保存、导出、扫描、取消和输出。
 
-这些截图与检查不等同于全面读屏或对比度审计。此前[目录案例](activity-workbench.md)和历史样式快照保留原样；本页记录后续扩展。
+这些截图与检查不等同于全面读屏或对比度审计。工作台入口另见[目录案例](activity-workbench.md)；历史版本通过 Git 查阅。

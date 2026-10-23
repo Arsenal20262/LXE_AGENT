@@ -21,8 +21,6 @@
 | 状态 | 截图 |
 | --- | --- |
 | 亮色／暗色 | [亮色](conversation-statistics/statistics-light.png) · [暗色](conversation-statistics/statistics-dark.png) |
-| 键盘焦点 | [暗色](conversation-statistics/statistics-focus-dark.png) |
-| 较窄窗口 | [暗色](conversation-statistics/statistics-narrow-dark.png) |
 
 对比启用／移除局部主题类时的元素坐标、尺寸、字体、间距及圆角，并核对 7／90／30 天切换和固定 182 格热力图。[测量记录](conversation-statistics/geometry-and-colors.json)包含实测配色；示例数据未出现的活动等级通过隐藏色块读取计算样式。
 

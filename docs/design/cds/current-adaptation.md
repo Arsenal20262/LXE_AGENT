@@ -2,13 +2,13 @@
 
 整理日期：2026-10-20。首批：设置原生输入框、会话导航行、工具调用条。不是全站审计，也不是 Claude 全组件规范。
 
-本表由 `current-adaptation.json` 生成。JSON 是本轮状态与证据的维护入口；旧截图、原始资料和历史变量快照保持原样。
+本表由 `current-adaptation.json` 生成。JSON 维护状态与证据对应关系；当前样式以链接的生产源码为准，历史变化通过 Git 查阅。
 
 ## 如何打开与验证
 
 从仓库根执行 `bun run cds:preview`，打开输出的本地网址。页面并排展示亮暗主题，可输入、选择、Tab 聚焦和展开工具结果；预览 10 分钟后自动关闭，也可 Ctrl+C 结束。
 执行 `bun run cds:check` 会构建相同页面、运行本地 Electron 交互检查、保存截图和实测值，并关闭测试进程。命令失败时不得沿用旧记录声称通过。
-执行 `bun run cds:docs` 可从 JSON 重建本表并更新归档校验清单。
+执行 `bun run cds:docs` 可核对原始出处片段并从 JSON 重建本表。
 
 入口源码：[展示页](../../../apps/dashboard/test/behavior/cds-gallery.tsx)、[布局样式](../../../apps/dashboard/test/behavior/cds-gallery.css)、[构建与验证](../../../scripts/cds-gallery.ts)。
 实测记录：[verification.json](showcase/verification.json)。记录内含实际源码 SHA-256、构建时 HEAD、浏览器版本与检查结果；后续代码改变需重新验证。
@@ -58,7 +58,7 @@
 
 ## 导航行
 
-会话侧边栏的 SessionsIndex。2026-10-23 补充选中配方、文字层级及 32px 会话行，最新实测见 examples/conversation-sidebar-density/verification.json；展示页截图仍为 2026-10-20 快照。不是所有导航组件的完整审计。
+会话侧边栏的 SessionsIndex。选中配方、文字层级、32px 会话行和 16px 工作区间距见侧栏案例；最新实测见 examples/conversation-sidebar-density/verification.json。展示页验证时间以 showcase/verification.json 为准，不是所有导航组件的完整审计。
 
 复用方式：**生产 SessionsIndex**。点击切换当前会话；悬停选中与未选中的行；用 Tab / Enter 导航。更多菜单沿用生产组件，动作只修改当前样本数据。
 

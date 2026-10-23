@@ -19,10 +19,7 @@
 | --- | --- | --- |
 | 活动页 | [截图](activity-workbench/activity-light.png) | [截图](activity-workbench/activity-dark.png) |
 | 工作台 | [截图](activity-workbench/workbench-light.png) | [截图](activity-workbench/workbench-dark.png) |
-| 折线 | — | [截图](activity-workbench/activity-line-dark.png) |
 | 键盘数据提示 | — | [截图](activity-workbench/activity-keyboard-dark.png) |
-| 480px 英文活动页、90 天 | — | [截图](activity-workbench/activity-narrow-en.png) |
-| 480px 英文工作台 | — | [截图](activity-workbench/workbench-narrow-en.png) |
 
 ## 实现与验证
 
@@ -30,6 +27,6 @@
 - [工作台样式](../../../../apps/dashboard/src/features/workbench/index-theme.css)、[工具目录](../../../../apps/dashboard/src/features/workbench/index-view.tsx)。
 - [Electron 行为检查](../../../../apps/dashboard/test/behavior/overview-pages.cjs)：范围查询、柱状／折线、键盘、三组明细、三个工作台入口、亮暗与窄屏溢出。
 
-本次主题作用域新增 `.activity-theme` 与 `.workbench-theme`；后者只用于工作台目录。工具内部流程保持既有实现。原始资料和此前的色彩／样式快照仍保持归档时内容，不自动覆盖为本次版本。
+活动与工作台分别使用 `.activity-theme` 与 `.workbench-theme`；工作台子页见[三个功能页面](workbench-details.md)。原始资料保持原样，历史样式通过 Git 查阅。
 
 没有会话侧栏的页面，内容容器左上角共用主页侧栏的 14px 圆角变量；这是 LXE 外壳一致性规则，不是 CDS 对所有页面规定的固定圆角。
