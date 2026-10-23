@@ -99,7 +99,7 @@ def test_final_skill_cli_transmits_request_settings_to_the_generator(
     )
     entry = load_catalog()["mabang_generate_final_restock_recommendation"]
     assert entry["visibility"] == "business" and entry["exposed"] is True
-    assert entry["owner_skills"] == ["replenishment-final-restock"]
+    assert entry["owner_skills"] == ["replenishment-workflow-map"]
 
 
 @pytest.mark.parametrize("days", ["-1", "121"])

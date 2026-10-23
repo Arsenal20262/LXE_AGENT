@@ -26,6 +26,8 @@ from services.mabang.amazon.fba.source_verification import (
 )
 from services.mabang.amazon.fba.store_msku_actual_inventory import (
     ACTUAL_INVENTORY_QUANTITY_COLUMN,
+    NO_INVENTORY_DATA_SHEET,
+    NO_LOCAL_SKU_SHEET,
     SOURCE_FILE_RE,
 )
 from services.mabang.amazon.fba.store_msku_replenishment import (
@@ -43,6 +45,8 @@ OUTPUT_FILENAME_SUFFIX = "补货最新.xlsx"
 OFFICE_TIMEOUT_SECONDS = 300
 MAX_DIAGNOSTIC_CHARACTERS = 2000
 MAX_ERROR_EXAMPLES = 20
+MAX_UNKNOWN_INVENTORY_EXAMPLES = 20
+MAX_UNKNOWN_INVENTORY_DIAGNOSTIC_CHARACTERS = 1800
 
 HEADERS = (
     "店铺名称", "MSKU", "父ASIN", "ASIN", "7天销量", "14天销量", "30天销量", "90天销量",
@@ -57,7 +61,7 @@ SOURCE_NUMBER_COLUMNS = (
     "在途", "待调仓", "调仓中",
 )
 SOURCE_REQUIRED_COLUMNS = (
-    "MSKU", "父ASIN", "ASIN", "本地SKU", "本地SKU名称", "备注", "单品重量(g)(cm)", "本地库存",
+    "MSKU", "父ASIN", "ASIN", "本地SKU", "本地SKU名称", "备注", "单品重量(g)(cm)",
     *SOURCE_NUMBER_COLUMNS,
 )
 OUTPUT_SOURCE_COLUMNS = {
@@ -95,10 +99,12 @@ class FinalRestockWorkbookResult:
     row_count: int
     formula_error_count: int
     formula_error_examples: tuple[str, ...]
+    unknown_inventory_count: int = 0
+    unknown_inventory_examples: tuple[str, ...] = ()
 
     @property
     def success(self) -> bool:
-        return self.formula_error_count == 0
+        return self.formula_error_count == 0 and self.unknown_inventory_count == 0
 
     def to_payload(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -109,13 +115,32 @@ class FinalRestockWorkbookResult:
             "row_count": self.row_count,
             "formula_error_count": self.formula_error_count,
             "formula_error_examples": list(self.formula_error_examples),
+            "unknown_inventory_count": self.unknown_inventory_count,
+            "unknown_inventory_examples": list(self.unknown_inventory_examples),
         }
         if not self.success:
-            payload["exception"] = (
-                f"Office 重算发现 {self.formula_error_count} 个 Excel 错误单元格；"
-                f"实际错误示例: {', '.join(self.formula_error_examples)}"
-            )
+            diagnostics = []
+            if self.formula_error_count:
+                diagnostics.append(
+                    f"Office 重算发现 {self.formula_error_count} 个 Excel 错误单元格；"
+                    f"实际错误示例: {', '.join(self.formula_error_examples)}"
+                )
+            if self.unknown_inventory_count:
+                diagnostics.append(
+                    f"深圳真实库存有 {self.unknown_inventory_count} 个 MSKU 未知；"
+                    "已生成核对文件，须运营确认后才能正式交付。"
+                    f"代表项: {'；'.join(self.unknown_inventory_examples)}"
+                )
+            payload["exception"] = " ".join(diagnostics)
         return payload
+
+
+@dataclass(frozen=True)
+class ShenzhenInventoryRow:
+    actual_inventory: int | float | None
+    local_sku: str
+    report_sheet: str
+    report_reason: str
 
 
 def _text(value: Any) -> str:
@@ -183,9 +208,8 @@ def _unique_source_rows(records: list[dict[str, Any]]) -> tuple[list[dict[str, A
     for index, record in enumerate(records, start=2):
         missing = [column for column in SOURCE_REQUIRED_COLUMNS if column not in record]
         if missing:
-            source_field = "（马帮字段 uq122）" if "本地库存" in missing else ""
             raise FinalRestockWorkbookError(
-                f"MSKU 源表 MSKU={_text(record.get('MSKU'))!r} 缺少列: {', '.join(missing)}{source_field}"
+                f"MSKU 源表 MSKU={_text(record.get('MSKU'))!r} 缺少列: {', '.join(missing)}"
             )
         msku = _text(record.get("MSKU"))
         key = normalize_sku_key(msku)
@@ -204,9 +228,9 @@ def _load_shenzhen_rows(
     report_path: Path,
     *,
     expected_keys: set[str],
-) -> dict[str, str]:
+) -> dict[str, ShenzhenInventoryRow]:
     workbook = load_workbook(report_path, read_only=True, data_only=True)
-    by_key: dict[str, str] = {}
+    by_key: dict[str, ShenzhenInventoryRow] = {}
     try:
         business_sheets = [
             sheet for sheet in workbook.worksheets
@@ -224,6 +248,7 @@ def _load_shenzhen_rows(
                     f"深圳库存报告工作表 {sheet.title} 缺少列: {', '.join(missing)}"
                 )
             indexes = {name: headers.index(name) for name in required}
+            remark_index = headers.index("备注") if "备注" in headers else None
             for row_number, values in enumerate(rows, start=2):
                 cells = list(values)
                 if not any(_text(value) for value in cells):
@@ -239,10 +264,30 @@ def _load_shenzhen_rows(
                         f"深圳库存报告存在重复 MSKU: {msku!r}"
                     )
                 actual = cells[indexes[ACTUAL_INVENTORY_QUANTITY_COLUMN]] if indexes[ACTUAL_INVENTORY_QUANTITY_COLUMN] < len(cells) else None
-                # Placeholder rows remain valid report identities; quantities never supply AG.
-                _optional_number(actual, context=f"深圳库存报告 MSKU={msku} 库存", allow_negative=True)
+                quantity = _optional_number(
+                    actual, context=f"深圳库存报告 MSKU={msku} 库存", allow_negative=True,
+                )
                 local_sku = cells[indexes["本地SKU"]] if indexes["本地SKU"] < len(cells) else None
-                by_key[key] = _text(local_sku)
+                remark = _text(cells[remark_index] if remark_index is not None and remark_index < len(cells) else None)
+                if sheet.title in {NO_LOCAL_SKU_SHEET, NO_INVENTORY_DATA_SHEET}:
+                    quantity = None
+                if quantity is None:
+                    if sheet.title == NO_LOCAL_SKU_SHEET:
+                        reason = "报告分类为无本地SKU；源表本地SKU为空，无法匹配深圳仓库存"
+                    elif sheet.title == NO_INVENTORY_DATA_SHEET:
+                        reason = "报告分类为无库存数据；未提供真实库存数量"
+                    else:
+                        reason = "原深圳库存报告中的真实库存数量为空"
+                    if remark:
+                        reason += f"；原报告备注={remark}"
+                else:
+                    reason = ""
+                by_key[key] = ShenzhenInventoryRow(
+                    actual_inventory=quantity,
+                    local_sku=_text(local_sku),
+                    report_sheet=sheet.title,
+                    report_reason=reason,
+                )
     except FinalRestockWorkbookError:
         raise
     except Exception as exc:
@@ -286,7 +331,7 @@ def _rows_for_workbook(
     records: list[dict[str, Any]],
     *,
     store_name: str,
-    inventory_by_key: dict[str, str],
+    inventory_by_key: dict[str, ShenzhenInventoryRow],
     shipment_by_key: dict[str, int | float],
 ) -> list[dict[str, Any]]:
     _, source_by_key = _unique_source_rows(records)
@@ -329,15 +374,12 @@ def _rows_for_workbook(
             )
         out["单件重量(g)"] = parsed_weight
         out["未发出货件总计"] = shipment_by_key.get(key, 0)
-        report_local_sku = inventory_by_key[key]
+        report_row = inventory_by_key[key]
         source_local_sku = _text(record.get("本地SKU"))
-        inventory_context = f"AG本地库存(uq122)，MSKU={msku}，MSKU源表第{source_row_number}行"
-        out["本地库存"] = _optional_number(
-            record.get("本地库存"), context=inventory_context, allow_negative=True,
-        )
-        if out["本地库存"] is None:
-            raise FinalRestockWorkbookError(f"{inventory_context} 缺失或为空，不能按0计算")
-        out["本地SKU"] = report_local_sku or source_local_sku
+        out["本地库存"] = report_row.actual_inventory
+        out["本地SKU"] = report_row.local_sku or source_local_sku
+        out["_inventory_unknown_reason"] = report_row.report_reason if report_row.actual_inventory is None else ""
+        out["_inventory_report_sheet"] = report_row.report_sheet
         result.append(out)
     return result
 
@@ -524,6 +566,29 @@ def generate_final_restock_recommendation(
         inventory_by_key=inventory_by_key,
         shipment_by_key=shipment_by_key,
     )
+    unknown_inventory_rows = [row for row in rows if row["_inventory_unknown_reason"]]
+    sample_rows: list[dict[str, Any]] = []
+    for category in (NO_LOCAL_SKU_SHEET, NO_INVENTORY_DATA_SHEET):
+        sample = next(
+            (row for row in unknown_inventory_rows if row["_inventory_report_sheet"] == category),
+            None,
+        )
+        if sample is not None:
+            sample_rows.append(sample)
+    sample_rows.extend(row for row in unknown_inventory_rows if row not in sample_rows)
+    examples: list[str] = []
+    diagnostic_characters = 0
+    for row in sample_rows[:MAX_UNKNOWN_INVENTORY_EXAMPLES]:
+        reason = re.sub(r"\s+", " ", row["_inventory_unknown_reason"]).strip()
+        example = f"MSKU={row['MSKU']}；类别={row['_inventory_report_sheet']}；原因={reason}"
+        if len(example) > 320:
+            example = example[:319] + "…"
+        separator_size = 1 if examples else 0
+        if diagnostic_characters + separator_size + len(example) > MAX_UNKNOWN_INVENTORY_DIAGNOSTIC_CHARACTERS:
+            break
+        examples.append(example)
+        diagnostic_characters += separator_size + len(example)
+    unknown_inventory_examples = tuple(examples)
 
     output_path = _output_path(clean_store_name, output_dir=output_dir)
     with TemporaryDirectory(prefix="final-restock-", dir=output_path.parent) as temporary_directory:
@@ -536,10 +601,12 @@ def generate_final_restock_recommendation(
             recalculated_path,
             rows=rows,
         )
-        published_path = (
-            output_path.with_name(f"{output_path.stem}-公式错误诊断{output_path.suffix}")
-            if formula_error_count else output_path
-        )
+        if formula_error_count:
+            published_path = output_path.with_name(f"{output_path.stem}-公式错误诊断{output_path.suffix}")
+        elif unknown_inventory_rows:
+            published_path = output_path.with_name(f"{output_path.stem}-库存待核对{output_path.suffix}")
+        else:
+            published_path = output_path
         os.replace(recalculated_path, published_path)
 
     return FinalRestockWorkbookResult(
@@ -549,6 +616,8 @@ def generate_final_restock_recommendation(
         row_count=len(rows),
         formula_error_count=formula_error_count,
         formula_error_examples=formula_error_examples,
+        unknown_inventory_count=len(unknown_inventory_rows),
+        unknown_inventory_examples=unknown_inventory_examples,
     )
 
 

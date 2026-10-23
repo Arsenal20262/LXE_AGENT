@@ -382,7 +382,7 @@ def _ids_lines(ids: list[str]) -> str:
 
 
 def _step2_form_data(
-    ids: list[str], *, memcache_key: str, include_local_inventory: bool = False,
+    ids: list[str], *, memcache_key: str,
 ) -> list[tuple[str, str]]:
     clean_ids = [_clean_text(item) for item in ids if _clean_text(item)]
     if not clean_ids:
@@ -392,11 +392,8 @@ def _step2_form_data(
         ("backUrl", ""),
         ("orderIds", _ids_lines(clean_ids)),
     ]
-    fieldlabels = (*STORE_MSKU_FIELDLABELS, "uq122") if include_local_inventory else STORE_MSKU_FIELDLABELS
-    fields = (
-        (*STORE_MSKU_EXPORT_FIELD_DEFS, ("本地库存", "uq122", ""))
-        if include_local_inventory else STORE_MSKU_EXPORT_FIELD_DEFS
-    )
+    fieldlabels = STORE_MSKU_FIELDLABELS
+    fields = STORE_MSKU_EXPORT_FIELD_DEFS
     form.extend(("fieldlabel", uq) for uq in fieldlabels)
     for name, uq, map_text in fields:
         form.extend(
@@ -437,8 +434,6 @@ def parse_store_msku_export_gourl(payload: dict[str, Any]) -> str:
 
 async def export_store_msku_file_url(
     ids: list[str],
-    *,
-    include_local_inventory: bool = False,
 ) -> str:
     with _timed_export_stage("prepare_export_auth"):
         auth = await resolve_store_msku_auth()
@@ -450,11 +445,10 @@ async def export_store_msku_file_url(
     with _timed_export_stage(
         "submit_export_request",
         id_count=len(ids),
-        include_local_inventory=include_local_inventory,
     ) as stage:
         async with erp_http_session.post(
             _fba_export_url(),
-            data=_step2_form_data(ids, memcache_key=auth.memcache_key, include_local_inventory=include_local_inventory),
+            data=_step2_form_data(ids, memcache_key=auth.memcache_key),
             headers=headers,
         ) as resp:
             stage["http_status"] = int(getattr(resp, "status", 0) or 0)
@@ -559,9 +553,7 @@ def normalize_store_msku_excel(excel_path: str | Path) -> tuple[Path, bool, bool
     raise StoreMskuDownloadError(f"不支持的店铺MSKU数据文件格式: {source_path.suffix}")
 
 
-def validate_store_msku_excel_headers(
-    excel_path: str | Path, *, include_local_inventory: bool = False,
-) -> None:
+def validate_store_msku_excel_headers(excel_path: str | Path) -> None:
     source_path = Path(excel_path).expanduser()
     if not source_path.is_file():
         raise FileNotFoundError(f"店铺MSKU数据Excel不存在: {source_path}")
@@ -586,8 +578,7 @@ def validate_store_msku_excel_headers(
         except Exception:
             pass
 
-    required = (*CORE_STORE_MSKU_HEADERS, "本地库存") if include_local_inventory else CORE_STORE_MSKU_HEADERS
-    missing = [column for column in required if column not in columns]
+    missing = [column for column in CORE_STORE_MSKU_HEADERS if column not in columns]
     if missing:
         raise StoreMskuDownloadError(f"店铺MSKU数据Excel缺少列: {', '.join(missing)}")
 
@@ -598,7 +589,6 @@ async def download_store_msku_excel(
     *,
     store_name: str = "",
     output_dir: str | Path | None = None,
-    include_local_inventory: bool = False,
 ) -> StoreMskuExcelResult:
     clean_store_id = normalize_store_id(store_id)
     clean_id_type = normalize_id_type(id_type)
@@ -610,9 +600,8 @@ async def download_store_msku_excel(
             stage["converted"] = converted
             stage["raw_excel_deleted"] = raw_excel_deleted
             stage["output_format"] = xlsx_path.suffix.lower()
-        required_columns = (*CORE_STORE_MSKU_HEADERS, "本地库存") if include_local_inventory else CORE_STORE_MSKU_HEADERS
-        with _timed_export_stage("validate_file_headers", required_column_count=len(required_columns)):
-            validate_store_msku_excel_headers(xlsx_path, include_local_inventory=include_local_inventory)
+        with _timed_export_stage("validate_file_headers", required_column_count=len(CORE_STORE_MSKU_HEADERS)):
+            validate_store_msku_excel_headers(xlsx_path)
         return StoreMskuExcelResult(
             store_name=clean_store_name,
             store_id=clean_store_id,
@@ -628,10 +617,7 @@ async def download_store_msku_excel(
             ExportPipelineSpec(
                 fetch_ids=fetch_store_msku_ids,
                 fetch_args=(clean_store_id, clean_id_type),
-                request_file_url=(
-                    partial(export_store_msku_file_url, include_local_inventory=True)
-                    if include_local_inventory else export_store_msku_file_url
-                ),
+                request_file_url=export_store_msku_file_url,
                 download_file=partial(
                     download_store_msku_excel_from_url,
                     store_id=clean_store_id,

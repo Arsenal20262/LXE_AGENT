@@ -1,5 +1,7 @@
 # 最终备货建议：自动取数衔接交接
 
+> PR3历史记录。当前PR4已将V1/V2完整任务统一到 `replenishment-workflow-map`，独立V2 Skill已退役；现行执行及命令归属见 [PR4交接](handoff-pr4.md)。下文保留当时实现及验证记录。
+
 ## 2026-10-22 PR #103：旺季裸开关 P2 与退役文档冲突
 
 - **现场与范围**：pool-7 / `codex/final-restock-auto-data`，起始工作区干净，HEAD 与远端 PR #103 均为 `d91049370ca69ccd83cce18ea1152e5b7eb9570a`；PR2 修复基线为 `af0d7b8b`。本轮 fetch 后固定 `origin/main=7802c187c3eeda7eac367dd01bee4bbdd05ade0f`，本地 main 仍为 `36130265`；不合并主线、不改其他分支或 pool-9 候选。

@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 from shutil import copyfile
 import subprocess
+from unittest.mock import Mock
 
 import pytest
 from openpyxl import Workbook, load_workbook
@@ -47,7 +48,7 @@ def test_workbook_writes_formulas_using_persisted_boost_choice(tmp_path: Path) -
 SOURCE_HEADERS = (
     "店铺名称", "MSKU", "父ASIN", "ASIN", "本地SKU", "本地SKU名称", "商品名称", "备注",
     "7天销量", "14天销量", "30天销量", "90天销量", "可售", "待入库", "预留",
-    "计划入库", "在途", "待调仓", "调仓中", "单品重量(g)(cm)", "本地库存",
+    "计划入库", "在途", "待调仓", "调仓中", "单品重量(g)(cm)",
 )
 
 
@@ -57,25 +58,25 @@ def _source_rows() -> list[dict[str, object]]:
             "MSKU": "SEA-1", "父ASIN": "PARENT-SEA", "ASIN": "ASIN-SEA", "本地SKU": "SKU-SEA",
             "本地SKU名称": "Ocean item", "备注": "", "7天销量": 77, "14天销量": 154,
             "30天销量": 330, "90天销量": 990, "可售": 880, "待入库": 0, "预留": 0,
-            "计划入库": 17, "在途": 0, "待调仓": 0, "调仓中": 0, "单品重量(g)(cm)": "50g 10*10*10", "本地库存": 15,
+            "计划入库": 17, "在途": 0, "待调仓": 0, "调仓中": 0, "单品重量(g)(cm)": "50g 10*10*10",
         },
         {
             "MSKU": "CLEAR-1", "父ASIN": "PARENT-CLEAR", "ASIN": "ASIN-CLEAR", "本地SKU": "SKU-CLEAR",
             "本地SKU名称": "Clearance item", "备注": "清货", "7天销量": 7, "14天销量": 14,
             "30天销量": 30, "90天销量": 90, "可售": 0, "待入库": 0, "预留": 0,
-            "计划入库": 0, "在途": 0, "待调仓": 0, "调仓中": 0, "单品重量(g)(cm)": 50, "本地库存": 0,
+            "计划入库": 0, "在途": 0, "待调仓": 0, "调仓中": 0, "单品重量(g)(cm)": 50,
         },
         {
             "MSKU": "COMBO-1", "父ASIN": "PARENT-COMBO", "ASIN": "ASIN-COMBO", "本地SKU": "SKU-COMBO",
             "本地SKU名称": "Combo item", "备注": "", "7天销量": 7, "14天销量": 14,
             "30天销量": 30, "90天销量": 90, "可售": 0, "待入库": 0, "预留": 0,
-            "计划入库": 0, "在途": 0, "待调仓": 0, "调仓中": 0, "单品重量(g)(cm)": 25, "本地库存": 7,
+            "计划入库": 0, "在途": 0, "待调仓": 0, "调仓中": 0, "单品重量(g)(cm)": 25,
         },
         {
             "MSKU": "UNBOUND-1", "父ASIN": "PARENT-UNBOUND", "ASIN": "ASIN-UNBOUND", "本地SKU": "UNVERIFIED-LOCAL",
             "本地SKU名称": "Unbound item", "备注": "", "7天销量": 7, "14天销量": 14,
             "30天销量": 30, "90天销量": 90, "可售": 0, "待入库": 0, "预留": 0,
-            "计划入库": 0, "在途": 0, "待调仓": 0, "调仓中": 0, "单品重量(g)(cm)": 50, "本地库存": 0,
+            "计划入库": 0, "在途": 0, "待调仓": 0, "调仓中": 0, "单品重量(g)(cm)": 50,
         },
     ]
 
@@ -208,7 +209,9 @@ def test_verified_literal_text_survives_full_office_generation(tmp_path: Path) -
     inputs = [source, report, snapshot]
     before = [hashlib.sha256(path.read_bytes()).hexdigest() for path in inputs]
     result = _generate(tmp_path, source_path=source, inventory_path=report, snapshot_path=snapshot)
-    assert result.success and result.formula_error_count == 0 and result.row_count == 3
+    assert result.success is True
+    assert result.unknown_inventory_count == 0
+    assert result.formula_error_count == 0 and result.row_count == 3
     formulas = load_workbook(result.output_xlsx_path, data_only=False)
     values = load_workbook(result.output_xlsx_path, data_only=True)
     try:
@@ -298,7 +301,7 @@ def test_generation_snapshots_setting_and_next_generation_reads_saved_value(
                     assert before.cell(row, column).value == after.cell(row, column).value
         assert before["V2"].value == final_restock_formulas(2, peak_boost_enabled=True, peak_boost_days=initial_days)["V"]
         assert after["V2"].value == final_restock_formulas(2, peak_boost_enabled=True, peak_boost_days=next_days)["V"]
-        assert before["AG2"].value == after["AG2"].value == 15
+        assert before["AG2"].value == after["AG2"].value == 12
         assert before["AH2"].value == after["AH2"].value == "SKU-SEA"
         for sheet in (before, after):
             assert all(sheet.cell(5, col).data_type == "f" for col in range(21, 30))
@@ -340,9 +343,11 @@ def test_generates_all_source_rows_without_formula_errors(tmp_path: Path, unboun
 
     output_path = Path(result.output_xlsx_path)
     assert output_path.is_file()
-    assert output_path.name.endswith(f"{STORE}补货最新.xlsx")
+    assert output_path.name.endswith(f"{STORE}补货最新-库存待核对.xlsx")
     assert result.row_count == 4
-    assert result.success is True
+    assert result.success is False  # UNBOUND-1 remains in the workbook with blank AG.
+    assert result.unknown_inventory_count == 1
+    assert "UNBOUND-1" in result.unknown_inventory_examples[0]
     assert result.formula_error_count == 0
     assert result.formula_error_examples == ()
 
@@ -376,7 +381,7 @@ def test_generates_all_source_rows_without_formula_errors(tmp_path: Path, unboun
         assert sheet["N2"].value == 17
         assert cached["T2"].value == 0
         assert sheet["AG3"].value == 0
-        assert sheet["AG2"].value == 15
+        assert sheet["AG2"].value == 12
         assert sheet["AH3"].value == "SKU-CLEAR"
         assert sheet["AH4"].value == "SKU-COMBO"
         assert cached["J2"].value == pytest.approx(11)
@@ -432,7 +437,9 @@ def test_binding_verdict_is_preserved_without_suppressing_advice_after_office_re
         book.save(report_path)
         book.close()
     result = _generate(tmp_path, source_path=source_path, inventory_path=report_path)
-    assert result.success and result.formula_error_count == 0
+    assert result.success is False
+    assert result.unknown_inventory_count == 2
+    assert result.formula_error_count == 0
     assert result.row_count == len(source_rows)
 
     # Recalculate the delivered formulas again; blank caches alone must not hide advice.
@@ -450,7 +457,9 @@ def test_binding_verdict_is_preserved_without_suppressing_advice_after_office_re
                 assert [sheet[f"{column}{row_number}"].value for column in ("E", "F", "G", "H")] == [
                     source_row[column] for column in ("7天销量", "14天销量", "30天销量", "90天销量")
                 ]
-                assert sheet[f"AG{row_number}"].value == source_row["本地库存"]
+                assert sheet[f"AG{row_number}"].value == (
+                    12 if msku == "SEA-1" else None if msku in {"UNBOUND-1", "UNMATCHED-1"} else 0
+                )
                 assert sheet[f"AH{row_number}"].value == (source_row["本地SKU"] or None)
                 expected = final_restock_formulas(row_number, peak_boost_enabled=False)
                 for column in ("I", "J", "R", "S"):
@@ -501,7 +510,7 @@ def test_workbook_layout_mapping_and_pr1_formulas_before_office(tmp_path: Path) 
         assert sheet["AH4"].value == "SKU-COMBO"
         assert sheet["AH3"].value == "SKU-CLEAR"
         assert sheet["AG3"].value == 0
-        assert sheet["AG2"].value == 15
+        assert sheet["AG2"].value == 12
         assert sheet["N2"].value == 17
         assert sheet["T2"].value == 0
         assert sheet["AD2"].value == 50
@@ -565,17 +574,14 @@ def test_unverified_rows_keep_source_data_with_all_formulas(
         workbook.close()
 
 
-@pytest.mark.parametrize("mutation", ["store", "fingerprint", "local_inventory_fingerprint"])
+@pytest.mark.parametrize("mutation", ["store", "fingerprint"])
 def test_source_store_and_fingerprint_are_verified(tmp_path: Path, mutation: str) -> None:
     source_path = _write_source(tmp_path / "202610131000-Amazon-Test_店铺MSKU数据.xlsx")
     inventory_path = _write_inventory_report(tmp_path / "inventory.xlsx", source_path)
     snapshot_path = _write_confirmed_empty_snapshot(tmp_path / "snapshots")
-    if mutation in {"fingerprint", "local_inventory_fingerprint"}:
+    if mutation == "fingerprint":
         workbook = load_workbook(source_path)
-        if mutation == "fingerprint":
-            workbook.active["I2"] = 78  # Change raw 7-day sales after source verification.
-        else:
-            workbook.active.cell(2, SOURCE_HEADERS.index("本地库存") + 1).value = 99
+        workbook.active["I2"] = 78  # Change raw 7-day sales after source verification.
         workbook.save(source_path)
         workbook.close()
     diagnostic = "店铺不一致" if mutation == "store" else "发生变化"
@@ -621,6 +627,39 @@ def test_inventory_report_must_cover_every_source_msku(tmp_path: Path) -> None:
         _generate(tmp_path, source_path=source_path, inventory_path=report, snapshot_path=snapshot)
 
 
+def test_inventory_report_rejects_duplicate_msku_across_sheets(tmp_path: Path, monkeypatch) -> None:
+    source_path = _write_source(tmp_path / "202610131000-Amazon-Test_店铺MSKU数据.xlsx")
+    report = _write_inventory_report(tmp_path / "inventory.xlsx", source_path)
+    snapshot = _write_confirmed_empty_snapshot(tmp_path / "snapshots")
+    workbook = load_workbook(report)
+    try:
+        stock_sheet = workbook[inventory.STOCK_ACTUAL_INVENTORY_SHEET]
+        combo_sheet = workbook[inventory.COMBO_ACTUAL_INVENTORY_SHEET]
+        headers = [cell.value for cell in stock_sheet[1]]
+        assert [cell.value for cell in combo_sheet[1]] == headers
+        msku_index = headers.index("MSKU")
+        duplicate = next(list(row) for row in stock_sheet.iter_rows(min_row=2, values_only=True)
+                         if row[msku_index] == "SEA-1")
+        duplicate[headers.index(inventory.ACTUAL_INVENTORY_QUANTITY_COLUMN)] = 999
+        combo_sheet.append(duplicate)
+        assert stock_sheet.title != combo_sheet.title
+        assert sum(row[msku_index] == "SEA-1" for sheet in (stock_sheet, combo_sheet)
+                   for row in sheet.iter_rows(min_row=2, values_only=True)) == 2
+        workbook.save(report)
+    finally:
+        workbook.close()
+
+    write = Mock(side_effect=AssertionError("重复库存报告不得生成工作簿"))
+    recalculate = Mock(side_effect=AssertionError("重复库存报告不得进入Office重算"))
+    monkeypatch.setattr(final_workbook, "_write_workbook", write)
+    monkeypatch.setattr(final_workbook, "_recalculate", recalculate)
+    with pytest.raises(FinalRestockWorkbookError, match="深圳库存报告存在重复 MSKU: 'SEA-1'"):
+        _generate(tmp_path, source_path=source_path, inventory_path=report, snapshot_path=snapshot)
+    write.assert_not_called()
+    recalculate.assert_not_called()
+    assert not list((tmp_path / "out").glob("*.xlsx"))
+
+
 def test_ah_uses_report_local_sku_and_falls_back_to_source_when_blank(tmp_path: Path) -> None:
     source_path = _write_source(tmp_path / "202610131000-Amazon-Test_店铺MSKU数据.xlsx")
     report = _write_inventory_report(tmp_path / "inventory.xlsx", source_path)
@@ -649,7 +688,7 @@ def test_ah_uses_report_local_sku_and_falls_back_to_source_when_blank(tmp_path: 
         source.records, store_name=STORE, inventory_by_key=inventory_by_key, shipment_by_key={},
     )
     assert [row["本地SKU"] for row in rows] == ["SKU-SEA", "SKU-CLEAR", "SKU-COMBO", "UNVERIFIED-LOCAL"]
-    assert [row["本地库存"] for row in rows] == [15, 0, 7, 0]
+    assert [row["本地库存"] for row in rows] == [12, 0, 0, None]
 
 
 @pytest.mark.parametrize("msku,changed_sku", [
@@ -687,13 +726,24 @@ def test_ah_accepts_report_local_sku_priority_after_source_verification(
     assert next(row for row in rows if row["MSKU"] == msku)["本地SKU"] == changed_sku
 
 
-def test_ag_preserves_negative_zero_and_numeric_text_local_stock(tmp_path: Path) -> None:
+def test_ag_preserves_negative_zero_and_numeric_text_from_shenzhen_report(tmp_path: Path) -> None:
     source_rows = _source_rows()
-    source_rows[0]["本地库存"] = -3
-    source_rows[1]["本地库存"] = 0
-    source_rows[3]["本地库存"] = "2.5"
     source_path = _write_source(tmp_path / "202610131000-Amazon-Test_店铺MSKU数据.xlsx", source_rows)
     report = _write_inventory_report(tmp_path / "inventory.xlsx", source_path)
+    workbook = load_workbook(report)
+    for sheet in workbook.worksheets:
+        if sheet.title in {source_verification.SHEET, inventory.NO_LOCAL_SKU_SHEET, inventory.NO_INVENTORY_DATA_SHEET}:
+            continue
+        headers = [cell.value for cell in sheet[1]]
+        quantity_column = headers.index(inventory.ACTUAL_INVENTORY_QUANTITY_COLUMN) + 1
+        msku_column = headers.index("MSKU") + 1
+        for row_number in range(2, sheet.max_row + 1):
+            msku = sheet.cell(row_number, msku_column).value
+            if msku == "SEA-1": sheet.cell(row_number, quantity_column).value = -3
+            elif msku == "CLEAR-1": sheet.cell(row_number, quantity_column).value = 0
+            elif msku == "COMBO-1": sheet.cell(row_number, quantity_column).value = "2.5"
+    workbook.save(report)
+    workbook.close()
     verified = source_verification.load_verified_source(source_path, store_name=STORE)
     _, source_by_key = final_workbook._unique_source_rows(verified.records)
     inventory_by_key = final_workbook._load_shenzhen_rows(report, expected_keys=set(source_by_key))
@@ -701,28 +751,39 @@ def test_ag_preserves_negative_zero_and_numeric_text_local_stock(tmp_path: Path)
         verified.records, store_name=STORE, inventory_by_key=inventory_by_key,
         shipment_by_key={},
     )
-    assert [row["本地库存"] for row in rows] == [-3, 0, 7, 2.5]
+    assert [row["本地库存"] for row in rows] == [-3, 0, 2.5, None]
     with pytest.raises(FinalRestockWorkbookError, match="必须是有限非负数"):
         final_workbook._optional_number(-1, context="未关联货件数量")
 
 
 @pytest.mark.parametrize("invalid", ["NaN", "Infinity", True, "unknown"])
-def test_ag_rejects_invalid_nonfinite_or_nonnumeric_local_inventory(tmp_path: Path, invalid) -> None:
-    rows = _source_rows()
-    rows[0]["本地库存"] = invalid
-    source_path = _write_source(tmp_path / "202610131000-Amazon-Test_店铺MSKU数据.xlsx", rows)
+def test_ag_rejects_invalid_shenzhen_stock(tmp_path: Path, invalid) -> None:
+    source_path = _write_source(tmp_path / "202610131000-Amazon-Test_店铺MSKU数据.xlsx")
     verified = source_verification.load_verified_source(source_path, store_name=STORE)
-    report = _write_inventory_report(tmp_path / "inventory.xlsx", source_path, rows)
+    report = _write_inventory_report(tmp_path / "inventory.xlsx", source_path)
+    workbook = load_workbook(report)
+    changed = False
+    for sheet in workbook.worksheets:
+        if sheet.title not in {source_verification.SHEET, inventory.NO_LOCAL_SKU_SHEET, inventory.NO_INVENTORY_DATA_SHEET}:
+            headers = [cell.value for cell in sheet[1]]
+            msku_column = headers.index("MSKU") + 1
+            quantity_column = headers.index(inventory.ACTUAL_INVENTORY_QUANTITY_COLUMN) + 1
+            for row_number in range(2, sheet.max_row + 1):
+                if sheet.cell(row_number, msku_column).value == "SEA-1":
+                    sheet.cell(row_number, quantity_column).value = invalid
+                    changed = True
+                    break
+        if changed:
+            break
+    assert changed, "the invalid stock fixture must modify the existing SEA-1 report row"
+    workbook.save(report)
+    workbook.close()
     _, source_by_key = final_workbook._unique_source_rows(verified.records)
-    inventory_by_key = final_workbook._load_shenzhen_rows(report, expected_keys=set(source_by_key))
-    with pytest.raises(FinalRestockWorkbookError, match="本地库存"):
-        final_workbook._rows_for_workbook(
-            verified.records, store_name=STORE, inventory_by_key=inventory_by_key,
-            shipment_by_key={},
-        )
+    with pytest.raises(FinalRestockWorkbookError, match="深圳库存报告 MSKU=SEA-1 库存"):
+        final_workbook._load_shenzhen_rows(report, expected_keys=set(source_by_key))
 
 
-def test_inventory_report_original_columns_suffice_for_ah_and_ag_stays_native(tmp_path: Path) -> None:
+def test_inventory_report_real_quantity_is_the_ag_source(tmp_path: Path) -> None:
     source_path = _write_source(tmp_path / "202610131000-Amazon-Test_店铺MSKU数据.xlsx")
     report = _write_inventory_report(tmp_path / "inventory.xlsx", source_path)
     workbook = load_workbook(report, read_only=True)
@@ -743,18 +804,33 @@ def test_inventory_report_original_columns_suffice_for_ah_and_ag_stays_native(tm
         verified.records, store_name=STORE, inventory_by_key=inventory_by_key,
         shipment_by_key={},
     )
-    assert rows[0]["本地库存"] == 15
+    assert rows[0]["本地库存"] == 12
     assert rows[2]["本地SKU"] == "SKU-COMBO"
 
 
-def test_source_without_native_local_inventory_is_rejected(tmp_path: Path) -> None:
+def test_source_without_native_local_inventory_is_accepted(tmp_path: Path) -> None:
+    source_path = _write_source(tmp_path / "202610131000-Amazon-Test_店铺MSKU数据.xlsx")
+    verified = source_verification.load_verified_source(source_path, store_name=STORE)
+    assert len(final_workbook._unique_source_rows(verified.records)[0]) == len(_source_rows())
+
+
+@pytest.mark.parametrize("native_stock", [None, "", "NaN", "Infinity", True, "unknown"])
+def test_unused_msku_local_inventory_does_not_validate_or_override_ag(tmp_path: Path, native_stock) -> None:
+    source_rows = _source_rows()
+    for row in source_rows:
+        row["本地库存"] = native_stock
     source_path = _write_source(
-        tmp_path / "202610131000-Amazon-Test_店铺MSKU数据.xlsx",
-        headers=tuple(header for header in SOURCE_HEADERS if header != "本地库存"),
+        tmp_path / "202610131000-Amazon-Test_店铺MSKU数据.xlsx", source_rows,
+        headers=(*SOURCE_HEADERS, "本地库存"),
     )
     verified = source_verification.load_verified_source(source_path, store_name=STORE)
-    with pytest.raises(FinalRestockWorkbookError, match="缺少列.*本地库存"):
-        final_workbook._unique_source_rows(verified.records)
+    report = _write_inventory_report(tmp_path / "inventory.xlsx", source_path, source_rows)
+    _, source_by_key = final_workbook._unique_source_rows(verified.records)
+    inventory_by_key = final_workbook._load_shenzhen_rows(report, expected_keys=set(source_by_key))
+    rows = final_workbook._rows_for_workbook(
+        verified.records, store_name=STORE, inventory_by_key=inventory_by_key, shipment_by_key={},
+    )
+    assert [row["本地库存"] for row in rows] == [12, 0, 0, None]
 
 
 def test_duplicate_source_msku_is_rejected(tmp_path: Path) -> None:
@@ -845,8 +921,9 @@ def test_office_failure_preserves_real_diagnostic(monkeypatch, tmp_path: Path) -
 
 
 def test_formula_error_does_not_replace_same_day_successful_output(monkeypatch, tmp_path: Path) -> None:
-    source = _write_source(tmp_path / "202610131000-Amazon-Test_店铺MSKU数据.xlsx")
-    report = _write_inventory_report(tmp_path / "inventory.xlsx", source)
+    source_rows = _source_rows()[:3]
+    source = _write_source(tmp_path / "202610131000-Amazon-Test_店铺MSKU数据.xlsx", source_rows)
+    report = _write_inventory_report(tmp_path / "inventory.xlsx", source, source_rows)
     snapshot = _write_confirmed_empty_snapshot(tmp_path / "snapshots")
     recalculation_count = 0
 

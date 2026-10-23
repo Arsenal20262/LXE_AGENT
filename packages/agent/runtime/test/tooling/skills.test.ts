@@ -108,12 +108,12 @@ describe("skill context", () => {
     const source = join(repositoryRoot(import.meta.dir), "skills");
     const names = readdirSync(source).filter((name) => name.startsWith("replenishment-") || name.startsWith("mabang-store-")
       || name === "mabang-brazil-reports-export" || name === "mabang-tms-products-export" || name === "yacang-reports-export" || name.startsWith("shangman-") || name === "southeast-asia-replenishment-workflow-map" || name === "vietnam-replenishment");
-    expect(names).toHaveLength(17);
+    expect(names).toHaveLength(16);
     for (const name of names) cpSync(join(source, name), join(root, "skills", name), { recursive: true });
     const catalog = new SkillCatalog(root, join(root, "missing-user"), { sharedSkillsRoot: false });
     catalog.forceRefresh();
     const skills = catalog.list({ allowedTypes: new Set(["replenishment"]) });
-    expect(skills).toHaveLength(17);
+    expect(skills).toHaveLength(16);
     expect(skills.every(skill => skill.type === "replenishment")).toBe(true);
     expect(catalog.list({ allowedTypes: new Set(["amazon_replenish"]) })).toHaveLength(0);
     expect(catalog.list({ allowedTypes: new Set() })).toHaveLength(0);
@@ -122,111 +122,41 @@ describe("skill context", () => {
       return reference;
     }));
     expect(references).toHaveLength(5);
-    expect(skills.find((skill) => skill.name === "replenishment-workflow-map")?.commands).toEqual([]);
-    const finalRestock = skills.find((skill) => skill.name === "replenishment-final-restock");
-    expect(finalRestock?.commands).toEqual(["lxeskill replenish final-restock generate"]);
-    expect(finalRestock?.description).toContain("最终备货建议");
-    expect(finalRestock?.description).toContain("普通备货");
-    expect(finalRestock?.description).toContain("确认最终流程后");
-    const finalPolicy = finalRestock?.content ?? "";
-    expect(finalPolicy).toContain("lxeskill list");
-    expect(finalPolicy).toContain("lxeskill describe");
-    expect(finalPolicy).not.toContain("catalog.json");
-    expect(finalPolicy).toContain("`internal` 命令默认不出现在 `list` 中");
-    expect(finalPolicy).not.toContain("lxeskill replenish final-restock settings");
-    expect(finalPolicy).toContain("入口确认后，用户只需提供店铺名");
-    const acquisitionSection = finalPolicy.split("## 仅给店铺名时的本轮取数")[1]?.split("## 输入与调用")[0] ?? "";
-    const acquisitionCommands = [
-      "lxeskill replenish store resolve",
-      "lxeskill mabang store msku export",
-      "lxeskill mabang store shenzhen-inventory export",
-      "lxeskill mabang store unlinked-shipments export",
-      "lxeskill replenish final-restock generate",
-      "send_files",
-    ];
-    const positions = acquisitionCommands.map((command) => acquisitionSection.indexOf(command));
-    expect(positions.every((position) => position >= 0)).toBe(true);
-    expect(positions).toEqual([...positions].sort((left, right) => left - right));
-    expect(acquisitionSection).toContain("--include-local-inventory");
-    expect(finalPolicy).not.toContain("--require-complete-inventory");
-    expect(finalPolicy).toContain("缺失、空白、非法或非有限");
-    expect(finalPolicy).toContain("合法占位行不因此阻断");
-    expect(finalPolicy).toContain("旺季加成每轮默认关闭");
-    expect(finalPolicy).toContain("不自动弹旺季询问窗口");
-    expect(finalPolicy).toContain("--peak-boost-enabled");
-    expect(finalPolicy).toContain("裸开关 `--peak-boost-enabled`，不附带值");
-    expect(finalPolicy).toContain("未明确要求时必须省略该参数，不传 `false`");
-    expect(finalPolicy).not.toContain("省略或传 false");
-    expect(finalPolicy).toContain("共 14 个公式字段");
-    expect(acquisitionSection).toContain('--msku-source-xlsx-path "<步骤2返回的xlsx_path>"');
-    expect(acquisitionSection).toContain("不回退历史文件或省略参数重试");
-    expect(finalPolicy).toContain("## 业务用途");
-    expect(finalPolicy).toContain("运营无需上传模板");
-    const businessSection = finalPolicy.split("## 业务用途")[1]?.split("## 入口与范围")[0] ?? "";
-    expect(businessSection).toContain("R“FBA总库存”及建议沿用原 13 列公式");
-    expect(businessSection).toContain("AG“本地库存”来自 MSKU `uq122`");
-    expect(businessSection).toContain("T“未发出货件总计”来自货件快照");
-    const dataSection = finalPolicy.split("## 三份数据的职责")[1]?.split("## 失败与恢复")[0] ?? "";
-    const sourceRow = dataSection.split("\n").find(line => line.startsWith("| MSKU 源表 |")) ?? "";
-    const shenzhenRow = dataSection.split("\n").find(line => line.startsWith("| 深圳库存报告 |")) ?? "";
-    const shipmentRow = dataSection.split("\n").find(line => line.startsWith("| 未关联货件快照 |")) ?? "";
-    expect(sourceRow).toContain("AG“本地库存”");
-    expect(sourceRow).toContain("`uq122`");
-    expect(shenzhenRow).toContain("AH“本地SKU”");
-    expect(shenzhenRow).toContain("回退源表本地SKU");
-    expect(shenzhenRow).toContain("深圳数量不参与本表建议公式");
-    expect(shipmentRow).toContain("T“未发出货件总计”");
-    expect(shipmentRow).toContain("快照商品数量");
-    expect(dataSection).toContain("不证明实时 Listing 绑定一致");
-    expect(finalPolicy).toContain("文件级核验失败与商品类型结论不同");
-    const deliverySection = finalPolicy.split("## 结果与交付")[1] ?? "";
-    expect(deliverySection).toContain("`data.formula_error_count=0`");
-    expect(deliverySection).toContain("不负责 Excel 业务校验");
-    expect(deliverySection).toContain("失败诊断文件");
-    expect(finalPolicy).toContain("lxeskill replenish final-restock generate --store-name");
-    expect(finalPolicy).toContain("步骤 3 的 `source_msku_xlsx_path` 必须指向步骤 2 本轮返回的 `xlsx_path`");
-    expect(finalPolicy).toContain("ok=false");
-    expect(finalPolicy).toContain("正常对外生成只需店铺名");
-    expect(finalPolicy).toContain("失败步骤");
-    expect(finalPolicy).toContain("保留实际错误及定位信息");
-    expect(finalPolicy).toContain("不要求用户自行查找三个路径");
-    expect(finalPolicy).not.toContain("用户明确指定一整套离线输入");
-    expect(finalPolicy).not.toContain("用户明确提供的一整套合格离线文件");
-    const workflowMap = skills.find((item) => item.name === "replenishment-workflow-map")?.content ?? "";
-    expect(workflowMap).toContain("只用店铺名启动本轮自动取数");
-    expect(workflowMap).toContain("普通备货仍按本流程");
-    expect(workflowMap).toContain("replenishment-calculate");
-    expect(workflowMap).not.toContain("离线输入模式");
+    const workflowMap = skills.find((skill) => skill.name === "replenishment-workflow-map");
+    expect(workflowMap?.commands).toEqual(["lxeskill replenish final-restock generate"]);
+    expect(skills.find((skill) => skill.name === "replenishment-final-restock")).toBeUndefined();
+    const policy = workflowMap?.content ?? "";
+    for (const text of ["lxeskill list", "lxeskill describe", "真实库存（深圳仓库）数量",
+      "35列", "14个公式字段", "I“销量趋势”", "J“加权日销”", "AI“可供天数”",
+      "库存待核对", "AG留空", "success=false", "ok=false", "Office Kit", "data.formula_error_count=0",
+      "旺季加成每轮默认关闭", "裸开关 `--peak-boost-enabled`", "--peak-boost-days", "不新增AG扣减"]) {
+      expect(policy).toContain(text);
+    }
+    for (const text of ["replenishment-final-restock", "catalog.json", "--include-local-inventory",
+      "--require-complete-inventory", "lxeskill replenish final-restock settings"]) {
+      expect(policy).not.toContain(text);
+    }
     const inventoryPolicy = skills.find((item) => item.name === "mabang-store-shenzhen-inventory-export")?.content ?? "";
     expect(inventoryPolicy).toContain("普通备货按原核验规则排除未通过商品");
-    expect(inventoryPolicy).toContain("保留全部 MSKU 并写入完整 14 个公式字段");
-    expect(inventoryPolicy).toContain("商品类型核验未通过本身不阻断最终备货");
+    expect(inventoryPolicy).toContain("保留全部MSKU和14个公式字段");
+    expect(inventoryPolicy).toContain("商品类型核验未通过本身不阻断V2");
     expect(inventoryPolicy).toContain("文件级来源异常仍须失败停止");
     const mskuPolicy = skills.find(skill => skill.name === "mabang-store-msku-export")?.content ?? "";
     expect(mskuPolicy).toContain("普通备货流程中");
-    expect(mskuPolicy).toContain("普通备货没有可计算记录时");
-    expect(mskuPolicy).toContain("保留全部 MSKU，并为所有行生成完整 14 个公式字段");
-    expect(mskuPolicy).toContain("按 `replenishment-final-restock` 继续");
-    expect(mskuPolicy).toContain("不额外运行普通备货销量分析");
+    expect(mskuPolicy).toContain("V1没有可计算记录时仅停止V1，不阻断已授权V2");
+    expect(mskuPolicy).toContain("保留全部MSKU和完整14个公式字段");
+    expect(mskuPolicy).toContain("返回 `replenishment-workflow-map`");
     const shipmentPolicy = skills.find(skill => skill.name === "mabang-store-unlinked-shipments-export")?.content ?? "";
-    expect(shipmentPolicy).toContain("| 普通备货 | `replenishment-calculate` / `lxeskill replenish calculate` | `--unlinked-shipments-snapshot` |");
-    expect(shipmentPolicy).toContain("| Amazon 最终备货 | `replenishment-final-restock` / `lxeskill replenish final-restock generate` | `--unlinked-shipments-snapshot-path` |");
-    expect(shipmentPolicy).toContain("lxeskill describe replenish calculate");
-    expect(shipmentPolicy).toContain("lxeskill describe replenish final-restock generate");
+    expect(shipmentPolicy).toContain("返回 `replenishment-workflow-map`");
+    expect(shipmentPolicy).toContain("V1、V2或两种版本继续计算和交付");
     const shenzhenInventoryPolicy = skills.find((item) => item.name === "mabang-store-shenzhen-inventory-export")?.content ?? "";
-    expect(finalPolicy).toContain("终态失败后保留实际诊断，不额外刷新或重试业务");
-    expect(finalPolicy).toContain("深圳库存终态失败时立即结束本轮");
     expect(shenzhenInventoryPolicy).toContain("马帮业务命令在内部按需恢复认证");
     expect(shenzhenInventoryPolicy).toContain("命令终态失败后保留实际诊断，不额外刷新或重试业务");
-    expect(finalPolicy).toContain("send_files(paths=<terminal.files>)");
-    expect(finalPolicy).not.toContain("用户只给店铺、仅给旧备货结果表或给出部分输入时，先列出缺失项并请求补齐");
-    for (const name of ["replenishment-workflow-map", "replenishment-calculate"]) {
-      const skill = skills.find((item) => item.name === name);
-      expect(skill?.description).toContain("最终备货建议");
-      expect(skill?.description).toContain("replenishment-final-restock");
-    }
     expect(skills.find((skill) => skill.name === "replenishment-calculate")?.commands)
       .toEqual(["lxeskill replenish calculate"]);
+    expect(workflowMap?.content).toContain("V1");
+    expect(workflowMap?.content).toContain("V2");
+    expect(workflowMap?.content).toContain("lxeskill replenish final-restock generate");
     expect(skills.find((skill) => skill.name === "southeast-asia-replenishment-workflow-map")?.commands).toEqual([]);
     expect(skills.find((skill) => skill.name === "vietnam-replenishment")?.commands).toEqual([
       "lxeskill vietnam replenishment calculate",
@@ -244,74 +174,93 @@ describe("skill context", () => {
     expect(skills.find((skill) => skill.name === "shangman-login")?.commands).toHaveLength(4);
   });
 
-  test("publishes the same Amazon workflow choice gate in the skill index and executable policies", () => {
+  test("indexes one Amazon entry that owns V2 generation after the standalone skill is retired", () => {
     const root = repositoryRoot(import.meta.dir);
     const catalog = new SkillCatalog(root, join(root, "missing-user"), { sharedSkillsRoot: false });
     catalog.forceRefresh();
-    const names = ["replenishment-final-restock", "replenishment-workflow-map"];
+    const workflow = catalog.get("replenishment-workflow-map")!;
+    const ordinary = catalog.get("replenishment-calculate")!;
+    expect(workflow.commands).toEqual(["lxeskill replenish final-restock generate"]);
+    expect(ordinary.commands).toEqual(["lxeskill replenish calculate"]);
+    expect(catalog.get("replenishment-sales-analyze")?.commands).toEqual(["lxeskill replenish sales analyze"]);
+    expect(catalog.get("replenishment-final-restock")).toBeUndefined();
+    expect(catalog.list().filter(skill => skill.commands.includes("lxeskill replenish final-restock generate")))
+      .toEqual([workflow]);
     const prompt = catalog.buildPrompt({ allowedTypes: new Set(["replenishment"]) }, root);
-    for (const name of names) {
-      const skill = catalog.get(name);
-      expect(skill).toBeDefined();
-      expect(skill!.description).toContain("Amazon 业务已明确且用户明确要求“最终备货建议”时使用 replenishment-final-restock");
-      expect(skill!.description).toContain("明确其他 ERP 或东南亚请求不使用本 Skill");
-      expect(skill!.description).toContain("平台业务不明确先澄清");
-      expect(skill!.description).toContain("不限定店铺或关键词组合");
-      expect(skill!.description).toContain("只有备货类型不明确时才选择“普通备货”或“最终备货建议”");
-      expect(skill!.description).not.toContain("Amazon-Yihaiqian-US");
-      expect(prompt).toContain(skill!.description);
-      expect(skill!.content).toContain("未选择前不执行店铺解析、取数或计算");
-      expect(skill!.content).toContain("店铺歧义不改变已明确的备货类型");
-      expect(skill!.content).not.toContain("同时包含完整店铺名");
-      expect(skill!.content).toContain("ask_user_question");
-      expect(skill!.content).toContain("普通备货");
-      expect(skill!.content).toContain("最终备货建议");
-    }
-    const finalPolicy = catalog.get("replenishment-final-restock")!.content;
-    expect(finalPolicy).toContain("已明确或已选择的备货类型沿用，不重复提问");
-    expect(finalPolicy).toContain("能从本轮上下文判断为 Amazon 时不重复询问平台");
-    expect(finalPolicy).toContain("跳过、取消或未明确选择时停止生成");
-    expect(finalPolicy).toContain("更换店铺但未更改备货类型时，只核对新店铺，不重新选择流程");
-    expect(finalPolicy).toContain("T 的状态覆盖及与 FBA 在途是否重叠尚待业务验收");
-    expect(finalPolicy).not.toContain("避免建议重复备货");
-    expect(finalPolicy).toContain("仅要求发送旧流程的最终文件，不代表切换到本 Skill");
-    expect(catalog.get("replenishment-workflow-map")!.content).toContain("明确的单步请求不受流程选择影响");
-    expect(catalog.list().filter(skill => skill.name === "replenishment-final-restock")).toHaveLength(1);
+    expect(prompt).toContain(workflow.description);
+    expect(prompt).not.toContain("replenishment-final-restock");
+    expect(workflow.content).toContain("V1");
+    expect(workflow.content).toContain("V2");
   });
 
-  test("keeps ordinary calculation invocation and delegates ambiguous workflow selection to the existing map", () => {
+  test("keeps ordinary calculation and report contracts within the V1 calculator", () => {
     const root = repositoryRoot(import.meta.dir);
     const catalog = new SkillCatalog(root, join(root, "missing-user"), { sharedSkillsRoot: false });
     catalog.forceRefresh();
-    const ordinary = catalog.get("replenishment-calculate");
-    expect(ordinary).toBeDefined();
-    expect(ordinary!.commands).toEqual(["lxeskill replenish calculate"]);
-    expect(ordinary!.description).toContain("备货量、补货量、运输方式、链接备货汇总");
-    expect(ordinary!.content).toContain("明确只用已有输入重算时执行本步骤");
-    expect(ordinary!.content).toContain("明确普通备货或明确只用已有输入重算时不重复询问流程");
-    expect(ordinary!.content).toContain("先读 `replenishment-workflow-map`，沿用其选择规则");
-    expect(ordinary!.content).toContain('lxeskill replenish calculate --store-name "<规范店铺名>" --unlinked-shipments-snapshot "<本轮快照路径>" [--template "<参数方案名>"]');
-    expect(ordinary!.content).not.toContain("ask_user_question");
-    expect(ordinary!.content).toContain("不执行本计算命令");
+    const ordinary = catalog.get("replenishment-calculate")!;
+    expect(ordinary.commands).toEqual(["lxeskill replenish calculate"]);
+    expect(ordinary.description).toContain("V1单步计算");
+    expect(ordinary.content).toContain("replenishment-workflow-map");
+    expect(ordinary.content).toContain('lxeskill replenish calculate --store-name "<规范店铺名>" --unlinked-shipments-snapshot "<本轮快照路径>" [--template "<参数方案名>"]');
+    expect(ordinary.content).toContain("最终备货意见");
+    expect(ordinary.content).toContain("参数方案决定理论算法");
+    expect(ordinary.content).not.toContain("lxeskill replenish final-restock generate");
   });
 
   // These are loaded-prompt contracts, not a substitute for live model routing validation.
-  test.each([
-    ["explicit final", "请为 Amazon-Yihaiqian-US 生成最终备货建议。", "进入最终流程，先解析店铺，不再询问备货类型。"],
-    ["explicit ordinary", "请为 Amazon-Yihaiqian-US 做普通备货。", "进入普通流程，不询问是否改用最终建议。"],
-    ["ambiguous workflow", "帮 Amazon-Yihaiqian-US 做备货。", "上下文未确定类型时，先选择普通或最终流程。"],
-    ["ambiguous store", "（已在 Amazon 备货上下文）请为 Yihaiqian 生成最终备货建议。", "先解析原始名称；若返回多个候选，只确认店铺，不重复询问备货类型。"],
-    ["explicit Vietnam", "请用雅仓生成越南最终备货建议。", "读取 vietnam-replenishment，按既有契约处理，不启动 Amazon 流程。"],
-    ["explicit other ERP export", "请导出上马 ERP 的库存和销量，供最终备货建议使用。", "读取 shangman-products-export，只处理指定导出，不启动 Amazon 流程。"],
-    ["ambiguous platform", "生成这家店的最终备货建议。", "上下文无法确定平台时，只澄清平台业务，保留已明确的最终备货意图。"],
-  ])("documents natural-language entry: %s", (_scenario, request, expectedBehavior) => {
+  test("keeps the two calculators' input parameters distinct in the unified workflow", () => {
     const root = repositoryRoot(import.meta.dir);
     const catalog = new SkillCatalog(root, join(root, "missing-user"), { sharedSkillsRoot: false });
     catalog.forceRefresh();
-    const finalSkill = catalog.get("replenishment-final-restock");
-    expect(finalSkill).toBeDefined();
-    expect(finalSkill!.content).toContain(`| ${request} | ${expectedBehavior} |`);
-    expect(catalog.buildPrompt({ allowedTypes: new Set(["replenishment"]) }, root)).toContain(finalSkill!.description);
+    const ordinary = catalog.get("replenishment-calculate")!;
+    const workflow = catalog.get("replenishment-workflow-map")!;
+    expect(ordinary.commands).toEqual(["lxeskill replenish calculate"]);
+    expect(ordinary.content).toContain('--unlinked-shipments-snapshot "<本轮快照路径>"');
+    expect(workflow.content).toContain('--unlinked-shipments-snapshot-path "<步骤5快照路径>"');
+    expect(workflow.content).toContain('--shenzhen-inventory-report-xlsx-path "<步骤4深圳报告路径>"');
+    expect(workflow.content).toContain('--msku-source-xlsx-path "<步骤2源表路径>"');
+  });
+
+  test("documents version intent, shared acquisition and independent delivery in the main workflow", () => {
+    const root = repositoryRoot(import.meta.dir);
+    const catalog = new SkillCatalog(root, join(root, "missing-user"), { sharedSkillsRoot: false });
+    catalog.forceRefresh();
+    const workflow = catalog.get("replenishment-workflow-map")!;
+    expect(workflow.description).toContain("唯一完整编排入口");
+    expect(workflow.content.match(/^## /gm)).toHaveLength(5);
+    for (const text of ["“普通备货”对应V1", "“最终备货建议”对应V2", "“两种都要”对应同时生成V1和V2",
+      "明确指定V1、V2或两种时直接沿用，不重复确认", "先结合本轮上下文判断", "仍无法确定时只询问一次", "并等待明确回答"]) {
+      expect(workflow.content).toContain(text);
+    }
+    const execution = workflow.content.split("## 执行")[1]?.split("## 结果")[0] ?? "";
+    const sequence = ["lxeskill replenish store resolve", "lxeskill mabang store msku export",
+      "lxeskill replenish sales analyze", "lxeskill mabang store shenzhen-inventory export",
+      "lxeskill mabang store unlinked-shipments export"];
+    const positions = sequence.map(command => execution.indexOf(command));
+    expect(positions.every(position => position >= 0)).toBe(true);
+    expect(positions).toEqual([...positions].sort((left, right) => left - right));
+    for (const command of sequence) expect(execution.split(command)).toHaveLength(2);
+    for (const text of ["共用同一轮已核验MSKU、深圳报告和货件快照，各取一次", "3，仅V1或双版本", "V2不依赖该报告",
+      "调用步骤5前核对其来源指向步骤2本轮文件", "replenishment-calculate", "本Skill运行",
+      "sales_analysis_xlsx_path", "actual_inventory_xlsx_path", "source_data_time"]) {
+      expect(execution).toContain(text);
+    }
+    const ordinary = execution.split("\n").find(line => line.startsWith("| V1 |")) ?? "";
+    const final = execution.split("\n").find(line => line.startsWith("| V2 |")) ?? "";
+    expect(ordinary).toContain("lxeskill replenish calculate");
+    expect(ordinary).toContain('--unlinked-shipments-snapshot "');
+    expect(ordinary).not.toContain("--unlinked-shipments-snapshot-path");
+    expect(final).toContain("lxeskill replenish final-restock generate");
+    expect(final).toContain("--msku-source-xlsx-path");
+    expect(final).toContain("--shenzhen-inventory-report-xlsx-path");
+    expect(final).toContain("--unlinked-shipments-snapshot-path");
+    const result = workflow.content.split("## 结果")[1] ?? "";
+    for (const text of ["共用取数、认证或来源失败时，停止依赖该输入的版本", "销量分析或V1计算失败", "仅停止V1",
+      "继续V2必要的共享取数、全MSKU计算及检查", "V2未知库存或计算失败也不阻止已满足前提的V1计算和正式交付",
+      "此临时规则不影响V1", "不把一版成功称为两版全部成功", "发送失败只重试该版文件交付"]) {
+      expect(result).toContain(text);
+    }
+    expect(execution).toContain("send_files(paths=<该版terminal.files>)");
   });
 
   test("indexes allowed skill manifests and points the agent to their source", () => {

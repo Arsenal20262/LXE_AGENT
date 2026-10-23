@@ -75,7 +75,7 @@ def test_success_returns_downloaded_store_msku_path(monkeypatch, capsys) -> None
     }
 
 
-def test_local_inventory_opt_in_is_forwarded_without_changing_default(monkeypatch) -> None:
+def test_msku_export_adapter_uses_the_standard_export_contract(monkeypatch) -> None:
     calls = []
 
     async def fake_download(store_id: str, id_type: str, **kwargs):
@@ -87,8 +87,4 @@ def test_local_inventory_opt_in_is_forwarded_without_changing_default(monkeypatc
 
     monkeypatch.setattr(cli, "download_store_msku_excel", fake_download)
     cli.run({"store_id": "1", "id_type": "shopId", "store_name": "Amazon-Test"})
-    cli.run({"store_id": "1", "id_type": "shopId", "store_name": "Amazon-Test", "include_local_inventory": True})
-    assert calls == [
-        ("1", "shopId", {"store_name": "Amazon-Test"}),
-        ("1", "shopId", {"store_name": "Amazon-Test", "include_local_inventory": True}),
-    ]
+    assert calls == [("1", "shopId", {"store_name": "Amazon-Test"})]

@@ -15,11 +15,11 @@ from services.agent_cli.mabang import calculate_store_msku_replenishment as ordi
 from services.agent_cli.mabang import generate_final_restock_recommendation as adapter
 from services.mabang.amazon.fba.final_restock_workbook import FinalRestockWorkbookResult, SOURCE_REQUIRED_COLUMNS
 from services.mabang.amazon.fba.sku_catalog import LocalSkuDefinition, SkuCatalogSnapshot
-from services.mabang.amazon.fba.source_verification import annotate_source
+from services.mabang.amazon.fba.source_verification import annotate_source, load_verified_source, stamp_report
 
 
 COMMAND = ["replenish", "final-restock", "generate"]
-SKILL = "replenishment-final-restock"
+WORKFLOW_SKILL = "replenishment-workflow-map"
 INPUTS = {
     "store_name": "Amazon-Test",
     "msku_source_xlsx_path": "source.xlsx",
@@ -41,7 +41,7 @@ def _terminal(capsys) -> dict:
 
 @pytest.fixture(autouse=True)
 def isolated_scope(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setenv("LXESKILL_SKILL_SCOPE", SKILL)
+    monkeypatch.setenv("LXESKILL_SKILL_SCOPE", WORKFLOW_SKILL)
     monkeypatch.setenv("LXE_DATA_ROOT", str(tmp_path / "state"))
     monkeypatch.setenv("LXE_WORKSPACE_ROOT", str(tmp_path / "workspace"))
 
@@ -50,7 +50,7 @@ def test_final_restock_is_exposed_with_one_owner_and_the_existing_inputs(capsys)
     entry = load_catalog()["mabang_generate_final_restock_recommendation"]
     assert entry["visibility"] == "business"
     assert entry["exposed"] is True
-    assert entry["owner_skills"] == [SKILL]
+    assert entry["owner_skills"] == [WORKFLOW_SKILL]
     assert entry["input_modes"] == ["flags"]
     schema = entry["input_schema"]
     assert schema["required"] == list(INPUTS) and schema["additionalProperties"] is False
@@ -66,48 +66,53 @@ def test_final_restock_is_exposed_with_one_owner_and_the_existing_inputs(capsys)
     assert all(item["command"] != "replenish final-restock settings" for item in commands)
     assert lxeskill.main(["describe", *COMMAND]) == 0
     described = _terminal(capsys)["data"]
-    assert described["owner_skills"] == [SKILL]
+    assert described["owner_skills"] == [WORKFLOW_SKILL]
     assert described["input_schema"]["required"] == list(INPUTS)
     assert "传裸开关 --peak-boost-enabled，不附带值；否则省略" in described["input_schema"]["properties"]["peak_boost_enabled"]["description"]
 
 
-def test_skills_use_public_queries_and_distinguish_unverified_calculation_rules() -> None:
+def test_skills_use_public_queries_and_keep_the_two_business_contracts() -> None:
     skills = Path(__file__).resolve().parents[4] / "skills"
-    final_policy = (skills / SKILL / "SKILL.md").read_text(encoding="utf-8")
+    final_policy = (skills / WORKFLOW_SKILL / "SKILL.md").read_text(encoding="utf-8")
     inventory_policy = (skills / "mabang-store-shenzhen-inventory-export" / "SKILL.md").read_text(encoding="utf-8")
     assert "lxeskill list" in final_policy and "lxeskill describe" in final_policy
     assert "catalog.json" not in final_policy
-    assert "`internal` 命令默认不出现在 `list` 中" in final_policy
-    assert "桌面设置命令不属于本 Skill 的模型业务入口" in final_policy
     assert "lxeskill replenish final-restock settings" not in final_policy
     assert "普通备货按原核验规则排除未通过商品" in inventory_policy
-    assert "保留全部 MSKU 并写入完整 14 个公式字段" in inventory_policy
-    assert "商品类型核验未通过本身不阻断最终备货" in inventory_policy
+    assert "保留全部MSKU和14个公式字段" in inventory_policy
+    assert "商品类型核验未通过本身不阻断V2" in inventory_policy
     assert "文件级来源异常仍须失败停止" in inventory_policy
     msku_policy = (skills / "mabang-store-msku-export" / "SKILL.md").read_text(encoding="utf-8")
     assert "普通备货流程中" in msku_policy
-    assert "普通备货完整任务下载成功后继续销量与库存" in msku_policy
-    assert "普通备货没有可计算记录时" in msku_policy
-    assert "保留全部 MSKU，并为所有行生成完整 14 个公式字段" in msku_policy
-    assert "按 `replenishment-final-restock` 继续" in msku_policy
-    assert "不额外运行普通备货销量分析" in msku_policy
+    assert "V1没有可计算记录时仅停止V1，不阻断已授权V2" in msku_policy
+    assert "保留全部MSKU和完整14个公式字段" in msku_policy
+    assert "返回 `replenishment-workflow-map`" in msku_policy
+    ordinary_policy = (skills / "replenishment-workflow-map" / "SKILL.md").read_text(encoding="utf-8")
+    sales_policy = (skills / "replenishment-sales-analyze" / "SKILL.md").read_text(encoding="utf-8")
+    assert "replenishment-sales-analyze" in ordinary_policy
+    assert "lxeskill replenish sales analyze" in sales_policy
+    assert "replenishment-calculate" in ordinary_policy
+    assert load_catalog()["mabang_analyze_store_msku_sales"]["owner_skills"] == ["replenishment-sales-analyze"]
 
 
 @pytest.mark.parametrize("workflow,scope,command", [
-    ("普通备货", "replenishment-calculate", ["replenish", "calculate"]),
-    ("Amazon 最终备货", SKILL, COMMAND),
+    ("V1", "replenishment-calculate", ["replenish", "calculate"]),
+    ("V2", WORKFLOW_SKILL, COMMAND),
 ])
-def test_shipment_skill_routes_pass_the_current_snapshot_to_the_right_calculator(
+def test_main_workflow_passes_the_current_snapshot_to_the_right_calculator(
     workflow, scope, command, tmp_path, monkeypatch, capsys,
 ):
-    policy = (Path(__file__).resolve().parents[4] / "skills" / "mabang-store-unlinked-shipments-export" / "SKILL.md").read_text(encoding="utf-8")
-    routes = [line for line in policy.splitlines() if line.startswith(f"| {workflow} |")]
-    assert len(routes) == 1, "shipment Skill must distinguish the two calculation contracts"
-    documented_command = re.search(r"`lxeskill ([^`]+)`", routes[0])
-    documented_flag = re.search(r"`(--unlinked-shipments-[^`]+)`", routes[0])
+    policy = (Path(__file__).resolve().parents[4] / "skills" / "replenishment-workflow-map" / "SKILL.md").read_text(encoding="utf-8")
+    routes = [line for line in policy.splitlines() if line.startswith(f"| {workflow} |") and "lxeskill" in line]
+    assert len(routes) == 1, "the main workflow must distinguish the two calculation contracts"
+    documented_command = re.search(r"`lxeskill ([^`]+?) --", routes[0])
+    documented_flag = re.search(r"(--unlinked-shipments-[a-z-]+)", routes[0])
     assert documented_command and documented_flag
     assert documented_command.group(1).split() == command
-    assert scope in routes[0]
+    if workflow == "V1":
+        assert scope in routes[0]
+    else:
+        assert load_catalog()["mabang_generate_final_restock_recommendation"]["owner_skills"] == [scope]
 
     snapshot = tmp_path / "本轮货件 快照.xlsx"
     output = tmp_path / "workspace/.lxeagent/artifacts/replenish/result.xlsx"
@@ -116,7 +121,7 @@ def test_shipment_skill_routes_pass_the_current_snapshot_to_the_right_calculator
     book.save(snapshot)
     book.save(output)
     book.close()
-    output_field = "output_xlsx_path" if scope == SKILL else "report_xlsx_path"
+    output_field = "output_xlsx_path" if scope == WORKFLOW_SKILL else "report_xlsx_path"
     result = Mock()
     result.to_payload.return_value = {"success": True, output_field: str(output)}
     final_calculate = Mock(return_value=result)
@@ -127,7 +132,7 @@ def test_shipment_skill_routes_pass_the_current_snapshot_to_the_right_calculator
     monkeypatch.setattr(sales_adapter, "analyze_store_msku_sales", sales)
     monkeypatch.setenv("LXESKILL_SKILL_SCOPE", scope)
     arguments = {"store_name": INPUTS["store_name"]}
-    if scope == SKILL:
+    if scope == WORKFLOW_SKILL:
         arguments.update({key: INPUTS[key] for key in ("msku_source_xlsx_path", "shenzhen_inventory_report_xlsx_path")})
     argv = [*documented_command.group(1).split(),
             *(item for key, value in arguments.items() for item in (f"--{key.replace('_', '-')}", value)),
@@ -135,16 +140,16 @@ def test_shipment_skill_routes_pass_the_current_snapshot_to_the_right_calculator
     assert lxeskill.main(argv) == 0
     terminal = _terminal(capsys)
     assert terminal["ok"] is True and terminal["files"] == [str(output)]
-    selected, other = (final_calculate, ordinary_calculate) if scope == SKILL else (ordinary_calculate, final_calculate)
+    selected, other = (final_calculate, ordinary_calculate) if scope == WORKFLOW_SKILL else (ordinary_calculate, final_calculate)
     assert selected.call_count == 1
     assert selected.call_args.kwargs["unlinked_shipments_snapshot_path"] == str(snapshot)
     other.assert_not_called()
     sales.assert_not_called()
-    assert "lxeskill describe " + " ".join(command) in policy
+    assert "lxeskill describe <命令路径>" in policy
 
 
 @pytest.mark.parametrize("scope,command,wrong_flag", [
-    (SKILL, COMMAND, "--unlinked-shipments-snapshot"),
+    (WORKFLOW_SKILL, COMMAND, "--unlinked-shipments-snapshot"),
     ("replenishment-calculate", ["replenish", "calculate"], "--unlinked-shipments-snapshot-path"),
 ])
 def test_shipment_snapshot_flags_are_not_interchangeable(scope, command, wrong_flag, monkeypatch, capsys):
@@ -175,31 +180,33 @@ def test_store_only_acquisition_reuses_exposed_existing_commands(name, owner, fi
     assert fields <= set(entry["input_schema"]["properties"])
 
 
-def test_shenzhen_source_is_optional_for_legacy_and_explicit_in_final_skill() -> None:
+def test_shenzhen_source_is_optional_for_legacy_and_explicit_in_main_workflow() -> None:
     entry = load_catalog()["mabang_export_store_msku_actual_inventory"]
     schema = entry["input_schema"]
     assert schema["required"] == ["store_name"]
     assert schema["properties"]["msku_source_xlsx_path"]["type"] == "string"
     assert schema["properties"]["msku_source_xlsx_path"]["minLength"] == 1
-    skill = (Path(__file__).resolve().parents[4] / "skills" / SKILL / "SKILL.md").read_text(encoding="utf-8")
-    assert '--msku-source-xlsx-path "<步骤2返回的xlsx_path>"' in skill
-    assert "不回退历史文件或省略参数重试" in skill
-    assert "库存导出自身会查找该店铺本地最新源表" not in skill
+    skill = (Path(__file__).resolve().parents[4] / "skills" / "replenishment-workflow-map" / "SKILL.md").read_text(encoding="utf-8")
+    assert "--msku-source-xlsx-path" in skill
+    assert "source_msku_xlsx_path" in skill
 
 
-def test_final_restock_opts_in_to_native_msku_local_inventory() -> None:
+def test_final_restock_uses_shenzhen_stock_without_native_msku_inventory_opt_in() -> None:
     entry = load_catalog()["mabang_download_store_msku_excel"]
-    assert entry["input_schema"]["properties"]["include_local_inventory"]["type"] == "boolean"
-    skill = (Path(__file__).resolve().parents[4] / "skills" / SKILL / "SKILL.md").read_text(encoding="utf-8")
-    assert 'lxeskill mabang store msku export --store-id' in skill
-    assert '--include-local-inventory' in skill
-    assert '步骤 2 源表中每个 MSKU 自身的“本地库存”' in skill
+    assert "include_local_inventory" not in entry["input_schema"]["properties"]
+    assert "本地库存" not in SOURCE_REQUIRED_COLUMNS
+    skill = (Path(__file__).resolve().parents[4] / "skills" / WORKFLOW_SKILL / "SKILL.md").read_text(encoding="utf-8")
+    workflow = (Path(__file__).resolve().parents[4] / 'skills' / 'replenishment-workflow-map' / 'SKILL.md').read_text(encoding='utf-8')
+    assert 'lxeskill mabang store msku export --store-id' in workflow
+    assert '--include-local-inventory' not in skill
+    assert '真实库存（深圳仓库）数量' in skill
 
 
 @pytest.mark.parametrize("scope,command", [
     ("replenishment-calculate", COMMAND),
-    (SKILL, ["replenish", "calculate"]),
+    (WORKFLOW_SKILL, ["replenish", "calculate"]),
     ("", COMMAND),
+    ("replenishment-final-restock", COMMAND),
 ])
 def test_new_and_old_commands_respect_their_own_skill_scope(scope, command, monkeypatch, capsys) -> None:
     monkeypatch.setenv("LXESKILL_SKILL_SCOPE", scope)
@@ -239,14 +246,15 @@ def test_removed_source_path_flag_is_rejected_in_the_new_skill_scope(capsys) -> 
     assert terminal["files"] == []
 
 
-def test_source_without_native_local_inventory_is_rejected_by_cli(tmp_path: Path, capsys) -> None:
+def test_source_without_native_local_inventory_passes_cli_source_validation(tmp_path: Path, monkeypatch, capsys) -> None:
+    from services.mabang.amazon.fba import final_restock_workbook as service
+
     source = tmp_path / "202610151000-Amazon-Test_店铺MSKU数据.xlsx"
     workbook = Workbook()
-    columns = [column for column in SOURCE_REQUIRED_COLUMNS if column != "本地库存"]
-    workbook.active.append(columns)
+    workbook.active.append(SOURCE_REQUIRED_COLUMNS)
     workbook.active.append([
         "MSKU-1" if column == "MSKU" else "SKU-1" if column == "本地SKU" else 0
-        for column in columns
+        for column in SOURCE_REQUIRED_COLUMNS
     ])
     workbook.save(source)
     workbook.close()
@@ -255,34 +263,33 @@ def test_source_without_native_local_inventory_is_rejected_by_cli(tmp_path: Path
         SkuCatalogSnapshot("Amazon-Test", "100", "shopId", (LocalSkuDefinition("SKU-1", 1),)),
         requested_store_name="Amazon-Test",
     )
-    inputs = {key: str(source) for key in INPUTS if key != "store_name"}
-    assert lxeskill.main(_args({"store_name": "Amazon-Test", **inputs})) == lxeskill.EXIT_BUSINESS
+    inventory = tmp_path / "inventory.xlsx"
+    workbook = Workbook()
+    workbook.save(inventory)
+    workbook.close()
+    stamp_report(inventory, load_verified_source(source, store_name="Amazon-Test").metadata)
+    snapshot = tmp_path / "snapshot.xlsx"
+    snapshot.touch()
+    # A sentinel at the next stage proves the CLI did not reject the missing uq122 column.
+    read_inventory = Mock(side_effect=service.FinalRestockWorkbookError("已进入深圳报告数量读取"))
+    monkeypatch.setattr(service, "_load_shenzhen_rows", read_inventory)
+    assert lxeskill.main(_args({
+        "store_name": "Amazon-Test", "msku_source_xlsx_path": str(source),
+        "shenzhen_inventory_report_xlsx_path": str(inventory),
+        "unlinked_shipments_snapshot_path": str(snapshot),
+    })) == lxeskill.EXIT_BUSINESS
     terminal = _terminal(capsys)
-    assert terminal["ok"] is False
-    assert terminal["error"]["code"] == "business_cli_failed"
-    assert "本地库存" in terminal["error"]["message"]
-    assert "缺少列" in terminal["error"]["message"]
-    assert terminal["files"] == []
+    assert terminal["error"]["message"] == "已进入深圳报告数量读取"
+    read_inventory.assert_called_once()
 
 
-def test_skill_describes_a_rules_without_suppressing_unverified_advice() -> None:
-    skill = (Path(__file__).resolve().parents[4] / "skills" / SKILL / "SKILL.md").read_text()
-    assert "`uq122`" in skill
-    assert "14 个公式字段" in skill
+def test_skill_describes_shenzhen_ag_and_final_only_review_delivery() -> None:
+    skill = (Path(__file__).resolve().parents[4] / "skills" / WORKFLOW_SKILL / "SKILL.md").read_text()
+    for text in ("真实库存（深圳仓库）数量", "14个公式字段", "35列", "库存待核对", "success=false", "ok=false", "Office Kit", "--peak-boost-enabled"):
+        assert text in skill
     assert "--require-complete-inventory" not in skill
-    assert "缺失、空白、非法或非有限" in skill
-    assert "合法占位行不因此阻断" in skill
     assert "require_complete_inventory" not in load_catalog()["mabang_export_store_msku_actual_inventory"]["input_schema"]["properties"]
-    assert "每轮默认关闭" in skill
-    assert "不自动弹旺季询问窗口" in skill
-    assert "--peak-boost-enabled" in skill
-    assert "未明确要求时必须省略该参数" in skill
-    assert "裸开关" in skill
-    assert "省略或传 false" not in skill
-    assert "U–AC" in skill
-    assert "13 列公式" in skill
-    assert "绑定核验未通过" in skill
-    assert "商品类型核验失败不等于没有库存" in skill
+    assert "旺季默认关闭" in skill
 
 
 def test_unknown_store_returns_actual_local_source_mismatch(tmp_path: Path, capsys) -> None:
@@ -380,3 +387,48 @@ def test_invalid_request_days_stop_before_reading_business_inputs(days, monkeypa
     assert lxeskill.main([*_args(INPUTS), "--peak-boost-days", days]) != 0
     assert _terminal(capsys)["ok"] is False
     read_input.assert_not_called()
+
+
+def test_unknown_inventory_keeps_review_file_but_returns_cli_failure(tmp_path, monkeypatch, capsys) -> None:
+    output = tmp_path / "workspace/.lxeagent/artifacts/replenish/final_restock_recommendation/result-库存待核对.xlsx"
+    output.parent.mkdir(parents=True)
+    output.touch()
+    result = FinalRestockWorkbookResult(
+        "Amazon-Test", "202610201000", str(output), 1, 0, (), 1,
+        ("MSKU=A；类别=无本地SKU；原因=源表本地SKU为空",),
+    )
+    generate = Mock(return_value=result)
+    monkeypatch.setattr(adapter, "generate_final_restock_recommendation", generate)
+    assert lxeskill.main(_args(INPUTS)) == lxeskill.EXIT_BUSINESS
+    terminal = _terminal(capsys)
+    assert terminal["ok"] is False
+    assert terminal["files"] == [str(output)]
+    assert terminal["data"]["success"] is False
+    assert terminal["data"]["unknown_inventory_count"] == 1
+    assert terminal["data"]["formula_error_count"] == 0
+    assert "须运营确认后才能正式交付" in terminal["error"]["message"]
+    generate.assert_called_once()
+
+
+def test_main_skill_is_the_single_store_name_workflow_for_v1_v2_and_both() -> None:
+    skills = Path(__file__).resolve().parents[4] / "skills"
+    workflow = (skills / WORKFLOW_SKILL / "SKILL.md").read_text(encoding="utf-8")
+    assert not (skills / "replenishment-final-restock" / "SKILL.md").exists()
+    assert "replenishment-final-restock" not in workflow
+    assert load_catalog()["mabang_generate_final_restock_recommendation"]["owner_skills"] == [WORKFLOW_SKILL]
+    for command in (
+        "lxeskill replenish store resolve", "lxeskill mabang store msku export",
+        "lxeskill mabang store shenzhen-inventory export", "lxeskill mabang store unlinked-shipments export",
+        "lxeskill replenish calculate", "lxeskill replenish final-restock generate", "send_files",
+    ):
+        assert command in workflow
+    for text in (
+        "--msku-source-xlsx-path", "--shenzhen-inventory-report-xlsx-path", "--unlinked-shipments-snapshot-path",
+        "真实库存（深圳仓库）数量", "success=false", "ok=false", "库存待核对",
+        "“普通备货”对应V1", "“最终备货建议”对应V2", "“两种都要”对应同时生成V1和V2",
+        "仍无法确定时只询问一次", "共用同一轮已核验MSKU、深圳报告和货件快照，各取一次",
+        "仅停止V1", "继续V2必要的共享取数、全MSKU计算及检查",
+        "V2未知库存或计算失败也不阻止已满足前提的V1计算和正式交付",
+        "此临时规则不影响V1", "不把一版成功称为两版全部成功",
+    ):
+        assert text in workflow
