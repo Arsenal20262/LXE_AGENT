@@ -1,20 +1,159 @@
 @import "../../shared/cds-theme.css";
 
-/* CDS purpose colors, scoped to the conversation list. Preserve its geometry,
-   typography and interaction behavior; these mappings are an LXE adaptation. */
+/* CDS semantic colors and comfortable density, scoped to the conversation list.
+   Geometry and type sizes are LXE choices, not recovered Claude measurements. */
 .app-sidebar.conversation-chrome-theme {
   --sidebar-bg: var(--cds-surface-nav);
   --sidebar-border: var(--cds-alpha-2);
   --sidebar-ink: var(--cds-ink);
   --sidebar-ink-soft: var(--cds-secondary);
+  --sidebar-label: color-mix(in srgb, var(--cds-secondary) 40%, var(--cds-muted));
   --sidebar-accent: var(--cds-accent);
   --sidebar-hover: color-mix(in srgb, var(--sidebar-bg) 95%, var(--sidebar-ink));
-  --sidebar-active: color-mix(in srgb, var(--sidebar-bg) 90%, var(--sidebar-ink));
-  /* Opaque fills also mask long titles behind the existing action-button fade. */
+  --sidebar-active: color-mix(in srgb, var(--sidebar-bg) 94%, var(--sidebar-ink));
   --sidebar-action-bg: var(--sidebar-hover);
   --sidebar-shadow: var(--shadow-strong);
   --focus-ring: var(--cds-accent);
+  --sidebar-row-height: 32px;
+  --sidebar-group-height: 36px;
+  --sidebar-row-pad: 8px;
+  --sidebar-icon-column: 16px;
+  padding-inline: 12px;
   color: var(--sidebar-ink-soft);
+}
+:root[data-theme="dark"] .app-sidebar.conversation-chrome-theme {
+  --sidebar-active: color-mix(in srgb, var(--sidebar-bg) 90%, var(--sidebar-ink));
+}
+.app-sidebar.conversation-chrome-theme .sidebar-list-header {
+  min-height: 40px;
+  padding-inline: var(--sidebar-row-pad) 2px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.app-sidebar.conversation-chrome-theme .sidebar-session-section {
+  margin-top: 8px;
+}
+.app-sidebar.conversation-chrome-theme .workspace-index {
+  gap: 8px;
+}
+.app-sidebar.conversation-chrome-theme .session-new-button {
+  min-height: 40px;
+  flex-shrink: 0;
+  gap: 8px;
+  padding: 8px var(--sidebar-row-pad);
+  font-size: 0.8125rem;
+  font-weight: 400;
+}
+.app-sidebar.conversation-chrome-theme .workspace-index-heading {
+  min-height: 32px;
+  margin-top: 12px;
+  padding-inline: var(--sidebar-row-pad) 4px;
+  color: var(--sidebar-label);
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+.app-sidebar.conversation-chrome-theme .workspace-group {
+  margin-bottom: 16px;
+}
+.app-sidebar.conversation-chrome-theme .workspace-group:last-child {
+  margin-bottom: 8px;
+}
+.app-sidebar.conversation-chrome-theme .workspace-group-header {
+  min-height: var(--sidebar-group-height);
+  margin-bottom: 4px;
+  padding-right: 4px;
+}
+.app-sidebar.conversation-chrome-theme .workspace-group-toggle {
+  min-height: var(--sidebar-group-height);
+  gap: 8px;
+  padding: 6px var(--sidebar-row-pad);
+  color: var(--sidebar-label);
+  font-size: 0.75rem;
+  font-weight: 400;
+  line-height: 20px;
+}
+.app-sidebar.conversation-chrome-theme .workspace-icon-button {
+  width: 28px;
+  height: 30px;
+  border-radius: 6px;
+}
+.app-sidebar.conversation-chrome-theme .workspace-default-badge {
+  padding: 0 4px;
+  border-radius: 4px;
+  font-size: 0.625rem;
+  line-height: 16px;
+}
+.app-sidebar.conversation-chrome-theme .sidebar-session-section .session-index-list {
+  gap: 2px;
+  margin-right: 0;
+}
+/* Keep the menu in its own column: hover never hides or shifts the title. */
+.app-sidebar.conversation-chrome-theme .session-index-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 32px;
+  border-radius: 8px;
+}
+.app-sidebar.conversation-chrome-theme .sidebar-session-section .session-index-open {
+  min-height: var(--sidebar-row-height);
+  grid-template-columns: var(--sidebar-icon-column) minmax(0, 1fr);
+  gap: 8px;
+  padding: 6px 0 6px var(--sidebar-row-pad);
+  border-radius: 8px;
+}
+.app-sidebar.conversation-chrome-theme .session-index-icon {
+  justify-self: center;
+}
+.app-sidebar.conversation-chrome-theme .session-index-item .primary-cell {
+  color: var(--cds-secondary);
+  font-size: 0.8125rem;
+  font-weight: 400;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+.app-sidebar.conversation-chrome-theme .session-index-item:is(:hover, :focus-within) .primary-cell {
+  color: var(--cds-ink);
+}
+.app-sidebar.conversation-chrome-theme .session-index-item.active .primary-cell {
+  color: var(--cds-ink);
+  font-size: 0.8125rem;
+  font-weight: 400;
+  text-overflow: ellipsis;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+.app-sidebar.conversation-chrome-theme .sidebar-session-section .session-index-item .session-index-actions {
+  position: static;
+  width: 28px;
+  height: 28px;
+  transform: none;
+  background: transparent;
+  box-shadow: none;
+}
+.app-sidebar.conversation-chrome-theme .sidebar-session-section .session-index-item .session-index-actions:is(:hover, :focus-visible) {
+  background: var(--cds-alpha-2);
+}
+.app-sidebar.conversation-chrome-theme .workspace-load-more,
+.app-sidebar.conversation-chrome-theme .workspace-empty {
+  min-height: 32px;
+  padding: 6px 8px 6px calc(var(--sidebar-row-pad) + var(--sidebar-icon-column) + 8px);
+  color: var(--cds-secondary);
+  font-size: 0.75rem;
+  line-height: 20px;
+}
+.app-sidebar.conversation-chrome-theme .workspace-load-more {
+  justify-self: start;
+  border-radius: 6px;
+}
+.app-sidebar.conversation-chrome-theme .workspace-load-more:hover:not(:disabled) {
+  background: var(--sidebar-hover);
+  color: var(--cds-ink);
+}
+.app-sidebar.conversation-chrome-theme .session-index-heading {
+  padding: 4px 8px 4px calc(var(--sidebar-row-pad) + var(--sidebar-icon-column) + 8px);
+  font-size: 0.6875rem;
+  line-height: 16px;
 }
 .app-sidebar.conversation-chrome-theme .session-index-item.active {
   --sidebar-action-bg: var(--sidebar-active);
