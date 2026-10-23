@@ -6,6 +6,8 @@
 
 左侧时钟入口打开“定时任务”。支持一次性任务、固定分钟间隔，以及带 IANA 时区的 RRULE 日历计划。表单提供每天、工作日预设和自定义规则，保存前可以预览未来五个时间。
 
+没有任务时显示整页空状态，只有一个“新建任务”入口。有任务后显示左侧任务列表与右侧详情；新建或保存后会清除筛选并选中该任务，删除最后一个任务则回到空状态。页面画布、标题和留白与“能力”页保持一致。
+
 - **每次新建对话**：选择工作区，可选固定模型；未指定模型时使用运行时默认模型。每次使用新的会话 ID，即使已有空白对话也不复用。不同轮次可以重叠执行。
 - **沿用已有对话**：选择桌面对话，继承其历史、模型和权限。同一会话不会插入第二个自动回合。固定间隔从本次实际启动时刻重新计时；日历计划仍遵循设定的日历时间。
 
@@ -71,4 +73,4 @@ flowchart LR
 
 遇到任务未运行，先看计划状态、下次时间和阻塞原因，再检查 Agent 是否就绪、工作区/模型是否仍可用。执行失败从运行记录打开原对话查看实际错误。连接失败会保留原始诊断，经脱敏和显式截断后返回，不以成功或空结果替代。
 
-源码验证入口：Gateway `automations.test.ts`、Desktop `automation-store.test.ts` / `desktop-mcp.test.ts`，以及 Runtime 历史窗口测试。手动页面验收可从仓库根启动 `bun apps/dashboard/test/features/automations/fixture-server.ts`；仅使用临时内存数据库与模拟执行，不读取真实业务数据。Windows 命名管道、托盘长时间运行、安装包和真实供应商任务仍需对应平台验收。
+源码验证入口：Gateway `automations.test.ts`、Desktop `automation-store.test.ts` / `desktop-mcp.test.ts` / `automation-electron.test.ts`，以及 Runtime 历史窗口测试。手动页面验收可从仓库根启动 `bun apps/dashboard/test/features/automations/fixture-server.ts`；仅使用临时内存数据库与模拟执行，不读取真实业务数据。[Windows 实机记录](automations-windows-validation.md)覆盖命名管道、真实 Electron SQLite / Worker、退出恢复和页面状态；整机休眠、托盘长时间运行、安装包和真实供应商任务仍需另行验收。
