@@ -1960,7 +1960,7 @@ export const SessionsIndex = React.memo(function SessionsIndex({
       ) : null}
       {showTable ? (
         <div
-          className="session-index-list"
+          className={embedded && searchOpen ? "session-index-list sidebar-scroll-area" : "session-index-list"}
           onScroll={() => {
             closeMenu(false);
             maybeLoadMore();

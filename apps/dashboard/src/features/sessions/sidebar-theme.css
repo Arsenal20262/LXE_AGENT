@@ -32,6 +32,8 @@
 }
 .app-sidebar.conversation-chrome-theme .sidebar-session-section {
   margin-top: 8px;
+  /* The sidebar owns outer clipping; allow the scrollbar into its end padding. */
+  overflow: visible;
 }
 .app-sidebar.conversation-chrome-theme .workspace-index {
   gap: 8px;
@@ -108,9 +110,9 @@
   font-size: 0.8125rem;
   font-weight: 400;
   line-height: 20px;
-  text-overflow: ellipsis;
-  -webkit-mask-image: none;
-  mask-image: none;
+  text-overflow: clip;
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent);
 }
 .app-sidebar.conversation-chrome-theme .session-index-item:is(:hover, :focus-within) .primary-cell {
   color: var(--cds-ink);
@@ -119,9 +121,9 @@
   color: var(--cds-ink);
   font-size: 0.8125rem;
   font-weight: 400;
-  text-overflow: ellipsis;
-  -webkit-mask-image: none;
-  mask-image: none;
+}
+.app-sidebar.conversation-chrome-theme .session-workspace-result {
+  text-overflow: clip;
 }
 .app-sidebar.conversation-chrome-theme .sidebar-session-section .session-index-item .session-index-actions {
   position: static;
@@ -171,8 +173,37 @@
 .app-sidebar.conversation-chrome-theme .workspace-default-badge {
   color: var(--cds-muted);
 }
-.app-sidebar.conversation-chrome-theme .workspace-index-scroll {
-  scrollbar-color: var(--cds-alpha-3) transparent;
+/* Extend only the real scroller into the sidebar's end padding. The 8px gutter
+   and 2px content gap preserve row width and keep the thumb off selected rows. */
+.app-sidebar.conversation-chrome-theme .sidebar-session-section .sidebar-scroll-area {
+  margin-right: -10px;
+  padding-right: 2px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  /* Let Chromium use the thumb geometry and states below instead of its
+     inherited native scrollbar-color / scrollbar-width overrides. */
+  scrollbar-color: auto;
+  scrollbar-width: auto;
+}
+.app-sidebar.conversation-chrome-theme .sidebar-scroll-area::-webkit-scrollbar {
+  width: 8px;
+}
+.app-sidebar.conversation-chrome-theme .sidebar-scroll-area::-webkit-scrollbar-track {
+  background: transparent;
+}
+.app-sidebar.conversation-chrome-theme .sidebar-scroll-area::-webkit-scrollbar-thumb {
+  min-height: 32px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--cds-alpha-3);
+  background-clip: padding-box;
+}
+.app-sidebar.conversation-chrome-theme .sidebar-scroll-area::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--cds-ink) 30%, transparent);
+}
+.app-sidebar.conversation-chrome-theme .sidebar-scroll-area::-webkit-scrollbar-thumb:active {
+  background-color: color-mix(in srgb, var(--cds-ink) 40%, transparent);
 }
 .app-sidebar.conversation-chrome-theme .session-index-icon[data-session-state="completed"] { color: var(--success); }
 .app-sidebar.conversation-chrome-theme .session-index-icon[data-session-state="error"] { color: var(--danger); }
