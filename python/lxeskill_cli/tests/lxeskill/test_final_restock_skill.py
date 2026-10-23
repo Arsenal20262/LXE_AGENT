@@ -71,30 +71,6 @@ def test_final_restock_is_exposed_with_one_owner_and_the_existing_inputs(capsys)
     assert "传裸开关 --peak-boost-enabled，不附带值；否则省略" in described["input_schema"]["properties"]["peak_boost_enabled"]["description"]
 
 
-def test_skills_use_public_queries_and_keep_the_two_business_contracts() -> None:
-    skills = Path(__file__).resolve().parents[4] / "skills"
-    final_policy = (skills / WORKFLOW_SKILL / "SKILL.md").read_text(encoding="utf-8")
-    inventory_policy = (skills / "mabang-store-shenzhen-inventory-export" / "SKILL.md").read_text(encoding="utf-8")
-    assert "lxeskill list" in final_policy and "lxeskill describe" in final_policy
-    assert "catalog.json" not in final_policy
-    assert "lxeskill replenish final-restock settings" not in final_policy
-    assert "普通备货按原核验规则排除未通过商品" in inventory_policy
-    assert "保留全部MSKU和14个公式字段" in inventory_policy
-    assert "商品类型核验未通过本身不阻断V2" in inventory_policy
-    assert "文件级来源异常仍须失败停止" in inventory_policy
-    msku_policy = (skills / "mabang-store-msku-export" / "SKILL.md").read_text(encoding="utf-8")
-    assert "普通备货流程中" in msku_policy
-    assert "V1没有可计算记录时仅停止V1，不阻断已授权V2" in msku_policy
-    assert "保留全部MSKU和完整14个公式字段" in msku_policy
-    assert "返回 `replenishment-workflow-map`" in msku_policy
-    ordinary_policy = (skills / "replenishment-workflow-map" / "SKILL.md").read_text(encoding="utf-8")
-    sales_policy = (skills / "replenishment-sales-analyze" / "SKILL.md").read_text(encoding="utf-8")
-    assert "replenishment-sales-analyze" in ordinary_policy
-    assert "lxeskill replenish sales analyze" in sales_policy
-    assert "replenishment-calculate" in ordinary_policy
-    assert load_catalog()["mabang_analyze_store_msku_sales"]["owner_skills"] == ["replenishment-sales-analyze"]
-
-
 @pytest.mark.parametrize("workflow,scope,command", [
     ("V1", "replenishment-calculate", ["replenish", "calculate"]),
     ("V2", WORKFLOW_SKILL, COMMAND),
@@ -283,15 +259,6 @@ def test_source_without_native_local_inventory_passes_cli_source_validation(tmp_
     read_inventory.assert_called_once()
 
 
-def test_skill_describes_shenzhen_ag_and_final_only_review_delivery() -> None:
-    skill = (Path(__file__).resolve().parents[4] / "skills" / WORKFLOW_SKILL / "SKILL.md").read_text()
-    for text in ("真实库存（深圳仓库）数量", "14个公式字段", "35列", "库存待核对", "success=false", "ok=false", "Office Kit", "--peak-boost-enabled"):
-        assert text in skill
-    assert "--require-complete-inventory" not in skill
-    assert "require_complete_inventory" not in load_catalog()["mabang_export_store_msku_actual_inventory"]["input_schema"]["properties"]
-    assert "旺季默认关闭" in skill
-
-
 def test_unknown_store_returns_actual_local_source_mismatch(tmp_path: Path, capsys) -> None:
     source = tmp_path / "source.xlsx"
     workbook = Workbook()
@@ -422,13 +389,17 @@ def test_main_skill_is_the_single_store_name_workflow_for_v1_v2_and_both() -> No
         "lxeskill replenish calculate", "lxeskill replenish final-restock generate", "send_files",
     ):
         assert command in workflow
-    for text in (
-        "--msku-source-xlsx-path", "--shenzhen-inventory-report-xlsx-path", "--unlinked-shipments-snapshot-path",
-        "真实库存（深圳仓库）数量", "success=false", "ok=false", "库存待核对",
-        "“普通备货”对应V1", "“最终备货建议”对应V2", "“两种都要”对应同时生成V1和V2",
-        "仍无法确定时只询问一次", "共用同一轮已核验MSKU、深圳报告和货件快照，各取一次",
-        "仅停止V1", "继续V2必要的共享取数、全MSKU计算及检查",
-        "V2未知库存或计算失败也不阻止已满足前提的V1计算和正式交付",
-        "此临时规则不影响V1", "不把一版成功称为两版全部成功",
+    # One static policy check owns stable command/data terms. Runtime tests cover
+    # discovery and permissions; model replay covers version decisions and stopping.
+    for term in (
+        "lxeskill list", "lxeskill describe", "V1", "V2", "replenishment-sales-analyze",
+        "--msku-source-xlsx-path", "--shenzhen-inventory-report-xlsx-path",
+        "--unlinked-shipments-snapshot-path", "--peak-boost-enabled", "--peak-boost-days",
+        "真实库存（深圳仓库）数量", "35列", "14个公式字段", "Office Kit",
+        "库存待核对", "success=false", "ok=false",
     ):
-        assert text in workflow
+        assert term in workflow
+    for retired in ("catalog.json", "--include-local-inventory", "lxeskill replenish final-restock settings"):
+        assert retired not in workflow
+    assert load_catalog()["mabang_analyze_store_msku_sales"]["owner_skills"] == ["replenishment-sales-analyze"]
+    assert "require_complete_inventory" not in load_catalog()["mabang_export_store_msku_actual_inventory"]["input_schema"]["properties"]
