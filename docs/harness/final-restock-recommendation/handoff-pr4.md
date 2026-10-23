@@ -4,9 +4,9 @@
 
 - **一个 Amazon 完整编排 Skill、两种计算版本、分别生成与交付。** V1原普通备货和V2最终备货建议均保留，V1算法和多Sheet产物不被V2替换。此决定替代之前的单算法统一方案和双完整入口方案。
 - 主入口：`replenishment-workflow-map`。独立 `replenishment-final-restock` Skill已完整退役，V2生成说明和命令归属均并入主Skill；`replenish final-restock generate` CLI及底层计算能力继续保留。
-- Worktree：`/Users/hym/.codex/worktrees/1672/Amazon`；分支：`codex/amazon-replenishment-unification`；PR3基线及本次提交前HEAD：`092b24cc891ced31da165ee49836157b2ec93d10`。
+- Worktree：`/Users/hym/.codex/worktrees/1672/Amazon`；分支：`codex/amazon-replenishment-unification`；PR3功能基线：`092b24cc891ced31da165ee49836157b2ec93d10`；PR4功能提交：`f973ed71ea07a0917d3a9ff60c9d6934aa1c3bdb`。后续main兼容合并及重启见文末。
 - 版本化调整前15项修改已保护至 `/private/tmp/pr4-before-versioned-entry-20261023`，含原diff、状态及文件压缩包；更早32项修改快照仍在 `/private/tmp/pr4-before-dual-flow-20261023`。没有整体reset/checkout/restore、stash或其他Git写操作。
-- PR4累计增量在本轮验证后按用户授权精确暂存并完成一次本地Commit；提交结果以本分支 `git log -1` 及收口汇报为准，最新范围及验证见文末。本轮未获Push、Merge或创建PR授权；PR1～PR3历史及其他worktree不变。未调用生产ERP或执行真实外部附件发送。
+- PR4累计增量已按用户授权形成上述本地功能Commit；本轮追加授权将远端main合入当前PR4，并确认唯一测试冲突的最小处理方案，合并结果以本分支 `git log -1` 及收口汇报为准。本轮未获Push或创建PR授权；PR1～PR3历史及其他worktree不变。未调用生产ERP或执行真实外部附件发送。
 
 ## 主入口与版本契约
 
@@ -87,7 +87,7 @@ export LXE_OFFICE_CLI=/Users/hym/.codex/worktrees/1672/Amazon/build/desktop-runt
 - 本地代码/CLI/Skill契约、真实Office产物和失败隔离验证通过；Python/Bun/Office测试环境就绪，具备准备本地Commit及人工评审材料的技术条件。模型回放缺少正常运行时凭据注入，仍为NOT VERIFIED。
 - 真实模型自动选路、Desktop聊天、生产ERP取数、外部附件发送、原生Windows/Microsoft Excel仍为 **NOT VERIFIED**。本轮沿用不调用生产ERP和不向外发送的边界，未读取模型凭据或冒充真实交付。
 - 人工审核重点：主Skill版本选择/同轮复用/分别交付说明，以及V2 AG口径和未知库存临时规则。运营允许未知库存正式交付的未来政策仍待确认；当前核对失败机制继续生效。
-- 后续PR按PR1→PR2→PR3→PR4依赖串行审查，PR4初始base为PR3，前序合并后按实际历史复核main和base。本轮仅授权精确暂存及一次本地Commit，不Push、Merge、Rebase或创建PR。
+- 后续PR按PR1→PR2→PR3→PR4依赖串行审查，PR4初始base为PR3，前序合并后按实际历史复核main和base。功能收口后的main合并已追加授权，详见文末；仍不Push、Rebase或创建PR。
 
 ## 历史风险（独立修复任务）
 
@@ -217,3 +217,23 @@ export LXE_OFFICE_CLI=/Users/hym/.codex/worktrees/1672/Amazon/build/desktop-runt
 - PR4累计范围为 **29条路径：25个修改、3个新增、1个删除**。新增为本handoff、`test_final_restock_shenzhen_delivery.py`、`test_replenishment_versions.py`；删除为独立V2 Skill。其余为既有AG修复、catalog归属、9个现行Amazon Skill、Runtime/Python测试、回放脚本及两份PR3历史交接提示。本轮新增回归放在已有文件，没有引入框架、依赖或锁文件变化。
 - 本轮用户授权精确暂存上述累计范围并完成一次本地Commit，提交信息为 `refactor: unify Amazon V1/V2 replenishment workflow`；提交SHA及最终工作区状态由 `git log -1`、`git status` 和收口汇报确认。后续Push、创建PR、Merge均需分别取得授权，PR4初始Base为PR3。
 - **技术收口PASS，具备后续提审准备条件**；人工仍需审核Skill版本选择、命令归属、AG口径及未知库存临时规则。17个真实模型回放、Desktop聊天、生产ERP、外部附件交付/发送恢复、原生Windows及Microsoft Excel仍为 **NOT VERIFIED**，历史403 P2仍需独立修复；不将技术收口视作生产验收。
+
+## 2026-10-23 main兼容合并与Desktop重启
+
+- 用户追加授权“远端main有更新则合并兼容”，并在预检发现冲突后明确确认最小处理方案。`git fetch origin main`取得 `abde37ddd63ca406921ad73c90dd1afa1139c363`；与此前只读审查查询相同，但当前PR4尚未合入。相对PR4功能提交有34个主线提交，其中29个非合并提交，涵盖文档整理、侧栏与权限界面、模型思考级别和MCP SDK v2。
+- 合并以PR4功能提交 `f973ed71` 为第一父节点、上述main为第二父节点，保留PR1～PR3及PR4既有历史，不修改本地main或前序分支，不Rebase、不Push、不创建PR。合并前提交信息、预检和日志保存在 `/private/tmp/pr4-main-compat-restart-8xxm9j8r/`。
+- 唯一冲突是 `apps/dashboard/test/behavior/renderer.test.ts` 的场景计数行：保留main的 `sidebar: 10`，同时保留Amazon设置的 `amazon-final-restock-settings: 6`。其余自动合并；PR4原29条路径在追加本节前逐字节保留。没有改业务算法、AG来源、公式或ERP认证。
+- 依照main声明执行 `bun install --frozen-lockfile` 同步3个包，锁文件SHA256保持 `129423dbbf5e0236db562425038fabc73882f201b62ab9f6d8e442c96e91e013`。这是复用main依赖，不是PR4自行升级。当前Python锁文件和业务源码未受main修改。
+
+| 合并后实际验证 | 结果与日志 |
+|---|---|
+| 全工作区TypeScript检查 | **通过**，8个工作区退出码均0；`typecheck.log`。 |
+| TypeScript生产模块边界检查 | **通过**，`bun run check:ts-boundary`。 |
+| Bun MCP协议/错误/图像、Skill/CLI归属、模型目录、Desktop设置及健康，11文件 | **120 passed、0 failed、705 assertions**；`bun-compat.log`。MCP使用本机模拟HTTP/stdio，未连接生产ERP。 |
+| 真实Chromium夹具：sidebar、amazon-final-restock-settings | **2 passed、0 failed、23 filtered**；`renderer.log`，分别保留10项侧栏和6项Amazon设置断言。 |
+| Python深圳库存交付、双版本、跨Sheet重复MSKU、Skill及仓库结构 | **56 passed、0 failed、无skip**；`python-compat.log`，包含真实Office Kit及V1/V2结果隔离。 |
+| 公开CLI检查 | doctor及V1/V2 describe均成功；49命令、38个Skill，V1 owner仍为原计算Skill，V2 owner仍为主Skill；`merged-cli-checks.json`。 |
+
+- **重启通过**：停止原PR4 Desktop/Agent后，以既有 `bun run desktop:preview` 重新准备缓存资源、构建Dashboard和Electron并启动合并源码。启动日志记录 `gateway_ready`、`lxeskill_probe_ready`、`skill_catalog_loaded`（38个Skill、0诊断）；新Desktop主进程63753、Agent子进程63785。日志为 `merged-desktop-preview.log`；默认数据仍在本worktree的 `var/`。
+- Electron实际用户窗口的自动化访问未获许可，因此本轮采用进程/日志检查；上述Chromium夹具不等同于真实用户聊天验收。17个模型回放、生产ERP、外部附件交付、原生Windows和Microsoft Excel继续 **NOT VERIFIED**；历史403 P2未修复。
+- PR4功能差异可独立通过 `092b24cc..f973ed71` 核对；本次带入的主线改动不计作备货功能新增。若后续仍以旧PR3为Base，PR差异还会包含这段main历史，提审时须按实际父链明确区分；没有擅自同步PR1～PR3。最终合并提交SHA及工作区状态以 `git log -1`、`git status` 和收口汇报为准。
