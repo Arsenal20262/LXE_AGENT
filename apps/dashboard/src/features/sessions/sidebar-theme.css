@@ -201,8 +201,8 @@
   scrollbar-color: auto;
   scrollbar-width: auto;
 }
-/* Mouse focus alone must not leave the thumb visible after leaving the list. */
-.app-sidebar.conversation-chrome-theme .sidebar-session-section .sidebar-scroll-area:is(:hover, :has(:focus-visible)) {
+/* Activity comes from scrolling, not hover or focus; the gutter stays stable. */
+.app-sidebar.conversation-chrome-theme .sidebar-session-section .sidebar-scroll-area[data-scrollbar-active] {
   --sidebar-scrollbar-fill: var(--cds-alpha-3);
 }
 .app-sidebar.conversation-chrome-theme .sidebar-scroll-area::-webkit-scrollbar {
@@ -218,7 +218,7 @@
   background: var(--sidebar-scrollbar-fill);
   background-clip: padding-box;
 }
-.app-sidebar.conversation-chrome-theme .sidebar-scroll-area::-webkit-scrollbar-thumb:hover {
+.app-sidebar.conversation-chrome-theme .sidebar-scroll-area[data-scrollbar-active]::-webkit-scrollbar-thumb:hover {
   background-color: color-mix(in srgb, var(--cds-ink) 30%, transparent);
 }
 .app-sidebar.conversation-chrome-theme .sidebar-scroll-area::-webkit-scrollbar-thumb:active {
