@@ -206,5 +206,13 @@
 ## 2026-10-24 修复提交与main整合收口准备
 
 - 用户已明确授权先提交上述5个文件，再合入最新main、执行必要整合回归，通过后正常Push更新PR #117并补验证评论；遇到冲突先停止汇报。不改PR Base、不合并PR、不修改PR1～PR3或其他草稿。
-- 本轮起点6ea5ee8c与PR远端一致，暂存区为空，5文件差异与上一轮已验证快照一致；先精确提交回滚兼容与UI覆盖修复，再单独记录main整合。提交前复用上一轮192项Python／真实Office、78项Bun和4组26场景UI证据，不称本轮重新执行；合入main后重新验证受影响路径。
+- 本轮起点6ea5ee8c与PR远端一致，暂存区为空，5文件中的源码／测试与上一轮已验证快照一致，交接仅补授权及提交计划；先精确提交回滚兼容与UI覆盖修复，再单独记录main整合。提交前复用上一轮192项Python／真实Office、78项Bun和4组26场景UI证据，不称本轮重新执行；合入main后重新验证受影响路径。
 - 保护快照和后续日志位于/private/tmp/pr117-publish-main-jixjqolj/，记录原始diff、全部本地分支及其他12个worktree的HEAD／状态／diff指纹。实际提交SHA、main基线与整合结果以Git记录和后续收口记录为准。
+
+## 2026-10-24 实际合入main后的整合验证
+
+- 5文件修复提交为346d84051e7726205cad95d7ab447e6b1059c191（fix: preserve Amazon V2 settings rollback compatibility），+169/-14；随后fetch确认main为3018cb30ed19ed42ba7c45dc90203633f0a50b22，包含#114、#108及#121。预检与实际合入均无冲突，未自行解决任何冲突；合并提交SHA以Git记录为准。
+- main同步的141路径属于上游累计变更，不是新增开发。原合并索引与merge-tree预测树完全一致；自动合并的Dashboard入口和Desktop协议相对main只增加原Amazon页面及两个设置方法。37个V1／公共取数／V2业务、配置、公式、主Skill及catalog指纹与修复提交一致；其余12个worktree的HEAD、状态及暂存／未暂存diff指纹不变，依赖和锁文件没有调整。
+- 以下均为实际合入后的新执行：Python CLI／infra及V2公式、设置、完整工作簿、A规则、深圳AG、双版本共865 passed／4 Windows专属skipped／4既有aiohttp弃用警告，包含真实LibreOffice／Office Kit重算；Bun七文件83 pass、389 assertions；真实Electron／Chromium四组4 pass、22 filtered、16外层断言，共26个内部场景，含中英文480px布局及深浅色截图。此前192／78项不叠加为本轮测试数。
+- 八工作区typecheck、TS生产边界、Dashboard及Desktop生产构建、doctor／list／两条V2 describe／datasets查询均通过；构建保留既有大chunk提示。独立回放及独立V2 Skill未恢复，生产messages/replay.ts保留。日志与截图均在/private/tmp/pr117-publish-main-jixjqolj/。
+- 本轮授权范围为正常追加Commit／Push更新PR #117并补评论，实际Push终态以远端Head和PR复核为准；不force push、不改PR Base、不合并PR，不改PR1～PR3历史或其他草稿。尚需维护者审核交互、旺季、迁移和命令取舍；真实模型语义、生产ERP、附件发送、完整Desktop业务、原生Windows／Microsoft Excel、新安装包及真实旧版安装包降级仍NOT VERIFIED。已有三字段配置回滚前仍须由修复版读取一次完成转换；此次整合测试不替代上述验收。
