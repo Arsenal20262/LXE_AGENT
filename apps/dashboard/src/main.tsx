@@ -1,6 +1,6 @@
 import { AutomationsPage } from "./features/automations/AutomationsPage";
 import { VietnamSettingsWorkbench } from "./features/workbench/vietnam-settings-view";
-import { AmazonFinalRestockSettingsWorkbench } from "./features/workbench/amazon-final-restock-settings-view";
+import { AmazonV2SettingsWorkbench } from "./features/workbench/amazon-v2-settings-view";
 import { SessionSidebar } from "./features/sessions/SessionSidebar";
 import { ConversationPage } from "./features/sessions/ConversationPage";
 import { CapabilitiesPage } from "./features/capabilities/CapabilitiesPage";
@@ -277,8 +277,8 @@ function App({
             {activeSection === "workbench" && workbenchView === "vietnam-settings" ? (
               <VietnamSettingsWorkbench onBack={() => openWorkbenchView("index")} />
             ) : null}
-            {activeSection === "workbench" && workbenchView === "amazon-final-restock-settings" ? (
-              <AmazonFinalRestockSettingsWorkbench onBack={() => openWorkbenchView("index")} />
+            {activeSection === "workbench" && workbenchView === "amazon-v2-settings" ? (
+              <AmazonV2SettingsWorkbench onBack={() => openWorkbenchView("index")} />
             ) : null}
             {activeSection === "workbench" && workbenchView === "input-assets" ? (
               <InputAssetsWorkbench

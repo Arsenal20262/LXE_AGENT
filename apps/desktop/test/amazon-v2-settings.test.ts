@@ -1,14 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { DesktopAmazonFinalRestockSettingsService } from "../src/main/amazon-final-restock-settings";
+import { DesktopAmazonV2SettingsService } from "../src/main/amazon-v2-settings";
 
-describe("Amazon final-restock settings bridge", () => {
+describe("Amazon V2 settings bridge", () => {
   test("reads and saves the persistent feature setting through lxeskill", async () => {
     const dataRoot = mkdtempSync(join(tmpdir(), "amazon-restock-settings-"));
     const calls: string[][] = [];
-    const service = new DesktopAmazonFinalRestockSettingsService({
+    const service = new DesktopAmazonV2SettingsService({
       platform: "darwin", pythonPath: "/managed/python", managedPath: "/managed", dataRoot,
       execute: async (args, options) => {
         calls.push(args);
@@ -34,28 +34,32 @@ describe("Amazon final-restock settings bridge", () => {
     rmSync(dataRoot, { recursive: true, force: true });
   });
 
-  test("real managed Python persists across service restarts and reports corrupt settings", async () => {
+  test.each([false, true])("real managed Python preserves legacy switch %s when only days change", async enabled => {
     const dataRoot = mkdtempSync(join(tmpdir(), "amazon-restock-settings-process-"));
     const options = { platform: "darwin" as const,
       pythonPath: resolve(import.meta.dirname, "../../../.venv", process.platform === "win32" ? "Scripts/python.exe" : "bin/python"),
       managedPath: "/managed", dataRoot };
     try {
-      const first = new DesktopAmazonFinalRestockSettingsService(options);
+      const first = new DesktopAmazonV2SettingsService(options);
       expect(await first.read()).toEqual({ peak_boost_enabled: false, peak_boost_days: null });
-      writeFileSync(join(dataRoot, "skill-data/amazon-final-restock/parameters.json"), '{"peak_boost_enabled":false}');
-      expect(await first.read()).toEqual({ peak_boost_enabled: false, peak_boost_days: null });
-      await first.save({ peak_boost_enabled: false, peak_boost_days: 20 });
-      const restarted = new DesktopAmazonFinalRestockSettingsService(options);
-      expect(await restarted.read()).toEqual({ peak_boost_enabled: false, peak_boost_days: 20 });
+      const path = join(dataRoot, "skill-data/amazon-final-restock/parameters.json");
+      const original = JSON.stringify({ peak_boost_enabled: enabled });
+      writeFileSync(path, original);
+      const legacy = await first.read();
+      expect(legacy).toEqual({ peak_boost_enabled: enabled, peak_boost_days: null });
+      expect(readFileSync(path, "utf8")).toBe(original);
+      await first.save({ ...legacy, peak_boost_days: 20 });
+      const restarted = new DesktopAmazonV2SettingsService(options);
+      expect(await restarted.read()).toEqual({ peak_boost_enabled: enabled, peak_boost_days: 20 });
       await restarted.save({ peak_boost_enabled: true, peak_boost_days: 20 });
-      expect(await new DesktopAmazonFinalRestockSettingsService(options).read()).toEqual({ peak_boost_enabled: true, peak_boost_days: 20 });
+      expect(await new DesktopAmazonV2SettingsService(options).read()).toEqual({ peak_boost_enabled: true, peak_boost_days: 20 });
       writeFileSync(join(dataRoot, "skill-data/amazon-final-restock/parameters.json"), '{"peak_boost_enabled":"false"}');
       await expect(restarted.read()).rejects.toThrow("ValueError: Amazon 最终备货设置格式无效");
     } finally { rmSync(dataRoot, { recursive: true, force: true }); }
   }, 15_000);
 
   test("rejects invalid renderer settings before invoking Python", async () => {
-    const service = new DesktopAmazonFinalRestockSettingsService({
+    const service = new DesktopAmazonV2SettingsService({
       platform: "darwin", pythonPath: "/managed/python", managedPath: "/managed", dataRoot: "/state",
       execute: async () => { throw new Error("must not execute"); },
     });
@@ -68,7 +72,7 @@ describe("Amazon final-restock settings bridge", () => {
   test("rejects malformed days in a CLI success response", async () => {
     const dataRoot = mkdtempSync(join(tmpdir(), "amazon-restock-invalid-response-"));
     try {
-      const service = new DesktopAmazonFinalRestockSettingsService({
+      const service = new DesktopAmazonV2SettingsService({
         platform: "darwin", pythonPath: "/managed/python", managedPath: "/managed", dataRoot,
         execute: async () => ({ stdout: JSON.stringify({ type: "result", ok: true, data: { success: true, data: { peak_boost_enabled: true, peak_boost_days: "20" } } }), stderr: "", error: null }),
       });
@@ -93,7 +97,7 @@ describe("Amazon final-restock settings bridge", () => {
   ] as const)("preserves failure diagnostics for response %s", async (stdout, stderr, error, expected) => {
     const dataRoot = mkdtempSync(join(tmpdir(), "amazon-restock-failure-"));
     try {
-      const service = new DesktopAmazonFinalRestockSettingsService({
+      const service = new DesktopAmazonV2SettingsService({
         platform: "win32", pythonPath: "/managed/python", managedPath: "/managed", dataRoot,
         execute: async () => ({ stdout, stderr, error }),
       });
@@ -105,7 +109,7 @@ describe("Amazon final-restock settings bridge", () => {
     const dataRoot = mkdtempSync(join(tmpdir(), "amazon-restock-progress-"));
     const parameters = { peak_boost_enabled: true, peak_boost_days: 0 };
     try {
-      const service = new DesktopAmazonFinalRestockSettingsService({
+      const service = new DesktopAmazonV2SettingsService({
         platform: "win32", pythonPath: "/managed/python", managedPath: "/managed", dataRoot,
         execute: async () => ({ stdout: JSON.stringify({ type: "progress" }) + "\r\n" + JSON.stringify({ type: "result", ok: true, data: { success: true, data: parameters } }) + "\r\n", stderr: "", error: null }),
       });
@@ -126,7 +130,7 @@ describe("Amazon final-restock settings bridge", () => {
         { stdout: detail, stderr: "", error: null },
         { stdout: "", stderr: "", error: new Error(detail) },
       ]) {
-        const service = new DesktopAmazonFinalRestockSettingsService({
+        const service = new DesktopAmazonV2SettingsService({
           platform: "win32", pythonPath: "/managed/python", managedPath: "/managed", dataRoot,
           execute: async () => execution,
         });

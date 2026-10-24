@@ -677,7 +677,7 @@ export interface DesktopVietnamSettingsState {
   template_error: string | null;
 }
 
-export interface DesktopAmazonFinalRestockSettings {
+export interface DesktopAmazonV2Settings {
   peak_boost_enabled: boolean;
   peak_boost_days: number | null;
 }
@@ -750,8 +750,8 @@ export interface LxeDesktopBridge {
     saveVietnamParameters(input: DesktopVietnamParameters): Promise<DesktopVietnamSettingsState>;
     uploadVietnamTemplate(): Promise<DesktopVietnamSettingsState | null>;
     exportVietnamTemplate(): Promise<DesktopVietnamTemplateExportResult | null>;
-    getAmazonFinalRestockSettings(): Promise<DesktopAmazonFinalRestockSettings>;
-    saveAmazonFinalRestockSettings(input: DesktopAmazonFinalRestockSettings): Promise<DesktopAmazonFinalRestockSettings>;
+    getAmazonV2Settings(): Promise<DesktopAmazonV2Settings>;
+    saveAmazonV2Settings(input: DesktopAmazonV2Settings): Promise<DesktopAmazonV2Settings>;
     onSyntheticPerformerTaskChanged(
       listener: (task: DesktopSyntheticPerformerTask) => void,
     ): () => void;

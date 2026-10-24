@@ -99,3 +99,26 @@
 - 本轮实际通过：Python五文件99 passed、无skip，包含完整工作簿回归、CLI、真实Office Kit深圳交付及双版本；Bun五文件57 pass／294 assertions；Runtime定向4 pass／29 assertions、123 filtered；八工作区typecheck与TS生产边界通过。日志`/private/tmp/pr117-retire-close-{python,bun,runtime,typecheck,boundary}.log`。未运行真实模型／ERP／外部附件或完整原生Desktop／Windows／Microsoft Excel验收，不把历史验证算本轮重跑。
 - PR #117远端起始Head为3babfbf3；PR #120已独立前进至70a372dd，增加三个Runtime测试文件的清理，本轮不取入这些改动。共享历史文档仍逐字节相同、脚本均删除；共同修改的skills.test.ts使用原base与双方内容做git merge-file -p双向对照，退出码均0、结果相同，保留Amazon断言及PR #120删除。其余两份Runtime测试在本分支相对base未改，按当前快照不产生内容冲突；未实际执行merge。
 - 本轮提交只含退役准备的五路径及工作簿测试，共六路径；暂存前后检查diff、敏感信息、残留入口和Git状态，提交／Push结果以追加提交及PR Head复核为准。PR1～PR3、PR Base及其他工作区保持，不force push。
+
+## 2026-10-24 PR4设置页最小适配（第一阶段）
+
+- 用户授权在PR4直接复用已有设置页补丁，起始HEAD为57d4c7c4；本轮不处理PR3冲突、不修改其他工作区，不暂存／Commit／Push／Merge。
+- 从已归位PR3的1c43896d逐路径复用9项源码／测试补丁，先通过应用检查再适配；没有合并PR3分支，也没有带入pool-11后续4cf6796e的命名、路由或IPC改名。
+- Amazon页面移除旺季checkbox及启用操作，只编辑天数，保留空值／0及0～120整数校验、保存、重载和实际失败信息。沿用原设置契约，保存天数时保留读取到的旧peak_boost_enabled；历史true／false仍可读取。本轮明确启用才加成，生成器默认关闭规则不变。
+- 复用WorkbenchPageHeader；共享输入框、卡片及保存区样式放入既有detail-theme.css的workbench-settings-*类。Amazon独有布局保留在新增两行CSS中；越南页面只补公共class并迁移相应样式，业务字段、事件与参数不变，Amazon不再引用越南CSS或类名。
+- 修改9项：Amazon页面及独有CSS、detail-theme.css、越南页面及CSS、i18n、Amazon行为测试、renderer夹具、Desktop设置测试；另更新本handoff。保留原无弹窗断言，未新增框架、Service或依赖；Python业务／公式、CLI/catalog、Skill、Runtime、Desktop IPC和锁文件均未改。
+- 先红：首轮被本机监听限制阻断；相同命令允许监听后，真实Chromium在“checkbox数量1而非0”处失败，确实命中原问题。修复后3组通过、23 filtered，覆盖Amazon6、越南8、工作台3，共17个内部场景；包括天数持久化／错误／空值与0、公共页头及越南选择器隔离。日志/private/tmp/pr117-settings-minimal/renderer-{red,red-local,green}.log。
+- 本轮Desktop四文件45 pass／201 assertions，包含真实私有Python读写旧true／false、重启持久化、损坏设置及IPC／preload边界；Python85 passed、无skip，覆盖设置、生成CLI、请求开关优先级／默认关闭、生成时参数快照、V1计算CLI及统一Skill契约。日志同目录desktop.log和python.log；各组独立计数，不与历史重叠组累计。
+- Dashboard生产及行为夹具typecheck、Desktop typecheck通过，日志同目录types-{dashboard,desktop}.log。其他12个worktree的HEAD、状态和暂存／未暂存diff指纹与本轮保护快照一致，包含PR3原11项草稿；快照为同目录protected-worktrees.json。
+- 本轮没有重新执行Office重算或全量业务测试，没有重启／部署用户Desktop、访问生产ERP、调用真实模型或发送附件；原生Windows／Microsoft Excel与完整桌面聊天仍NOT VERIFIED。已有业务回归证据见上方，不作为本轮重跑；后续提交需另获授权。
+
+## 2026-10-24 PR4设置页命名与本地提交收口
+
+- 起始HEAD为57d4c7c4，分支codex/amazon-replenishment-unification。用户已授权将第一阶段10文件有效修改及本次命名收敛一并本地Commit；不Push、Merge、Rebase或修改PR Base，实际提交SHA以Git记录和收口报告为准。
+- 只读参考pool-11的4cf6796e，在PR4当前文件逐项修改名称，不复制旧文件或cherry-pick旧分支。页面／CSS／行为测试及Desktop Service／测试改名为amazon-v2-settings；组件、配置类型、preload方法及IPC对应统一为AmazonV2Settings，导航与中英文标题同步。旧页面路径通过现有规则回到工作台索引，无兼容包装。
+- 前次天数读取／校验／保存／重载、旧布尔兼容、无checkbox、公共页头及CSS隔离完整保留；main的automations导航、navigation-rail场景和sidebar:10断言保持。改名后仍调用replenish final-restock settings，参数继续存放在amazon-final-restock目录；generate命令、Python模块、CLI/catalog、主Skill、V1/V2算法、深圳AG及Office能力未改。
+- 本轮新执行：导航回归先红3 pass／1 fail（新路径原先回退index）；改名后Desktop设置／preload／IPC及导航五文件49 pass／224 assertions。包含真实私有Python对旧true／false配置读取、仅改天数、重启持久化及损坏错误；preload验证新IPC通道和原参数交接。
+- 真实Chromium四组4 pass／22 filtered：Amazon6、越南8、工作台3、navigation-rail8，共25个内部场景。八工作区typecheck通过；Dashboard构建通过（存在大于500kB的chunk提示，本轮未扩展拆包），Desktop通过既有buildDesktop入口构建到临时目录，未重启用户服务。
+- 本轮新执行两条CLI describe查询，generate仍为business且owner为replenishment-workflow-map，settings仍为internal。Python85项及上方真实Office／双版本回归为未变业务源码的复用证据，本轮未重复执行，不当作真实模型或生产Agent验收。
+- 本轮日志在/private/tmp/pr117-settings-final/：renderer.log、desktop-navigation.log、typecheck.log、dashboard-build.log、desktop-build.log、describe-{settings,generate}.json；原10文件补丁备份在initial.patch／initial-files/。其他12个worktree按protected-worktrees.json核对HEAD、状态及暂存／未暂存指纹，PR3和pool-11保持原样。
+- 收口检查仅暂存本任务设置页、命名、关联测试及本handoff；排除构建产物、临时日志、私密信息和其他草稿。真实模型、完整原生Desktop聊天、生产ERP、外部附件、Windows及Microsoft Excel仍NOT VERIFIED；本地提交后仍需人工审核及另行Push授权。

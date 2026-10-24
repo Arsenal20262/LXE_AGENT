@@ -1,10 +1,10 @@
 import { execFile } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
-import type { DesktopAmazonFinalRestockSettings } from "@lxe/desktop-protocol";
+import type { DesktopAmazonV2Settings } from "@lxe/desktop-protocol";
 import { redactAndBound, type AssetCommandExecution, type DesktopInputAssetsOptions } from "./input-assets";
 
-export function isAmazonFinalRestockSettings(input: unknown): input is DesktopAmazonFinalRestockSettings {
+export function isAmazonV2Settings(input: unknown): input is DesktopAmazonV2Settings {
   if (!input || typeof input !== "object" || Array.isArray(input) || Object.keys(input).length !== 2) return false;
   const value = input as Record<string, unknown>;
   return typeof value.peak_boost_enabled === "boolean" && (value.peak_boost_days === null
@@ -13,10 +13,10 @@ export function isAmazonFinalRestockSettings(input: unknown): input is DesktopAm
 }
 
 /** Desktop consumes the lxeskill contract; Python owns validation and storage. */
-export class DesktopAmazonFinalRestockSettingsService {
+export class DesktopAmazonV2SettingsService {
   constructor(private readonly options: DesktopInputAssetsOptions) {}
 
-  private async call(action: "read" | "save", value?: string): Promise<DesktopAmazonFinalRestockSettings> {
+  private async call(action: "read" | "save", value?: string): Promise<DesktopAmazonV2Settings> {
     const temporaryRoot = join(this.options.dataRoot, "tmp");
     mkdirSync(temporaryRoot, { recursive: true });
     const args = ["-I", "-B", "-X", "utf8", "-m", "lxeskill", "replenish", "final-restock", "settings", "--action", action];
@@ -36,7 +36,7 @@ export class DesktopAmazonFinalRestockSettingsService {
     const terminal = execution.stdout.split(/\r?\n/u).filter(line => line.trim()).at(-1) ?? "";
     try { result = JSON.parse(terminal); } catch { /* Preserve actual process diagnostics below. */ }
     if (execution.error || result?.type !== "result" || result.ok !== true
-      || result.data?.success !== true || !isAmazonFinalRestockSettings(result.data.data)) {
+      || result.data?.success !== true || !isAmazonV2Settings(result.data.data)) {
       const observed = typeof result?.error?.message === "string" && result.error.message.trim() ? result.error.message : undefined;
       throw new Error(redactAndBound(observed || execution.stderr || execution.error?.message
         || `Invalid lxeskill settings result: ${terminal}`));
@@ -44,9 +44,9 @@ export class DesktopAmazonFinalRestockSettingsService {
     return result.data.data;
   }
 
-  read(): Promise<DesktopAmazonFinalRestockSettings> { return this.call("read"); }
-  save(input: unknown): Promise<DesktopAmazonFinalRestockSettings> {
-    if (!isAmazonFinalRestockSettings(input)) {
+  read(): Promise<DesktopAmazonV2Settings> { return this.call("read"); }
+  save(input: unknown): Promise<DesktopAmazonV2Settings> {
+    if (!isAmazonV2Settings(input)) {
       throw new Error("peak_boost_enabled must be a boolean; peak_boost_days must be null or an integer between 0 and 120");
     }
     const serialized = JSON.stringify(input);
