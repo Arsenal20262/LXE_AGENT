@@ -390,7 +390,8 @@ def test_main_skill_is_the_single_store_name_workflow_for_v1_v2_and_both() -> No
     ):
         assert command in workflow
     # One static policy check owns stable command/data terms. Runtime tests cover
-    # discovery and permissions; model replay covers version decisions and stopping.
+    # discovery and permissions. Real Agent version decisions and stopping still
+    # require acceptance through agentcli/Desktop; these assertions do not prove them.
     for term in (
         "lxeskill list", "lxeskill describe", "V1", "V2", "replenishment-sales-analyze",
         "--msku-source-xlsx-path", "--shenzhen-inventory-report-xlsx-path",

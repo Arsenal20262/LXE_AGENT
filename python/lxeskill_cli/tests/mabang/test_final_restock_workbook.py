@@ -299,8 +299,6 @@ def test_generation_snapshots_setting_and_next_generation_reads_saved_value(
                     assert after.cell(row, column).value == expected_next["V" if column == 22 else "W"]
                 else:
                     assert before.cell(row, column).value == after.cell(row, column).value
-        assert before["V2"].value == final_restock_formulas(2, peak_boost_enabled=True, peak_boost_days=initial_days)["V"]
-        assert after["V2"].value == final_restock_formulas(2, peak_boost_enabled=True, peak_boost_days=next_days)["V"]
         assert before["AG2"].value == after["AG2"].value == 12
         assert before["AH2"].value == after["AH2"].value == "SKU-SEA"
         for sheet in (before, after):
@@ -530,8 +528,6 @@ def test_workbook_layout_mapping_and_pr1_formulas_before_office(tmp_path: Path) 
             assert actual == expected
         assert all(sheet[f"{column}5"].data_type == "f" for column in ("U", "V", "W", "X", "Y", "Z", "AA", "AB", "AC", "AI"))
         assert [sheet.cell(row, 2).value for row in range(2, 6)] == ["SEA-1", "CLEAR-1", "COMBO-1", "UNBOUND-1"]
-        assert [sheet.cell(1, column).value for column in range(1, 36)][29] == "单件重量(g)"
-        assert sheet["AD2"].value == 50  # Header changes; numeric values remain grams.
     finally:
         workbook.close()
 

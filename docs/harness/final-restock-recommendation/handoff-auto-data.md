@@ -46,6 +46,6 @@
 - PR3阶段的34列／13公式、未核验行省略建议、uq122强制取数及独立完整Skill均是历史；当前35列／14公式与深圳AG以PR4为准。
 - 当前V2库存未知时保留全部MSKU、AG留空、生成待核对文件且失败，尚未获正式交付批准；V1原规则不受影响。
 - 403应立即停止；原store_resolver及相关服务历史恢复逻辑由独立`codex/amazon-network-recovery`处理，未纳入本PR提交，不声称已修复。
-- 真实模型回放、当前Desktop完整聊天／生产ERP／外部附件、Windows及Microsoft Excel为NOT VERIFIED；旧版本成功记录不替代当前验收。
+- 真实Agent模型行为、当前Desktop完整聊天／生产ERP／外部附件、Windows及Microsoft Excel为NOT VERIFIED；旧版本成功记录不替代当前验收。
 - 2026-10-24只在PR4整理历史交接；pool-7现有11项草稿和其他工作区保持原样，不改PR Base或提交历史。
 - 完整被压缩原文、原样本SHA及阶段日志路径可用`git show b892ea8f:docs/harness/final-restock-recommendation/handoff-auto-data.md`追溯；本轮实际结果见PR4交接。
