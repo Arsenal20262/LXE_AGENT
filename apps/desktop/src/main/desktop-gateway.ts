@@ -562,9 +562,7 @@ export class DesktopGateway {
       }
     }
     if (call.operation === "sessions.stop") {
-      const result = await this.composition.parts.conversations.stop(call.input.session_id, call.input.turn_id);
-      if (result.stopped_turn_id || result.cleared_turn_ids.length) this.automations?.service.pauseSession(call.input.session_id, "用户已停止会话的自动执行；恢复任务后继续");
-      return result as DashboardRpcResult<O>;
+      return await this.composition.parts.conversations.stop(call.input.session_id, call.input.turn_id) as DashboardRpcResult<O>;
     }
     if (call.operation === "sessions.activity") {
       return this.composition.parts.conversations.activity(call.input.session_id) as DashboardRpcResult<O>;
@@ -618,7 +616,7 @@ export class DesktopGateway {
       } catch (error) { return { opened: false, error: error instanceof Error ? error.message : String(error) } as DashboardRpcResult<O>; }
     }
     const result = await this.runtime.dashboardCall(call as AgentDashboardRpcCall) as DashboardRpcResult<O>;
-    if (call.operation === "models.update" || call.operation === "models.thinking.update") {
+    if ((call.operation === "models.update" || call.operation === "models.thinking.update") && call.input.remember_default !== false) {
       const model = result as unknown as {
         provider: string;
         model: string;
