@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from services.mabang.amazon.fba import final_restock_settings as settings
+from services.mabang.amazon.fba import replenishment_v2_settings as settings
 
 
 @pytest.fixture(autouse=True)
@@ -14,17 +14,18 @@ def isolated(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize("days", [None, 0, 20, 120])
 def test_custom_days_persist_without_converting_blank_to_zero(days):
-    parameters = {"peak_boost_enabled": True, "peak_boost_days": days}
+    parameters = {"peak_boost_enabled": days is not None, "peak_boost_days": days}
     assert settings.save_parameters(parameters) == parameters
     assert settings.read_state() == parameters
 
 
-def test_legacy_setting_keeps_switch_and_uses_default_days():
+@pytest.mark.parametrize("enabled,days", [(False, None), (True, None), (True, 20)])
+def test_legacy_setting_keeps_days_but_requires_a_new_opt_in(enabled, days):
     path = settings.data_directory() / "parameters.json"
     path.parent.mkdir(parents=True)
-    original = '{"peak_boost_enabled":false}'
+    original = json.dumps({"peak_boost_enabled": enabled, **({"peak_boost_days": days} if days is not None else {})})
     path.write_text(original, encoding="utf-8")
-    assert settings.read_state() == {"peak_boost_enabled": False, "peak_boost_days": None}
+    assert settings.read_state() == {"peak_boost_enabled": False, "peak_boost_days": days}
     assert path.read_text(encoding="utf-8") == original
 
 
@@ -37,12 +38,32 @@ def test_invalid_days_are_rejected_including_when_disabled(days):
 def test_default_is_off_and_persists_across_reads():
     assert settings.read_state() == {"peak_boost_enabled": False, "peak_boost_days": None}
     assert settings.read_state()["peak_boost_enabled"] is False
-    assert json.loads((settings.data_directory() / "parameters.json").read_text()) == {"peak_boost_enabled": False, "peak_boost_days": None}
+    assert json.loads((settings.data_directory() / "parameters.json").read_text()) == {"schema_version": 2, "peak_boost_enabled": False, "peak_boost_days": None}
+
+
+def test_enabled_setting_requires_explicit_days_and_stays_enabled_after_restart():
+    with pytest.raises(ValueError, match="加成天数"):
+        settings.save_parameters({"peak_boost_enabled": True, "peak_boost_days": None})
+    parameters = {"peak_boost_enabled": True, "peak_boost_days": 20}
+    assert settings.save_parameters(parameters) == parameters
+    assert settings.read_state() == parameters
+    assert json.loads((settings.data_directory() / "parameters.json").read_text()) == {"schema_version": 2, **parameters}
 
 
 def test_saved_setting_is_used_by_next_read():
     assert settings.save_parameters({"peak_boost_enabled": False, "peak_boost_days": 20}) == {"peak_boost_enabled": False, "peak_boost_days": 20}
     assert settings.read_state()["peak_boost_enabled"] is False
+
+
+@pytest.mark.parametrize("version", [1, True, "2"])
+def test_unsupported_config_version_is_rejected_without_rewriting(version):
+    path = settings.data_directory() / "parameters.json"
+    path.parent.mkdir(parents=True)
+    raw = json.dumps({"schema_version": version, "peak_boost_enabled": True, "peak_boost_days": 20})
+    path.write_text(raw, encoding="utf-8")
+    with pytest.raises(ValueError, match="配置版本"):
+        settings.read_state()
+    assert path.read_text(encoding="utf-8") == raw
 
 
 @pytest.mark.parametrize("raw", [None, {}, {"peak_boost_enabled": 1}, {"peak_boost_enabled": "false"}, {"peak_boost_enabled": True, "extra": False}])

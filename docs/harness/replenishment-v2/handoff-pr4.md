@@ -3,7 +3,7 @@
 ## Git、职责与当前契约
 
 - 分支 `codex/amazon-replenishment-unification`，工作区 `/Users/hym/.codex/worktrees/1672/Amazon`；PR #117。
-- 依赖链：PR1 `979c33e8` → PR2 `af0d7b8b` → PR3 `092b24cc` → PR4功能提交 `f973ed71` → main兼容合并 `b892ea8f`（第二父为`abde37dd`）→ 精简提交 `6d0e72ea`。本轮在这些提交后合入main e3274147，不重写历史或修改PR Base。
+- 依赖链：PR1 `979c33e8` → PR2 `af0d7b8b` → PR3 `092b24cc` → PR4功能提交 `f973ed71` → main兼容合并 `b892ea8f`（第二父为`abde37dd`）→ 精简提交 `6d0e72ea` → main兼容合并 `3babfbf3`（继承e3274147）→ 回放退役 `57d4c7c4` → 设置页修复 `af8f298f`。后续V2命名、旺季交互和文档调整在本轮收口提交，不重写历史或修改PR Base。
 - b892ea8f时PR117对merge-base abde37dd为72文件、+7301/-399；PR4功能提交对PR3为29文件、+1352/-719。前者含上游累计功能，不能称PR4新增7301行。
 - 一个完整主Skill `replenishment-workflow-map`，V1/V2独立计算、检查和交付；独立`replenishment-final-restock` Skill已删除，V2 CLI owner改为主Skill。
 - V1保留原销量分析、参数方案、算法、筛选和多Sheet；V2继承PR1的14公式、PR2的35列单表和Office Kit。PR3提供自动取数集成；不计为PR4新建。
@@ -12,10 +12,11 @@
 ## 输入、计算与交付
 
 - V1：原`replenish calculate --store-name ... --unlinked-shipments-snapshot ... [--template ...]`；由原CLI查找／核验销量和库存输入。
-- V2：`replenish final-restock generate`接受`store_name`及MSKU源表、深圳报告、未关联货件快照三路径，复用原来源指纹、批次、店铺、MSKU身份和覆盖核验。
+- V2：`replenish v2 generate`接受`store_name`及MSKU源表、深圳报告、未关联货件快照三路径，复用原来源指纹、批次、店铺、MSKU身份和覆盖核验。Desktop通过internal命令`replenish v2 settings`管理旺季配置。
+- V2业务模块统一为replenishment_v2_formulas、replenishment_v2_settings及replenishment_v2_workbook；公式入口为replenishment_v2_formulas，生成入口为generate_replenishment_v2。旧业务模块不保留导入别名，V1模块不改。
 - AG唯一读取深圳报告“真实库存（深圳仓库）数量”；普通及组合SKU沿用原报告结果，保留正数、真实0、有限负数，不回退uq122，也不要求该列存在或合法。
 - **V2临时规则**：库存未知时AG留空、全部行和14公式保留，生成“库存待核对”文件，success=false/ok=false，暂停正式交付；诊断包含代表性MSKU、报告分类和可取得的原因。运营尚未批准未知库存正式交付，不设历史25行门槛，不影响V1。
-- 35列、I/J、AH/AD/AI及空海运公式保留；没有新增AG扣减。旺季每轮默认关闭，只在明确要求时传裸`--peak-boost-enabled`；天数按本轮值／保存值／默认30，上限120。
+- 35列、I/J、AH/AD/AI及空海运公式保留；没有新增AG扣减。旺季页面初始关闭，勾选开启时必填0～120整数天数，没有默认30天；本轮聊天明确开启、关闭或指定天数优先，未提时沿用页面保存设置。
 - V2经Office Kit重算、结构／公式／Excel错误检查后才发布正式文件；失败不覆盖已有合格文件。各版本仅发送自身成功terminal.files，诊断附件不作正式成功，发送失败只重试该文件发送。
 
 ## 生产源码与V1对照证据
@@ -23,7 +24,7 @@
 - 旧22路径审计清单中19个逐字节一致，另3项为Skill／doctor测试变化；“源码未变”“指引或测试变化”“业务结果一致”是三个不同结论。原清单：`/private/tmp/pr4-versioned-entry-audit.json`。
 - 原V1算法、销量分析、库存算法与PR3相同；历史独立PR3固定样本对照11项通过，涵盖六场景业务结果、多Sheet和公式，不只是文件存在检查。
 - V2仍调用PR1公式和现有Office适配，深圳读取器仅映射原报告，不计算第二套组合库存；目录会话作用域、计时和CLI薄适配有真实消费者。
-- 本轮核查的生成器、957行工作簿测试、原库存模块及official_api未发现确定的可删生产实现，保持0修改。旧独立Skill和uq122专用生产依赖未恢复。
+- 此前冗余审计未发现生成器、工作簿测试、原库存模块及official_api有确定可删的生产实现，当时保持0修改。本轮旺季设置需求变更见末节；旧独立Skill和uq122专用生产依赖未恢复。
 
 ## 关键历史验证（不同范围有重叠，不累计）
 
@@ -122,3 +123,63 @@
 - 本轮新执行两条CLI describe查询，generate仍为business且owner为replenishment-workflow-map，settings仍为internal。Python85项及上方真实Office／双版本回归为未变业务源码的复用证据，本轮未重复执行，不当作真实模型或生产Agent验收。
 - 本轮日志在/private/tmp/pr117-settings-final/：renderer.log、desktop-navigation.log、typecheck.log、dashboard-build.log、desktop-build.log、describe-{settings,generate}.json；原10文件补丁备份在initial.patch／initial-files/。其他12个worktree按protected-worktrees.json核对HEAD、状态及暂存／未暂存指纹，PR3和pool-11保持原样。
 - 收口检查仅暂存本任务设置页、命名、关联测试及本handoff；排除构建产物、临时日志、私密信息和其他草稿。真实模型、完整原生Desktop聊天、生产ERP、外部附件、Windows及Microsoft Excel仍NOT VERIFIED；本地提交后仍需人工审核及另行Push授权。
+
+## 2026-10-24 旺季设置交互变更（af8f298f之后的开发阶段）
+
+- 用户明确要求页面改为真正生效的checkbox，默认关闭，保留天数输入、开启时必填；取消默认30天。展示名称为“亚马逊备货旺季加成”，页内解释仅适用于V2。此需求取代上节“仅保存天数、每轮只能聊天启用”的旧方案；既有公共页头和Amazon／越南CSS隔离保留。
+- 该开发阶段位于codex/amazon-replenishment-unification，起始HEAD为af8f298f；当时仅修改代码、测试及本交接，未暂存、Commit或Push，未修改PR Base或其他工作区。
+- 优先级：本轮明确关闭→不加成；本轮明确开启或指定天数→启用，天数取本轮值否则保存值；本轮均未指定→沿用页面开关与天数。开启而缺天数时返回真实错误、询问补充后可复用本轮文件；没有隐式30天。聊天覆盖不写回设置，正在进行的生成使用启动时读取的一份快照。
+- 沿用现有CLI、设置Service和两字段IPC契约。generate省略开关时传None供Service解析；明确开启仍可传裸--peak-boost-enabled，明确关闭传--peak-boost-enabled=false，=true也可接受，非法值仍拒绝。catalog及主Skill同步当前公开参数；其他布尔参数规则未改，没有新增Runtime路由或包装层。
+- 旧无版本配置保留天数但按关闭读取，不改写原文件，防止过去无计算作用的true在升级后意外启用。通过现有保存接口明确保存后，内部参数文件附schema_version=2以区分新语义；对外仍只返回开关和天数。版本非法、损坏配置、类型及范围错误仍真实失败。参数目录amazon-final-restock不变，不直接编辑用户配置。
+- PR1公式函数及其旧默认参数保持原契约；正式生成器始终传入已解析的布尔值和具体天数，未启用且无天数时传0，启用缺值先停止，因此不会使用公式函数的历史30天缺省。V1算法、AG深圳来源、全部MSKU／35列／14公式、Office检查和库存待核对规则没有修改。
+- 新用例先红后绿：旧实现在旧true配置、启用缺天数、页面偏好和聊天天数覆盖场景失败；修复后定向通过。最终本轮实跑Python692 passed／4 Windows专属skipped，含公开CLI与infra全目录、设置、工作簿、A规则、真实Office深圳AG交付及双版本成功／失败隔离。日志/private/tmp/pr117-seasonal-policy/python-verified.log；4条既有aiohttp弃用警告保留。
+- Python首轮在沙箱禁止localhost监听处出现59项环境失败，另1项原长路径fixture因临时路径仅230字符未达到260而失败；允许本地监听后只余该路径问题。最终使用足够长的隔离--basetemp重跑原整组，通过692项，未改测试断言以掩盖失败。初轮和中间日志仍保存在同目录python-final.log、python-final-local.log及filesystem-diagnostic.log。
+- 本轮Bun七文件83 pass／388 assertions，覆盖Desktop设置、真实隔离Python旧配置迁移／持久化、IPC／preload、导航、Skill发现及CLI归属。真实Chromium四组4 pass／22 filtered，覆盖Amazon6、越南8、工作台3、navigation-rail8，共25个内部场景；包含勾选必填、开关／天数保存重载、失败草稿、0与空值区分、公共页头及样式隔离。
+- 八工作区typecheck、Dashboard生产构建通过；构建仍有既有大chunk提示。两条公开describe实际通过，generate仍为business且owner为replenishment-workflow-map，settings仍为internal。日志同目录bun-final.log、renderer.log、typecheck.log、dashboard-build.log和describe-*.json。
+- 其他12个worktree的HEAD、Git状态及暂存／未暂存diff指纹与本轮protected-worktrees.json保护快照一致。未访问生产ERP、调用真实模型或发送附件；自然语言理解、完整Desktop业务、Windows及Microsoft Excel仍NOT VERIFIED，普通测试与进程启动不替代这些验收。
+- 当前PR4预览已通过既有desktop:preview重新构建并重启，启动日志同目录desktop-preview.log记录lxeskill_probe_ready、gateway_ready及38个Skill／0诊断。仅确认当前工作区预览启动，未自动修改用户设置或执行备货；当时改动尚未提交／推送。
+- 随后按用户截图精简文案：简介为“适用于亚马逊备货 V2 模板。”，底部只保留天数必填及聊天优先的一段提示，中英文同步；删除重复段落及其未使用文案字段。Dashboard typecheck和Chromium两组（Amazon6／工作台3）实际通过，日志/private/tmp/pr117-settings-copy/；仅调整展示及对应测试，上一轮设置／CLI／计算／Office证据复用，不计作本次重跑。
+
+## 2026-10-24 V2业务称谓统一（命令更名前的历史状态）
+
+- 按用户要求仅统一V2：主Skill、MSKU及深圳库存Skill中的V2说明、dataset展示说明、V2设置真实错误及对应fixture、模块说明和PR1交接标题均使用V2备货。唯一完整主Skill不变，未新增入口、计算逻辑或命名兼容层。
+- 保留现有final-restock CLI、Python标识及存储路径，避免破坏公开调用和已有参数；它们仅为技术标识。V1原Sheet名称及相关说明、越南业务术语、明确的历史记录原样保留。本轮保护快照核对V1相关13文件逐字节不变，V1 catalog条目与HEAD一致；V2公式去除docstring后的AST与HEAD一致，执行表达式未改。
+- 本轮实际通过：Python四文件83 passed（Skill／设置CLI、设置服务、同轮双版本，含真实Office）；Bun三文件54 pass／237 assertions（Desktop设置、Runtime真实Skill发现和CLI归属）；Chromium Amazon组1 pass／25 filtered（6个内部场景）；公开datasets list返回V2展示说明。日志/private/tmp/pr117-v2-terminology/。未调用真实模型、ERP或发送附件，不将离线验证视作模型选路验收；保留此前有效草稿，不暂存／Commit／Push。
+
+## 2026-10-24 V2公开命令收敛（af8f298f之后的开发阶段）
+
+- 用户明确批准V2命令统一为lxeskill replenish v2 generate和lxeskill replenish v2 settings，不保留旧命令别名；V1不改。generate仍为business，唯一owner为replenishment-workflow-map；settings仍为internal，由原Desktop页头／preload／可信IPC／设置Service调用，不成为第二个模型业务入口。
+- 公开注册标识同步为mabang_generate_replenishment_v2及mabang_replenishment_v2_settings。按现有catalog命名校验，将两个原CLI适配文件分别改名为generate_replenishment_v2.py、replenishment_v2_settings.py；内容与改名前有效草稿逐字节一致，未增加包装、兼容转发或模块层级。公开dataset ID为replenish_v2，生成器只同步该查找键；原replenish/final_restock_recommendation文件目录和amazon-final-restock参数目录均保留，已有文件与设置不迁移。
+- 主Skill、Desktop实际子进程命令、Runtime发现／统计契约测试、Python CLI和真实Office双版本／深圳AG用例均同步新命令。旧命令及旧独立Skill只保留于明确的历史记录、缺失／拒绝断言和历史导航回退用例；当前有效业务指引及注册不再调用它们。
+- 原取数、深圳普通／组合计算、来源校验、公式、Office和交付实现均有消费者，未发现可确认的重复完整取数链路，因此没有为减文件数删除必要的Service或CLI适配。V1 catalog条目及其他全部条目／数据目录经结构对照保持不变；共用CLI只改V2注册标识匹配，V2工作簿只改dataset查找键，不改本轮已验证的旺季优先级、35列／14公式、深圳AG或待核对规则。
+- 退役断言先在原注册上4项失败，命中旧命令仍可describe／执行；同步更名后4项通过。中间校验发现注册名必须匹配CLI模块名，随即按原规则改名两个适配文件并同步消费者，没有放松校验。最终Python696 passed／4 Windows专属skipped，含规定CLI／infra全目录、工作簿及真实Office；Bun七文件83 pass／389 assertions，含真实隔离Python旧设置读写、新命令及dataset公开查询；八工作区typecheck通过。
+- 本轮实际list、两条新命令describe、datasets list及doctor全部成功，仍49个命令／38个Skill，未增加重复注册。扫描skills、apps、python及packages，旧命令唯一执行式引用为拒绝测试；旧存储目录和私有公式／工作簿模块名保留。日志/private/tmp/pr117-v2-command-cleanup/，包括原始失败、最终Python／Bun／typecheck及CLI查询输出；页面业务行为未变，上一轮6场景UI证据复用，不记作本轮重跑。
+- 该开发阶段起始HEAD为af8f298f，原有设置页及有效草稿保留；当时未暂存、Commit、Push或修改PR／其他工作区，后续授权的提交收口见末节。未调用真实模型、生产ERP或外部附件；Windows、Microsoft Excel及完整正式Agent聊天仍NOT VERIFIED。
+- 最后核对32个V1／公共Amazon业务文件的指纹与本轮保护快照相同，其他12个worktree的HEAD、状态及暂存／未暂存diff指纹均未变。当前PR4预览已按现有desktop:preview成功构建重启，日志记录38 Skill／0诊断、lxeskill_probe_ready及gateway_ready；当前Desktop使用新V2命令。diff及暂存区检查通过，暂存区仍为空；两个新文件是原适配文件改名，提交前需将原删除和新文件一并纳入。
+
+## 2026-10-24 V2内部模块统一命名（开发阶段记录）
+
+- 用户明确要求V2内部名称也统一，保留V1。本轮将三个业务模块及八个既有测试文件一对一改名，函数／类型／导入／monkeypatch引用和临时文件名同步；14份Python生产／消费者文件与改名前快照的差异严格等于记录的名称替换，没有新增兼容模块、包装层或算法。
+- 业务文件为replenishment_v2_formulas.py、replenishment_v2_settings.py、replenishment_v2_workbook.py；类型为ReplenishmentV2Settings、ReplenishmentV2WorkbookError、ReplenishmentV2WorkbookResult，生成函数为generate_replenishment_v2。所有改名前模块已删除，使用当前私有uv环境的隔离Python确认旧模块无法解析、新模块正确解析；V2代码中的旧Python标识符为0。
+- PR1／PR2交接中的当前函数入口及可执行测试路径同步为新名称；明确的Git历史引用不改写。现有参数和产物目录字面量保留以兼容历史数据，相关断言仍验证原物理位置；这些路径不再用作业务命令、模块、函数或类型名称。
+- 本轮Python855 passed／4 Windows专属skipped，包含CLI／infra、改名后的全部公式及工作簿测试、真实LibreOffice／Office Kit、深圳AG和双版本独立成功／失败；相较前轮额外执行了159项原公式回归，未增加／删除业务用例。Bun三文件54 pass／238 assertions，覆盖Desktop真实隔离Python读写、Skill发现及公开CLI归属。日志/private/tmp/pr117-v2-module-rename/；未重跑未修改的前端类型／构建和页面行为，复用上轮对应证据。
+- 32个V1／公共Amazon源码及Skill文件与本轮快照逐字节一致，CLI/catalog／TS生产代码未变；V1原算法、参数、销量分析、多Sheet及原Sheet名保持。原有未提交旺季交互、命令更名和深圳AG修复完整保留，无Commit／Push／PR操作，不调用真实模型、生产ERP或附件发送；原生Windows／Microsoft Excel及完整聊天验收仍NOT VERIFIED。
+
+## 2026-10-24 文档目录统一为V2（开发阶段记录）
+
+- 按用户要求将五份交接文档整体迁入docs/harness/replenishment-v2/，保留已有未提交内容；本节外正文原样迁移。六处同目录相对链接随文档迁移后仍正确，无需新增兼容目录或跳转页。
+- 全仓旧目录引用仅余四条明确的git show历史定位，逐一通过git cat-file核对原提交对象存在；它们必须指向当时的路径，未改写历史。现行链接和文件路径中旧目录残留为0。
+- 本轮仅做文档移动和本节记录，所有其他已存在文件与迁移前指纹一致；V1、兼容存储路径、V2代码及全部先前有效草稿不变。必要验证为5文件迁移检查、6处相对链接、4条历史定位、全仓引用扫描及diff检查；未重复执行未变化的Python／Bun业务测试，上一轮855 passed／4 Windows skipped及Bun54 pass为复用证据。未Commit、Push或修改其他工作区。
+
+## 2026-10-24 V2命名、旺季规则及文档累计提交收口
+
+- 本轮用户明确授权核对累计diff、必要回归、Commit、正常Push并更新现有PR #117正文；不合并PR、不改Base、不重写历史。起始HEAD为af8f298f；PR实际Head仓库为Arsenal20262/LXE_AGENT，同名分支远端起点与本地一致。提交SHA和Push终态以Git及PR Head复核为准。
+- 精确纳入34项逻辑文件变更：16项修改、18项改名（5份交接、2个CLI适配、3个V2业务模块、8个测试）。新旧路径一并暂存，排除构建产物、日志、缓存、用户设置及其他草稿；不将未暂存新文件遗漏造成的删除统计当作真实代码减少。
+- 当前契约为replenish v2 generate／settings，V2模块、测试和文档目录统一命名；仅历史存储目录保留兼容。旺季页面初始关闭、开启必填0～120天、无默认30天；未提时用页面设置，聊天明确要求优先且不写回设置。旧无版本配置关闭读取并保留天数，新保存使用schema_version=2。V1原命令、算法、销量分析、参数和多Sheet不改。
+- 本轮重新执行Python：855 passed／4 skipped／4 warnings，覆盖规定的CLI与infra目录、公式、设置、工作簿、A规则、真实LibreOffice／Office Kit深圳AG及双版本。4项skip均为原生Windows专属；4条警告为既有aiohttp弃用提示。不是复用上节855项记录，也不与历史次数累加。
+- 本轮重新执行Bun七文件：83 pass／389 assertions；真实Chromium四组：4 pass／22 filtered／16外层断言，包含Amazon6、越南8、工作台3和navigation-rail8，共25个内部场景。验证设置持久化、旧配置、错误处理、IPC／preload、导航、公共页头、样式隔离、Skill发现与命令归属；不等于完整Desktop聊天验收。
+- 八工作区typecheck、Dashboard／Desktop生产构建、TS生产边界、doctor、list、两条V2 describe及datasets list均实际通过。构建保留既有大chunk提示；边界检查首次因未暂存改名时索引仍列旧文件而失败，完整暂存后原检查通过，未修改校验脚本或放松断言。日志统一在/private/tmp/pr117-final-publish/。
+- 完整暂存diff及空白检查通过；32个V1／公共Amazon源码、配置和Skill与保护快照及起始HEAD逐字节一致，其他12个worktree的HEAD、状态、暂存／未暂存diff指纹不变。PR1～PR3及原main基线e3274147祖先关系保留，未混入独立网络修复或pool-11草稿。五份交接共10处相对链接有效，历史Git路径仅用于原提交追溯。
+- 提交前只读fetch确认最新main为884a1b56（#114系统提示词精简）；正确merge-base仍为e3274147。最新main与起始HEAD的merge-tree无冲突，本轮暂存路径与main新增41路径无交集；未机械合入main或改变PR Base。本轮测试运行于当前PR4候选代码，并非合入884a1b56后的整合测试，正式Agent受新main影响的行为仍须人工验收。
+- 独立AI回放脚本已在57d4c7c4退役，本轮确认仍缺失，无新Harness或替代运行器；正式Runtime、Provider、工具及生产messages/replay.ts保留。原8／16／17场景的编译或离线trace属于历史观察证据，不代表真实模型通过。
+- 未验证范围：真实模型的版本识别、澄清、失败停止及交付语义，完整Desktop业务、生产ERP、外部附件发送、原生Windows、Microsoft Excel和新安装包。库存未知仍只生成待核对文件并返回非成功，正式交付须运营确认；历史403认证恢复问题未在PR4修复。PR包含用户交互及公开命令变化，仍需组长人工审核。

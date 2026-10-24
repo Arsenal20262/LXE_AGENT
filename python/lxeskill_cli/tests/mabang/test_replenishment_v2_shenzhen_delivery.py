@@ -14,9 +14,9 @@ from lxeskill import cli as lxeskill
 from services.mabang.amazon.fba import source_verification as verification
 from services.mabang.amazon.fba import store_msku_actual_inventory as inventory
 from services.mabang.amazon.fba import store_msku_replenishment as legacy_replenishment
-from services.mabang.amazon.fba.final_restock_recommendation import final_restock_formulas
+from services.mabang.amazon.fba.replenishment_v2_formulas import replenishment_v2_formulas
 from services.mabang.amazon.fba.sku_catalog import LocalSkuDefinition
-from test_final_restock_workbook import (
+from test_replenishment_v2_workbook import (
     SOURCE_HEADERS,
     STORE,
     _source_rows,
@@ -120,7 +120,7 @@ def test_shenzhen_report_controls_ag_and_office_delivery_status(
     monkeypatch.setattr(legacy_replenishment, "calculate_store_msku_replenishment", unexpected_inventory_call)
     monkeypatch.setattr(legacy_replenishment, "calculate_replenishment_rows", unexpected_inventory_call)
     code = lxeskill.main([
-        "replenish", "final-restock", "generate", "--store-name", STORE,
+        "replenish", "v2", "generate", "--store-name", STORE,
         "--msku-source-xlsx-path", str(source),
         "--shenzhen-inventory-report-xlsx-path", str(report),
         "--unlinked-shipments-snapshot-path", str(snapshot),
@@ -149,7 +149,7 @@ def test_shenzhen_report_controls_ag_and_office_delivery_status(
             assert sheet[f"AG{index}"].value == expected_stock[row["MSKU"]]
             if native_inventory == "conflicting":
                 assert sheet[f"AG{index}"].value != row["本地库存"]
-            expected_formulas = final_restock_formulas(index, peak_boost_enabled=False)
+            expected_formulas = replenishment_v2_formulas(index, peak_boost_enabled=False)
             assert len(expected_formulas) == 14
             assert {cell.column_letter for cell in sheet[index] if cell.data_type == "f"} == set(expected_formulas)
             assert {column: sheet[f"{column}{index}"].value for column in expected_formulas} == expected_formulas

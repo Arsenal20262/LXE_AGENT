@@ -1,4 +1,4 @@
-"""Persistent, user-editable settings for the Amazon final-restock workbook."""
+"""Persistent, user-editable seasonal settings for Amazon V2 replenishment."""
 from __future__ import annotations
 
 import json
@@ -11,20 +11,22 @@ from shared.process_lock import interprocess_lock
 from shared.repository import state_root
 
 
-class FinalRestockSettings(TypedDict):
+class ReplenishmentV2Settings(TypedDict):
     peak_boost_enabled: bool
     peak_boost_days: int | None
 
 
-def _validate(raw: object, *, legacy: bool = False) -> FinalRestockSettings:
+def _validate(raw: object, *, legacy: bool = False) -> ReplenishmentV2Settings:
     if not isinstance(raw, dict) or type(raw.get("peak_boost_enabled")) is not bool:
         raise ValueError("peak_boost_enabled 必须是布尔值")
     keys = set(raw)
     if keys != {"peak_boost_enabled", "peak_boost_days"} and not (legacy and keys == {"peak_boost_enabled"}):
-        raise ValueError("Amazon 最终备货设置字段无效")
+        raise ValueError("Amazon V2 旺季设置字段无效")
     days = raw.get("peak_boost_days")
     if days is not None and (type(days) is not int or not 0 <= days <= 120):
         raise ValueError("peak_boost_days 必须为空或 0～120 的整数")
+    if not legacy and raw["peak_boost_enabled"] and days is None:
+        raise ValueError("启用旺季加成时必须填写加成天数（0～120的整数）")
     return {"peak_boost_enabled": raw["peak_boost_enabled"], "peak_boost_days": days}
 
 
@@ -36,25 +38,32 @@ def _path() -> Path:
     return data_directory() / "parameters.json"
 
 
-def _read_unlocked() -> FinalRestockSettings:
+def _read_unlocked() -> ReplenishmentV2Settings:
     path = _path()
     if not path.exists():
         return {"peak_boost_enabled": False, "peak_boost_days": None}
     if path.stat().st_size > 1024 * 1024:
-        raise ValueError("Amazon 最终备货设置文件超过 1 MiB")
+        raise ValueError("Amazon V2 旺季设置文件超过 1 MiB")
     raw = json.loads(path.read_text(encoding="utf-8"))
     try:
-        return _validate(raw, legacy=True)
+        if isinstance(raw, dict) and "schema_version" in raw:
+            if type(raw["schema_version"]) is not int or raw["schema_version"] != 2:
+                raise ValueError("不支持的旺季加成配置版本")
+            return _validate({key: value for key, value in raw.items() if key != "schema_version"})
+        # Historical switches were preferences only, not permission to enable a run.
+        # Keep saved days and the original file; a new explicit save activates v2.
+        parameters = _validate(raw, legacy=True)
+        return {**parameters, "peak_boost_enabled": False}
     except ValueError as exc:
-        raise ValueError(f"Amazon 最终备货设置格式无效: {exc}") from exc
+        raise ValueError(f"Amazon V2 旺季设置格式无效: {exc}") from exc
 
 
-def _write_unlocked(parameters: FinalRestockSettings) -> None:
+def _write_unlocked(parameters: ReplenishmentV2Settings) -> None:
     root = data_directory()
     temporary = root / f".parameters-{uuid4().hex}.tmp"
     try:
         with temporary.open("x", encoding="utf-8") as stream:
-            json.dump(parameters, stream, ensure_ascii=False, indent=2)
+            json.dump({"schema_version": 2, **parameters}, stream, ensure_ascii=False, indent=2)
             stream.write("\n")
             stream.flush()
             os.fsync(stream.fileno())
@@ -63,7 +72,7 @@ def _write_unlocked(parameters: FinalRestockSettings) -> None:
         temporary.unlink(missing_ok=True)
 
 
-def read_state() -> FinalRestockSettings:
+def read_state() -> ReplenishmentV2Settings:
     root = data_directory()
     root.mkdir(parents=True, exist_ok=True)
     with interprocess_lock(root / ".settings.lock"):
@@ -73,7 +82,7 @@ def read_state() -> FinalRestockSettings:
     return parameters
 
 
-def save_parameters(raw: object) -> FinalRestockSettings:
+def save_parameters(raw: object) -> ReplenishmentV2Settings:
     parameters = _validate(raw)
     root = data_directory()
     root.mkdir(parents=True, exist_ok=True)

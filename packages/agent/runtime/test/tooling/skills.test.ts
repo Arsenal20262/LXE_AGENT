@@ -123,7 +123,7 @@ describe("skill context", () => {
     }));
     expect(references).toHaveLength(5);
     const workflowMap = skills.find((skill) => skill.name === "replenishment-workflow-map");
-    expect(workflowMap?.commands).toEqual(["lxeskill replenish final-restock generate"]);
+    expect(workflowMap?.commands).toEqual(["lxeskill replenish v2 generate"]);
     expect(skills.find((skill) => skill.name === "replenishment-final-restock")).toBeUndefined();
     expect(skills.find((skill) => skill.name === "replenishment-calculate")?.commands)
       .toEqual(["lxeskill replenish calculate"]);
@@ -150,11 +150,11 @@ describe("skill context", () => {
     catalog.forceRefresh();
     const workflow = catalog.get("replenishment-workflow-map")!;
     const ordinary = catalog.get("replenishment-calculate")!;
-    expect(workflow.commands).toEqual(["lxeskill replenish final-restock generate"]);
+    expect(workflow.commands).toEqual(["lxeskill replenish v2 generate"]);
     expect(ordinary.commands).toEqual(["lxeskill replenish calculate"]);
     expect(catalog.get("replenishment-sales-analyze")?.commands).toEqual(["lxeskill replenish sales analyze"]);
     expect(catalog.get("replenishment-final-restock")).toBeUndefined();
-    expect(catalog.list().filter(skill => skill.commands.includes("lxeskill replenish final-restock generate")))
+    expect(catalog.list().filter(skill => skill.commands.includes("lxeskill replenish v2 generate")))
       .toEqual([workflow]);
     const prompt = catalog.buildPrompt({ allowedTypes: new Set(["replenishment"]) }, root);
     expect(prompt).toContain(workflow.description);

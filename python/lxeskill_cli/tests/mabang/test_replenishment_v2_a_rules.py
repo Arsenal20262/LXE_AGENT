@@ -10,13 +10,13 @@ from zipfile import BadZipFile
 import pytest
 from openpyxl import Workbook, load_workbook
 
-from services.mabang.amazon.fba import final_restock_settings as settings
-from services.mabang.amazon.fba import final_restock_workbook as service
+from services.mabang.amazon.fba import replenishment_v2_settings as settings
+from services.mabang.amazon.fba import replenishment_v2_workbook as service
 from services.mabang.amazon.fba import source_verification as verification
 from services.mabang.amazon.fba import store_msku_actual_inventory as inventory
-from services.mabang.amazon.fba.final_restock_recommendation import final_restock_formulas
+from services.mabang.amazon.fba.replenishment_v2_formulas import replenishment_v2_formulas
 from services.mabang.amazon.fba.sku_catalog import LocalSkuDefinition
-from test_final_restock_workbook import STORE, _source_rows, _write_source, _write_confirmed_empty_snapshot
+from test_replenishment_v2_workbook import STORE, _source_rows, _write_source, _write_confirmed_empty_snapshot
 
 
 @pytest.fixture(autouse=True)
@@ -45,13 +45,13 @@ def inputs(tmp_path, *, weight=50, stock=0, report_sku="SKU-SEA", sheet=None):
 def generate(tmp_path, monkeypatch, **kwargs):
     monkeypatch.setattr(service, "_recalculate", copyfile)
     monkeypatch.setattr(service, "_inspect_recalculated", lambda *_a, **_k: (0, ()))
-    return service.generate_final_restock_recommendation(STORE, output_dir=tmp_path / "out", **kwargs)
+    return service.generate_replenishment_v2(STORE, output_dir=tmp_path / "out", **kwargs)
 
 
 def test_unverified_rows_keep_all_fourteen_formulas_and_negative_source_stock(tmp_path, monkeypatch):
     files = inputs(tmp_path)
     def unexpected_sales_analysis(*_args, **_kwargs):
-        pytest.fail("unverified final-restock rows must not trigger ordinary sales analysis")
+        pytest.fail("unverified V2 rows must not trigger ordinary sales analysis")
     monkeypatch.setattr("services.mabang.amazon.fba.store_msku_sales_analysis.analyze_store_msku_sales", unexpected_sales_analysis)
     assert verification.load_verified_source(files["msku_source_xlsx_path"], store_name=STORE).records[0]["是否通过绑定核验"] is False
     result = generate(tmp_path, monkeypatch, **files)
@@ -59,11 +59,11 @@ def test_unverified_rows_keep_all_fourteen_formulas_and_negative_source_stock(tm
     try:
         sheet = book.active
         assert sheet.max_column == 35 and sheet["AI1"].value == "可供天数"
-        assert len(final_restock_formulas(2)) == 14
+        assert len(replenishment_v2_formulas(2)) == 14
         assert sheet["K2"].value == -7
         assert sheet.auto_filter.ref == "A1:AI2"
         assert sheet["AI2"].number_format == "0.00"
-        assert all(sheet[f"{col}2"].data_type == "f" for col in final_restock_formulas(2))
+        assert all(sheet[f"{col}2"].data_type == "f" for col in replenishment_v2_formulas(2))
     finally:
         book.close()
 
@@ -84,7 +84,7 @@ def test_unknown_shenzhen_placeholders_map_to_blank_and_keep_all_formulas(tmp_pa
     book = load_workbook(result.output_xlsx_path)
     try:
         assert book.active["AG2"].value is None
-        assert all(book.active[f"{col}2"].data_type == "f" for col in final_restock_formulas(2))
+        assert all(book.active[f"{col}2"].data_type == "f" for col in replenishment_v2_formulas(2))
     finally:
         book.close()
 
@@ -142,7 +142,7 @@ def test_legal_placeholders_do_not_bypass_report_file_validation(tmp_path, monke
         book.active["B1"] = "wrong-column"
         book.save(report)
         book.close()
-        expected, message = service.FinalRestockWorkbookError, "缺少列"
+        expected, message = service.ReplenishmentV2WorkbookError, "缺少列"
     with pytest.raises(expected, match=message):
         generate(tmp_path, monkeypatch, **files)
     assert not list((tmp_path / "out").glob("*.xlsx"))
@@ -177,7 +177,7 @@ def test_a_weight_blanks_and_valid_numeric_text(tmp_path, monkeypatch, weight, e
 
 
 def test_bad_weight_identifies_field_msku_stage_and_actual_reason(tmp_path, monkeypatch):
-    with pytest.raises(service.FinalRestockWorkbookError) as caught:
+    with pytest.raises(service.ReplenishmentV2WorkbookError) as caught:
         generate(tmp_path, monkeypatch, **inputs(tmp_path, weight="invalid-weight"))
     message = str(caught.value)
     assert all(part in message for part in ("SEA-1", "单品重量(g)(cm)", "AD", "解析", "invalid-weight"))
@@ -190,18 +190,44 @@ def test_chat_request_controls_boost_without_rewriting_saved_preference(tmp_path
     result = generate(tmp_path, monkeypatch, **inputs(tmp_path), peak_boost_enabled=requested)
     book = load_workbook(result.output_xlsx_path)
     try:
-        assert book.active["V2"].value == final_restock_formulas(2, peak_boost_enabled=requested, peak_boost_days=20)["V"]
+        assert book.active["V2"].value == replenishment_v2_formulas(2, peak_boost_enabled=requested, peak_boost_days=20)["V"]
     finally:
         book.close()
     assert settings.read_state() == {"peak_boost_enabled": saved, "peak_boost_days": 20}
 
 
-def test_omitted_chat_opt_in_never_uses_old_saved_enabled_flag(tmp_path, monkeypatch):
-    settings.save_parameters({"peak_boost_enabled": True, "peak_boost_days": 120})
+@pytest.mark.parametrize("enabled", [False, True])
+def test_omitted_chat_override_uses_the_saved_checkbox(tmp_path, monkeypatch, enabled):
+    settings.save_parameters({"peak_boost_enabled": enabled, "peak_boost_days": 20})
     result = generate(tmp_path, monkeypatch, **inputs(tmp_path))
     book = load_workbook(result.output_xlsx_path)
-    assert "+0,120" in book.active["V2"].value
-    book.close()
+    try:
+        assert book.active["V2"].value == replenishment_v2_formulas(2, peak_boost_enabled=enabled, peak_boost_days=20)["V"]
+    finally:
+        book.close()
+
+
+@pytest.mark.parametrize("saved_days", [None, 20])
+def test_chat_days_enable_boost_and_override_saved_days_without_saving(tmp_path, monkeypatch, saved_days):
+    saved = {"peak_boost_enabled": False, "peak_boost_days": saved_days}
+    settings.save_parameters(saved)
+    result = generate(tmp_path, monkeypatch, **inputs(tmp_path), peak_boost_days=15)
+    book = load_workbook(result.output_xlsx_path)
+    try:
+        assert book.active["V2"].value == replenishment_v2_formulas(2, peak_boost_enabled=True, peak_boost_days=15)["V"]
+    finally:
+        book.close()
+    assert settings.read_state() == saved
+
+
+def test_enabled_request_without_days_stops_before_reading_inputs(tmp_path, monkeypatch):
+    def unexpected(*_args, **_kwargs):
+        pytest.fail("missing boost days must stop before reading inputs")
+    monkeypatch.setattr(service, "_path", unexpected)
+    with pytest.raises(ValueError, match="加成天数"):
+        service.generate_replenishment_v2(STORE, msku_source_xlsx_path="source.xlsx",
+            shenzhen_inventory_report_xlsx_path="inventory.xlsx", unlinked_shipments_snapshot_path="snapshot.xlsx",
+            peak_boost_enabled=True)
 
 
 def test_ai_recalculates_empty_zero_and_suggested_quantities(tmp_path):
@@ -214,7 +240,7 @@ def test_ai_recalculates_empty_zero_and_suggested_quantities(tmp_path):
     for row, (daily, stock, shipments, air, sea, _) in enumerate(cases, 2):
         for col, value in (("J", daily), ("R", stock), ("T", shipments), ("Y", air), ("AB", sea)):
             book.active[f"{col}{row}"] = value
-        book.active[f"AI{row}"] = final_restock_formulas(row)["AI"]
+        book.active[f"AI{row}"] = replenishment_v2_formulas(row)["AI"]
     source, output = tmp_path / "supply.xlsx", tmp_path / "recalculated.xlsx"
     book.save(source)
     book.close()

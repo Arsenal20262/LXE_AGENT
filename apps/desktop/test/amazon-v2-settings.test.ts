@@ -21,20 +21,20 @@ describe("Amazon V2 settings bridge", () => {
         expect(options.env?.TMPDIR).toBe(join(dataRoot, "tmp"));
         expect(options.env?.PYTHONUTF8).toBe("1");
         expect(options.env?.PYTHONIOENCODING).toBe("utf-8");
-        const parameters = args[10] === "save" ? JSON.parse(args[12]!) : { peak_boost_enabled: true, peak_boost_days: null };
+        const parameters = args[10] === "save" ? JSON.parse(args[12]!) : { peak_boost_enabled: false, peak_boost_days: null };
         return { stdout: JSON.stringify({ type: "result", ok: true, data: { success: true, data: parameters } }), stderr: "", error: null };
       },
     });
-    expect(await service.read()).toEqual({ peak_boost_enabled: true, peak_boost_days: null });
+    expect(await service.read()).toEqual({ peak_boost_enabled: false, peak_boost_days: null });
     expect(await service.save({ peak_boost_enabled: false, peak_boost_days: 20 })).toEqual({ peak_boost_enabled: false, peak_boost_days: 20 });
     expect(calls).toEqual([
-      ["-I", "-B", "-X", "utf8", "-m", "lxeskill", "replenish", "final-restock", "settings", "--action", "read"],
-      ["-I", "-B", "-X", "utf8", "-m", "lxeskill", "replenish", "final-restock", "settings", "--action", "save", "--parameters", '{"peak_boost_enabled":false,"peak_boost_days":20}'],
+      ["-I", "-B", "-X", "utf8", "-m", "lxeskill", "replenish", "v2", "settings", "--action", "read"],
+      ["-I", "-B", "-X", "utf8", "-m", "lxeskill", "replenish", "v2", "settings", "--action", "save", "--parameters", '{"peak_boost_enabled":false,"peak_boost_days":20}'],
     ]);
     rmSync(dataRoot, { recursive: true, force: true });
   });
 
-  test.each([false, true])("real managed Python preserves legacy switch %s when only days change", async enabled => {
+  test.each([false, true])("real managed Python defaults old preference %s off until explicit save", async enabled => {
     const dataRoot = mkdtempSync(join(tmpdir(), "amazon-restock-settings-process-"));
     const options = { platform: "darwin" as const,
       pythonPath: resolve(import.meta.dirname, "../../../.venv", process.platform === "win32" ? "Scripts/python.exe" : "bin/python"),
@@ -46,15 +46,15 @@ describe("Amazon V2 settings bridge", () => {
       const original = JSON.stringify({ peak_boost_enabled: enabled });
       writeFileSync(path, original);
       const legacy = await first.read();
-      expect(legacy).toEqual({ peak_boost_enabled: enabled, peak_boost_days: null });
+      expect(legacy).toEqual({ peak_boost_enabled: false, peak_boost_days: null });
       expect(readFileSync(path, "utf8")).toBe(original);
       await first.save({ ...legacy, peak_boost_days: 20 });
       const restarted = new DesktopAmazonV2SettingsService(options);
-      expect(await restarted.read()).toEqual({ peak_boost_enabled: enabled, peak_boost_days: 20 });
+      expect(await restarted.read()).toEqual({ peak_boost_enabled: false, peak_boost_days: 20 });
       await restarted.save({ peak_boost_enabled: true, peak_boost_days: 20 });
       expect(await new DesktopAmazonV2SettingsService(options).read()).toEqual({ peak_boost_enabled: true, peak_boost_days: 20 });
       writeFileSync(join(dataRoot, "skill-data/amazon-final-restock/parameters.json"), '{"peak_boost_enabled":"false"}');
-      await expect(restarted.read()).rejects.toThrow("ValueError: Amazon 最终备货设置格式无效");
+      await expect(restarted.read()).rejects.toThrow("ValueError: Amazon V2 旺季设置格式无效");
     } finally { rmSync(dataRoot, { recursive: true, force: true }); }
   }, 15_000);
 
@@ -64,6 +64,7 @@ describe("Amazon V2 settings bridge", () => {
       execute: async () => { throw new Error("must not execute"); },
     });
     expect(() => service.save({ peak_boost_enabled: "false" })).toThrow("must be a boolean");
+    expect(() => service.save({ peak_boost_enabled: true, peak_boost_days: null })).toThrow("when enabled");
     for (const days of [-1, 121, 1.5, true, "20", undefined, NaN, Infinity]) {
       expect(() => service.save({ peak_boost_enabled: false, peak_boost_days: days })).toThrow("peak_boost_days");
     }

@@ -27,7 +27,7 @@ references:
 lxeskill mabang store shenzhen-inventory export --store-name "<规范店铺名>"
 ```
 
-以上旧调用保留按店铺选择本地最新 MSKU 源表的行为。最终备货等已取得明确源表的任务，使用导出实际返回的路径：
+以上旧调用保留按店铺选择本地最新 MSKU 源表的行为。V2等已取得明确源表的任务，使用导出实际返回的路径：
 
 ```text
 lxeskill mabang store shenzhen-inventory export --store-name "<规范店铺名>" --msku-source-xlsx-path "<MSKU导出返回的xlsx_path>"

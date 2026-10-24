@@ -184,11 +184,11 @@ export const ZH_TEXT = {
     loading: "正在读取设置…", retry: "重试", unavailable: "请在桌面应用中打开越南备货设置。",
   },
   amazonV2Settings: {
-    title: "亚马逊 V2 设置", subtitle: "设置 V2 旺季加成天数；每轮默认不加成，需在本轮对话中明确启用。",
-    days: "旺季加成天数", daysHint: "留空使用默认30天，可填0～120整数；本轮明确启用时使用保存天数或请求指定值。",
-    invalidDays: "旺季加成天数须留空或填写0～120的整数。", save: "保存天数",
-    saved: "加成天数已保存。", saving: "正在保存…", appliesNextRun: "本轮明确启用旺季加成时使用保存的天数；本轮指定天数优先。正在进行的计算不受影响。",
-    loading: "正在读取设置…", retry: "重试", unavailable: "请在桌面应用工作台中打开亚马逊 V2 设置。",
+    title: "亚马逊备货旺季加成", subtitle: "适用于亚马逊备货 V2 模板。",
+    enable: "启用旺季加成", days: "加成天数", daysHint: "开启时必填0～120天；聊天中指定的设置优先。",
+    requiredDays: "开启旺季加成时，请填写加成天数。", invalidDays: "加成天数须填写0～120的整数。", save: "保存设置",
+    saved: "旺季加成设置已保存。", saving: "正在保存…",
+    loading: "正在读取设置…", retry: "重试", unavailable: "请在桌面应用工作台中打开亚马逊备货旺季加成。",
   },
   workbenchIndex: {
     eyebrow: "工作台",
@@ -1111,11 +1111,11 @@ export const UI_TEXT: Record<Language, UiText> = {
       loading: "Loading settings…", retry: "Retry", unavailable: "Open these settings in the desktop app.",
     },
     amazonV2Settings: {
-      title: "Amazon V2 settings", subtitle: "Set V2 seasonal boost days. Every run defaults off unless the current chat request explicitly enables it.",
-      days: "Seasonal boost days", daysHint: "Leave blank for 30 days, or enter an integer from 0 to 120. An opted-in run uses saved days unless the request specifies a value.",
-      invalidDays: "Leave seasonal boost days blank or enter an integer from 0 to 120.", save: "Save days",
-      saved: "Seasonal boost days saved.", saving: "Saving…", appliesNextRun: "An opted-in run uses saved days unless the current request specifies a value. Running calculations keep their snapshot.",
-      loading: "Loading settings…", retry: "Retry", unavailable: "Open Amazon V2 settings in the desktop workbench.",
+      title: "Amazon replenishment seasonal boost", subtitle: "Applies to the Amazon V2 replenishment template.",
+      enable: "Enable seasonal boost", days: "Boost days", daysHint: "When enabled, enter 0–120 days. Chat instructions take priority.",
+      requiredDays: "Enter boost days before enabling seasonal boost.", invalidDays: "Boost days must be an integer from 0 to 120.", save: "Save settings",
+      saved: "Seasonal boost settings saved.", saving: "Saving…",
+      loading: "Loading settings…", retry: "Retry", unavailable: "Open Amazon replenishment seasonal boost in the desktop workbench.",
     },
     workbenchIndex: {
       eyebrow: "Workbench",

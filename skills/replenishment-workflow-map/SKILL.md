@@ -1,9 +1,9 @@
 ---
 name: replenishment-workflow-map
-description: Amazon备货唯一完整编排入口，按用户意图生成V1普通备货、V2最终备货建议或两种版本。复用同轮马帮数据，分别调用对应计算并独立检查、交付；版本不明确时结合上下文判断，仍不明确才确认一次。
+description: Amazon备货唯一完整编排入口，按用户意图生成V1普通备货、V2备货或两种版本。复用同轮马帮数据，分别调用对应计算并独立检查、交付；版本不明确时结合上下文判断，仍不明确才确认一次。
 type: replenishment
 commands:
-  - lxeskill replenish final-restock generate
+  - lxeskill replenish v2 generate
 ---
 
 # Amazon 备货
@@ -15,12 +15,12 @@ commands:
 | 版本 | 产物 |
 |---|---|
 | V1普通备货 | 原参数方案和算法生成的多Sheet报表。 |
-| V2最终备货建议 | `replenish final-restock generate` 生成的35列 `mskulist` 工作表。 |
+| V2备货 | `replenish v2 generate` 生成的35列 `mskulist` 工作表。 |
 
 ## 输入
 
-- 必需：Amazon店铺名及目标版本。“普通备货”对应V1，“最终备货建议”对应V2，“两种都要”对应同时生成V1和V2。
-- 可选：V1参数方案，默认“默认”；V2旺季加成和天数，旺季加成每轮默认关闭，仅本轮明确要求启用时传入。
+- 必需：Amazon店铺名及目标版本（V1、V2或两种）。“普通备货”对应V1，“两种都要”对应同时生成V1和V2。
+- 可选：V1参数方案，默认“默认”；V2旺季加成和天数，页面初始关闭，未提旺季时使用页面设置，本轮聊天明确要求优先。
 - 明确指定V1、V2或两种时直接沿用，不重复确认。版本不明确时先结合本轮上下文判断；仍无法确定时只询问一次，并等待明确回答。
 - 模糊店铺名交给店铺解析能力核对真实候选；平台或业务不明确时确认业务。
 
@@ -47,7 +47,7 @@ commands:
 | 版本 | 计算调用与交接 |
 |---|---|
 | V1 | 读取 `replenishment-calculate` 后运行：`lxeskill replenish calculate --store-name "<规范店铺名>" --unlinked-shipments-snapshot "<步骤5快照路径>" [--template "<方案名>"]`。V1按原CLI读取并核验销量和深圳报告；核对返回的 `sales_analysis_xlsx_path`、`actual_inventory_xlsx_path`、`source_data_time` 属于本轮步骤3、4。 |
-| V2 | 本Skill运行：`lxeskill replenish final-restock generate --store-name "<规范店铺名>" --msku-source-xlsx-path "<步骤2源表路径>" --shenzhen-inventory-report-xlsx-path "<步骤4深圳报告路径>" --unlinked-shipments-snapshot-path "<步骤5快照路径>" [--peak-boost-enabled] [--peak-boost-days <0～120>]`。旺季默认关闭；本轮明确启用才传裸开关 `--peak-boost-enabled`，否则省略。天数只传本轮明确指定值；未指定则命令使用保存值，保存值为空时用30天。 |
+| V2 | 本Skill运行：`lxeskill replenish v2 generate --store-name "<规范店铺名>" --msku-source-xlsx-path "<步骤2源表路径>" --shenzhen-inventory-report-xlsx-path "<步骤4深圳报告路径>" --unlinked-shipments-snapshot-path "<步骤5快照路径>" [--peak-boost-enabled] [--peak-boost-days <0～120>]`。未提旺季时省略两个参数，沿用页面保存的开关和天数。聊天明确开启时传裸开关 `--peak-boost-enabled`，明确关闭时传 `--peak-boost-enabled=false`；聊天指定天数时传 `--peak-boost-days <0～120>`，单独指定天数即启用，明确关闭仍优先。启用没有默认天数；若命令报告缺少天数，询问用户后复用本轮数据重算。本轮覆盖不改写页面设置。 |
 
 V2使用同轮MSKU、深圳库存报告和货件快照，核验来源指纹、店铺、批次及MSKU覆盖。生成 `mskulist` 工作表的35列和全部MSKU行，每行写入14个公式字段，包括I“销量趋势”、J“加权日销”和AI“可供天数”；商品类型核验未通过的行也保留。
 

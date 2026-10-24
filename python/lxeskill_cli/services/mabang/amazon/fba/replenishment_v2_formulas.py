@@ -1,4 +1,4 @@
-"""YHQUS final-restock formulas, independent of the existing replenishment rules.
+"""Amazon V2 replenishment formulas, independent of the V1 replenishment rules.
 
 The user-confirmed XLSX rules take precedence for AA/AC blank guards; the
 proposal's appendix supplies the formulas and confirmed U-column IF order.
@@ -8,7 +8,7 @@ algorithm or cached results.
 from __future__ import annotations
 
 
-def final_restock_formulas(
+def replenishment_v2_formulas(
     row_number: int, *, peak_boost_enabled: bool = True, peak_boost_days: int | None = None,
 ) -> dict[str, str]:
     """Return the original 13 formulas plus supply days in the 35-column layout.
@@ -16,7 +16,7 @@ def final_restock_formulas(
     Keys are column letters; values include Excel's leading ``=``. Callers
     own source validation, workbook writing and recalculation. The current
     helper retains its legacy formula defaults; business generation explicitly
-    supplies the current request opt-in and its settings snapshot.
+    supplies the resolved seasonal settings snapshot.
     """
     if type(row_number) is not int or not 2 <= row_number <= 1_048_576:
         raise ValueError("row_number must be an Excel data-row integer between 2 and 1048576")

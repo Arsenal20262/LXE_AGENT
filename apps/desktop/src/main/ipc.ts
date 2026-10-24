@@ -283,7 +283,7 @@ export function registerDesktopIpc(application: DesktopIpcApplication): () => vo
   ipcMain.handle(IPC_CHANNELS.saveAmazonV2Settings, (event, input: unknown) => {
     trustedWorkspaceSender(event);
     if (!isAmazonV2Settings(input)) {
-      throw new Error("peak_boost_enabled must be a boolean; peak_boost_days must be null or an integer between 0 and 120");
+      throw new Error("peak_boost_enabled must be a boolean; peak_boost_days must be an integer between 0 and 120 when enabled, otherwise null is allowed");
     }
     return application.saveAmazonV2Settings(input);
   });

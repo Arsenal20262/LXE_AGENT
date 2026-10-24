@@ -11,14 +11,14 @@ import pytest
 from openpyxl import load_workbook
 
 from lxeskill import cli as lxeskill
-from services.mabang.amazon.fba import final_restock_workbook as final_workbook
+from services.mabang.amazon.fba import replenishment_v2_workbook as v2_workbook
 from services.mabang.amazon.fba import source_verification as verification
 from services.mabang.amazon.fba import store_msku as msku_export
 from services.mabang.amazon.fba import store_msku_actual_inventory as inventory
 from services.mabang.amazon.fba import store_msku_sales_analysis as sales_analysis
-from services.mabang.amazon.fba.final_restock_recommendation import final_restock_formulas
+from services.mabang.amazon.fba.replenishment_v2_formulas import replenishment_v2_formulas
 from services.mabang.amazon.fba.sku_catalog import LocalSkuDefinition
-from test_final_restock_workbook import (
+from test_replenishment_v2_workbook import (
     SOURCE_HEADERS, STORE, _source_rows, _write_confirmed_empty_snapshot, _write_source,
 )
 
@@ -115,9 +115,9 @@ def test_same_batch_supports_independent_version_cli_results(tmp_path, monkeypat
     if scenario == "v2-office-failed":
         def fail_office(*_args, **_kwargs):
             raise RuntimeError("fixture V2 Office recalculation failed")
-        monkeypatch.setattr(final_workbook, "_recalculate", fail_office)
+        monkeypatch.setattr(v2_workbook, "_recalculate", fail_office)
     v2_code, v2 = execute("replenishment-workflow-map", [
-        "replenish", "final-restock", "generate", "--store-name", STORE,
+        "replenish", "v2", "generate", "--store-name", STORE,
         "--msku-source-xlsx-path", str(source),
         "--shenzhen-inventory-report-xlsx-path", str(report),
         "--unlinked-shipments-snapshot-path", str(snapshot),
@@ -140,7 +140,7 @@ def test_same_batch_supports_independent_version_cli_results(tmp_path, monkeypat
             assert book.sheetnames == ["mskulist"] and book.active.max_column == 35
             for index, expected in enumerate([12, 0, 7] + ([None] if review else []), 2):
                 assert book.active[f"AG{index}"].value == expected
-                assert {cell.column_letter for cell in book.active[index] if cell.data_type == "f"} == set(final_restock_formulas(index))
+                assert {cell.column_letter for cell in book.active[index] if cell.data_type == "f"} == set(replenishment_v2_formulas(index))
         finally:
             book.close()
     if v1:

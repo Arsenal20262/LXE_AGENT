@@ -8,11 +8,11 @@ import pytest
 from openpyxl import Workbook, load_workbook
 from openpyxl.formula.translate import Translator
 
-from services.mabang.amazon.fba.final_restock_recommendation import final_restock_formulas
+from services.mabang.amazon.fba.replenishment_v2_formulas import replenishment_v2_formulas
 
 
 def test_formula_contract():
-    formulas = final_restock_formulas(2)
+    formulas = replenishment_v2_formulas(2)
     assert tuple(formulas) == ("I", "J", "R", "S", "U", "V", "W", "X", "Y", "Z", "AA", "AB", "AC", "AI")
     assert formulas["J"] == "=E2/7*0.6+F2/14*0.3+G2/30*0.1"
     assert formulas["R"] == "=K2+L2+M2+O2+P2+Q2"
@@ -24,9 +24,9 @@ def test_formula_contract():
 
 
 def test_seasonal_boost_is_on_by_default_and_can_be_disabled():
-    enabled = final_restock_formulas(2)
-    disabled = final_restock_formulas(2, peak_boost_enabled=False)
-    assert enabled["V"] == final_restock_formulas(2, peak_boost_enabled=True)["V"]
+    enabled = replenishment_v2_formulas(2)
+    disabled = replenishment_v2_formulas(2, peak_boost_enabled=False)
+    assert enabled["V"] == replenishment_v2_formulas(2, peak_boost_enabled=True)["V"]
     assert 'SEARCH("热销",AF2)' in enabled["V"]
     assert 'SEARCH("热销",AF2)' not in disabled["V"]
     assert "+0,120" in disabled["V"] and "+0,120" in disabled["W"]
@@ -37,24 +37,24 @@ def test_seasonal_boost_is_on_by_default_and_can_be_disabled():
 
 def test_seasonal_boost_setting_requires_a_boolean():
     with pytest.raises(ValueError, match="peak_boost_enabled"):
-        final_restock_formulas(2, peak_boost_enabled=1)
+        replenishment_v2_formulas(2, peak_boost_enabled=1)
 
 
 @pytest.mark.parametrize("days", [0, 20, 120])
 def test_custom_days_replace_only_the_existing_seasonal_bonus(days):
-    default = final_restock_formulas(2)
-    custom = final_restock_formulas(2, peak_boost_days=days)
+    default = replenishment_v2_formulas(2)
+    custom = replenishment_v2_formulas(2, peak_boost_days=days)
     for column, formula in default.items():
         assert custom[column] == (formula.replace(",30,0))", f",{days},0))") if column in ("V", "W") else formula)
-    assert final_restock_formulas(2, peak_boost_days=None) == default
-    assert final_restock_formulas(2, peak_boost_days=30) == default
-    assert final_restock_formulas(2, peak_boost_enabled=False, peak_boost_days=days) == final_restock_formulas(2, peak_boost_enabled=False)
+    assert replenishment_v2_formulas(2, peak_boost_days=None) == default
+    assert replenishment_v2_formulas(2, peak_boost_days=30) == default
+    assert replenishment_v2_formulas(2, peak_boost_enabled=False, peak_boost_days=days) == replenishment_v2_formulas(2, peak_boost_enabled=False)
 
 
 @pytest.mark.parametrize("days", [-1, 121, 1.5, True, "20"])
 def test_formula_rejects_invalid_custom_days(days):
     with pytest.raises(ValueError, match="peak_boost_days"):
-        final_restock_formulas(2, peak_boost_days=days)
+        replenishment_v2_formulas(2, peak_boost_days=days)
 
 
 @pytest.mark.parametrize("enabled,days,remark,expected", [
@@ -78,7 +78,7 @@ def test_configured_seasonal_boost_excel_recalculation(tmp_path, enabled, days, 
     sheet["J2"] = 11
     sheet["S2"] = 80
     sheet["AF2"] = remark
-    formulas = final_restock_formulas(2, peak_boost_enabled=enabled, peak_boost_days=days)
+    formulas = replenishment_v2_formulas(2, peak_boost_enabled=enabled, peak_boost_days=days)
     sheet["V2"] = formulas["V"]
     sheet["W2"] = formulas["W"]
     book.save(source)
@@ -101,8 +101,8 @@ def test_configured_seasonal_boost_excel_recalculation(tmp_path, enabled, days, 
 
 @pytest.mark.parametrize("row", [3, 2004, 1_048_576])
 def test_all_relative_references_follow_the_requested_row(row):
-    reference = final_restock_formulas(2)
-    actual = final_restock_formulas(row)
+    reference = replenishment_v2_formulas(2)
+    actual = replenishment_v2_formulas(row)
     assert actual == {
         column: Translator(formula, origin=f"{column}2").translate_formula(f"{column}{row}")
         for column, formula in reference.items()
@@ -112,7 +112,7 @@ def test_all_relative_references_follow_the_requested_row(row):
 @pytest.mark.parametrize("row", [True, False, -1, 0, 1, 2.0, "2", None, 1_048_577])
 def test_invalid_data_row_is_rejected(row):
     with pytest.raises(ValueError, match="row_number"):
-        final_restock_formulas(row)
+        replenishment_v2_formulas(row)
 
 
 # Each case overrides cells only to isolate a formula's business boundary.
@@ -211,7 +211,7 @@ def recalculated_cases(tmp_path_factory):
     executable = shutil.which("soffice") or shutil.which("libreoffice")
     if executable is None:
         pytest.skip("NOT VERIFIED: LibreOffice is unavailable for formula evaluation")
-    root = tmp_path_factory.mktemp("final-restock-formulas")
+    root = tmp_path_factory.mktemp("replenishment-v2-formulas")
     book = Workbook()
     sheet = book.active
     sheet.title = "formula_cases"
@@ -219,7 +219,7 @@ def recalculated_cases(tmp_path_factory):
         sheet[f"A{row}"] = name
         for column in ("E", "F", "G", "H", "K", "L", "M", "N", "O", "P", "Q", "T", "AD"):
             sheet[f"{column}{row}"] = 0
-        for column, formula in final_restock_formulas(row).items():
+        for column, formula in replenishment_v2_formulas(row).items():
             sheet[f"{column}{row}"] = formula
         for column, value in inputs.items():
             sheet[f"{column}{row}"] = value

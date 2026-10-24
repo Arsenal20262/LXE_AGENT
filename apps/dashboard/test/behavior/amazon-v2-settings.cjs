@@ -4,6 +4,7 @@ const { join } = require("node:path");
 
 module.exports = async ({ js, step, waitFor, click, state }) => {
   const days = '.amazon-peak-days input';
+  const toggle = '.amazon-peak-toggle input';
   const save = '.workbench-settings-actions button';
   const editDays = async value => {
     await js(`(() => { const input = document.querySelector('${days}'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, ${JSON.stringify(value)}); input.dispatchEvent(new Event('input', { bubbles: true })); })()`);
@@ -12,29 +13,37 @@ module.exports = async ({ js, step, waitFor, click, state }) => {
   const loaded = () => waitFor(`Boolean(document.querySelector('${days}'))`, "Amazon settings loaded");
   const saved = () => waitFor(`document.querySelector('${save}').disabled && !document.querySelector('${days}').disabled`, "days saved");
 
-  await step("days-only settings use the shared header and leave opt-in to the current request", async () => {
+  await step("unchecked settings have no default days and require days before enabling", async () => {
     await js("behavior.mountAmazonV2Settings('zh')"); await loaded();
-    assert.equal(await js("document.querySelectorAll('input[type=checkbox]').length"), 0);
+    assert.equal(await js("document.querySelectorAll('input[type=checkbox]').length"), 1);
     assert.equal(await js("document.querySelector('.workbench-detail-header h1').id"), "amazon-v2-settings-title");
     assert.equal(await js("document.querySelector('section').getAttribute('aria-labelledby')"), "amazon-v2-settings-title");
     assert.equal(await js("document.querySelectorAll('[class*=vietnam]').length"), 0);
-    assert.match(await js("document.body.innerText"), /默认30天/);
-    assert.match(await js("document.body.innerText"), /每轮默认不加成/);
+    assert.match(await js("document.body.innerText"), /亚马逊备货旺季加成/);
+    assert.equal(await js(`document.querySelector('${toggle}').checked`), false);
+    assert.equal(await js(`document.querySelector('${days}').placeholder`), "");
+    assert.equal(await js("document.querySelector('.workbench-detail-description').textContent"), "适用于亚马逊备货 V2 模板。");
+    assert.equal(await js("document.querySelectorAll('.workbench-note').length"), 1);
     assert.equal(await js("document.querySelectorAll('[role=dialog]').length"), 0);
     assert.equal(await js(`document.querySelector('${days}').value`), "");
     assert.equal(await js("document.querySelectorAll('input[type=file]').length"), 0);
+    await click(toggle); await click(save);
+    assert.match(await js("document.querySelector('[role=alert]').textContent"), /请填写加成天数/);
+    assert.equal((await state()).calls.filter(call => call.operation === "amazon-v2.save").length, 0);
+    await click(toggle);
   });
-  await step("days persist across remounts without editing the historical switch", async () => {
-    await editDays("20"); await click(save); await saved();
+  await step("checkbox and days persist across remounts", async () => {
+    await click(toggle); await editDays("20"); await click(save); await saved();
     assert.deepEqual((await state()).calls.filter(call => call.operation === "amazon-v2.save").at(-1).input,
       { peak_boost_enabled: true, peak_boost_days: 20 });
     await js("behavior.mountAmazonV2Settings('en')"); await loaded();
     assert.equal(await js(`document.querySelector('${days}').value`), "20");
-    assert.equal(await js("document.querySelectorAll('input[type=checkbox]').length"), 0);
+    assert.equal(await js(`document.querySelector('${toggle}').checked`), true);
   });
   await step("pending saves lock fields and failed saves preserve the draft and actual error", async () => {
     await editDays("40"); await js("behavior.amazonSaveMode('hold')"); await click(save);
     assert.equal(await js(`document.querySelector('${days}').disabled`), true);
+    assert.equal(await js(`document.querySelector('${toggle}').disabled`), true);
     assert.equal(await js(`document.querySelector('${save}').disabled`), true);
     await js("behavior.releaseAmazonSave()"); await saved();
     await editDays("60"); await js("behavior.amazonSaveMode('error')"); await click(save);
@@ -61,9 +70,10 @@ module.exports = async ({ js, step, waitFor, click, state }) => {
     }
     assert.equal((await state()).calls.filter(call => call.operation === "amazon-v2.save").length, count);
     for (const [value, expected] of [["0", 0], ["", null]]) {
+      if (value === "") await click(toggle);
       await editDays(value); await click(save); await saved();
       const input = (await state()).calls.filter(call => call.operation === "amazon-v2.save").at(-1).input;
-      assert.deepEqual(input, { peak_boost_enabled: true, peak_boost_days: expected });
+      assert.deepEqual(input, { peak_boost_enabled: value !== "", peak_boost_days: expected });
       await js("behavior.mountAmazonV2Settings('zh')"); await loaded();
       assert.equal(await js(`document.querySelector('${days}').value`), value);
     }

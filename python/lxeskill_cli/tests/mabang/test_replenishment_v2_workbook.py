@@ -11,17 +11,17 @@ from unittest.mock import Mock
 import pytest
 from openpyxl import Workbook, load_workbook
 
-from services.mabang.amazon.fba import final_restock_workbook as final_workbook
-from services.mabang.amazon.fba import final_restock_settings as settings
+from services.mabang.amazon.fba import replenishment_v2_workbook as v2_workbook
+from services.mabang.amazon.fba import replenishment_v2_settings as settings
 from services.mabang.amazon.fba import source_verification
 from services.mabang.amazon.fba import store_msku_actual_inventory as inventory
 from services.mabang.amazon.fba import unlinked_shipments as shipments
-from services.mabang.amazon.fba.final_restock_recommendation import final_restock_formulas
+from services.mabang.amazon.fba.replenishment_v2_formulas import replenishment_v2_formulas
 from services.mabang.amazon.fba.sku_catalog import LocalSkuDefinition, SkuCatalogSnapshot
 from services.mabang.amazon.fba.store_msku_replenishment import StoreMskuReplenishmentError
-from services.mabang.amazon.fba.final_restock_workbook import (
-    FinalRestockWorkbookError,
-    generate_final_restock_recommendation,
+from services.mabang.amazon.fba.replenishment_v2_workbook import (
+    ReplenishmentV2WorkbookError,
+    generate_replenishment_v2,
 )
 
 
@@ -35,14 +35,14 @@ def isolated_settings(tmp_path: Path, monkeypatch) -> None:
 
 def test_workbook_writes_formulas_using_persisted_boost_choice(tmp_path: Path) -> None:
     path = tmp_path / "formula-setting.xlsx"
-    final_workbook._write_workbook(path, [{"_binding_verified": True}], peak_boost_enabled=False)
+    v2_workbook._write_workbook(path, [{"_binding_verified": True}], peak_boost_enabled=False)
     book = load_workbook(path, data_only=False)
     try:
-        sheet = book[final_workbook.WORKSHEET_NAME]
+        sheet = book[v2_workbook.WORKSHEET_NAME]
         assert 'SEARCH("热销",AF2)' not in sheet["V2"].value
         assert "+0,120" in sheet["V2"].value
         assert "+0,120" in sheet["W2"].value
-        assert sheet["I2"].value == final_restock_formulas(2)["I"]
+        assert sheet["I2"].value == replenishment_v2_formulas(2)["I"]
     finally:
         book.close()
 SOURCE_HEADERS = (
@@ -162,7 +162,7 @@ def _generate(tmp_path: Path, *, source_path: Path | None = None, inventory_path
         tmp_path / "inventory.xlsx", source_path
     )
     snapshot_path = snapshot_path or _write_confirmed_empty_snapshot(tmp_path / "snapshots")
-    return generate_final_restock_recommendation(
+    return generate_replenishment_v2(
         STORE,
         msku_source_xlsx_path=source_path,
         shenzhen_inventory_report_xlsx_path=inventory_path,
@@ -178,16 +178,16 @@ def test_workbook_preserves_literal_strings_and_only_writes_designed_formulas(tm
         "本地SKU名称": "=2+2", "备注": "=1+1", "本地SKU": "=local-sku",
     }
     path = tmp_path / "literal-text.xlsx"
-    final_workbook._write_workbook(path, [{**literals, "本地库存": -4, "单件重量(g)": 0}])
+    v2_workbook._write_workbook(path, [{**literals, "本地库存": -4, "单件重量(g)": 0}])
     book = load_workbook(path, data_only=False)
     try:
         sheet = book.active
         for header, expected in literals.items():
-            cell = sheet.cell(2, final_workbook.HEADERS.index(header) + 1)
+            cell = sheet.cell(2, v2_workbook.HEADERS.index(header) + 1)
             assert (cell.value, cell.data_type) == (expected, "s")
         assert sheet["AG2"].value == -4 and sheet["AG2"].data_type == "n"
         assert sheet["AD2"].value == 0 and sheet["AD2"].data_type == "n"
-        assert {cell.column_letter for cell in sheet[2] if cell.data_type == "f"} == set(final_restock_formulas(2))
+        assert {cell.column_letter for cell in sheet[2] if cell.data_type == "f"} == set(replenishment_v2_formulas(2))
     finally:
         book.close()
 
@@ -225,7 +225,7 @@ def test_verified_literal_text_survives_full_office_generation(tmp_path: Path) -
                 assert cached[f"{column}{number}"].value == expected
                 if expected is not None:
                     assert sheet[f"{column}{number}"].data_type == cached[f"{column}{number}"].data_type == "s"
-            expected_formulas = final_restock_formulas(number, peak_boost_enabled=False)
+            expected_formulas = replenishment_v2_formulas(number, peak_boost_enabled=False)
             assert {cell.column_letter for cell in sheet[number] if cell.data_type == "f"} == set(expected_formulas)
             assert all(sheet[f"{column}{number}"].value == formula for column, formula in expected_formulas.items())
         # Literal UNICHAR text must not evaluate to 清货 and suppress the shipping-day formulas.
@@ -248,7 +248,7 @@ def test_unexpected_source_formula_after_office_stops_publication(tmp_path: Path
     first = _generate(tmp_path, source_path=source, inventory_path=report, snapshot_path=snapshot)
     official = Path(first.output_xlsx_path)
     original_output = official.read_bytes()
-    recalculate = final_workbook._recalculate
+    recalculate = v2_workbook._recalculate
 
     def inject_unexpected_formula(input_path: Path, output_path: Path) -> None:
         book = load_workbook(input_path)
@@ -259,29 +259,29 @@ def test_unexpected_source_formula_after_office_stops_publication(tmp_path: Path
             book.close()
         recalculate(input_path, output_path)
 
-    monkeypatch.setattr(final_workbook, "_recalculate", inject_unexpected_formula)
-    with pytest.raises(FinalRestockWorkbookError, match="非计算单元格.*AE2"):
+    monkeypatch.setattr(v2_workbook, "_recalculate", inject_unexpected_formula)
+    with pytest.raises(ReplenishmentV2WorkbookError, match="非计算单元格.*AE2"):
         _generate(tmp_path, source_path=source, inventory_path=report, snapshot_path=snapshot)
     assert official.read_bytes() == original_output
 
 
 @pytest.mark.parametrize("initial_enabled,initial_days,next_enabled,next_days", [
-    (False, None, True, None), (True, 20, True, 60), (True, 0, True, None),
+    (False, 20, True, 40), (True, 20, True, 60), (True, 0, True, 10),
 ])
 def test_generation_snapshots_setting_and_next_generation_reads_saved_value(
     tmp_path: Path, monkeypatch, initial_enabled, initial_days, next_enabled, next_days,
 ) -> None:
     settings.save_parameters({"peak_boost_enabled": initial_enabled, "peak_boost_days": initial_days})
-    original_rows = final_workbook._rows_for_workbook
+    original_rows = v2_workbook._rows_for_workbook
 
     def change_setting_during_generation(*args, **kwargs):
         settings.save_parameters({"peak_boost_enabled": next_enabled, "peak_boost_days": next_days})
         return original_rows(*args, **kwargs)
 
     # This test checks the generation boundary; actual Office evaluation is tested separately.
-    monkeypatch.setattr(final_workbook, "_rows_for_workbook", change_setting_during_generation)
-    monkeypatch.setattr(final_workbook, "_recalculate", copyfile)
-    monkeypatch.setattr(final_workbook, "_inspect_recalculated", lambda *args, **kwargs: (0, ()))
+    monkeypatch.setattr(v2_workbook, "_rows_for_workbook", change_setting_during_generation)
+    monkeypatch.setattr(v2_workbook, "_recalculate", copyfile)
+    monkeypatch.setattr(v2_workbook, "_inspect_recalculated", lambda *args, **kwargs: (0, ()))
     first = _generate(tmp_path / "first", peak_boost_enabled=True)
     second = _generate(tmp_path / "next", peak_boost_enabled=True)
     first_book = load_workbook(first.output_xlsx_path, data_only=False)
@@ -293,8 +293,8 @@ def test_generation_snapshots_setting_and_next_generation_reads_saved_value(
         for row in range(2, 6):
             for column in range(1, 36):
                 if column in (22, 23):
-                    expected_first = final_restock_formulas(row, peak_boost_enabled=True, peak_boost_days=initial_days)
-                    expected_next = final_restock_formulas(row, peak_boost_enabled=True, peak_boost_days=next_days)
+                    expected_first = replenishment_v2_formulas(row, peak_boost_enabled=True, peak_boost_days=initial_days)
+                    expected_next = replenishment_v2_formulas(row, peak_boost_enabled=True, peak_boost_days=next_days)
                     assert before.cell(row, column).value == expected_first["V" if column == 22 else "W"]
                     assert after.cell(row, column).value == expected_next["V" if column == 22 else "W"]
                 else:
@@ -372,7 +372,7 @@ def test_generates_all_source_rows_without_formula_errors(tmp_path: Path, unboun
         assert all(not sheet.cell(2, col).font.bold for col in range(1, 36))
 
         for row_number in range(2, 6):
-            expected = final_restock_formulas(row_number, peak_boost_enabled=False)
+            expected = replenishment_v2_formulas(row_number, peak_boost_enabled=False)
             assert {column: sheet[f"{column}{row_number}"].value for column in expected} == expected
         assert [sheet.cell(row, 2).value for row in range(2, 6)] == ["SEA-1", "CLEAR-1", "COMBO-1", "UNBOUND-1"]
         assert [sheet.cell(row, 1).value for row in range(2, 6)] == [STORE] * 4
@@ -442,7 +442,7 @@ def test_binding_verdict_is_preserved_without_suppressing_advice_after_office_re
 
     # Recalculate the delivered formulas again; blank caches alone must not hide advice.
     recalculated_again = tmp_path / "recalculated-again.xlsx"
-    final_workbook._recalculate(Path(result.output_xlsx_path), recalculated_again)
+    v2_workbook._recalculate(Path(result.output_xlsx_path), recalculated_again)
     for path in (Path(result.output_xlsx_path), recalculated_again):
         formulas = load_workbook(path, read_only=True, data_only=False)
         values = load_workbook(path, read_only=True, data_only=True)
@@ -459,7 +459,7 @@ def test_binding_verdict_is_preserved_without_suppressing_advice_after_office_re
                     12 if msku == "SEA-1" else None if msku in {"UNBOUND-1", "UNMATCHED-1"} else 0
                 )
                 assert sheet[f"AH{row_number}"].value == (source_row["本地SKU"] or None)
-                expected = final_restock_formulas(row_number, peak_boost_enabled=False)
+                expected = replenishment_v2_formulas(row_number, peak_boost_enabled=False)
                 for column in ("I", "J", "R", "S"):
                     assert sheet[f"{column}{row_number}"].value == expected[column]
                 assert cached[f"I{row_number}"].value is not None
@@ -478,19 +478,19 @@ def test_workbook_layout_mapping_and_pr1_formulas_before_office(tmp_path: Path) 
     report_path = _write_inventory_report(tmp_path / "inventory.xlsx", source_path)
     snapshot_path = _write_confirmed_empty_snapshot(tmp_path / "snapshots")
     verified = source_verification.load_verified_source(source_path, store_name=STORE)
-    _, source_by_key = final_workbook._unique_source_rows(verified.records)
-    inventory_by_key = final_workbook._load_shenzhen_rows(report_path, expected_keys=set(source_by_key))
-    shipment_by_key = final_workbook._shipment_quantities(
+    _, source_by_key = v2_workbook._unique_source_rows(verified.records)
+    inventory_by_key = v2_workbook._load_shenzhen_rows(report_path, expected_keys=set(source_by_key))
+    shipment_by_key = v2_workbook._shipment_quantities(
         snapshot_path, store_name=STORE, source_data_time="202610131000"
     )
-    rows = final_workbook._rows_for_workbook(
+    rows = v2_workbook._rows_for_workbook(
         verified.records,
         store_name=STORE,
         inventory_by_key=inventory_by_key,
         shipment_by_key=shipment_by_key,
     )
     workbook_path = tmp_path / "formulas.xlsx"
-    final_workbook._write_workbook(workbook_path, rows)
+    v2_workbook._write_workbook(workbook_path, rows)
 
     workbook = load_workbook(workbook_path, data_only=False)
     try:
@@ -520,7 +520,7 @@ def test_workbook_layout_mapping_and_pr1_formulas_before_office(tmp_path: Path) 
         assert all(sheet.cell(2, column).font.name == "Calibri" for column in range(1, 36))
         assert all(not sheet.cell(2, column).font.bold for column in range(1, 36))
         for row_number in range(2, len(rows) + 2):
-            expected = final_restock_formulas(row_number)
+            expected = replenishment_v2_formulas(row_number)
             actual = {
                 column: sheet[f"{column}{row_number}"].value
                 for column in expected
@@ -542,15 +542,15 @@ def test_unverified_rows_keep_source_data_with_all_formulas(
     source_path = _write_source(tmp_path / "202610131000-Amazon-Test_店铺MSKU数据.xlsx", source_rows)
     report_path = _write_inventory_report(tmp_path / "inventory.xlsx", source_path, source_rows)
     verified = source_verification.load_verified_source(source_path, store_name=STORE)
-    _, source_by_key = final_workbook._unique_source_rows(verified.records)
-    mapped = final_workbook._rows_for_workbook(
+    _, source_by_key = v2_workbook._unique_source_rows(verified.records)
+    mapped = v2_workbook._rows_for_workbook(
         verified.records,
         store_name=STORE,
-        inventory_by_key=final_workbook._load_shenzhen_rows(report_path, expected_keys=set(source_by_key)),
+        inventory_by_key=v2_workbook._load_shenzhen_rows(report_path, expected_keys=set(source_by_key)),
         shipment_by_key={},
     )
     workbook_path = tmp_path / "formulas.xlsx"
-    final_workbook._write_workbook(workbook_path, mapped)
+    v2_workbook._write_workbook(workbook_path, mapped)
     workbook = load_workbook(workbook_path, read_only=True, data_only=False)
     try:
         sheet = workbook["mskulist"]
@@ -562,10 +562,10 @@ def test_unverified_rows_keep_source_data_with_all_formulas(
         for row_number in (2, 3, 4):
             assert {
                 column: sheet[f"{column}{row_number}"].value
-                for column in final_restock_formulas(row_number)
-            } == final_restock_formulas(row_number)
+                for column in replenishment_v2_formulas(row_number)
+            } == replenishment_v2_formulas(row_number)
         for column in ("I", "J", "R", "S"):
-            assert sheet[f"{column}5"].value == final_restock_formulas(5)[column]
+            assert sheet[f"{column}5"].value == replenishment_v2_formulas(5)[column]
     finally:
         workbook.close()
 
@@ -582,7 +582,7 @@ def test_source_store_and_fingerprint_are_verified(tmp_path: Path, mutation: str
         workbook.close()
     diagnostic = "店铺不一致" if mutation == "store" else "发生变化"
     with pytest.raises(source_verification.SourceVerificationError, match=diagnostic):
-        generate_final_restock_recommendation(
+        generate_replenishment_v2(
             "Wrong-Store" if mutation == "store" else STORE,
             msku_source_xlsx_path=source_path,
             shenzhen_inventory_report_xlsx_path=inventory_path,
@@ -605,7 +605,7 @@ def test_inventory_report_must_have_the_same_source_batch(tmp_path: Path, differ
     report = _write_inventory_report(tmp_path / "inventory.xlsx", other_source)
     snapshot = _write_confirmed_empty_snapshot(tmp_path / "snapshots")
 
-    with pytest.raises(FinalRestockWorkbookError, match="批次"):
+    with pytest.raises(ReplenishmentV2WorkbookError, match="批次"):
         _generate(
             tmp_path,
             source_path=source_path,
@@ -619,7 +619,7 @@ def test_inventory_report_must_cover_every_source_msku(tmp_path: Path) -> None:
     report = _write_inventory_report(tmp_path / "inventory.xlsx", source_path, _source_rows()[:2])
     snapshot = _write_confirmed_empty_snapshot(tmp_path / "snapshots")
 
-    with pytest.raises(FinalRestockWorkbookError, match="覆盖与源表不一致"):
+    with pytest.raises(ReplenishmentV2WorkbookError, match="覆盖与源表不一致"):
         _generate(tmp_path, source_path=source_path, inventory_path=report, snapshot_path=snapshot)
 
 
@@ -647,9 +647,9 @@ def test_inventory_report_rejects_duplicate_msku_across_sheets(tmp_path: Path, m
 
     write = Mock(side_effect=AssertionError("重复库存报告不得生成工作簿"))
     recalculate = Mock(side_effect=AssertionError("重复库存报告不得进入Office重算"))
-    monkeypatch.setattr(final_workbook, "_write_workbook", write)
-    monkeypatch.setattr(final_workbook, "_recalculate", recalculate)
-    with pytest.raises(FinalRestockWorkbookError, match="深圳库存报告存在重复 MSKU: 'SEA-1'"):
+    monkeypatch.setattr(v2_workbook, "_write_workbook", write)
+    monkeypatch.setattr(v2_workbook, "_recalculate", recalculate)
+    with pytest.raises(ReplenishmentV2WorkbookError, match="深圳库存报告存在重复 MSKU: 'SEA-1'"):
         _generate(tmp_path, source_path=source_path, inventory_path=report, snapshot_path=snapshot)
     write.assert_not_called()
     recalculate.assert_not_called()
@@ -678,9 +678,9 @@ def test_ah_uses_report_local_sku_and_falls_back_to_source_when_blank(tmp_path: 
         workbook.close()
 
     source = source_verification.load_verified_source(source_path, store_name=STORE)
-    _, source_by_key = final_workbook._unique_source_rows(source.records)
-    inventory_by_key = final_workbook._load_shenzhen_rows(report, expected_keys=set(source_by_key))
-    rows = final_workbook._rows_for_workbook(
+    _, source_by_key = v2_workbook._unique_source_rows(source.records)
+    inventory_by_key = v2_workbook._load_shenzhen_rows(report, expected_keys=set(source_by_key))
+    rows = v2_workbook._rows_for_workbook(
         source.records, store_name=STORE, inventory_by_key=inventory_by_key, shipment_by_key={},
     )
     assert [row["本地SKU"] for row in rows] == ["SKU-SEA", "SKU-CLEAR", "SKU-COMBO", "UNVERIFIED-LOCAL"]
@@ -713,9 +713,9 @@ def test_ah_accepts_report_local_sku_priority_after_source_verification(
         workbook.close()
 
     source = source_verification.load_verified_source(source_path, store_name=STORE)
-    _, source_by_key = final_workbook._unique_source_rows(source.records)
-    inventory_by_key = final_workbook._load_shenzhen_rows(report, expected_keys=set(source_by_key))
-    rows = final_workbook._rows_for_workbook(
+    _, source_by_key = v2_workbook._unique_source_rows(source.records)
+    inventory_by_key = v2_workbook._load_shenzhen_rows(report, expected_keys=set(source_by_key))
+    rows = v2_workbook._rows_for_workbook(
         source.records, store_name=STORE,
         inventory_by_key=inventory_by_key, shipment_by_key={},
     )
@@ -741,15 +741,15 @@ def test_ag_preserves_negative_zero_and_numeric_text_from_shenzhen_report(tmp_pa
     workbook.save(report)
     workbook.close()
     verified = source_verification.load_verified_source(source_path, store_name=STORE)
-    _, source_by_key = final_workbook._unique_source_rows(verified.records)
-    inventory_by_key = final_workbook._load_shenzhen_rows(report, expected_keys=set(source_by_key))
-    rows = final_workbook._rows_for_workbook(
+    _, source_by_key = v2_workbook._unique_source_rows(verified.records)
+    inventory_by_key = v2_workbook._load_shenzhen_rows(report, expected_keys=set(source_by_key))
+    rows = v2_workbook._rows_for_workbook(
         verified.records, store_name=STORE, inventory_by_key=inventory_by_key,
         shipment_by_key={},
     )
     assert [row["本地库存"] for row in rows] == [-3, 0, 2.5, None]
-    with pytest.raises(FinalRestockWorkbookError, match="必须是有限非负数"):
-        final_workbook._optional_number(-1, context="未关联货件数量")
+    with pytest.raises(ReplenishmentV2WorkbookError, match="必须是有限非负数"):
+        v2_workbook._optional_number(-1, context="未关联货件数量")
 
 
 @pytest.mark.parametrize("invalid", ["NaN", "Infinity", True, "unknown"])
@@ -774,9 +774,9 @@ def test_ag_rejects_invalid_shenzhen_stock(tmp_path: Path, invalid) -> None:
     assert changed, "the invalid stock fixture must modify the existing SEA-1 report row"
     workbook.save(report)
     workbook.close()
-    _, source_by_key = final_workbook._unique_source_rows(verified.records)
-    with pytest.raises(FinalRestockWorkbookError, match="深圳库存报告 MSKU=SEA-1 库存"):
-        final_workbook._load_shenzhen_rows(report, expected_keys=set(source_by_key))
+    _, source_by_key = v2_workbook._unique_source_rows(verified.records)
+    with pytest.raises(ReplenishmentV2WorkbookError, match="深圳库存报告 MSKU=SEA-1 库存"):
+        v2_workbook._load_shenzhen_rows(report, expected_keys=set(source_by_key))
 
 
 def test_inventory_report_real_quantity_is_the_ag_source(tmp_path: Path) -> None:
@@ -794,9 +794,9 @@ def test_inventory_report_real_quantity_is_the_ag_source(tmp_path: Path) -> None
     finally:
         workbook.close()
     verified = source_verification.load_verified_source(source_path, store_name=STORE)
-    _, source_by_key = final_workbook._unique_source_rows(verified.records)
-    inventory_by_key = final_workbook._load_shenzhen_rows(report, expected_keys=set(source_by_key))
-    rows = final_workbook._rows_for_workbook(
+    _, source_by_key = v2_workbook._unique_source_rows(verified.records)
+    inventory_by_key = v2_workbook._load_shenzhen_rows(report, expected_keys=set(source_by_key))
+    rows = v2_workbook._rows_for_workbook(
         verified.records, store_name=STORE, inventory_by_key=inventory_by_key,
         shipment_by_key={},
     )
@@ -807,7 +807,7 @@ def test_inventory_report_real_quantity_is_the_ag_source(tmp_path: Path) -> None
 def test_source_without_native_local_inventory_is_accepted(tmp_path: Path) -> None:
     source_path = _write_source(tmp_path / "202610131000-Amazon-Test_店铺MSKU数据.xlsx")
     verified = source_verification.load_verified_source(source_path, store_name=STORE)
-    assert len(final_workbook._unique_source_rows(verified.records)[0]) == len(_source_rows())
+    assert len(v2_workbook._unique_source_rows(verified.records)[0]) == len(_source_rows())
 
 
 @pytest.mark.parametrize("native_stock", [None, "", "NaN", "Infinity", True, "unknown"])
@@ -821,9 +821,9 @@ def test_unused_msku_local_inventory_does_not_validate_or_override_ag(tmp_path: 
     )
     verified = source_verification.load_verified_source(source_path, store_name=STORE)
     report = _write_inventory_report(tmp_path / "inventory.xlsx", source_path, source_rows)
-    _, source_by_key = final_workbook._unique_source_rows(verified.records)
-    inventory_by_key = final_workbook._load_shenzhen_rows(report, expected_keys=set(source_by_key))
-    rows = final_workbook._rows_for_workbook(
+    _, source_by_key = v2_workbook._unique_source_rows(verified.records)
+    inventory_by_key = v2_workbook._load_shenzhen_rows(report, expected_keys=set(source_by_key))
+    rows = v2_workbook._rows_for_workbook(
         verified.records, store_name=STORE, inventory_by_key=inventory_by_key, shipment_by_key={},
     )
     assert [row["本地库存"] for row in rows] == [12, 0, 0, None]
@@ -836,7 +836,7 @@ def test_duplicate_source_msku_is_rejected(tmp_path: Path) -> None:
     report = _write_inventory_report(tmp_path / "inventory.xlsx", source_path, rows)
     snapshot = _write_confirmed_empty_snapshot(tmp_path / "snapshots")
 
-    with pytest.raises(FinalRestockWorkbookError, match="重复 MSKU"):
+    with pytest.raises(ReplenishmentV2WorkbookError, match="重复 MSKU"):
         _generate(tmp_path, source_path=source_path, inventory_path=report, snapshot_path=snapshot)
 
 
@@ -847,7 +847,7 @@ def test_missing_required_source_number_is_not_converted_to_zero(tmp_path: Path)
     report = _write_inventory_report(tmp_path / "inventory.xlsx", source_path, rows)
     snapshot = _write_confirmed_empty_snapshot(tmp_path / "snapshots")
 
-    with pytest.raises(FinalRestockWorkbookError, match="可售"):
+    with pytest.raises(ReplenishmentV2WorkbookError, match="可售"):
         _generate(tmp_path, source_path=source_path, inventory_path=report, snapshot_path=snapshot)
 
 
@@ -857,18 +857,18 @@ def test_explicit_zero_weight_is_preserved_without_accepting_invalid_weight(tmp_
     source_path = _write_source(tmp_path / "202610131000-Amazon-Test_店铺MSKU数据.xlsx", rows)
     report = _write_inventory_report(tmp_path / "inventory.xlsx", source_path, rows)
     verified = source_verification.load_verified_source(source_path, store_name=STORE)
-    _, source_by_key = final_workbook._unique_source_rows(verified.records)
-    mapped = final_workbook._rows_for_workbook(
+    _, source_by_key = v2_workbook._unique_source_rows(verified.records)
+    mapped = v2_workbook._rows_for_workbook(
         verified.records, store_name=STORE,
-        inventory_by_key=final_workbook._load_shenzhen_rows(report, expected_keys=set(source_by_key)),
+        inventory_by_key=v2_workbook._load_shenzhen_rows(report, expected_keys=set(source_by_key)),
         shipment_by_key={},
     )
     assert mapped[0]["单件重量(g)"] == 0
     rows[0]["单品重量(g)(cm)"] = "invalid"
-    with pytest.raises(FinalRestockWorkbookError, match="AD重量解析.*MSKU=SEA-1.*无法解析"):
-        final_workbook._rows_for_workbook(
+    with pytest.raises(ReplenishmentV2WorkbookError, match="AD重量解析.*MSKU=SEA-1.*无法解析"):
+        v2_workbook._rows_for_workbook(
             rows, store_name=STORE,
-            inventory_by_key=final_workbook._load_shenzhen_rows(report, expected_keys=set(source_by_key)),
+            inventory_by_key=v2_workbook._load_shenzhen_rows(report, expected_keys=set(source_by_key)),
             shipment_by_key={},
         )
 
@@ -876,19 +876,19 @@ def test_explicit_zero_weight_is_preserved_without_accepting_invalid_weight(tmp_
 def test_snapshot_quantities_map_by_msku_and_orphans_are_rejected(tmp_path: Path) -> None:
     source_path = _write_source(tmp_path / "202610131000-Amazon-Test_店铺MSKU数据.xlsx")
     source = source_verification.load_verified_source(source_path, store_name=STORE)
-    _, source_by_key = final_workbook._unique_source_rows(source.records)
+    _, source_by_key = v2_workbook._unique_source_rows(source.records)
     report = _write_inventory_report(tmp_path / "inventory.xlsx", source_path)
-    inventory_by_key = final_workbook._load_shenzhen_rows(report, expected_keys=set(source_by_key))
+    inventory_by_key = v2_workbook._load_shenzhen_rows(report, expected_keys=set(source_by_key))
 
-    rows = final_workbook._rows_for_workbook(
+    rows = v2_workbook._rows_for_workbook(
         source.records,
         store_name=STORE,
         inventory_by_key=inventory_by_key,
         shipment_by_key={"SEA-1": 3.5},
     )
     assert rows[0]["未发出货件总计"] == 3.5
-    with pytest.raises(FinalRestockWorkbookError, match="源表没有的 MSKU"):
-        final_workbook._rows_for_workbook(
+    with pytest.raises(ReplenishmentV2WorkbookError, match="源表没有的 MSKU"):
+        v2_workbook._rows_for_workbook(
             source.records,
             store_name=STORE,
             inventory_by_key=inventory_by_key,
@@ -908,12 +908,12 @@ def test_snapshot_from_a_different_day_is_rejected(tmp_path: Path) -> None:
 def test_office_failure_preserves_real_diagnostic(monkeypatch, tmp_path: Path) -> None:
     def fail(arguments, *, timeout_seconds):
         assert arguments[0] == "recalculate"
-        assert timeout_seconds == final_workbook.OFFICE_TIMEOUT_SECONDS
+        assert timeout_seconds == v2_workbook.OFFICE_TIMEOUT_SECONDS
         return subprocess.CompletedProcess(arguments, 1, "", "LXE_OFFICE_NODE is not configured")
 
-    monkeypatch.setattr(final_workbook, "run_kit_bounded", fail)
-    with pytest.raises(FinalRestockWorkbookError, match="LXE_OFFICE_NODE is not configured"):
-        final_workbook._recalculate(tmp_path / "in.xlsx", tmp_path / "out.xlsx")
+    monkeypatch.setattr(v2_workbook, "run_kit_bounded", fail)
+    with pytest.raises(ReplenishmentV2WorkbookError, match="LXE_OFFICE_NODE is not configured"):
+        v2_workbook._recalculate(tmp_path / "in.xlsx", tmp_path / "out.xlsx")
 
 
 def test_formula_error_does_not_replace_same_day_successful_output(monkeypatch, tmp_path: Path) -> None:
@@ -934,9 +934,9 @@ def test_formula_error_does_not_replace_same_day_successful_output(monkeypatch, 
             workbook.close()
 
     inspections = iter([(0, ()), (1, ("AC3=#VALUE!",))])
-    monkeypatch.setattr(final_workbook, "_recalculate", recalculate_with_distinct_valid_xlsx)
+    monkeypatch.setattr(v2_workbook, "_recalculate", recalculate_with_distinct_valid_xlsx)
     monkeypatch.setattr(
-        final_workbook, "_inspect_recalculated",
+        v2_workbook, "_inspect_recalculated",
         lambda path, *, rows: next(inspections),
     )
     first = _generate(tmp_path, source_path=source, inventory_path=report, snapshot_path=snapshot)

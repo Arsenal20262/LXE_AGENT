@@ -12,13 +12,13 @@ from lxeskill import cli as lxeskill
 from lxeskill.business import load_catalog
 from services.agent_cli.mabang import analyze_store_msku_sales as sales_adapter
 from services.agent_cli.mabang import calculate_store_msku_replenishment as ordinary_adapter
-from services.agent_cli.mabang import generate_final_restock_recommendation as adapter
-from services.mabang.amazon.fba.final_restock_workbook import FinalRestockWorkbookResult, SOURCE_REQUIRED_COLUMNS
+from services.agent_cli.mabang import generate_replenishment_v2 as adapter
+from services.mabang.amazon.fba.replenishment_v2_workbook import ReplenishmentV2WorkbookResult, SOURCE_REQUIRED_COLUMNS
 from services.mabang.amazon.fba.sku_catalog import LocalSkuDefinition, SkuCatalogSnapshot
 from services.mabang.amazon.fba.source_verification import annotate_source, load_verified_source, stamp_report
 
 
-COMMAND = ["replenish", "final-restock", "generate"]
+COMMAND = ["replenish", "v2", "generate"]
 WORKFLOW_SKILL = "replenishment-workflow-map"
 INPUTS = {
     "store_name": "Amazon-Test",
@@ -46,8 +46,8 @@ def isolated_scope(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("LXE_WORKSPACE_ROOT", str(tmp_path / "workspace"))
 
 
-def test_final_restock_is_exposed_with_one_owner_and_the_existing_inputs(capsys) -> None:
-    entry = load_catalog()["mabang_generate_final_restock_recommendation"]
+def test_replenishment_v2_is_exposed_with_one_owner_and_the_existing_inputs(capsys) -> None:
+    entry = load_catalog()["mabang_generate_replenishment_v2"]
     assert entry["visibility"] == "business"
     assert entry["exposed"] is True
     assert entry["owner_skills"] == [WORKFLOW_SKILL]
@@ -63,12 +63,22 @@ def test_final_restock_is_exposed_with_one_owner_and_the_existing_inputs(capsys)
     commands = _terminal(capsys)["data"]["commands"]
     assert any(item["command"] == " ".join(COMMAND) for item in commands)
     assert all(item["command"] != "replenish calculate" for item in commands)
-    assert all(item["command"] != "replenish final-restock settings" for item in commands)
+    assert all(item["command"] != "replenish v2 settings" for item in commands)
     assert lxeskill.main(["describe", *COMMAND]) == 0
     described = _terminal(capsys)["data"]
     assert described["owner_skills"] == [WORKFLOW_SKILL]
     assert described["input_schema"]["required"] == list(INPUTS)
-    assert "传裸开关 --peak-boost-enabled，不附带值；否则省略" in described["input_schema"]["properties"]["peak_boost_enabled"]["description"]
+    assert "--peak-boost-enabled=false" in described["input_schema"]["properties"]["peak_boost_enabled"]["description"]
+
+
+@pytest.mark.parametrize("operation", ["generate", "settings"])
+@pytest.mark.parametrize("prefix", [[], ["describe"]])
+def test_retired_v2_command_names_are_not_aliases(operation, prefix, monkeypatch, capsys):
+    execute = Mock(side_effect=AssertionError("retired commands must not execute business modules"))
+    monkeypatch.setattr(lxeskill, "execute_module_json", execute)
+    assert lxeskill.main([*prefix, "replenish", "final-restock", operation]) == lxeskill.EXIT_USAGE
+    assert _terminal(capsys)["error"]["code"] == "unknown_command"
+    execute.assert_not_called()
 
 
 @pytest.mark.parametrize("workflow,scope,command", [
@@ -88,7 +98,7 @@ def test_main_workflow_passes_the_current_snapshot_to_the_right_calculator(
     if workflow == "V1":
         assert scope in routes[0]
     else:
-        assert load_catalog()["mabang_generate_final_restock_recommendation"]["owner_skills"] == [scope]
+        assert load_catalog()["mabang_generate_replenishment_v2"]["owner_skills"] == [scope]
 
     snapshot = tmp_path / "本轮货件 快照.xlsx"
     output = tmp_path / "workspace/.lxeagent/artifacts/replenish/result.xlsx"
@@ -103,7 +113,7 @@ def test_main_workflow_passes_the_current_snapshot_to_the_right_calculator(
     final_calculate = Mock(return_value=result)
     ordinary_calculate = Mock(return_value=result)
     sales = Mock(side_effect=AssertionError("calculation handoff must not start sales analysis"))
-    monkeypatch.setattr(adapter, "generate_final_restock_recommendation", final_calculate)
+    monkeypatch.setattr(adapter, "generate_replenishment_v2", final_calculate)
     monkeypatch.setattr(ordinary_adapter, "calculate_store_msku_replenishment", ordinary_calculate)
     monkeypatch.setattr(sales_adapter, "analyze_store_msku_sales", sales)
     monkeypatch.setenv("LXESKILL_SKILL_SCOPE", scope)
@@ -131,7 +141,7 @@ def test_main_workflow_passes_the_current_snapshot_to_the_right_calculator(
 def test_shipment_snapshot_flags_are_not_interchangeable(scope, command, wrong_flag, monkeypatch, capsys):
     final_calculate = Mock(side_effect=AssertionError("invalid flag must not execute calculation"))
     ordinary_calculate = Mock(side_effect=AssertionError("invalid flag must not execute calculation"))
-    monkeypatch.setattr(adapter, "generate_final_restock_recommendation", final_calculate)
+    monkeypatch.setattr(adapter, "generate_replenishment_v2", final_calculate)
     monkeypatch.setattr(ordinary_adapter, "calculate_store_msku_replenishment", ordinary_calculate)
     monkeypatch.setenv("LXESKILL_SKILL_SCOPE", scope)
     assert lxeskill.main([*command, "--store-name", "Amazon-Test", wrong_flag, "snapshot.xlsx"]) == lxeskill.EXIT_USAGE
@@ -167,7 +177,7 @@ def test_shenzhen_source_is_optional_for_legacy_and_explicit_in_main_workflow() 
     assert "source_msku_xlsx_path" in skill
 
 
-def test_final_restock_uses_shenzhen_stock_without_native_msku_inventory_opt_in() -> None:
+def test_replenishment_v2_uses_shenzhen_stock_without_native_msku_inventory_opt_in() -> None:
     entry = load_catalog()["mabang_download_store_msku_excel"]
     assert "include_local_inventory" not in entry["input_schema"]["properties"]
     assert "本地库存" not in SOURCE_REQUIRED_COLUMNS
@@ -223,7 +233,7 @@ def test_removed_source_path_flag_is_rejected_in_the_new_skill_scope(capsys) -> 
 
 
 def test_source_without_native_local_inventory_passes_cli_source_validation(tmp_path: Path, monkeypatch, capsys) -> None:
-    from services.mabang.amazon.fba import final_restock_workbook as service
+    from services.mabang.amazon.fba import replenishment_v2_workbook as service
 
     source = tmp_path / "202610151000-Amazon-Test_店铺MSKU数据.xlsx"
     workbook = Workbook()
@@ -247,7 +257,7 @@ def test_source_without_native_local_inventory_passes_cli_source_validation(tmp_
     snapshot = tmp_path / "snapshot.xlsx"
     snapshot.touch()
     # A sentinel at the next stage proves the CLI did not reject the missing uq122 column.
-    read_inventory = Mock(side_effect=service.FinalRestockWorkbookError("已进入深圳报告数量读取"))
+    read_inventory = Mock(side_effect=service.ReplenishmentV2WorkbookError("已进入深圳报告数量读取"))
     monkeypatch.setattr(service, "_load_shenzhen_rows", read_inventory)
     assert lxeskill.main(_args({
         "store_name": "Amazon-Test", "msku_source_xlsx_path": str(source),
@@ -292,13 +302,13 @@ def test_terminal_preserves_success_or_formula_failure_and_file(
     workbook.save(output)
     workbook.close()
     output = output.resolve()
-    result = FinalRestockWorkbookResult(
+    result = ReplenishmentV2WorkbookResult(
         store_name="Amazon-Test", source_data_time="202610131000", output_xlsx_path=str(output),
         row_count=1, formula_error_count=formula_errors,
         formula_error_examples=("AC2=#VALUE!",) if formula_errors else (),
     )
     generate = Mock(return_value=result)
-    monkeypatch.setattr(adapter, "generate_final_restock_recommendation", generate)
+    monkeypatch.setattr(adapter, "generate_replenishment_v2", generate)
     assert lxeskill.main(_args(INPUTS)) == (lxeskill.EXIT_BUSINESS if formula_errors else 0)
     terminal = _terminal(capsys)
     assert terminal["ok"] is (formula_errors == 0)
@@ -307,22 +317,22 @@ def test_terminal_preserves_success_or_formula_failure_and_file(
     if formula_errors:
         assert terminal["error"]["message"] == result.to_payload()["exception"]
         assert "AC2=#VALUE!" in terminal["error"]["message"]
-    generate.assert_called_once_with("Amazon-Test", **{key: value for key, value in INPUTS.items() if key != "store_name"}, peak_boost_enabled=False, peak_boost_days=None)
+    generate.assert_called_once_with("Amazon-Test", **{key: value for key, value in INPUTS.items() if key != "store_name"}, peak_boost_enabled=None, peak_boost_days=None)
 
 
 @pytest.mark.parametrize("days_flags,expected_days", [([], None), (["--peak-boost-days", "20"], 20)])
 def test_explicit_current_request_boost_flags_reach_existing_generator(
     tmp_path, monkeypatch, capsys, days_flags, expected_days,
 ):
-    from services.agent_cli.mabang import generate_final_restock_recommendation as adapter
+    from services.agent_cli.mabang import generate_replenishment_v2 as adapter
     output = tmp_path / "workspace/.lxeagent/artifacts/replenish/final_restock_recommendation/result.xlsx"
     output.parent.mkdir(parents=True)
     book = Workbook()
     book.save(output)
     book.close()
-    result = FinalRestockWorkbookResult("Amazon-Test", "202610201000", str(output), 1, 0, ())
+    result = ReplenishmentV2WorkbookResult("Amazon-Test", "202610201000", str(output), 1, 0, ())
     generate = Mock(return_value=result)
-    monkeypatch.setattr(adapter, "generate_final_restock_recommendation", generate)
+    monkeypatch.setattr(adapter, "generate_replenishment_v2", generate)
     assert lxeskill.main([*_args(INPUTS), "--peak-boost-enabled", *days_flags]) == 0
     assert _terminal(capsys)["ok"] is True
     assert generate.call_args.kwargs["peak_boost_enabled"] is True
@@ -330,14 +340,14 @@ def test_explicit_current_request_boost_flags_reach_existing_generator(
 
 
 @pytest.mark.parametrize("flags", [
-    ["--peak-boost-enabled=false"],
-    ["--peak-boost-enabled=true"],
+    ["--peak-boost-enabled=invalid"],
+    ["--peak-boost-enabled=0"],
     ["--peak-boost-enabled="],
     ["--peak-boost-enabled", "false"],
 ])
 def test_boost_flag_values_fail_before_business_execution(flags, monkeypatch, capsys):
     generate = Mock(side_effect=AssertionError("invalid flag values must not generate a workbook"))
-    monkeypatch.setattr(adapter, "generate_final_restock_recommendation", generate)
+    monkeypatch.setattr(adapter, "generate_replenishment_v2", generate)
     assert lxeskill.main([*_args(INPUTS), *flags]) == lxeskill.EXIT_USAGE
     terminal = _terminal(capsys)
     assert terminal["ok"] is False
@@ -348,7 +358,7 @@ def test_boost_flag_values_fail_before_business_execution(flags, monkeypatch, ca
 
 @pytest.mark.parametrize("days", ["-1", "121", "1.5", "invalid"])
 def test_invalid_request_days_stop_before_reading_business_inputs(days, monkeypatch, capsys):
-    from services.mabang.amazon.fba import final_restock_workbook as service
+    from services.mabang.amazon.fba import replenishment_v2_workbook as service
     read_input = Mock(side_effect=AssertionError("invalid days must not read input files"))
     monkeypatch.setattr(service, "_path", read_input)
     assert lxeskill.main([*_args(INPUTS), "--peak-boost-days", days]) != 0
@@ -360,12 +370,12 @@ def test_unknown_inventory_keeps_review_file_but_returns_cli_failure(tmp_path, m
     output = tmp_path / "workspace/.lxeagent/artifacts/replenish/final_restock_recommendation/result-库存待核对.xlsx"
     output.parent.mkdir(parents=True)
     output.touch()
-    result = FinalRestockWorkbookResult(
+    result = ReplenishmentV2WorkbookResult(
         "Amazon-Test", "202610201000", str(output), 1, 0, (), 1,
         ("MSKU=A；类别=无本地SKU；原因=源表本地SKU为空",),
     )
     generate = Mock(return_value=result)
-    monkeypatch.setattr(adapter, "generate_final_restock_recommendation", generate)
+    monkeypatch.setattr(adapter, "generate_replenishment_v2", generate)
     assert lxeskill.main(_args(INPUTS)) == lxeskill.EXIT_BUSINESS
     terminal = _terminal(capsys)
     assert terminal["ok"] is False
@@ -382,11 +392,11 @@ def test_main_skill_is_the_single_store_name_workflow_for_v1_v2_and_both() -> No
     workflow = (skills / WORKFLOW_SKILL / "SKILL.md").read_text(encoding="utf-8")
     assert not (skills / "replenishment-final-restock" / "SKILL.md").exists()
     assert "replenishment-final-restock" not in workflow
-    assert load_catalog()["mabang_generate_final_restock_recommendation"]["owner_skills"] == [WORKFLOW_SKILL]
+    assert load_catalog()["mabang_generate_replenishment_v2"]["owner_skills"] == [WORKFLOW_SKILL]
     for command in (
         "lxeskill replenish store resolve", "lxeskill mabang store msku export",
         "lxeskill mabang store shenzhen-inventory export", "lxeskill mabang store unlinked-shipments export",
-        "lxeskill replenish calculate", "lxeskill replenish final-restock generate", "send_files",
+        "lxeskill replenish calculate", "lxeskill replenish v2 generate", "send_files",
     ):
         assert command in workflow
     # One static policy check owns stable command/data terms. Runtime tests cover
@@ -400,7 +410,7 @@ def test_main_skill_is_the_single_store_name_workflow_for_v1_v2_and_both() -> No
         "库存待核对", "success=false", "ok=false",
     ):
         assert term in workflow
-    for retired in ("catalog.json", "--include-local-inventory", "lxeskill replenish final-restock settings"):
+    for retired in ("catalog.json", "--include-local-inventory", "lxeskill replenish v2 settings"):
         assert retired not in workflow
     assert load_catalog()["mabang_analyze_store_msku_sales"]["owner_skills"] == ["replenishment-sales-analyze"]
     assert "require_complete_inventory" not in load_catalog()["mabang_export_store_msku_actual_inventory"]["input_schema"]["properties"]

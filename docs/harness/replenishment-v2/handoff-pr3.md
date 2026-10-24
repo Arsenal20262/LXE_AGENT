@@ -10,7 +10,7 @@
 
 ## 当前状态与归属
 
-- 原独立`replenishment-final-restock` Skill及其owner只代表PR3历史，PR4已删除该Skill，命令保留并归属`replenishment-workflow-map`。
+- 原独立`replenishment-final-restock` Skill及其owner只代表PR3历史，PR4已删除该Skill。V2计算能力保留，现行命令为`replenish v2 generate`，归属`replenishment-workflow-map`；Desktop配置使用internal命令`replenish v2 settings`。
 - V1原计算／销量分析／多Sheet保留；V2使用规范店铺名、同源MSKU、深圳报告及货件快照，35列／14公式由上游实现。
 - 三文件来源核验、真实异常、失败附件和标准终态复用CLI／Service；Runtime继续按现有Skill发现与公开`lxeskill list/describe`契约工作。
 - PR3原uq122 AG由PR4深圳真实库存整改替代。当前未知库存只允许核对文件及非成功状态，未获运营正式交付批准。
@@ -26,7 +26,7 @@
 ## 限制与下一步
 
 - 静态Skill、模拟Service终态和Runtime发现不证明真实模型正确选路；真实模型、Desktop完整聊天、生产ERP、当前附件发送、Windows和Microsoft Excel仍NOT VERIFIED。
-- 遗留设置页三个问题归PR3：无效旺季开关、越南CSS耦合、未复用公共页头。已有独立pool-11补丁，保持独立评审，不暗中移入PR4。
+- PR3遗留的无效旺季开关、越南CSS耦合和页头复用问题已由PR4提交`af8f298f`修复；pool-11保留为历史补丁来源。后续有效开关、天数必填和聊天优先规则属于PR4在af8f298f之后的旺季交互调整，当前状态及证据见[PR4交接](handoff-pr4.md)。
 - 403后认证刷新是原有历史风险，当前PR4未修复；独立网络修复分支的草稿不计入本层已发布能力。
 - 原逐轮rebase／暂存／计数变化记录保留在`git show b892ea8f:docs/harness/final-restock-recommendation/handoff-pr3.md`，不作现行Git操作授权。
 - 2026-10-24仅整理PR4工作区中的历史文档，没有修改PR1～PR3分支或提交；本轮实际检查与Git状态见PR4交接。

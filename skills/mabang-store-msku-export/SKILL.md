@@ -26,7 +26,7 @@ commands:
 lxeskill mabang store msku export --store-id "<ID>" --id-type "<fbaWarehouseIds[]|shopId>" --store-name "<规范店铺名>"
 ```
 
-V1普通备货、V2最终备货建议和单步导出均使用上述默认导出。最终备货 AG“本地库存”由同轮深圳库存报告提供，源表无需提供 `uq122`。
+V1普通备货、V2备货和单步导出均使用上述默认导出。V2的AG“本地库存”由同轮深圳库存报告提供，源表无需提供 `uq122`。
 
 ## 结果与下一步
 

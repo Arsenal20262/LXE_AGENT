@@ -8,10 +8,10 @@ import pytest
 
 from lxeskill import cli
 from lxeskill.business import load_catalog
-from services.mabang.amazon.fba import final_restock_settings as settings
+from services.mabang.amazon.fba import replenishment_v2_settings as settings
 
 
-COMMAND = ["replenish", "final-restock", "settings"]
+COMMAND = ["replenish", "v2", "settings"]
 
 
 @pytest.fixture(autouse=True)
@@ -22,7 +22,7 @@ def isolated(tmp_path, monkeypatch):
 
 
 def test_settings_is_internal_and_not_another_model_entry(capsys):
-    entry = load_catalog()["mabang_final_restock_settings"]
+    entry = load_catalog()["mabang_replenishment_v2_settings"]
     assert entry["command_path"] == COMMAND
     assert entry["visibility"] == "internal"
     assert entry["exposed"] is False
@@ -74,12 +74,12 @@ def test_real_cli_round_trip_keeps_storage_format_and_actual_failure():
     assert legacy["peak_boost_enabled"] is False
     assert legacy == settings.read_state()
     for enabled in (False, True):
-        parameters = {**initial, "peak_boost_enabled": enabled}
+        parameters = {**initial, "peak_boost_enabled": enabled, "peak_boost_days": 20 if enabled else None}
         assert invoke("save", "--parameters", json.dumps(parameters))["data"]["data"] == parameters
         assert settings.read_state() == parameters
         assert invoke("read")["data"]["data"] == parameters
     for original, diagnostic in [
-        ('{"peak_boost_enabled":"invalid"}', "ValueError: Amazon 最终备货设置格式无效"),
+        ('{"peak_boost_enabled":"invalid"}', "ValueError: Amazon V2 旺季设置格式无效"),
         ("{invalid", "JSONDecodeError:"),
     ]:
         path.write_text(original, encoding="utf-8")

@@ -1,10 +1,10 @@
-"""Internal lxeskill command for the desktop Amazon final-restock settings."""
+"""Internal lxeskill command for desktop Amazon V2 seasonal settings."""
 from __future__ import annotations
 
 from typing import Any
 
 from services.agent_cli._shared.json_cli import exception_text
-from services.mabang.amazon.fba import final_restock_settings as settings
+from services.mabang.amazon.fba import replenishment_v2_settings as settings
 
 
 def run(arguments: dict[str, Any]) -> dict[str, Any]:
