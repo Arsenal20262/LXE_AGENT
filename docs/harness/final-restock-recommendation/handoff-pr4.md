@@ -3,8 +3,8 @@
 ## Git、职责与当前契约
 
 - 分支 `codex/amazon-replenishment-unification`，工作区 `/Users/hym/.codex/worktrees/1672/Amazon`；PR #117。
-- 依赖链：PR1 `979c33e8` → PR2 `af0d7b8b` → PR3 `092b24cc` → PR4功能提交 `f973ed71` → main兼容合并 `b892ea8f`（第二父为`abde37dd`）。本轮不修改这些提交或PR Base。
-- 已提交PR117对merge-base abde37dd为72文件、+7301/-399；PR4功能提交对PR3为29文件、+1352/-719。前者含上游累计功能，不能称PR4新增7301行。
+- 依赖链：PR1 `979c33e8` → PR2 `af0d7b8b` → PR3 `092b24cc` → PR4功能提交 `f973ed71` → main兼容合并 `b892ea8f`（第二父为`abde37dd`）→ 精简提交 `6d0e72ea`。本轮在这些提交后合入main e3274147，不重写历史或修改PR Base。
+- b892ea8f时PR117对merge-base abde37dd为72文件、+7301/-399；PR4功能提交对PR3为29文件、+1352/-719。前者含上游累计功能，不能称PR4新增7301行。
 - 一个完整主Skill `replenishment-workflow-map`，V1/V2独立计算、检查和交付；独立`replenishment-final-restock` Skill已删除，V2 CLI owner改为主Skill。
 - V1保留原销量分析、参数方案、算法、筛选和多Sheet；V2继承PR1的14公式、PR2的35列单表和Office Kit。PR3提供自动取数集成；不计为PR4新建。
 - 双版本复用同轮合格MSKU、深圳报告和三类货件；V1另需销量报告，V2不调用该步骤。单方失败不覆盖另一方结果，共享输入失败停止依赖版本。
@@ -90,4 +90,16 @@
 - 真实模型16场景、自由文本语义、当前Desktop完整聊天、生产ERP、外部附件发送／恢复、原生Windows及Microsoft Excel均NOT VERIFIED。Chromium夹具、固定trace、Office Kit和静态检查不替代这些验收。
 - 运营仍待确认未知库存未来能否正式交付；当前核对失败规则继续生效。
 - 本轮为CONDITIONAL PASS：离线定向通过，具备人工检查条件；PR3 UI补丁独立归位，Stack Base／main兼容及真实运行验收仍需按实际提审阶段处理。
-- 本轮PR4共8文件+231/-1367，净减1136行；5份handoff从1260压至253行，测试净减131行，回放脚本净增2行（含离线列举与失败停止）。提交前HEAD为b892ea8f；本轮用户明确授权精确Commit及正常Push到PR #117现有fork分支，实际SHA和Push结果以Git／远端复核及最终报告为准。PR1～PR3及pool-11草稿保持，不改Base、不force push、不Merge或创建PR。
+- 上轮精简已通过6d0e72ea提交并Push：8文件+231/-1367、净减1136行，5份handoff压至253行，测试净减131行。该轮没有合并main；以下记录本轮追加授权的兼容合并。
+
+## 2026-10-24 PR4合入main并解决renderer冲突
+
+- 用户明确授权合入最新main、保留双方有效测试，验证后Commit／正常Push更新PR #117，不合并GitHub PR。起始HEAD为6d0e72ea，工作区干净；只读fetch固定main为e3274147246d0bd0deb2c01b5c32f34cfd023b38。
+- main新增3个提交（自动化、Desktop MCP、导航等），152路径属于主线继承。唯一内容冲突为renderer.test.ts，合并后保留26套件并集：main navigation-rail 8、conversation-window 5、sidebar 10，以及PR4 Amazon设置6；共用runner／夹具的自动合并内容经复核保留。
+- Python业务、CLI/catalog、公式与全部Skill对6d0e72ea的diff为零；没有移入PR3的1c43896d设置补丁或独立网络修复e379881e，不改V1/V2算法或AG规则。
+- 按main锁文件执行bun install --frozen-lockfile，同步4个包；锁文件与main逐字节一致，没有自行升级依赖。
+- 实际通过：八工作区typecheck、TS生产边界、14文件Bun142 pass／883 assertions；Python四文件53 pass无skip，含真实Office Kit、无uq122、未知库存待核对及双版本失败隔离。16场景--list及编译通过，不执行真实模型。日志`/private/tmp/pr4-renderer-main-{typecheck,boundary,bun,python}.log`及`pr4-renderer-main-scenarios.json`。
+- Chromium整份renderer的26套件全部通过、104 assertions，覆盖导航8项、对话窗口5项、侧栏10项和Amazon6项等双方有效断言；日志`/private/tmp/pr4-renderer-main-chromium.log`。
+- 默认cached diff检查对main继承的Windows source-hashes.json报告9行CRLF；原文件与main逐字节一致，保持原件。仅临时使用core.whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol识别Windows行尾后检查通过，不修改仓库配置或放过实际尾部空格。
+- 其他工作区HEAD、暂存／未暂存diff和草稿指纹保存于`/private/tmp/pr4-renderer-main-merge-current-path`指向目录，提交前后复核；PR1～PR3及其他草稿保持，不改PR Base、不force push、不合并GitHub PR。
+- 最终合并提交SHA／Push状态以Git、远端PR Head及本轮报告为准。真实模型16场景／自由文本、生产ERP、用户Desktop完整链路、外部附件、原生Windows和Microsoft Excel继续NOT VERIFIED；历史403修复仅存在独立PR #122，不宣称本分支已包含。
