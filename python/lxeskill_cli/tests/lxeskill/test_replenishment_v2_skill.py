@@ -404,6 +404,7 @@ def test_main_skill_is_the_single_store_name_workflow_for_v1_v2_and_both() -> No
     # require acceptance through agentcli/Desktop; these assertions do not prove them.
     for term in (
         "lxeskill list", "lxeskill describe", "V1", "V2", "replenishment-sales-analyze",
+        "ask_user_question", "父级店铺名称",
         "--msku-source-xlsx-path", "--shenzhen-inventory-report-xlsx-path",
         "--unlinked-shipments-snapshot-path", "--peak-boost-enabled", "--peak-boost-days",
         "真实库存（深圳仓库）数量", "35列", "14个公式字段", "Office Kit",

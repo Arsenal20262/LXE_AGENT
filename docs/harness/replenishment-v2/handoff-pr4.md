@@ -216,3 +216,24 @@
 - 以下均为实际合入后的新执行：Python CLI／infra及V2公式、设置、完整工作簿、A规则、深圳AG、双版本共865 passed／4 Windows专属skipped／4既有aiohttp弃用警告，包含真实LibreOffice／Office Kit重算；Bun七文件83 pass、389 assertions；真实Electron／Chromium四组4 pass、22 filtered、16外层断言，共26个内部场景，含中英文480px布局及深浅色截图。此前192／78项不叠加为本轮测试数。
 - 八工作区typecheck、TS生产边界、Dashboard及Desktop生产构建、doctor／list／两条V2 describe／datasets查询均通过；构建保留既有大chunk提示。独立回放及独立V2 Skill未恢复，生产messages/replay.ts保留。日志与截图均在/private/tmp/pr117-publish-main-jixjqolj/。
 - 本轮授权范围为正常追加Commit／Push更新PR #117并补评论，实际Push终态以远端Head和PR复核为准；不force push、不改PR Base、不合并PR，不改PR1～PR3历史或其他草稿。尚需维护者审核交互、旺季、迁移和命令取舍；真实模型语义、生产ERP、附件发送、完整Desktop业务、原生Windows／Microsoft Excel、新安装包及真实旧版安装包降级仍NOT VERIFIED。已有三字段配置回滚前仍须由修复版读取一次完成转换；此次整合测试不替代上述验收。
+
+## 2026-10-24 未明确店铺时提供真实候选（开发阶段记录）
+
+- 起点332e42c3，用户确认采用现有选择卡：本轮未确定具体店铺时，先读取店铺解析Skill并执行不带store_name的原resolve命令，读取data.xlsx_path中的真实名称／ID／ID类型／父级关系；按已有站点或名称线索缩小后提供选项。每题最多4项，较多时先选实际店铺组，再选单站点；已确定的店铺及V1／V2版本沿用，确认后复用本次身份数据继续MSKU导出。
+- 只调整主Skill与店铺解析Skill的description和执行指引，复用既有CLI、列表文件及ask_user_question，不增加Service、Runtime路由、UI组件、缓存或取数请求。列表查询属于选店前置，不当作备货完成；独立查询店铺列表仍按原契约交付文件。模糊匹配的内联候选及大列表候选文件均按真实内容选择。
+- 原静态主Skill契约测试新增两个稳定工具／字段术语，先在旧指引下失败；增加1项离线CLI交接测试，实际生成并读取三条模拟店铺的列表文件，验证身份及父级数据和只取数一次。最终Python店铺解析／CLI及主Skill三文件59 passed；Bun Skill发现／公开CLI归属两文件34 pass、164 assertions；公开describe确认store_name仍可省略。日志位于/private/tmp/pr117-store-options-g0sca8fz/。
+- V1／V2计算、旺季、AG、来源和文件交付实现均未修改；未调用生产ERP、真实模型或发送附件，不把静态指引及离线契约通过当作模型必然正确选店。真实选择体验需通过正式Desktop新任务验收。本轮不暂存／Commit／Push，PR1～PR3和其他草稿保持。
+
+## 2026-10-26 站点通用性与表意核查（开发阶段记录）
+
+- 当前PR4 HEAD为332e42c3，继承PR3的092b24cc；本地origin/main为3018cb30，本轮GitHub只读核实上游main为bb628ce8，并读取其AGENTS.md、docs/pr-review.md。保留已有5文件选店草稿，不同步main，不执行暂存、提交或推送。
+- 主流程按真实店铺名称、网页ID／ID类型、源指纹和批次工作，未发现仅允许美国站的条件。MSKU导出未固定国家筛选，深圳普通／组合库存及V1／V2计算沿用原实现；单店单站点限制属于来源隔离。美国站样本、主Skill中的用户问法示例、V1具名参数方案及原始规则文件名保留。
+- 仅收敛两处说明：MSKU Skill的“单店或欧洲子站点”改为“单店、单站点”；独立补充库存CSV下载参考先指向目标店铺对应站点，保留美国站链接及截图示例。CLI、Runtime、Desktop和业务源码均未修改，没有新增国家路由、适配或测试框架。
+- 本轮实际执行：Python主Skill／店铺解析／来源核验／补充库存CLI五文件109 passed；Bun Skill发现／命令归属两文件34 pass、164 assertions；list及V1、V2、店铺解析describe均成功。既有用例包含JP／UK解析、欧洲站展示标签保留和跨店来源拒绝。日志位于/private/tmp/pr117-site-wording-bad19hbn/。
+- 其他国家已能运行属于用户实际使用反馈，本轮未重新访问生产ERP或调用模型／发送附件，不将其写成所有站点业务规则均经运营确认。文件仍须满足现有字段、单店及来源契约；本轮不重跑未改变的公式／Office／完整Desktop验收，不Commit／Push或修改PR。
+
+## 2026-10-26 店铺候选与站点说明提交收口
+
+- 用户授权将上述7文件合并收口，Commit并正常Push更新PR #117；起点为332e42c3，实际Head仓库为Arsenal20262/LXE_AGENT，远端同名分支经git ls-remote确认与本地一致。仅提交这7文件，不合入main、不改PR Base或PR1～PR3及其他草稿；提交／Push终态以Git及PR Head复核为准。
+- 本轮重新执行Python五文件109 passed；Bun Skill发现、命令归属及用户选择卡三文件49 pass、262 assertions；list和店铺解析／V1／V2 describe均成功。覆盖模拟店铺列表文件中的名称、ID、类型、父级关系、一次查询、候选失败返回、来源隔离及现有选择卡契约；不将其算作真实模型选店验收。日志在/private/tmp/pr117-store-publish-9q9kst6l/。
+- 1136个生产文件与起点指纹相同，V1／V2计算、旺季、AG、来源隔离、Excel及交付实现未改。332e42c3阶段865项Python／真实Office及Desktop证据仅复用，不计为本轮重跑；本轮未执行真实模型、生产ERP、附件发送、完整Desktop业务或Windows验收，也未验证与最新main的整合行为。

@@ -1,6 +1,6 @@
 ---
 name: replenishment-workflow-map
-description: Amazon备货唯一完整编排入口，按用户意图生成V1普通备货、V2备货或两种版本。复用同轮马帮数据，分别调用对应计算并独立检查、交付；版本不明确时结合上下文判断，仍不明确才确认一次。
+description: Amazon备货唯一完整编排入口，按用户意图生成V1普通备货、V2备货或两种版本。未确定店铺时查询真实候选供用户选择；复用同轮马帮数据，分别计算、检查和交付，版本仍不明确时确认一次。
 type: replenishment
 commands:
   - lxeskill replenish v2 generate
@@ -19,10 +19,10 @@ commands:
 
 ## 输入
 
-- 必需：Amazon店铺名及目标版本（V1、V2或两种）。“普通备货”对应V1，“两种都要”对应同时生成V1和V2。
+- 输入：Amazon备货需求及目标版本（V1、V2或两种），店铺可直接提供或通过下方候选选定。“普通备货”对应V1，“两种都要”对应同时生成V1和V2。
 - 可选：V1参数方案，默认“默认”；V2旺季加成和天数，页面初始关闭，未提旺季时使用页面设置，本轮聊天明确要求优先。
 - 明确指定V1、V2或两种时直接沿用，不重复确认。版本不明确时先结合本轮上下文判断；仍无法确定时只询问一次，并等待明确回答。
-- 模糊店铺名交给店铺解析能力核对真实候选；平台或业务不明确时确认业务。
+- 模糊店铺名交给店铺解析能力核对真实候选；缺少具体店铺时走下方店铺确认路径，平台或业务不明确时确认业务。
 
 ## 依赖
 
@@ -30,13 +30,19 @@ commands:
 
 调用前读取对应取数Skill；V1计算读取 `replenishment-calculate`，V2生成命令由本Skill提供。运行前用 `lxeskill list` 和 `lxeskill describe <命令路径>` 查询当前公开参数；文件发送使用 `send_files`。
 
+## 店铺确认
+
+- 本轮上下文尚未确定具体店铺（例如只说“亚马逊美国”）时，先读取 `replenishment-store-resolve`，执行不带店铺名的 `lxeskill replenish store resolve`，读取返回的 `data.xlsx_path` 店铺列表。
+- 按用户已给出的国家／站点或名称线索缩小候选；使用 `ask_user_question` 将真实店铺名列为选项，同名时用父级店铺名称或ID区分。每题最多4个选项，候选较多时先按列表中的“父级店铺名称”选择实际店铺组，再选择具体店铺；仍过多时确认名称线索缩小范围。
+- 店铺组确认后继续选到单站点。选中后复用本次列表的 `store_name`、`store_id`、`id_type` 进入MSKU导出；已确定的店铺、版本直接沿用。只把尚缺的信息交给用户确认，自定义文字使用提问卡内置输入。
+
 ## 执行
 
 完整任务默认采集本轮数据；当前任务已有同轮合格输入时复用，并只补缺失或不匹配的数据。双版本共用同一轮已核验MSKU、深圳报告和货件快照，各取一次；V1另生成销量报告，V2不依赖该报告。
 
 | 顺序 | 能力与调用 | 输出交接 |
 |---|---|---|
-| 1 | `replenishment-store-resolve`：`lxeskill replenish store resolve --store-name "<用户店铺名>"` | 保留规范 `store_name`、`store_id`、`id_type`；候选有歧义时请用户选择。 |
+| 1 | `replenishment-store-resolve`：已提供名称时运行 `lxeskill replenish store resolve --store-name "<用户店铺名>"`；缺少名称时使用上方列表选择路径。 | 保留选定单站点的规范 `store_name`、`store_id`、`id_type`；已有本轮解析／选店结果时复用。 |
 | 2 | `mabang-store-msku-export`：`lxeskill mabang store msku export --store-id "<store_id>" --id-type "<id_type>" --store-name "<规范店铺名>"` | 保留本轮 `data.xlsx_path` 及行数；源时间由后续同源报告交叉核对。 |
 | 3，仅V1或双版本 | `replenishment-sales-analyze`：`lxeskill replenish sales analyze --store-name "<规范店铺名>"` | 保留 `data.report_xlsx_path`、`source_xlsx_path`、`source_data_time`；确认来源为步骤2的本轮源表。 |
 | 4 | `mabang-store-shenzhen-inventory-export`：`lxeskill mabang store shenzhen-inventory export --store-name "<规范店铺名>" --msku-source-xlsx-path "<步骤2源表路径>"` | 保留 `data.shenzhen_warehouse_inventory_report_xlsx_path`、`source_msku_xlsx_path`、`source_msku_data_time`；调用步骤5前核对其来源指向步骤2本轮文件。 |
