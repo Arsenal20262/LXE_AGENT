@@ -9,7 +9,7 @@ describe("Amazon V2 settings bridge", () => {
     const dataRoot = mkdtempSync(join(tmpdir(), "amazon-restock-settings-"));
     const calls: string[][] = [];
     const service = new DesktopAmazonV2SettingsService({
-      platform: "darwin", pythonPath: "/managed/python", managedPath: "/managed", dataRoot,
+      platform: "darwin", executablePath: "/managed/lxeskill", managedPath: "/managed", dataRoot,
       execute: async (args, options) => {
         calls.push(args);
         expect(options.cwd).toBe(dataRoot);
@@ -21,23 +21,23 @@ describe("Amazon V2 settings bridge", () => {
         expect(options.env?.TMPDIR).toBe(join(dataRoot, "tmp"));
         expect(options.env?.PYTHONUTF8).toBe("1");
         expect(options.env?.PYTHONIOENCODING).toBe("utf-8");
-        const parameters = args[10] === "save" ? JSON.parse(args[12]!) : { peak_boost_enabled: false, peak_boost_days: null };
+        const parameters = args[4] === "save" ? JSON.parse(args[6]!) : { peak_boost_enabled: false, peak_boost_days: null };
         return { stdout: JSON.stringify({ type: "result", ok: true, data: { success: true, data: parameters } }), stderr: "", error: null };
       },
     });
     expect(await service.read()).toEqual({ peak_boost_enabled: false, peak_boost_days: null });
     expect(await service.save({ peak_boost_enabled: false, peak_boost_days: 20 })).toEqual({ peak_boost_enabled: false, peak_boost_days: 20 });
     expect(calls).toEqual([
-      ["-I", "-B", "-X", "utf8", "-m", "lxeskill", "replenish", "v2", "settings", "--action", "read"],
-      ["-I", "-B", "-X", "utf8", "-m", "lxeskill", "replenish", "v2", "settings", "--action", "save", "--parameters", '{"peak_boost_enabled":false,"peak_boost_days":20}'],
+      ["replenish", "v2", "settings", "--action", "read"],
+      ["replenish", "v2", "settings", "--action", "save", "--parameters", '{"peak_boost_enabled":false,"peak_boost_days":20}'],
     ]);
     rmSync(dataRoot, { recursive: true, force: true });
   });
 
-  test.each([false, true])("real managed Python defaults old preference %s off until explicit save", async enabled => {
+  test.each([false, true])("real CLI defaults old preference %s off until explicit save", async enabled => {
     const dataRoot = mkdtempSync(join(tmpdir(), "amazon-restock-settings-process-"));
     const options = { platform: "darwin" as const,
-      pythonPath: resolve(import.meta.dirname, "../../../.venv", process.platform === "win32" ? "Scripts/python.exe" : "bin/python"),
+      executablePath: resolve(import.meta.dirname, "../../../.venv", process.platform === "win32" ? "Scripts/lxeskill.exe" : "bin/lxeskill"),
       managedPath: "/managed", dataRoot };
     try {
       const first = new DesktopAmazonV2SettingsService(options);
@@ -60,7 +60,7 @@ describe("Amazon V2 settings bridge", () => {
 
   test("rejects invalid renderer settings before invoking Python", async () => {
     const service = new DesktopAmazonV2SettingsService({
-      platform: "darwin", pythonPath: "/managed/python", managedPath: "/managed", dataRoot: "/state",
+      platform: "darwin", executablePath: "/managed/lxeskill", managedPath: "/managed", dataRoot: "/state",
       execute: async () => { throw new Error("must not execute"); },
     });
     expect(() => service.save({ peak_boost_enabled: "false" })).toThrow("must be a boolean");
@@ -74,7 +74,7 @@ describe("Amazon V2 settings bridge", () => {
     const dataRoot = mkdtempSync(join(tmpdir(), "amazon-restock-invalid-response-"));
     try {
       const service = new DesktopAmazonV2SettingsService({
-        platform: "darwin", pythonPath: "/managed/python", managedPath: "/managed", dataRoot,
+        platform: "darwin", executablePath: "/managed/lxeskill", managedPath: "/managed", dataRoot,
         execute: async () => ({ stdout: JSON.stringify({ type: "result", ok: true, data: { success: true, data: { peak_boost_enabled: true, peak_boost_days: "20" } } }), stderr: "", error: null }),
       });
       await expect(service.read()).rejects.toThrow("Invalid lxeskill settings result");
@@ -99,7 +99,7 @@ describe("Amazon V2 settings bridge", () => {
     const dataRoot = mkdtempSync(join(tmpdir(), "amazon-restock-failure-"));
     try {
       const service = new DesktopAmazonV2SettingsService({
-        platform: "win32", pythonPath: "/managed/python", managedPath: "/managed", dataRoot,
+        platform: "win32", executablePath: "/managed/lxeskill", managedPath: "/managed", dataRoot,
         execute: async () => ({ stdout, stderr, error }),
       });
       await expect(service.read()).rejects.toThrow(expected);
@@ -111,7 +111,7 @@ describe("Amazon V2 settings bridge", () => {
     const parameters = { peak_boost_enabled: true, peak_boost_days: 0 };
     try {
       const service = new DesktopAmazonV2SettingsService({
-        platform: "win32", pythonPath: "/managed/python", managedPath: "/managed", dataRoot,
+        platform: "win32", executablePath: "/managed/lxeskill", managedPath: "/managed", dataRoot,
         execute: async () => ({ stdout: JSON.stringify({ type: "progress" }) + "\r\n" + JSON.stringify({ type: "result", ok: true, data: { success: true, data: parameters } }) + "\r\n", stderr: "", error: null }),
       });
       expect(await service.read()).toEqual(parameters);
@@ -132,7 +132,7 @@ describe("Amazon V2 settings bridge", () => {
         { stdout: "", stderr: "", error: new Error(detail) },
       ]) {
         const service = new DesktopAmazonV2SettingsService({
-          platform: "win32", pythonPath: "/managed/python", managedPath: "/managed", dataRoot,
+          platform: "win32", executablePath: "/managed/lxeskill", managedPath: "/managed", dataRoot,
           execute: async () => execution,
         });
         let message = "";

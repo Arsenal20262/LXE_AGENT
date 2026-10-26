@@ -398,7 +398,7 @@ async function bootstrap(): Promise<void> {
     enrollments: new DesktopCloudEnrollmentManager(),
     logger: cloudLogger,
     provisioner: cloudProvisioner,
-    contextClient: new DesktopCloudContextClient({ pythonPath: paths.managedPythonPath, cwd: paths.dataRoot }),
+    contextClient: new DesktopCloudContextClient({ executablePath: paths.lxeskillExecutablePath, cwd: paths.dataRoot }),
     onConfigured: async () => {
       await gateway.restart();
       invalidations.push(ALL_DASHBOARD_DATA_DOMAINS);
@@ -419,7 +419,7 @@ async function bootstrap(): Promise<void> {
   activeCloud = cloud;
   const syntheticPerformer = new DesktopSyntheticPerformerService({
     platform: process.platform,
-    pythonPath: paths.managedPythonPath,
+    executablePath: paths.lxeskillExecutablePath,
     exifToolPath: paths.exifToolPath,
     dataRoot: paths.dataRoot,
     managedPath: paths.managedPath,
@@ -431,16 +431,16 @@ async function bootstrap(): Promise<void> {
   activeSyntheticPerformer = syntheticPerformer;
   const inputAssets = new DesktopInputAssetsService({
     platform: process.platform,
-    pythonPath: paths.managedPythonPath,
+    executablePath: paths.lxeskillExecutablePath,
     dataRoot: paths.dataRoot,
     managedPath: paths.managedPath,
   });
   const vietnamSettings = new DesktopVietnamSettingsService({
-    platform: process.platform, pythonPath: paths.managedPythonPath,
+    platform: process.platform, executablePath: paths.lxeskillExecutablePath,
     dataRoot: paths.dataRoot, managedPath: paths.managedPath,
   });
   const amazonV2Settings = new DesktopAmazonV2SettingsService({
-    platform: process.platform, pythonPath: paths.managedPythonPath,
+    platform: process.platform, executablePath: paths.lxeskillExecutablePath,
     dataRoot: paths.dataRoot, managedPath: paths.managedPath,
   });
   const checkCloudAfterResume = (): void => { void cloud.check(); activeUpdates?.wake(); };

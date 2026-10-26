@@ -10,9 +10,9 @@ from openpyxl import Workbook
 
 from lxeskill import cli as lxeskill
 from lxeskill.business import load_catalog
-from services.agent_cli.mabang import analyze_store_msku_sales as sales_adapter
-from services.agent_cli.mabang import calculate_store_msku_replenishment as ordinary_adapter
-from services.agent_cli.mabang import generate_replenishment_v2 as adapter
+from services.commands.mabang import analyze_store_msku_sales as sales_adapter
+from services.commands.mabang import calculate_store_msku_replenishment as ordinary_adapter
+from services.commands.mabang import generate_replenishment_v2 as adapter
 from services.mabang.amazon.fba.replenishment_v2_workbook import ReplenishmentV2WorkbookResult, SOURCE_REQUIRED_COLUMNS
 from services.mabang.amazon.fba.sku_catalog import LocalSkuDefinition, SkuCatalogSnapshot
 from services.mabang.amazon.fba.source_verification import annotate_source, load_verified_source, stamp_report
@@ -324,7 +324,7 @@ def test_terminal_preserves_success_or_formula_failure_and_file(
 def test_explicit_current_request_boost_flags_reach_existing_generator(
     tmp_path, monkeypatch, capsys, days_flags, expected_days,
 ):
-    from services.agent_cli.mabang import generate_replenishment_v2 as adapter
+    from services.commands.mabang import generate_replenishment_v2 as adapter
     output = tmp_path / "workspace/.lxeagent/artifacts/replenish/final_restock_recommendation/result.xlsx"
     output.parent.mkdir(parents=True)
     book = Workbook()

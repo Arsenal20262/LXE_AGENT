@@ -237,3 +237,12 @@
 - 用户授权将上述7文件合并收口，Commit并正常Push更新PR #117；起点为332e42c3，实际Head仓库为Arsenal20262/LXE_AGENT，远端同名分支经git ls-remote确认与本地一致。仅提交这7文件，不合入main、不改PR Base或PR1～PR3及其他草稿；提交／Push终态以Git及PR Head复核为准。
 - 本轮重新执行Python五文件109 passed；Bun Skill发现、命令归属及用户选择卡三文件49 pass、262 assertions；list和店铺解析／V1／V2 describe均成功。覆盖模拟店铺列表文件中的名称、ID、类型、父级关系、一次查询、候选失败返回、来源隔离及现有选择卡契约；不将其算作真实模型选店验收。日志在/private/tmp/pr117-store-publish-9q9kst6l/。
 - 1136个生产文件与起点指纹相同，V1／V2计算、旺季、AG、来源隔离、Excel及交付实现未改。332e42c3阶段865项Python／真实Office及Desktop证据仅复用，不计为本轮重跑；本轮未执行真实模型、生产ERP、附件发送、完整Desktop业务或Windows验收，也未验证与最新main的整合行为。
+
+## 2026-10-26 合入main的CLI迁移与测试分层
+
+- 用户针对PR #117已知冲突授权合入最新main；起点90cea680，fetch确认目标bb628ce8，包含#109、#120、#124。按main迁移至services/commands，保留PR4深圳源表参数、三类货件诊断、候选列表测试及V2两个计算／设置入口；四个CLI适配文件与原实现仅有导入路径差异。没有改V1／V2算法、旺季、AG或来源规则。
+- Runtime两个冲突测试文件与main逐字节一致，沿用#120的通用Harness测试分层；PR4的实际Amazon Skill发现、权限范围、唯一主入口、V1／V2命令归属及兼容dataset检查归入已有Desktop CLI集成测试。保留主Skill的选店契约及模拟US／UK店铺列表读回测试，未恢复已退役回放脚本或独立V2 Skill。
+- Amazon设置桥接复用main的CLI可执行路径与managedPythonEnvironment，保留原终态校验、真实错误、设置兼容和旺季规则；同步现有读写测试。V2 catalog补齐main的help元数据，并用既有生成器刷新命令手册，不新增协议、Service或兼容包装。
+- 本轮合入后的实跑：Python CLI／infra、店铺解析／取数适配、V1销量／算法／报表、V2全套及双版本1061 passed、4 skipped、4条既有aiohttp警告，包含真实LibreOffice与Office Kit重算；Bun十三文件96 pass、467 assertions；八工作区typecheck、TS生产边界、Dashboard／Desktop构建、doctor／list／V1／V2／店铺describe、V2帮助和命令手册检查通过。构建保留既有大chunk提示。
+- 首轮Python的59项失败均由沙箱禁止127.0.0.1测试服务器绑定端口导致，放行本地fixture后整组原样重跑通过；初轮Bun的测试模块别名不可解析已改为测试文件直接引用，最终十三文件全组重跑通过。没有删除断言或跳过失败用例。依赖按main锁文件frozen恢复，未额外升级或改写锁文件。
+- 32个Amazon业务文件和12个其他worktree的HEAD／状态／diff指纹与起点相同，90cea680的四份Skill指引完整保留。日志在/private/tmp/pr117-main-integration-ldadfhn1/。真实模型选店及失败停止语义、生产ERP、外部附件、完整原生Desktop、Windows／Microsoft Excel仍NOT VERIFIED；本轮合入main不等于合并PR，提交及远端更新以Git和PR Head为准。

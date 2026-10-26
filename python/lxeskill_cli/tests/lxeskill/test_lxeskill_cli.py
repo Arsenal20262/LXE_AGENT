@@ -129,7 +129,7 @@ def test_auth_refresh_final_error_preserves_stage_url_type_and_real_message(monk
     assert "Locator.click: Element is not visible" in message
 
 
-def test_list_and_help_write_one_terminal_jsonl_record(capsys) -> None:
+def test_list_and_describe_write_one_terminal_jsonl_record(capsys) -> None:
     assert lxeskill.main(["list"]) == 0
     records = _records(capsys)
     assert len(records) == 1
@@ -137,7 +137,7 @@ def test_list_and_help_write_one_terminal_jsonl_record(capsys) -> None:
     assert records[0]["ok"] is True
     assert len(records[0]["data"]["commands"]) == 45
 
-    assert lxeskill.main(["fba", "customs", "preview", "--help"]) == 0
+    assert lxeskill.main(["describe", "fba", "customs", "preview"]) == 0
     records = _records(capsys)
     assert len(records) == 1
     assert records[0]["data"]["command"] == "fba customs preview"
@@ -745,6 +745,26 @@ def test_absent_skill_scope_is_unrestricted(monkeypatch, capsys) -> None:
     assert len(record["data"]["commands"]) == len(visible)
 
 
+def test_export_catalog_exposes_warehouse_scope_and_erp_ownership(monkeypatch, capsys) -> None:
+    monkeypatch.delenv("LXESKILL_SKILL_SCOPE", raising=False)
+    assert lxeskill.main(["list"]) == 0
+    (record,) = _records(capsys)
+    commands = record["data"]["commands"]
+    (tms,) = [entry for entry in commands if entry["name"].startswith("mabang_tms_")]
+    assert tms["command"] == "mabang-tms products export"
+    assert tms["owner_skills"] == ["mabang-tms-products-export"]
+    assert tms["attribution_skill"] == "mabang-tms-products-export"
+    assert tms["artifact_paths"] == [{"field": "artifacts[].path", "role": "deliverable"}]
+    warehouse = tms["input_schema"]["properties"]["warehouse"]
+    assert warehouse["type"] == "string"
+    assert warehouse["enum"] == ["PH1", "VN1", "all"]
+    # External CLI callers retain the optional all-warehouse invocation.
+    assert "required" not in tms["input_schema"]
+    yacang = next(entry for entry in commands if entry["command"] == "yacang reports export")
+    assert yacang["owner_skills"] == ["yacang-reports-export"]
+    assert yacang["attribution_skill"] == "yacang-reports-export"
+
+
 def test_vietnam_has_one_ordinary_command_and_no_managed_contract() -> None:
     catalog = load_catalog()
     assert not any("managed_execution" in entry for entry in catalog.values())
@@ -776,7 +796,10 @@ def test_datasets_list_exposes_public_relative_directories(capsys):
     assert record["ok"] is True
     datasets = record["data"]["datasets"]
     assert datasets
-    assert any(item["id"] == "fba_delivery_csv" and item["dir"] == "fba/delivery_csv" for item in datasets)
+    directories = {item["id"]: item["dir"] for item in datasets}
+    assert directories["fba_delivery_csv"] == "fba/delivery_csv"
+    assert directories["vietnam_recommendations"] == "vietnam/recommendations"
+    assert directories["mabang_tms_exports"] == "mabang_tms/exports"
     assert all(set(item) == {"id", "dir", "holds"} for item in datasets)
     assert all(not Path(item["dir"]).is_absolute() and item["holds"] for item in datasets)
     assert record["files"] == []

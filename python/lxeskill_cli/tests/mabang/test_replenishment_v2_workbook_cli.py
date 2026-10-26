@@ -8,7 +8,7 @@ import pytest
 
 from lxeskill import cli as lxeskill
 from lxeskill.business import load_catalog
-from services.agent_cli.mabang import generate_replenishment_v2 as cli
+from services.commands.mabang import generate_replenishment_v2 as cli
 
 
 def test_cli_forwards_the_three_offline_files(monkeypatch) -> None:

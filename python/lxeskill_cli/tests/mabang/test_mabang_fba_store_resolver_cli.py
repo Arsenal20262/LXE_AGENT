@@ -4,7 +4,7 @@ from pathlib import Path
 
 from openpyxl import load_workbook
 
-from services.agent_cli.mabang import resolve_fba_store as cli
+from services.commands.mabang import resolve_fba_store as cli
 from services.mabang.amazon.fba import store_resolver as stores
 from services.mabang.amazon.fba.store_resolver import (
     FbaStore,
