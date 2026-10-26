@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 import subprocess
 import sys
 
@@ -100,3 +101,30 @@ def test_cli_preserves_utf8_errors_with_legacy_stdout():
     error = json.loads(result.stdout.decode("utf-8"))
     assert error["type"] == "result" and error["ok"] is False
     assert error["error"]["message"] == "ValueError: peak_boost_enabled 必须是布尔值"
+
+
+def test_failed_save_terminal_and_restarted_reader_keep_previous_settings(monkeypatch, capsys):
+    original = {"peak_boost_enabled": True, "peak_boost_days": 20}
+    settings.save_parameters(original)
+    replace = settings.os.replace
+
+    def fail_metadata(source, destination):
+        if Path(destination).name == "parameters.meta.json":
+            raise OSError("fixture metadata publication failed")
+        return replace(source, destination)
+
+    monkeypatch.setattr(settings.os, "replace", fail_metadata)
+    assert cli.main([*COMMAND, "--action", "save", "--parameters", json.dumps({
+        "peak_boost_enabled": True, "peak_boost_days": 40,
+    })]) == 4
+    terminal = json.loads(capsys.readouterr().out)
+    assert terminal["ok"] is False and terminal["files"] == []
+    assert "fixture metadata publication failed" in terminal["error"]["message"]
+    assert terminal["data"]["exception"] == terminal["error"]["message"]
+    child = subprocess.run(
+        [sys.executable, "-I", "-B", "-m", "lxeskill", *COMMAND, "--action", "read"],
+        capture_output=True, text=True, encoding="utf-8", timeout=30,
+    )
+    assert child.returncode == 0, child.stderr or child.stdout
+    result = json.loads(child.stdout)
+    assert result["ok"] is True and result["data"]["data"] == original

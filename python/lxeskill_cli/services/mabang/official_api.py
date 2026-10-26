@@ -3,15 +3,12 @@ from __future__ import annotations
 
 import asyncio
 import json
-import math
 import os
 import re
 import time
 from contextlib import AsyncExitStack, asynccontextmanager, contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from email.utils import parsedate_to_datetime
 from typing import Any
 
 
@@ -124,22 +121,6 @@ def invalid(context: str, reason: str, payload: Any) -> None:
     raise OfficialApiError(context, reason, payload)
 
 
-def retry_delay(value: str | None, fallback: float) -> float:
-    if not value:
-        return fallback
-    try:
-        seconds = float(value)
-    except ValueError:
-        try:
-            date = parsedate_to_datetime(value)
-            if date.tzinfo is None:
-                date = date.replace(tzinfo=timezone.utc)
-            seconds = (date - datetime.now(timezone.utc)).total_seconds()
-        except (ValueError, TypeError, OverflowError):
-            return fallback
-    return max(0.0, seconds) if math.isfinite(seconds) and seconds >= 0 else fallback
-
-
 def _business_failure(payload: Any) -> bool:
     if not isinstance(payload, dict):
         return False
@@ -229,10 +210,9 @@ async def _post_with_client(client, endpoint: str, body: dict[str, Any], *, cont
         except ValueError as exc:
             raise OfficialApiError(context, str(exc)) from exc
         status, payload = response.status_code, response.payload
-        retry_after = response.headers.get("Retry-After")
-        retryable = status in (429, 502, 503, 504) and not _business_failure(payload)
+        retryable = status in (502, 503, 504) and not _business_failure(payload)
         if retryable and attempt + 1 < MAX_ATTEMPTS:
-            await asyncio.sleep(retry_delay(retry_after, 2 ** attempt) if status == 429 else 2 ** attempt)
+            await asyncio.sleep(2 ** attempt)
             continue
         if not 200 <= status < 300:
             raise OfficialApiError(context, f"HTTP {status}", payload)

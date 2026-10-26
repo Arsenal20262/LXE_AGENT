@@ -5,6 +5,8 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import shutil
+from tempfile import mkdtemp
 from typing import TypedDict
 from uuid import uuid4
 
@@ -97,12 +99,38 @@ def _replace_text(path: Path, text: str) -> None:
 
 def _write_unlocked(parameters: ReplenishmentV2Settings) -> None:
     path = _path()
+    metadata_path = path.with_name("parameters.meta.json")
     contents = json.dumps(parameters, ensure_ascii=False, indent=2) + "\n"
-    # Old and current settings readers share the existing lock. Publish matching
-    # metadata last; an interrupted write leaves the new file without valid opt-in.
-    _replace_text(path, contents)
-    metadata = {"schema_version": 2, "parameters_fingerprint": _fingerprint(path, contents.encode("utf-8"))}
-    _replace_text(path.with_name("parameters.meta.json"), json.dumps(metadata, ensure_ascii=False, indent=2) + "\n")
+    recovery = Path(mkdtemp(prefix=".settings-rollback-", dir=path.parent))
+    keep_recovery = False
+    try:
+        # Preserve timestamps as well as bytes: the existing opt-in fingerprint
+        # includes the parameter file's mtime. Readers and writers share this lock.
+        for target in (path, metadata_path):
+            if target.exists():
+                shutil.copy2(target, recovery / target.name)
+        try:
+            _replace_text(path, contents)
+            metadata = {"schema_version": 2, "parameters_fingerprint": _fingerprint(path, contents.encode("utf-8"))}
+            _replace_text(metadata_path, json.dumps(metadata, ensure_ascii=False, indent=2) + "\n")
+        except Exception as publish_error:
+            try:
+                for target in (path, metadata_path):
+                    backup = recovery / target.name
+                    if not backup.exists():
+                        target.unlink(missing_ok=True)
+                    elif (not target.exists() or target.read_bytes() != backup.read_bytes()
+                          or target.stat().st_mtime_ns != backup.stat().st_mtime_ns):
+                        os.replace(backup, target)
+            except OSError as rollback_error:
+                keep_recovery = True
+                raise OSError(
+                    f"旺季设置保存失败: {publish_error}; 恢复原配置失败: {rollback_error}; 备份保留于 {recovery}"
+                ) from publish_error
+            raise
+    finally:
+        if not keep_recovery:
+            shutil.rmtree(recovery, ignore_errors=True)
 
 
 def read_state() -> ReplenishmentV2Settings:

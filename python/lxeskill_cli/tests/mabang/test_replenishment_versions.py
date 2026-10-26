@@ -16,6 +16,7 @@ from services.mabang.amazon.fba import source_verification as verification
 from services.mabang.amazon.fba import store_msku as msku_export
 from services.mabang.amazon.fba import store_msku_actual_inventory as inventory
 from services.mabang.amazon.fba import store_msku_sales_analysis as sales_analysis
+from services.mabang.amazon.fba import unlinked_shipments as shipments
 from services.mabang.amazon.fba.replenishment_v2_formulas import replenishment_v2_formulas
 from services.mabang.amazon.fba.sku_catalog import LocalSkuDefinition
 from test_replenishment_v2_workbook import (
@@ -23,9 +24,9 @@ from test_replenishment_v2_workbook import (
 )
 
 
-@pytest.mark.parametrize("scenario", ["both-known", "v2-unknown", "v1-sales-failed", "v2-office-failed"])
+@pytest.mark.parametrize("scenario", ["both-known", "v2-unknown", "v1-sales-failed", "v2-office-failed", "invalid-shipments"])
 def test_same_batch_supports_independent_version_cli_results(tmp_path, monkeypatch, capsys, scenario):
-    if not os.environ.get("LXE_OFFICE_NODE") or not os.environ.get("LXE_OFFICE_CLI"):
+    if scenario != "invalid-shipments" and (not os.environ.get("LXE_OFFICE_NODE") or not os.environ.get("LXE_OFFICE_CLI")):
         pytest.skip("Office Kit is unavailable; cross-version workbook acceptance remains NOT VERIFIED")
     monkeypatch.setenv("LXE_WORKSPACE_ROOT", str(tmp_path))
     monkeypatch.setenv("LXE_DATA_ROOT", str(tmp_path / "state"))
@@ -65,6 +66,25 @@ def test_same_batch_supports_independent_version_cli_results(tmp_path, monkeypat
     )
     verification.stamp_report(report, verified.metadata)
     snapshot = _write_confirmed_empty_snapshot(artifacts / "unlinked_shipments_snapshots")
+    if scenario == "invalid-shipments":
+        raw = tmp_path / "shipments.csv"
+        raw.write_text(f"店铺,MSKU,MSKU发货量\n{STORE},SEA-1,17\n{STORE},COMBO-1,23\n", encoding="utf-8")
+        query = shipments.StoreUnlinkedShipmentDownloadResult(
+            STORE, 401403, "202610131000", [
+                shipments.UnlinkedShipmentStatusResult(spec.status_name, int(index == 0), raw_file_path=str(raw) if index == 0 else "")
+                for index, spec in enumerate(shipments.UNLINKED_SHIPMENT_STATUS_SPECS)
+            ],
+        )
+        snapshot = Path(shipments.build_store_unlinked_shipments_snapshot(
+            [raw], store_name=STORE, query_result=query, snapshot_time="202610131100", output_dir=snapshot.parent,
+        ).snapshot_xlsx_path)
+        book = load_workbook(snapshot)
+        sheet = book[shipments.SNAPSHOT_SUMMARY_SHEET]
+        for row in sheet.iter_rows(min_row=2):
+            if row[1].value == "SEA-1":
+                row[2].value = "invalid"
+        book.save(snapshot)
+        book.close()
     inputs = [source, report, snapshot]
     hashes = [hashlib.sha256(path.read_bytes()).hexdigest() for path in inputs]
 
@@ -100,19 +120,25 @@ def test_same_batch_supports_independent_version_cli_results(tmp_path, monkeypat
             "replenish", "calculate", "--store-name", STORE,
             "--unlinked-shipments-snapshot", str(snapshot),
         ])
-        assert v1_code == 0 and v1["ok"] is True
-        assert Path(v1["data"]["sales_analysis_xlsx_path"]) == Path(sales["data"]["report_xlsx_path"])
-        assert Path(v1["data"]["actual_inventory_xlsx_path"]) == report
-        assert v1["data"]["source_data_time"] == sales["data"]["source_data_time"] == "202610131000"
-        assert v1["data"]["row_count"] == 3  # V1 keeps its existing eligibility rules.
-        assert v1["files"] == [v1["data"]["report_xlsx_path"]]
-        book = load_workbook(v1["files"][0], read_only=True)
-        try:
-            assert book.sheetnames == ["最终备货意见", "本轮不备货", "链接备货汇总", "源数据核验信息"]
-        finally:
-            book.close()
+        if scenario == "invalid-shipments":
+            assert v1_code == lxeskill.EXIT_BUSINESS and v1["ok"] is False
+            assert "SEA-1" in v1["error"]["message"] and "未关联数量" in v1["error"]["message"]
+            assert v1["files"] == []
+            assert not list((artifacts / "calculation").glob("*.xlsx"))
+        else:
+            assert v1_code == 0 and v1["ok"] is True
+            assert Path(v1["data"]["sales_analysis_xlsx_path"]) == Path(sales["data"]["report_xlsx_path"])
+            assert Path(v1["data"]["actual_inventory_xlsx_path"]) == report
+            assert v1["data"]["source_data_time"] == sales["data"]["source_data_time"] == "202610131000"
+            assert v1["data"]["row_count"] == 3  # V1 keeps its existing eligibility rules.
+            assert v1["files"] == [v1["data"]["report_xlsx_path"]]
+            book = load_workbook(v1["files"][0], read_only=True)
+            try:
+                assert book.sheetnames == ["最终备货意见", "本轮不备货", "链接备货汇总", "源数据核验信息"]
+            finally:
+                book.close()
 
-    if scenario == "v2-office-failed":
+    if scenario in {"v2-office-failed", "invalid-shipments"}:
         def fail_office(*_args, **_kwargs):
             raise RuntimeError("fixture V2 Office recalculation failed")
         monkeypatch.setattr(v2_workbook, "_recalculate", fail_office)
@@ -122,10 +148,14 @@ def test_same_batch_supports_independent_version_cli_results(tmp_path, monkeypat
         "--shenzhen-inventory-report-xlsx-path", str(report),
         "--unlinked-shipments-snapshot-path", str(snapshot),
     ])
-    if scenario == "v2-office-failed":
+    if scenario in {"v2-office-failed", "invalid-shipments"}:
         assert v2_code == lxeskill.EXIT_BUSINESS and v2["ok"] is False
-        assert "fixture V2 Office recalculation failed" in v2["error"]["message"]
+        expected = "未关联数量" if scenario == "invalid-shipments" else "fixture V2 Office recalculation failed"
+        assert expected in v2["error"]["message"]
         assert v2["files"] == []
+        if scenario == "invalid-shipments":
+            assert "SEA-1" in v2["error"]["message"]
+            assert not list((artifacts / "final_restock_recommendation").glob("*.xlsx"))
     else:
         review = scenario == "v2-unknown"
         assert v2_code == (lxeskill.EXIT_BUSINESS if review else 0)
@@ -143,7 +173,7 @@ def test_same_batch_supports_independent_version_cli_results(tmp_path, monkeypat
                 assert {cell.column_letter for cell in book.active[index] if cell.data_type == "f"} == set(replenishment_v2_formulas(index))
         finally:
             book.close()
-    if v1:
+    if v1 and v1["ok"]:
         assert Path(v1["files"][0]).is_file()  # V2 failure never replaces or invalidates V1.
         assert set(v1["files"]).isdisjoint(v2["files"])
     assert [hashlib.sha256(path.read_bytes()).hexdigest() for path in inputs] == hashes

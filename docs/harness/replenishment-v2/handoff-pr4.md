@@ -3,7 +3,7 @@
 ## Git、职责与当前契约
 
 - 分支 `codex/amazon-replenishment-unification`，工作区 `/Users/hym/.codex/worktrees/1672/Amazon`；PR #117。
-- 依赖链：PR1 `979c33e8` → PR2 `af0d7b8b` → PR3 `092b24cc` → PR4功能提交 `f973ed71` → main兼容合并 `b892ea8f`（第二父为`abde37dd`）→ 精简提交 `6d0e72ea` → main兼容合并 `3babfbf3`（继承e3274147）→ 回放退役 `57d4c7c4` → 设置页修复 `af8f298f`。后续V2命名、旺季交互和文档调整在本轮收口提交，不重写历史或修改PR Base。
+- 依赖链：PR1 `979c33e8` → PR2 `af0d7b8b` → 确认的PR3 `092b24cc` → PR4。本轮本地提交起点为 `591a848b`，已继承main／merge-base `bb628ce8`；定向修复提交结果以Git记录为准，尚未推送。PR3当前额外设置补丁未合入祖先链，PR4已独立处理对应前端问题，不修改前序分支或PR Base。
 - b892ea8f时PR117对merge-base abde37dd为72文件、+7301/-399；PR4功能提交对PR3为29文件、+1352/-719。前者含上游累计功能，不能称PR4新增7301行。
 - 一个完整主Skill `replenishment-workflow-map`，V1/V2独立计算、检查和交付；独立`replenishment-final-restock` Skill已删除，V2 CLI owner改为主Skill。
 - V1保留原销量分析、参数方案、算法、筛选和多Sheet；V2继承PR1的14公式、PR2的35列单表和Office Kit。PR3提供自动取数集成；不计为PR4新建。
@@ -17,8 +17,16 @@
 - AG唯一读取深圳报告“真实库存（深圳仓库）数量”；普通及组合SKU沿用原报告结果，保留正数、真实0、有限负数，不回退uq122，也不要求该列存在或合法。
 - **V2临时规则**：库存未知时AG留空、全部行和14公式保留，生成“库存待核对”文件，success=false/ok=false，暂停正式交付；诊断包含代表性MSKU、报告分类和可取得的原因。运营尚未批准未知库存正式交付，不设历史25行门槛，不影响V1。
 - 35列、I/J、AH/AD/AI及空海运公式保留；没有新增AG扣减。旺季页面初始关闭，勾选开启时必填0～120整数天数，没有默认30天；本轮聊天明确开启、关闭或指定天数优先，未提时沿用页面保存设置。
-- 旺季存储的现行回滚契约：parameters.json仅保留开关、天数两个业务字段；版本2标记和文件指纹位于同目录parameters.meta.json。此前内嵌schema_version=2的格式在修复版读取时自动转换，具体兼容边界见末节。
+- 旺季存储：parameters.json保留旧版可读的开关、天数，parameters.meta.json保存版本2标记和指纹；内嵌schema_version=2配置读取时转换。保存沿用现有锁及原子替换，发布失败恢复原参数／元数据及mtime，保留真实错误；正常完成后清理短期备份。恢复自身也发生I/O错误时报告两项实际错误并保留备份路径，不能宣称已恢复。
 - V2经Office Kit重算、结构／公式／Excel错误检查后才发布正式文件；失败不覆盖已有合格文件。各版本仅发送自身成功terminal.files，诊断附件不作正式成功，发送失败只重试该文件发送。
+
+## 本轮定向整改与验证（本地提交收口）
+
+- 用户明确授权两个历史公共P2直接纳入PR4。原货件模块统一拒绝非法、非有限、负数及空／缺失数量，原始文件与快照一致校验，诊断带MSKU、字段、来源；真实0保留，区别于三类查询确认无货件。V1／V2算法和有效数量结果不变。
+- 按历史PR #122的已验证实现修正店铺、MSKU、深圳和货件403停止；官方API的429停止逻辑适配当前共享client，不整体覆盖旧文件。401原恢复、临时连接和502／503／504有限恢复保留；删除失去消费者的Retry-After辅助函数。#122仍为关闭未合并，本轮不修改该PR。
+- 最终25文件Python回归 **780 passed、无skip**，实际配置本工作区Office Node／Kit，包含LibreOffice公式、V1销量／多Sheet、V2深圳AG／全部MSKU／35列14公式、未知库存、双版本、HTTP停止及设置恢复。Bun四文件 **37 pass、167 assertions**；doctor／list／V1与V2 describe及diff检查通过。日志：`/private/tmp/pr117-p2-final-paumwl1w/`。提交前核实18个源码／测试文件未再改写，复用以上证据，另实跑关键边界 **141 passed、225 deselected**（`/private/tmp/pr117-precommit-critical.log`）；重叠用例不累计。
+- 另用两个全新Python子进程执行原公开V1／V2 CLI读取非法货件快照，均实际退出4、ok=false、files=[]，保留数量错误；设置CLI保存失败及新进程读取验证原“开启、20天”不变。均使用离线夹具，未访问ERP或模型。
+- 旺季页面默认及聊天临时覆盖优先级已核对一致，无需修改UI、Skill、生成器、CLI/catalog或公式；没有恢复独立V2 Skill或模型回放。源码反方复审未发现新的确定P0～P3。551行新增测试覆盖独立输入、认证恢复包装、CLI失败及配置恢复边界，未发现值得删除的无意义重复。用户已授权本轮19文件精确暂存及一个本地fix提交，不Push或修改GitHub；正式审核和生产验收仍须单独完成。
 
 ## 生产源码与V1对照证据
 
@@ -64,11 +72,11 @@
 
 ## 历史风险、未验证范围与下一步
 
-- **历史P2，当前PR4未修复**：store_resolver._read_store_html约415行把403/401同归认证失败，fetch_fba_stores约436行刷新后再试。注入403曾观察2次获取／1次刷新；429为1次／0刷新。复现`/private/tmp/pr4-readonly-final-20261023-1ti4de5d/auth-stop-reproduction.json`；原blob为ed3ceb3d，和PR3／main abde37dd一致。
-- 403须立即停止，不能作为普通登录过期自动恢复；401正常恢复应保留。另在`codex/amazon-network-recovery`／pool-10处理，草稿未纳入PR4，不声明已发布修复。
+- 历史403／429和货件非法数量P2已按本轮授权在本地修复，详见上方验证；尚未推送，不能据此宣称远端PR或main已包含修复。原403复现证据保留在`/private/tmp/pr4-readonly-final-20261023-1ti4de5d/auth-stop-reproduction.json`。
+- 两文件异常回滚不提供掉电或进程强杀的整体事务；恢复本身持续I/O失败须按保留备份人工处理。不遵守现有锁的外部写器、低精度文件系统下同时间粒度的相同内容改写、真实Windows安装包降级均未验证，不能扩大mtime指纹及回滚保证。
 - 真实Agent的模型决策／自由文本语义、当前Desktop完整聊天、生产ERP、外部附件发送／恢复、原生Windows及Microsoft Excel均NOT VERIFIED。Chromium夹具、历史固定trace、Office Kit和静态检查不替代这些验收。
 - 运营仍待确认未知库存未来能否正式交付；当前核对失败规则继续生效。
-- 本轮为CONDITIONAL PASS：离线定向通过，具备人工检查条件；PR3 UI补丁独立归位，Stack Base／main兼容及真实运行验收仍需按实际提审阶段处理。
+- 当前补丁离线定向及反方复审通过，具备本地提交和人工检查条件；前序PR仍须按依赖顺序审核，真实运行验收不以测试数量替代。
 - 上轮精简已通过6d0e72ea提交并Push：8文件+231/-1367、净减1136行，5份handoff压至253行，测试净减131行。该轮没有合并main；以下记录本轮追加授权的兼容合并。
 
 ## 2026-10-24 PR4合入main并解决renderer冲突
@@ -81,7 +89,7 @@
 - Chromium整份renderer的26套件全部通过、104 assertions，覆盖导航8项、对话窗口5项、侧栏10项和Amazon6项等双方有效断言；日志`/private/tmp/pr4-renderer-main-chromium.log`。
 - 默认cached diff检查对main继承的Windows source-hashes.json报告9行CRLF；原文件与main逐字节一致，保持原件。仅临时使用core.whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol识别Windows行尾后检查通过，不修改仓库配置或放过实际尾部空格。
 - 其他工作区HEAD、暂存／未暂存diff和草稿指纹保存于`/private/tmp/pr4-renderer-main-merge-current-path`指向目录，提交前后复核；PR1～PR3及其他草稿保持，不改PR Base、不force push、不合并GitHub PR。
-- 最终合并提交为3babfbf3，已正常Push。真实Agent模型行为／自由文本、生产ERP、用户Desktop完整链路、外部附件、原生Windows和Microsoft Excel继续NOT VERIFIED；历史403修复仅存在独立PR #122，不宣称本分支已包含。
+- 当时最终合并提交为3babfbf3，已正常Push。真实Agent模型行为／自由文本、生产ERP、用户Desktop完整链路、外部附件、原生Windows和Microsoft Excel继续NOT VERIFIED；当时历史403修复仅存在独立PR #122。
 
 ## 独立AI回放运行器退役（准备阶段，起始HEAD 3babfbf3）
 
@@ -183,7 +191,7 @@
 - 完整暂存diff及空白检查通过；32个V1／公共Amazon源码、配置和Skill与保护快照及起始HEAD逐字节一致，其他12个worktree的HEAD、状态、暂存／未暂存diff指纹不变。PR1～PR3及原main基线e3274147祖先关系保留，未混入独立网络修复或pool-11草稿。五份交接共10处相对链接有效，历史Git路径仅用于原提交追溯。
 - 提交前只读fetch确认最新main为884a1b56（#114系统提示词精简）；正确merge-base仍为e3274147。最新main与起始HEAD的merge-tree无冲突，本轮暂存路径与main新增41路径无交集；未机械合入main或改变PR Base。本轮测试运行于当前PR4候选代码，并非合入884a1b56后的整合测试，正式Agent受新main影响的行为仍须人工验收。
 - 独立AI回放脚本已在57d4c7c4退役，本轮确认仍缺失，无新Harness或替代运行器；正式Runtime、Provider、工具及生产messages/replay.ts保留。原8／16／17场景的编译或离线trace属于历史观察证据，不代表真实模型通过。
-- 未验证范围：真实模型的版本识别、澄清、失败停止及交付语义，完整Desktop业务、生产ERP、外部附件发送、原生Windows、Microsoft Excel和新安装包。库存未知仍只生成待核对文件并返回非成功，正式交付须运营确认；历史403认证恢复问题未在PR4修复。PR包含用户交互及公开命令变化，仍需组长人工审核。
+- 当时未验证范围：真实模型的版本识别、澄清、失败停止及交付语义，完整Desktop业务、生产ERP、外部附件发送、原生Windows、Microsoft Excel和新安装包。库存未知仍只生成待核对文件并返回非成功，正式交付须运营确认；历史403问题在该阶段尚未修复。PR包含用户交互及公开命令变化，仍需组长人工审核。
 
 ## 2026-10-24 配置回滚兼容最小修复（开发阶段记录）
 

@@ -354,11 +354,11 @@ def transport(monkeypatch):
     return setup
 
 def test_transport_auth_and_retries(transport):
-    session, sleeps = transport([Response(429, {'detail': 'limited'}, headers={'Retry-After': '3'}), Response(503, raw='gateway unavailable'), Response(payload={'code': 200, 'data': {}})])
+    session, sleeps = transport([Response(502, raw='gateway unavailable'), Response(503, raw='gateway unavailable'), Response(payload={'code': 200, 'data': {}})])
     metrics = http.RequestMetrics()
     with http.observe_requests(metrics):
         assert asyncio.run(http.post_json('shops/list', {}, context='shop'))['code'] == 200
-    assert sleeps == [3, 2] and len(session.calls) == 3
+    assert sleeps == [1, 2] and len(session.calls) == 3
     assert metrics.request_count == metrics.client_count == 1
     assert metrics.http_attempt_count == 3 and metrics.http_failure_count == metrics.retry_count == 2
     assert metrics.request_failure_count == metrics.request_cancelled_count == 0
@@ -540,11 +540,6 @@ def test_empty_listing_page(monkeypatch):
     assert asyncio.run(combo.fetch_listing_bindings('shop')) == []
 
 
-@pytest.mark.parametrize('value,expected', [('NaN', 2), ('Infinity', 2), ('-1', 2), ('invalid', 2), ('0', 0), ('4', 4)])
-def test_retry_after_validation(value, expected):
-    assert http.retry_delay(value, 2) == expected
-
-
 def test_missing_server_does_not_call_network(monkeypatch, transport):
     session, _ = transport([])
     monkeypatch.delenv('LXE_DATA_SERVER_URL')
@@ -565,3 +560,18 @@ def test_quoted_secret_with_spaces_is_fully_redacted():
     assert 'long secret' not in http.diagnostic('password="long secret"; actual error')
     assert 'actual error' in http.diagnostic('password="long secret"; actual error')
     assert 'upstream-key' not in http.diagnostic({'appkey': 'upstream-key', 'message': 'actual error'})
+
+
+@pytest.mark.parametrize("payload", [{"detail": "actual rate limit"}, {"code": 200, "data": {}}])
+def test_transport_rate_limit_is_terminal_without_sleep(transport, payload):
+    session, sleeps = transport([
+        Response(429, payload, headers={"Retry-After": "3"}),
+        Response(payload={"code": 200, "data": {}}),
+    ])
+    with pytest.raises(http.OfficialApiError, match="HTTP 429") as captured:
+        asyncio.run(http.post_json("combo-skus/search", {}, context="SKU=C page=2"))
+    assert len(session.calls) == 1
+    assert sleeps == []
+    assert "SKU=C page=2" in str(captured.value)
+    if "detail" in payload:
+        assert "actual rate limit" in str(captured.value)

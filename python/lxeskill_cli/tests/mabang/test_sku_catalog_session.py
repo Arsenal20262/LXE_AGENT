@@ -46,7 +46,7 @@ def test_actual_http_pagination_retry_cookie_and_cleanup(monkeypatch, reuse):
                 payload = stock_page() if body.get("cursor") else stock_page(["S"], "end")
             elif body["comboSku"] == "C1" and not retried:
                 retried = True
-                return web.json_response({"detail": "limited"}, status=429, headers={"Retry-After": "0"})
+                return web.json_response({"detail": "temporarily unavailable"}, status=503)
             elif body["comboSku"] == "C0":
                 payload = combo_page("C0")
                 payload["data"].update(total=21, page=body["page"])

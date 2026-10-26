@@ -111,6 +111,107 @@ def test_interrupted_metadata_save_does_not_enable_boost(monkeypatch):
     assert not list(settings.data_directory().glob("*.tmp"))
 
 
+@pytest.mark.parametrize("failed_file", ["parameters.json", "parameters.meta.json"])
+def test_failed_save_preserves_previous_enabled_settings(failed_file, monkeypatch):
+    original = {"peak_boost_enabled": True, "peak_boost_days": 20}
+    settings.save_parameters(original)
+    paths = [settings.data_directory() / name for name in ("parameters.json", "parameters.meta.json")]
+    before = [(path.read_bytes(), path.stat().st_mtime_ns) for path in paths]
+    replace = settings.os.replace
+
+    def fail_publish(source, destination):
+        if Path(destination).name == failed_file:
+            raise OSError(f"fixture {failed_file} publication failed")
+        return replace(source, destination)
+
+    with monkeypatch.context() as fault:
+        fault.setattr(settings.os, "replace", fail_publish)
+        with pytest.raises(OSError, match="publication failed"):
+            settings.save_parameters({"peak_boost_enabled": True, "peak_boost_days": 40})
+        assert settings.read_state() == original
+        assert [(path.read_bytes(), path.stat().st_mtime_ns) for path in paths] == before
+
+    assert settings.save_parameters({"peak_boost_enabled": True, "peak_boost_days": 40})["peak_boost_days"] == 40
+    assert not list(settings.data_directory().glob(".*.tmp"))
+
+
+def test_failure_after_metadata_replace_restores_both_files(monkeypatch):
+    original = {"peak_boost_enabled": True, "peak_boost_days": 20}
+    settings.save_parameters(original)
+    replace_text = settings._replace_text
+
+    def fail_after_publish(path, text):
+        replace_text(path, text)
+        if path.name == "parameters.meta.json":
+            raise OSError("fixture failure after metadata replacement")
+
+    monkeypatch.setattr(settings, "_replace_text", fail_after_publish)
+    with pytest.raises(OSError, match="after metadata replacement"):
+        settings.save_parameters({"peak_boost_enabled": False, "peak_boost_days": 40})
+    assert settings.read_state() == original
+
+
+def test_failed_rollback_reports_both_errors_and_retains_original_backup(monkeypatch):
+    original = {"peak_boost_enabled": True, "peak_boost_days": 20}
+    settings.save_parameters(original)
+    root = settings.data_directory()
+    original_metadata = (root / "parameters.meta.json").read_bytes()
+    replace = settings.os.replace
+
+    def fail_publication_and_rollback(source, destination):
+        if Path(source).parent.name.startswith(".settings-rollback-"):
+            raise OSError("fixture rollback failed")
+        if Path(destination).name == "parameters.meta.json":
+            raise OSError("fixture metadata publish failed")
+        return replace(source, destination)
+
+    monkeypatch.setattr(settings.os, "replace", fail_publication_and_rollback)
+    with pytest.raises(OSError) as failure:
+        settings.save_parameters({"peak_boost_enabled": True, "peak_boost_days": 40})
+    assert "fixture metadata publish failed" in str(failure.value)
+    assert "fixture rollback failed" in str(failure.value)
+    (backup,) = root.glob(".settings-rollback-*")
+    assert str(backup) in str(failure.value)
+    assert json.loads((backup / "parameters.json").read_bytes()) == original
+    assert (backup / "parameters.meta.json").read_bytes() == original_metadata
+
+
+def test_failed_first_save_keeps_configuration_absent(monkeypatch):
+    replace = settings.os.replace
+
+    def fail_metadata(source, destination):
+        if Path(destination).name == "parameters.meta.json":
+            raise OSError("fixture first metadata publication failed")
+        return replace(source, destination)
+
+    monkeypatch.setattr(settings.os, "replace", fail_metadata)
+    with pytest.raises(OSError, match="first metadata"):
+        settings.save_parameters({"peak_boost_enabled": True, "peak_boost_days": 40})
+    assert not (settings.data_directory() / "parameters.json").exists()
+    assert not (settings.data_directory() / "parameters.meta.json").exists()
+
+
+def test_failed_inline_migration_keeps_original_configuration(monkeypatch):
+    path = settings.data_directory() / "parameters.json"
+    path.parent.mkdir(parents=True)
+    original = '{"schema_version":2,"peak_boost_enabled":true,"peak_boost_days":20}'
+    path.write_text(original, encoding="utf-8")
+    replace = settings.os.replace
+
+    def fail_metadata(source, destination):
+        if Path(destination).name == "parameters.meta.json":
+            raise OSError("fixture migration publication failed")
+        return replace(source, destination)
+
+    with monkeypatch.context() as fault:
+        fault.setattr(settings.os, "replace", fail_metadata)
+        with pytest.raises(OSError, match="migration publication"):
+            settings.read_state()
+        assert path.read_text(encoding="utf-8") == original
+        assert not path.with_name("parameters.meta.json").exists()
+    assert settings.read_state() == {"peak_boost_enabled": True, "peak_boost_days": 20}
+
+
 @pytest.mark.parametrize("raw", [
     "{invalid",
     '{"schema_version":1,"parameters_fingerprint":"' + "0" * 64 + '"}',
