@@ -53,9 +53,7 @@ const pendingCandidates: (() => void)[] = [];
 const referenceSkills = ["office-xlsx", "office-docx", "office-pptx"].map(name => ({ name, description: "Office fixture skill", type: "default", commands: [], references: [], location: "/skills/" + name + "/SKILL.md" }));
 let vietnamUploadError: boolean | string = false;
 let amazonV2Settings: { peak_boost_enabled: boolean; peak_boost_days: number | null } = { peak_boost_enabled: false, peak_boost_days: null };
-let amazonReadError = false;
-let amazonSaveMode: "success" | "hold" | "error" = "success";
-let releaseAmazonSave: (() => void) | undefined;
+let amazonSaveMode: "success" | "error" = "success";
 let vietnamReadError = false;
 let vietnamExportMode: "success" | "cancel" | "error" | "hold" = "success";
 let releaseVietnamExport: (() => void) | undefined;
@@ -239,12 +237,10 @@ const desktop = {
   listInputAssets: async () => [],
   getAmazonV2Settings: async () => {
     calls.push({ operation: "amazon-v2.read" });
-    if (amazonReadError) throw new Error("ValueError: Amazon V2 旺季设置格式无效");
     return { ...amazonV2Settings };
   },
   saveAmazonV2Settings: async input => {
     calls.push({ operation: "amazon-v2.save", input });
-    if (amazonSaveMode === "hold") await new Promise<void>(resolve => { releaseAmazonSave = resolve; });
     if (amazonSaveMode === "error") throw new Error("PermissionError: fixture settings denied");
     amazonV2Settings = { ...input };
     return { ...amazonV2Settings };
@@ -505,9 +501,7 @@ const fixture = {
     </div>));
   },
   vietnamUploadFailure(value: boolean | string) { vietnamUploadError = value; },
-  amazonReadFailure(value: boolean) { amazonReadError = value; },
   amazonSaveMode(value: typeof amazonSaveMode) { amazonSaveMode = value; },
-  releaseAmazonSave() { releaseAmazonSave?.(); },
   mountAmazonV2Settings(language: "en" | "zh") {
     reset();
     flushSync(() => root!.render(<I18nContext.Provider value={UI_TEXT[language]}>

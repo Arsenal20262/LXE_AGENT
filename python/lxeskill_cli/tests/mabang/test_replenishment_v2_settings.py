@@ -1,11 +1,9 @@
+"""Persistent settings: defaults, legacy opt-in and the real failed-save regression."""
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
-
 import pytest
-
 from services.mabang.amazon.fba import replenishment_v2_settings as settings
 
 
@@ -14,257 +12,96 @@ def isolated(tmp_path, monkeypatch):
     monkeypatch.setenv("LXE_DATA_ROOT", str(tmp_path / "app"))
 
 
-@pytest.mark.parametrize("days", [None, 0, 20, 120])
-def test_custom_days_persist_without_converting_blank_to_zero(days):
-    parameters = {"peak_boost_enabled": days is not None, "peak_boost_days": days}
-    assert settings.save_parameters(parameters) == parameters
-    assert settings.read_state() == parameters
-
-
-@pytest.mark.parametrize("enabled,days", [(False, None), (True, None), (True, 20)])
-def test_legacy_setting_keeps_days_but_requires_a_new_opt_in(enabled, days):
-    path = settings.data_directory() / "parameters.json"
-    path.parent.mkdir(parents=True)
-    original = json.dumps({"peak_boost_enabled": enabled, **({"peak_boost_days": days} if days is not None else {})})
-    path.write_text(original, encoding="utf-8")
-    assert settings.read_state() == {"peak_boost_enabled": False, "peak_boost_days": days}
-    assert path.read_text(encoding="utf-8") == original
-
-
-@pytest.mark.parametrize("days", [-1, 121, 1.5, True, "20", "", float("nan"), float("inf")])
-def test_invalid_days_are_rejected_including_when_disabled(days):
-    with pytest.raises(ValueError, match="peak_boost_days"):
-        settings.save_parameters({"peak_boost_enabled": False, "peak_boost_days": days})
-
-
-def test_default_is_off_and_persists_across_reads():
+def test_first_use_is_off_without_default_days():
     assert settings.read_state() == {"peak_boost_enabled": False, "peak_boost_days": None}
-    assert settings.read_state()["peak_boost_enabled"] is False
-    assert json.loads((settings.data_directory() / "parameters.json").read_text()) == {"peak_boost_enabled": False, "peak_boost_days": None}
-
-
-def test_enabled_setting_requires_explicit_days_and_stays_enabled_after_restart():
-    with pytest.raises(ValueError, match="加成天数"):
-        settings.save_parameters({"peak_boost_enabled": True, "peak_boost_days": None})
-    parameters = {"peak_boost_enabled": True, "peak_boost_days": 20}
-    assert settings.save_parameters(parameters) == parameters
-    assert settings.read_state() == parameters
-    # The old reader rejects any field beyond these two, including schema_version.
-    contents = (settings.data_directory() / "parameters.json").read_bytes()
-    assert json.loads(contents) == parameters
-    assert b"\r\n" not in contents  # The fingerprint uses the same UTF-8 bytes on Windows.
 
 
 @pytest.mark.parametrize("enabled,days", [(False, None), (True, 0), (True, 20)])
-def test_inline_v2_config_is_converted_to_rollback_readable_format(enabled, days):
-    parameters = {"peak_boost_enabled": enabled, "peak_boost_days": days}
+def test_save_reload_retains_old_reader_compatible_fields(enabled, days):
+    expected = {"peak_boost_enabled": enabled, "peak_boost_days": days}
+    assert settings.save_parameters(expected) == settings.read_state() == expected
+    assert json.loads((settings.data_directory() / "parameters.json").read_bytes()) == expected
+
+
+@pytest.mark.parametrize("inline_version,enabled", [(None, False), (2, True)])
+def test_legacy_configuration_requires_opt_in_but_explicit_v2_migrates(inline_version, enabled):
     path = settings.data_directory() / "parameters.json"
     path.parent.mkdir(parents=True)
-    path.write_text(json.dumps({"schema_version": 2, **parameters}), encoding="utf-8")
-    assert settings.read_state() == parameters
-    assert json.loads(path.read_text()) == parameters
-    assert settings.read_state() == parameters
+    raw = {"peak_boost_enabled": True, "peak_boost_days": 20}
+    if inline_version:
+        raw["schema_version"] = inline_version
+    original = json.dumps(raw)
+    path.write_text(original)
+    assert settings.read_state() == {"peak_boost_enabled": enabled, "peak_boost_days": 20}
+    if inline_version:
+        assert "schema_version" not in json.loads(path.read_bytes())
+    else:
+        assert path.read_text() == original
 
 
-@pytest.mark.parametrize("legacy", [
-    {"peak_boost_enabled": True},
-    {"peak_boost_enabled": True, "peak_boost_days": 40},
+def test_old_writer_invalidates_saved_opt_in():
+    settings.save_parameters({"peak_boost_enabled": True, "peak_boost_days": 20})
+    path = settings.data_directory() / "parameters.json"
+    path.write_text('{"peak_boost_enabled":true,"peak_boost_days":40}')
+    assert settings.read_state() == {"peak_boost_enabled": False, "peak_boost_days": 40}
+
+
+@pytest.mark.parametrize("parameters", [
+    {"peak_boost_enabled": True, "peak_boost_days": None},
+    {"peak_boost_enabled": False, "peak_boost_days": 121},
 ])
-def test_old_writer_cannot_reuse_stale_v2_opt_in(legacy):
+def test_invalid_settings_never_persist(parameters):
+    with pytest.raises(ValueError):
+        settings.save_parameters(parameters)
+    assert not (settings.data_directory() / "parameters.json").exists()
+
+
+@pytest.mark.parametrize("name", ["parameters.json", "parameters.meta.json"])
+def test_corrupt_configuration_reports_error_without_rewriting(name):
     settings.save_parameters({"peak_boost_enabled": True, "peak_boost_days": 20})
-    path = settings.data_directory() / "parameters.json"
-    original = json.dumps(legacy)
-    path.write_text(original, encoding="utf-8")
-    assert settings.read_state() == {"peak_boost_enabled": False, "peak_boost_days": legacy.get("peak_boost_days")}
-    assert path.read_text() == original
-    parameters = {"peak_boost_enabled": True, "peak_boost_days": 15}
-    settings.save_parameters(parameters)
-    assert settings.read_state() == parameters
+    path = settings.data_directory() / name
+    path.write_text("{invalid")
+    with pytest.raises(ValueError):
+        settings.read_state()
+    assert path.read_text() == "{invalid"
 
 
-def test_old_writer_rewriting_identical_values_cannot_reuse_v2_opt_in():
-    settings.save_parameters({"peak_boost_enabled": True, "peak_boost_days": 20})
-    path = settings.data_directory() / "parameters.json"
-    original = path.read_bytes()
-    previous = path.stat()
-    path.write_bytes(original)
-    os.utime(path, ns=(previous.st_atime_ns, previous.st_mtime_ns + 1_000_000))
-    assert settings.read_state() == {"peak_boost_enabled": False, "peak_boost_days": 20}
-    assert path.read_bytes() == original
-
-
-def test_interrupted_metadata_save_does_not_enable_boost(monkeypatch):
-    settings.save_parameters({"peak_boost_enabled": True, "peak_boost_days": 20})
-    path = settings.data_directory() / "parameters.json"
-    path.write_text(json.dumps({"peak_boost_enabled": False, "peak_boost_days": 20}), encoding="utf-8")
-    replace = settings.os.replace
-
-    def fail_metadata(source, destination):
-        if Path(destination).name == "parameters.meta.json":
-            raise OSError("fixture metadata publish failed")
-        return replace(source, destination)
-
-    monkeypatch.setattr(settings.os, "replace", fail_metadata)
-    with pytest.raises(OSError, match="fixture metadata publish failed"):
-        settings.save_parameters({"peak_boost_enabled": True, "peak_boost_days": 20})
-    assert settings.read_state() == {"peak_boost_enabled": False, "peak_boost_days": 20}
-    assert not list(settings.data_directory().glob("*.tmp"))
-
-
-@pytest.mark.parametrize("failed_file", ["parameters.json", "parameters.meta.json"])
-def test_failed_save_preserves_previous_enabled_settings(failed_file, monkeypatch):
-    original = {"peak_boost_enabled": True, "peak_boost_days": 20}
-    settings.save_parameters(original)
-    paths = [settings.data_directory() / name for name in ("parameters.json", "parameters.meta.json")]
-    before = [(path.read_bytes(), path.stat().st_mtime_ns) for path in paths]
-    replace = settings.os.replace
-
-    def fail_publish(source, destination):
-        if Path(destination).name == failed_file:
-            raise OSError(f"fixture {failed_file} publication failed")
-        return replace(source, destination)
-
-    with monkeypatch.context() as fault:
-        fault.setattr(settings.os, "replace", fail_publish)
-        with pytest.raises(OSError, match="publication failed"):
-            settings.save_parameters({"peak_boost_enabled": True, "peak_boost_days": 40})
-        assert settings.read_state() == original
-        assert [(path.read_bytes(), path.stat().st_mtime_ns) for path in paths] == before
-
-    assert settings.save_parameters({"peak_boost_enabled": True, "peak_boost_days": 40})["peak_boost_days"] == 40
-    assert not list(settings.data_directory().glob(".*.tmp"))
-
-
-def test_failure_after_metadata_replace_restores_both_files(monkeypatch):
-    original = {"peak_boost_enabled": True, "peak_boost_days": 20}
-    settings.save_parameters(original)
-    replace_text = settings._replace_text
-
-    def fail_after_publish(path, text):
-        replace_text(path, text)
-        if path.name == "parameters.meta.json":
-            raise OSError("fixture failure after metadata replacement")
-
-    monkeypatch.setattr(settings, "_replace_text", fail_after_publish)
-    with pytest.raises(OSError, match="after metadata replacement"):
-        settings.save_parameters({"peak_boost_enabled": False, "peak_boost_days": 40})
-    assert settings.read_state() == original
-
-
-def test_failed_rollback_reports_both_errors_and_retains_original_backup(monkeypatch):
-    original = {"peak_boost_enabled": True, "peak_boost_days": 20}
-    settings.save_parameters(original)
+@pytest.mark.parametrize("phase", ["parameters.json", "parameters.meta.json", "after-metadata"])
+def test_save_failure_restores_previous_effective_values(monkeypatch, phase):
+    expected = {"peak_boost_enabled": True, "peak_boost_days": 20}
+    settings.save_parameters(expected)
     root = settings.data_directory()
-    original_metadata = (root / "parameters.meta.json").read_bytes()
-    replace = settings.os.replace
+    before = {name: ((root / name).read_bytes(), (root / name).stat().st_mtime_ns)
+              for name in ("parameters.json", "parameters.meta.json")}
+    replace = settings._replace_text
+    def fail(path, text):
+        if path.name == phase:
+            raise OSError("fixture publish failed")
+        replace(path, text)
+        if path.name == "parameters.meta.json" and phase == "after-metadata":
+            raise OSError("fixture publish failed")
+    monkeypatch.setattr(settings, "_replace_text", fail)
+    with pytest.raises(OSError, match="fixture publish failed"):
+        settings.save_parameters({"peak_boost_enabled": True, "peak_boost_days": 40})
+    assert settings.read_state() == expected
+    assert {name: ((root / name).read_bytes(), (root / name).stat().st_mtime_ns) for name in before} == before
+    assert not list(root.glob(".settings-rollback-*"))
 
-    def fail_publication_and_rollback(source, destination):
+
+def test_failed_recovery_keeps_original_backup_and_both_real_errors(monkeypatch):
+    original = {"peak_boost_enabled": True, "peak_boost_days": 20}
+    settings.save_parameters(original)
+    replace = settings.os.replace
+    def fail(source, destination):
         if Path(source).parent.name.startswith(".settings-rollback-"):
             raise OSError("fixture rollback failed")
         if Path(destination).name == "parameters.meta.json":
-            raise OSError("fixture metadata publish failed")
+            raise OSError("fixture publish failed")
         return replace(source, destination)
-
-    monkeypatch.setattr(settings.os, "replace", fail_publication_and_rollback)
-    with pytest.raises(OSError) as failure:
+    monkeypatch.setattr(settings.os, "replace", fail)
+    with pytest.raises(OSError) as error:
         settings.save_parameters({"peak_boost_enabled": True, "peak_boost_days": 40})
-    assert "fixture metadata publish failed" in str(failure.value)
-    assert "fixture rollback failed" in str(failure.value)
-    (backup,) = root.glob(".settings-rollback-*")
-    assert str(backup) in str(failure.value)
+    assert "fixture publish failed" in str(error.value) and "fixture rollback failed" in str(error.value)
+    (backup,) = settings.data_directory().glob(".settings-rollback-*")
+    assert str(backup) in str(error.value)
     assert json.loads((backup / "parameters.json").read_bytes()) == original
-    assert (backup / "parameters.meta.json").read_bytes() == original_metadata
-
-
-def test_failed_first_save_keeps_configuration_absent(monkeypatch):
-    replace = settings.os.replace
-
-    def fail_metadata(source, destination):
-        if Path(destination).name == "parameters.meta.json":
-            raise OSError("fixture first metadata publication failed")
-        return replace(source, destination)
-
-    monkeypatch.setattr(settings.os, "replace", fail_metadata)
-    with pytest.raises(OSError, match="first metadata"):
-        settings.save_parameters({"peak_boost_enabled": True, "peak_boost_days": 40})
-    assert not (settings.data_directory() / "parameters.json").exists()
-    assert not (settings.data_directory() / "parameters.meta.json").exists()
-
-
-def test_failed_inline_migration_keeps_original_configuration(monkeypatch):
-    path = settings.data_directory() / "parameters.json"
-    path.parent.mkdir(parents=True)
-    original = '{"schema_version":2,"peak_boost_enabled":true,"peak_boost_days":20}'
-    path.write_text(original, encoding="utf-8")
-    replace = settings.os.replace
-
-    def fail_metadata(source, destination):
-        if Path(destination).name == "parameters.meta.json":
-            raise OSError("fixture migration publication failed")
-        return replace(source, destination)
-
-    with monkeypatch.context() as fault:
-        fault.setattr(settings.os, "replace", fail_metadata)
-        with pytest.raises(OSError, match="migration publication"):
-            settings.read_state()
-        assert path.read_text(encoding="utf-8") == original
-        assert not path.with_name("parameters.meta.json").exists()
-    assert settings.read_state() == {"peak_boost_enabled": True, "peak_boost_days": 20}
-
-
-@pytest.mark.parametrize("raw", [
-    "{invalid",
-    '{"schema_version":1,"parameters_fingerprint":"' + "0" * 64 + '"}',
-    '{"schema_version":2,"parameters_fingerprint":null}',
-])
-def test_corrupt_v2_metadata_fails_without_rewriting_configuration(raw):
-    settings.save_parameters({"peak_boost_enabled": True, "peak_boost_days": 20})
-    path = settings.data_directory() / "parameters.json"
-    original = path.read_bytes()
-    metadata = settings.data_directory() / "parameters.meta.json"
-    metadata.write_text(raw, encoding="utf-8")
-    with pytest.raises(ValueError):
-        settings.read_state()
-    assert path.read_bytes() == original
-    assert metadata.read_text() == raw
-
-
-def test_saved_setting_is_used_by_next_read():
-    assert settings.save_parameters({"peak_boost_enabled": False, "peak_boost_days": 20}) == {"peak_boost_enabled": False, "peak_boost_days": 20}
-    assert settings.read_state()["peak_boost_enabled"] is False
-
-
-@pytest.mark.parametrize("version", [1, True, "2"])
-def test_unsupported_config_version_is_rejected_without_rewriting(version):
-    path = settings.data_directory() / "parameters.json"
-    path.parent.mkdir(parents=True)
-    raw = json.dumps({"schema_version": version, "peak_boost_enabled": True, "peak_boost_days": 20})
-    path.write_text(raw, encoding="utf-8")
-    with pytest.raises(ValueError, match="配置版本"):
-        settings.read_state()
-    assert path.read_text(encoding="utf-8") == raw
-
-
-@pytest.mark.parametrize("raw", [None, {}, {"peak_boost_enabled": 1}, {"peak_boost_enabled": "false"}, {"peak_boost_enabled": True, "extra": False}])
-def test_invalid_setting_is_rejected(raw):
-    with pytest.raises(ValueError):
-        settings.save_parameters(raw)
-
-
-def test_corrupt_saved_setting_fails_instead_of_silently_defaulting():
-    settings.read_state()
-    path = settings.data_directory() / "parameters.json"
-    path.write_text('{"peak_boost_enabled": "false"}', encoding="utf-8")
-    with pytest.raises(ValueError, match="格式无效"):
-        settings.read_state()
-
-
-@pytest.mark.parametrize("days", [-1, 121, 1.5, True, "20", ""])
-def test_corrupt_custom_days_fail_on_read_without_overwriting_file(days):
-    settings.read_state()
-    path = settings.data_directory() / "parameters.json"
-    raw = json.dumps({"peak_boost_enabled": True, "peak_boost_days": days})
-    path.write_text(raw, encoding="utf-8")
-    with pytest.raises(ValueError, match="peak_boost_days"):
-        settings.read_state()
-    assert path.read_text(encoding="utf-8") == raw

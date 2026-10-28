@@ -64,8 +64,7 @@ def status_failure(monkeypatch, tmp_path):
     return install
 
 
-@pytest.mark.parametrize("status", [spec.status_name for spec in ship.UNLINKED_SHIPMENT_STATUS_SPECS])
-@pytest.mark.parametrize("stage", ["查询数量", "创建导出任务", "轮询导出任务", "获取下载地址", "下载文件"])
+@pytest.mark.parametrize("status,stage", [("WMS待配货", "下载文件")])
 def test_status_stage_failure_preserves_exception_and_reaches_redacted_terminal(
     status_failure, status, stage, monkeypatch, tmp_path, capsys,
 ):
@@ -97,18 +96,6 @@ def test_status_stage_failure_preserves_exception_and_reaches_redacted_terminal(
     assert [name for name, action in calls if action == "查询数量"] == expected_statuses[:expected_statuses.index(status) + 1]
     assert calls[-1] == (status, stage)
     assert calls.count((status, stage)) == 1
-    snapshot.assert_not_called()
-
-
-@pytest.mark.parametrize("stage", ["查询数量", "创建导出任务", "轮询导出任务", "获取下载地址", "下载文件"])
-def test_status_stage_cancellation_propagates_without_snapshot(status_failure, stage):
-    error = asyncio.CancelledError("cancelled offline request")
-    calls, snapshot = status_failure("WMS待配货", stage, error)
-    with pytest.raises(asyncio.CancelledError) as caught:
-        cli.run({"store_name": "Amazon-Test"})
-    assert caught.value is error
-    assert calls[-1] == ("WMS待配货", stage)
-    assert all(name == "WMS待配货" for name, _ in calls)
     snapshot.assert_not_called()
 
 

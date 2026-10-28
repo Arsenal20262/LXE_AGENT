@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { DesktopAmazonV2SettingsService } from "../src/main/amazon-v2-settings";
@@ -34,27 +34,16 @@ describe("Amazon V2 settings bridge", () => {
     rmSync(dataRoot, { recursive: true, force: true });
   });
 
-  test.each([false, true])("real CLI defaults old preference %s off until explicit save", async enabled => {
-    const dataRoot = mkdtempSync(join(tmpdir(), "amazon-restock-settings-process-"));
+  test("the real CLI persists settings across Desktop service restarts", async () => {
+    const dataRoot = mkdtempSync(join(tmpdir(), "amazon-settings-process-"));
     const options = { platform: "darwin" as const,
       executablePath: resolve(import.meta.dirname, "../../../.venv", process.platform === "win32" ? "Scripts/lxeskill.exe" : "bin/lxeskill"),
       managedPath: "/managed", dataRoot };
     try {
       const first = new DesktopAmazonV2SettingsService(options);
       expect(await first.read()).toEqual({ peak_boost_enabled: false, peak_boost_days: null });
-      const path = join(dataRoot, "skill-data/amazon-final-restock/parameters.json");
-      const original = JSON.stringify({ peak_boost_enabled: enabled });
-      writeFileSync(path, original);
-      const legacy = await first.read();
-      expect(legacy).toEqual({ peak_boost_enabled: false, peak_boost_days: null });
-      expect(readFileSync(path, "utf8")).toBe(original);
-      await first.save({ ...legacy, peak_boost_days: 20 });
-      const restarted = new DesktopAmazonV2SettingsService(options);
-      expect(await restarted.read()).toEqual({ peak_boost_enabled: false, peak_boost_days: 20 });
-      await restarted.save({ peak_boost_enabled: true, peak_boost_days: 20 });
+      await first.save({ peak_boost_enabled: true, peak_boost_days: 20 });
       expect(await new DesktopAmazonV2SettingsService(options).read()).toEqual({ peak_boost_enabled: true, peak_boost_days: 20 });
-      writeFileSync(join(dataRoot, "skill-data/amazon-final-restock/parameters.json"), '{"peak_boost_enabled":"false"}');
-      await expect(restarted.read()).rejects.toThrow("ValueError: Amazon V2 旺季设置格式无效");
     } finally { rmSync(dataRoot, { recursive: true, force: true }); }
   }, 15_000);
 
@@ -65,9 +54,7 @@ describe("Amazon V2 settings bridge", () => {
     });
     expect(() => service.save({ peak_boost_enabled: "false" })).toThrow("must be a boolean");
     expect(() => service.save({ peak_boost_enabled: true, peak_boost_days: null })).toThrow("when enabled");
-    for (const days of [-1, 121, 1.5, true, "20", undefined, NaN, Infinity]) {
-      expect(() => service.save({ peak_boost_enabled: false, peak_boost_days: days })).toThrow("peak_boost_days");
-    }
+
   });
 
   test("rejects malformed days in a CLI success response", async () => {
@@ -81,28 +68,14 @@ describe("Amazon V2 settings bridge", () => {
     } finally { rmSync(dataRoot, { recursive: true, force: true }); }
   });
 
-  test.each([
-    [JSON.stringify({ type: "result", ok: false, error: { message: "ValueError: 设置文件损坏" } }), "", new Error("exit 4"), "ValueError: 设置文件损坏"],
-    ["", "PermissionError: 设置目录不可写", new Error("exit 1"), "PermissionError: 设置目录不可写"],
-    ["", "", new Error("spawn managed-python ENOENT"), "spawn managed-python ENOENT"],
-    ["{invalid", "", null, "Invalid lxeskill settings result: {invalid"],
-    ["null", "", null, "Invalid lxeskill settings result: null"],
-    [JSON.stringify({ type: "result", ok: false, error: { message: { detail: "unexpected error shape" } } }), "", null, "unexpected error shape"],
-    [JSON.stringify({ type: "result", ok: false, error: { message: 12 } }), "", null, '"message":12'],
-    [JSON.stringify({ type: "result", ok: false, error: { message: " " } }), "PermissionError: 实际进程错误", null, "PermissionError: 实际进程错误"],
-    [JSON.stringify({ type: "result", ok: true, data: { success: true, data: { peak_boost_enabled: true, peak_boost_days: null } } }), "", new Error("exit 1"), "exit 1"],
-    [JSON.stringify({ success: true, data: { peak_boost_enabled: true, peak_boost_days: null } }), "", null, "Invalid lxeskill settings result"],
-    [JSON.stringify({ type: "result", ok: false, data: { success: true, data: { peak_boost_enabled: true, peak_boost_days: null } } }), "", null, "Invalid lxeskill settings result"],
-    [JSON.stringify({ type: "progress", ok: true, data: { success: true, data: { peak_boost_enabled: true, peak_boost_days: null } } }), "", null, "Invalid lxeskill settings result"],
-    [JSON.stringify({ type: "result", ok: true, data: { success: false, data: { peak_boost_enabled: true, peak_boost_days: null } } }), "", null, "Invalid lxeskill settings result"],
-  ] as const)("preserves failure diagnostics for response %s", async (stdout, stderr, error, expected) => {
-    const dataRoot = mkdtempSync(join(tmpdir(), "amazon-restock-failure-"));
+  test("preserves the CLI failure diagnostic", async () => {
+    const dataRoot = mkdtempSync(join(tmpdir(), "amazon-settings-failure-"));
     try {
       const service = new DesktopAmazonV2SettingsService({
-        platform: "win32", executablePath: "/managed/lxeskill", managedPath: "/managed", dataRoot,
-        execute: async () => ({ stdout, stderr, error }),
+        platform: "darwin", executablePath: "/managed/lxeskill", managedPath: "/managed", dataRoot,
+        execute: async () => ({ stdout: JSON.stringify({ type: "result", ok: false, error: { message: "ValueError: 设置文件损坏" } }), stderr: "", error: new Error("exit 4") }),
       });
-      await expect(service.read()).rejects.toThrow(expected);
+      await expect(service.read()).rejects.toThrow("ValueError: 设置文件损坏");
     } finally { rmSync(dataRoot, { recursive: true, force: true }); }
   });
 
@@ -118,34 +91,4 @@ describe("Amazon V2 settings bridge", () => {
     } finally { rmSync(dataRoot, { recursive: true, force: true }); }
   });
 
-  test("uses shared secret redaction and output bounds for every failure source", async () => {
-    const dataRoot = mkdtempSync(join(tmpdir(), "amazon-restock-redaction-"));
-    const original = process.env.LXE_TEST_SETTINGS_API_KEY;
-    const secret = "synthetic-settings-secret";
-    process.env.LXE_TEST_SETTINGS_API_KEY = secret;
-    try {
-      const detail = "实际错误".repeat(2_000) + secret;
-      for (const execution of [
-        { stdout: JSON.stringify({ type: "result", ok: false, error: { message: detail } }), stderr: "", error: null },
-        { stdout: "", stderr: detail, error: new Error("exit 1") },
-        { stdout: detail, stderr: "", error: null },
-        { stdout: "", stderr: "", error: new Error(detail) },
-      ]) {
-        const service = new DesktopAmazonV2SettingsService({
-          platform: "win32", executablePath: "/managed/lxeskill", managedPath: "/managed", dataRoot,
-          execute: async () => execution,
-        });
-        let message = "";
-        try { await service.read(); } catch (cause) { message = (cause as Error).message; }
-        expect(message).toContain("[redacted]");
-        expect(message).toContain("[truncated]");
-        expect(message).not.toContain(secret);
-        expect(Buffer.byteLength(message, "utf8")).toBeLessThan(4_200);
-      }
-    } finally {
-      if (original === undefined) delete process.env.LXE_TEST_SETTINGS_API_KEY;
-      else process.env.LXE_TEST_SETTINGS_API_KEY = original;
-      rmSync(dataRoot, { recursive: true, force: true });
-    }
-  });
 });

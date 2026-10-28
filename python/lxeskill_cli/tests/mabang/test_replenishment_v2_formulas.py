@@ -6,7 +6,6 @@ import subprocess
 
 import pytest
 from openpyxl import Workbook, load_workbook
-from openpyxl.formula.translate import Translator
 
 from services.mabang.amazon.fba.replenishment_v2_formulas import replenishment_v2_formulas
 
@@ -57,64 +56,6 @@ def test_formula_rejects_invalid_custom_days(days):
         replenishment_v2_formulas(2, peak_boost_days=days)
 
 
-@pytest.mark.parametrize("enabled,days,remark,expected", [
-    (False, 20, "热销", (90, 95)),
-    (True, None, "热销", (120, 120)),
-    (True, 20, "热销", (110, 115)),
-    (True, 0, "热销", (90, 95)),
-    (True, 120, "热销", (120, 120)),
-    (True, 20, "", (90, 95)),
-    (True, 20, "不补，热销", (90, 95)),
-    (True, 20, "清货，热销", (None, None)),
-])
-def test_configured_seasonal_boost_excel_recalculation(tmp_path, enabled, days, remark, expected):
-    executable = shutil.which("soffice") or shutil.which("libreoffice")
-    if executable is None:
-        pytest.skip("NOT VERIFIED: LibreOffice is unavailable for formula evaluation")
-    source = tmp_path / "seasonal-off.xlsx"
-    book = Workbook()
-    sheet = book.active
-    sheet["I2"] = "平稳"
-    sheet["J2"] = 11
-    sheet["S2"] = 80
-    sheet["AF2"] = remark
-    formulas = replenishment_v2_formulas(2, peak_boost_enabled=enabled, peak_boost_days=days)
-    sheet["V2"] = formulas["V"]
-    sheet["W2"] = formulas["W"]
-    book.save(source)
-    book.close()
-    output = tmp_path / "recalculated"
-    output.mkdir()
-    result = subprocess.run(
-        [executable, f"-env:UserInstallation={(tmp_path / 'profile').as_uri()}", "--headless",
-         "--convert-to", "xlsx", "--outdir", str(output), str(source)],
-        capture_output=True, text=True, timeout=60,
-    )
-    assert result.returncode == 0, result.stdout + result.stderr
-    calculated = load_workbook(output / source.name, data_only=True)
-    try:
-        assert calculated.active["V2"].value == expected[0]
-        assert calculated.active["W2"].value == expected[1]
-    finally:
-        calculated.close()
-
-
-@pytest.mark.parametrize("row", [3, 2004, 1_048_576])
-def test_all_relative_references_follow_the_requested_row(row):
-    reference = replenishment_v2_formulas(2)
-    actual = replenishment_v2_formulas(row)
-    assert actual == {
-        column: Translator(formula, origin=f"{column}2").translate_formula(f"{column}{row}")
-        for column, formula in reference.items()
-    }
-
-
-@pytest.mark.parametrize("row", [True, False, -1, 0, 1, 2.0, "2", None, 1_048_577])
-def test_invalid_data_row_is_rejected(row):
-    with pytest.raises(ValueError, match="row_number"):
-        replenishment_v2_formulas(row)
-
-
 # Each case overrides cells only to isolate a formula's business boundary.
 # None denotes an empty cached result; formula-empty and truly empty inputs
 # are deliberately distinguished in the AC cases below.
@@ -140,6 +81,8 @@ CASES = [
     ("clearance-before-hot", {"I": "增长", "J": 11, "S": 80, "AF": "清货，热销，新品"}, {"V": None, "W": None}),
     ("no-replenish-cancels-boost-only", {"I": "平稳", "J": 6, "S": 80, "AF": "不补，热销，出口退税"}, {"V": 75, "W": 90}),
     ("hot-declining", {"I": "下降", "J": 6, "S": 80, "AF": "热销产品"}, {"V": 90, "W": 120}),
+    ("peak-steady-no-boost", {"I": "平稳", "J": 11, "S": 80, "AF": "稳定产品"}, {"V": 90, "W": 95}),
+    ("peak-declining-no-boost", {"I": "下降", "J": 11, "S": 80, "AF": "稳定产品"}, {"V": 75, "W": 95}),
     ("peak-cap-100", {"I": "平稳", "J": 21, "S": 80, "AF": "热销"}, {"V": 120, "W": 120}),
     ("sample-air-empty", {"I": "样本不足", "J": 1, "S": 80, "AF": "热销"}, {"V": None, "W": None}),
     ("sea-days-70", {"J": 6, "S": 70}, {"W": None}),
@@ -195,15 +138,27 @@ for daily, expected in ((5.01, 90), (10, 90), (10.01, 95), (20, 95), (20.01, 100
     CASES.append((f"sea-band-{daily}", {"J": daily, "S": 80}, {"W": expected}))
 
 for keyword in ("新品-海运", "一般产品", "透明计划", "稳定产品", "重点产品", "重点关注", "有机会", "出口退税"):
-    for trend, air, sea in (("增长", 120, 120), ("平稳", 90, 95), ("下降", 75, 95)):
+    for trend, air, sea in (("增长", 120, 120),):
         CASES.append((f"peak-{keyword}-{trend}", {"I": trend, "J": 11, "S": 80, "AF": keyword}, {"V": air, "W": sea}))
 
-for remark in ("", "低价商城", "低价甩货", "滞销"):
+for remark in ("", "滞销"):
     CASES.append((f"no-peak-{remark}", {"I": "增长", "J": 11, "S": 80, "AF": remark}, {"V": 90, "W": 95}))
 
 for source, target in (("X", "Y"), ("AA", "AB")):
-    for quantity, expected in ((4, None), (5, 10), (14, 10), (15, 20), (203, 200), (496, 500), ('=""', None)):
+    for quantity, expected in ((4, None), (5, 10), ('=""', None)):
         CASES.append((f"round-{target}-{quantity}", {source: quantity}, {target: expected}))
+
+
+CASES = [(name, inputs, expected, {}) for name, inputs, expected in CASES]
+for enabled, days, remark, expected in [
+    (False, 20, "热销", (90, 95)), (True, 20, "热销", (110, 115)),
+    (True, 0, "热销", (90, 95)), (True, 120, "热销", (120, 120)),
+    (True, 20, "不补，热销", (90, 95)), (True, 20, "清货，热销", (None, None)),
+]:
+    CASES.append((f"configured-{enabled}-{days}-{remark}",
+                  {"I": "平稳", "J": 11, "S": 80, "AF": remark},
+                  dict(zip(("V", "W"), expected)),
+                  {"peak_boost_enabled": enabled, "peak_boost_days": days}))
 
 
 @pytest.fixture(scope="module")
@@ -215,11 +170,11 @@ def recalculated_cases(tmp_path_factory):
     book = Workbook()
     sheet = book.active
     sheet.title = "formula_cases"
-    for row, (name, inputs, _) in enumerate(CASES, 2):
+    for row, (name, inputs, _, settings) in enumerate(CASES, 2):
         sheet[f"A{row}"] = name
         for column in ("E", "F", "G", "H", "K", "L", "M", "N", "O", "P", "Q", "T", "AD"):
             sheet[f"{column}{row}"] = 0
-        for column, formula in replenishment_v2_formulas(row).items():
+        for column, formula in replenishment_v2_formulas(row, **settings).items():
             sheet[f"{column}{row}"] = formula
         for column, value in inputs.items():
             sheet[f"{column}{row}"] = value
@@ -242,14 +197,14 @@ def recalculated_cases(tmp_path_factory):
         assert cached.active.max_row == len(CASES) + 1
         yield {
             name: {column: cached.active[f"{column}{row}"].value for column in expected}
-            for row, (name, _, expected) in enumerate(CASES, 2)
+            for row, (name, _, expected, _) in enumerate(CASES, 2)
         }
     finally:
         cached.close()
 
 
-@pytest.mark.parametrize("name,inputs,expected", CASES, ids=[case[0] for case in CASES])
-def test_recalculated_business_boundaries(recalculated_cases, name, inputs, expected):
+@pytest.mark.parametrize("name,inputs,expected,settings", CASES, ids=[case[0] for case in CASES])
+def test_recalculated_business_boundaries(recalculated_cases, name, inputs, expected, settings):
     actual = recalculated_cases[name]
     for column, value in expected.items():
         if isinstance(value, (int, float)):

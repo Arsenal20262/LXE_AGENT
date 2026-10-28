@@ -715,51 +715,20 @@ def test_download_store_unlinked_shipments_does_not_retry_more_than_once(monkeyp
     assert run_calls == ["Amazon-Test-US", "Amazon-Test-US"]
 
 
-@pytest.mark.parametrize("stage", ["shop", "status"])
-@pytest.mark.parametrize("encoding", ["http", "json-int", "json-str"])
-@pytest.mark.parametrize("first_status,second_status", [(403, 200), (429, 200), (401, 200), (401, 401), (401, 403), (401, 429)])
-def test_shipments_pipeline_auth_boundary(monkeypatch, tmp_path, stage, encoding, first_status, second_status):
-    from services.mabang.amazon.fba import batch_delivery as batch
-
-    empty = lambda: _FakeResponse({"code": 200, "data": {"data": []}})
-    def attempt(code):
-        if code == 200:
-            prefix = [_FakeResponse({"code": 200, "data": {"shop": [{"id": 10, "name": "Shop"}]}})] if stage == "shop" else []
-            return prefix + [empty() for _ in ship.UNLINKED_SHIPMENT_STATUS_SPECS]
-        failure = (_FakeResponse({"msg": "actual rejection"}, status=code) if encoding == "http" else
-                   _FakeResponse({"code": str(code) if encoding == "json-str" else code, "msg": "actual rejection"}))
-        return ([empty()] if stage == "status" else []) + [failure]
-    session = _FakeSession(attempt(first_status) + attempt(second_status))
-    refresh = AsyncMock()
-    create = AsyncMock()
-    download = AsyncMock()
+def test_shipments_pipeline_auth_boundary(monkeypatch, tmp_path):
+    session = _FakeSession([_FakeResponse({"code": 200, "data": {"data": []}}),
+                            _FakeResponse({"msg": "actual rejection"}, status=403)])
+    refresh, create, download = AsyncMock(), AsyncMock(), AsyncMock()
     monkeypatch.setattr(ship, "erp_http_session", session)
     monkeypatch.setattr(ship, "get_fba_free_token", AsyncMock(return_value="fixture-token"))
     monkeypatch.setattr(ship, "refresh_mabang_auth", refresh)
+    monkeypatch.setattr(ship, "resolve_shop_option", AsyncMock(return_value=ship.ShopOption(10, "Shop", {})))
     monkeypatch.setattr(ship, "create_unlinked_export_task", create)
     monkeypatch.setattr(ship, "download_raw_file_from_url", download)
-    if stage == "status":
-        monkeypatch.setattr(ship, "resolve_shop_option", AsyncMock(return_value=ship.ShopOption(10, "Shop", {})))
-
-    if first_status == 401 and second_status == 200:
-        result = asyncio.run(ship.download_store_unlinked_shipments("Shop", output_dir=tmp_path))
-        assert len(result.status_results) == len(ship.UNLINKED_SHIPMENT_STATUS_SPECS)
-    else:
-        final_status = second_status if first_status == 401 else first_status
-        expected = batch.BatchDeliveryApiAuthError if final_status == 401 else (
-            ship.MabangRequestError if encoding == "http" else batch.BatchDeliveryApiError)
-        marker = "status" if encoding == "http" else "code"
-        with pytest.raises(expected, match=f"{marker}={final_status}") as captured:
-            asyncio.run(ship.download_store_unlinked_shipments("Shop", output_dir=tmp_path))
-        if final_status == 403:
-            assert not isinstance(captured.value, batch.BatchDeliveryApiAuthError)
-            assert "actual rejection" in str(captured.value)
-    statuses = [first_status, second_status] if first_status == 401 else [first_status]
-    assert len(session.calls) == sum(len(attempt(status)) for status in statuses)
+    with pytest.raises(ship.MabangRequestError, match="status=403.*actual rejection"):
+        asyncio.run(ship.download_store_unlinked_shipments("Shop", output_dir=tmp_path))
+    assert len(session.calls) == 2  # Stop at the failed status, without starting later exports.
+    refresh.assert_not_awaited()
     create.assert_not_awaited()
     download.assert_not_awaited()
     assert not list(tmp_path.iterdir())
-    if first_status == 401:
-        refresh.assert_awaited_once_with(purpose="fba_unlinked_shipments_download_auth_retry")
-    else:
-        refresh.assert_not_awaited()

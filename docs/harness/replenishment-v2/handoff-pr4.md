@@ -3,7 +3,7 @@
 ## Git、职责与当前契约
 
 - 分支 `codex/amazon-replenishment-unification`，工作区 `/Users/hym/.codex/worktrees/1672/Amazon`；PR #117。
-- 依赖链：PR1 `979c33e8` → PR2 `af0d7b8b` → 确认的PR3 `092b24cc` → PR4。本轮本地提交起点为 `591a848b`，已继承main／merge-base `bb628ce8`；定向修复提交结果以Git记录为准，尚未推送。PR3当前额外设置补丁未合入祖先链，PR4已独立处理对应前端问题，不修改前序分支或PR Base。
+- 依赖链：PR1 `979c33e8` → PR2 `af0d7b8b` → 确认的PR3 `092b24cc` → PR4。当前测试精简起点为已提交的 `e75e9f37`，已继承main／merge-base `bb628ce8`；本轮测试修改尚未提交。PR3当前额外设置补丁未合入祖先链，PR4已独立处理对应前端问题，不修改前序分支或PR Base。
 - b892ea8f时PR117对merge-base abde37dd为72文件、+7301/-399；PR4功能提交对PR3为29文件、+1352/-719。前者含上游累计功能，不能称PR4新增7301行。
 - 一个完整主Skill `replenishment-workflow-map`，V1/V2独立计算、检查和交付；独立`replenishment-final-restock` Skill已删除，V2 CLI owner改为主Skill。
 - V1保留原销量分析、参数方案、算法、筛选和多Sheet；V2继承PR1的14公式、PR2的35列单表和Office Kit。PR3提供自动取数集成；不计为PR4新建。
@@ -20,13 +20,13 @@
 - 旺季存储：parameters.json保留旧版可读的开关、天数，parameters.meta.json保存版本2标记和指纹；内嵌schema_version=2配置读取时转换。保存沿用现有锁及原子替换，发布失败恢复原参数／元数据及mtime，保留真实错误；正常完成后清理短期备份。恢复自身也发生I/O错误时报告两项实际错误并保留备份路径，不能宣称已恢复。
 - V2经Office Kit重算、结构／公式／Excel错误检查后才发布正式文件；失败不覆盖已有合格文件。各版本仅发送自身成功terminal.files，诊断附件不作正式成功，发送失败只重试该文件发送。
 
-## 本轮定向整改与验证（本地提交收口）
+## 历史定向整改与验证（e75e9f37之前的本地提交收口）
 
 - 用户明确授权两个历史公共P2直接纳入PR4。原货件模块统一拒绝非法、非有限、负数及空／缺失数量，原始文件与快照一致校验，诊断带MSKU、字段、来源；真实0保留，区别于三类查询确认无货件。V1／V2算法和有效数量结果不变。
 - 按历史PR #122的已验证实现修正店铺、MSKU、深圳和货件403停止；官方API的429停止逻辑适配当前共享client，不整体覆盖旧文件。401原恢复、临时连接和502／503／504有限恢复保留；删除失去消费者的Retry-After辅助函数。#122仍为关闭未合并，本轮不修改该PR。
 - 最终25文件Python回归 **780 passed、无skip**，实际配置本工作区Office Node／Kit，包含LibreOffice公式、V1销量／多Sheet、V2深圳AG／全部MSKU／35列14公式、未知库存、双版本、HTTP停止及设置恢复。Bun四文件 **37 pass、167 assertions**；doctor／list／V1与V2 describe及diff检查通过。日志：`/private/tmp/pr117-p2-final-paumwl1w/`。提交前核实18个源码／测试文件未再改写，复用以上证据，另实跑关键边界 **141 passed、225 deselected**（`/private/tmp/pr117-precommit-critical.log`）；重叠用例不累计。
 - 另用两个全新Python子进程执行原公开V1／V2 CLI读取非法货件快照，均实际退出4、ok=false、files=[]，保留数量错误；设置CLI保存失败及新进程读取验证原“开启、20天”不变。均使用离线夹具，未访问ERP或模型。
-- 旺季页面默认及聊天临时覆盖优先级已核对一致，无需修改UI、Skill、生成器、CLI/catalog或公式；没有恢复独立V2 Skill或模型回放。源码反方复审未发现新的确定P0～P3。551行新增测试覆盖独立输入、认证恢复包装、CLI失败及配置恢复边界，未发现值得删除的无意义重复。用户已授权本轮19文件精确暂存及一个本地fix提交，不Push或修改GitHub；正式审核和生产验收仍须单独完成。
+- 旺季页面默认及聊天临时覆盖优先级已核对一致，无需修改UI、Skill、生成器、CLI/catalog或公式；没有恢复独立V2 Skill或模型回放。源码反方复审未发现新的确定P0～P3。当时551行新增测试覆盖输入、认证恢复包装、CLI失败及配置恢复边界；后续按职责层收敛重复矩阵，现行测试规模与结果见下方专项精简记录。用户已授权本轮19文件精确暂存及一个本地fix提交，不Push或修改GitHub；正式审核和生产验收仍须单独完成。
 
 ## 生产源码与V1对照证据
 
@@ -254,3 +254,14 @@
 - 本轮合入后的实跑：Python CLI／infra、店铺解析／取数适配、V1销量／算法／报表、V2全套及双版本1061 passed、4 skipped、4条既有aiohttp警告，包含真实LibreOffice与Office Kit重算；Bun十三文件96 pass、467 assertions；八工作区typecheck、TS生产边界、Dashboard／Desktop构建、doctor／list／V1／V2／店铺describe、V2帮助和命令手册检查通过。构建保留既有大chunk提示。
 - 首轮Python的59项失败均由沙箱禁止127.0.0.1测试服务器绑定端口导致，放行本地fixture后整组原样重跑通过；初轮Bun的测试模块别名不可解析已改为测试文件直接引用，最终十三文件全组重跑通过。没有删除断言或跳过失败用例。依赖按main锁文件frozen恢复，未额外升级或改写锁文件。
 - 32个Amazon业务文件和12个其他worktree的HEAD／状态／diff指纹与起点相同，90cea680的四份Skill指引完整保留。日志在/private/tmp/pr117-main-integration-ldadfhn1/。真实模型选店及失败停止语义、生产ERP、外部附件、完整原生Desktop、Windows／Microsoft Excel仍NOT VERIFIED；本轮合入main不等于合并PR，提交及远端更新以Git和PR Head为准。
+
+## 2026-10-27 测试专项精简（未提交）
+
+- 起点 `e75e9f37`，main／merge-base `bb628ce8`，仅调整测试及本交接，不改生产源码、Skill、CLI/catalog、公式、依赖或其他工作区；本轮不暂存、不Commit、不Push。
+- 相对该main的测试／Fixture差异从36路径、+4729/-47，降为33路径、+2204/-48；PR新增测试减少2525行（53.39%），包含下方10月28日补回的两行反例。其中包含1个30行HTML夹具，前后均保留；不是删除main原有测试。两份重复测试文件删除，一份SKU计时测试文件恢复为main原内容。
+- Workbook 953→425行：保留35列／14公式、全MSKU、来源／批次／覆盖／重复MSKU、AG/AH/AD及货件映射、Office失败和发布边界；等价AH/AG/数字／来源变体合并到所属模块。`test_replenishment_v2_a_rules.py`与`test_replenishment_v2_workbook_cli.py`的必要保障分别并入Workbook、公式、真实深圳交付和公开CLI契约测试，不再作为执行文件。
+- 货件合法／非法数量分类保留在公共货件模块；双版本CLI仅用一个非法快照证明两版失败无正式附件。403／429停止、401恢复由公共HTTP／JSON层验证，各取数消费者保留代表性拒绝；原main测试函数未删除或改写。设置保留默认、有效保存、旧配置、聊天优先级、运行快照、发布失败回滚及恢复自身失败诊断，删除重复格式／I/O变体。
+- Python受影响文件的顶层测试函数266→173（112个旧函数删除或被合并，由19个简洁函数承接，154个同名函数保留）；与历史780项相同业务回归范围精简为448项。Amazon页面6→3个Smoke步骤，工作台只删除Amazon附加宽窄屏矩阵，越南原行为不变。移除无消费者的测试夹具hold／read-error控制；未新增框架或Agent运行器。
+- 本轮实际：23文件Python **448 passed，无skip**（含真实Office Kit和LibreOffice、V1原销量／算法／多Sheet、35列14公式、深圳普通／组合及无旧库存字段、未知库存、双版本和非法货件停止、认证与设置回滚）；来源归属两文件另 **66 passed**。Bun六文件 **33 pass、183 assertions**；Chromium Amazon／越南／工作台 **3套件通过、23套件过滤**，Dashboard typecheck、diff检查通过。上述23文件在import清理及MSKU无文件断言加强后已重跑通过；随后仅简化店铺／货件两个消费者测试的失去消费者分支，再实跑这两文件67 passed，重叠结果不累计。
+- 日志与精简前后完整测试地图：`/private/tmp/amazon-test-trim-dxoz7ea7/`。历史780项、551行和更早测试数量仅是对应旧版本证据，不能称为当前测试数量；模型／正式Desktop聊天、生产ERP、真实外部发送、Windows和Microsoft Excel继续NOT VERIFIED。真实Office Kit使用本工作区已有Node/Kit，未安装依赖或修改锁文件。
+- 2026-10-28增量复审发现“非增长不加成”的代表反例删漏，已在原公式CASES补回平稳／下降各一条（备注稳定产品、日销11、可销售80天），不恢复完整关键词矩阵。正常公式经原LibreOffice批量入口121 passed；仅内存移除增长限制时恰好两条反例失败、其余119 passed，证明确实能拒绝错误公式。日志：`/private/tmp/pr117-peak-counterexamples-20261028/`。本轮只重跑公式文件，其他范围复用上轮只读复审514 Python、33 Bun及3套件Chromium证据，不累计为本轮执行；生产代码不变，仍未暂存／提交／推送。

@@ -356,8 +356,10 @@ def test_download_fba_delivery_csv_does_not_refresh_non_auth_errors(monkeypatch,
     assert refresh_calls == []
 
 
-@pytest.mark.parametrize("encoding", ["http", "json-int", "json-str"])
-@pytest.mark.parametrize("first_status,second_status", [(403, 200), (429, 200), (401, 200), (401, 401), (401, 403), (401, 429)])
+@pytest.mark.parametrize("encoding,first_status,second_status", [
+    ("http", 403, 200), ("http", 429, 200), ("http", 401, 200),
+    ("json-int", 403, 200), ("json-str", 429, 200), ("json-str", 401, 200),
+])
 def test_single_delivery_pipeline_auth_boundary(monkeypatch, tmp_path, encoding, first_status, second_status):
     def response(code):
         if code == 200:

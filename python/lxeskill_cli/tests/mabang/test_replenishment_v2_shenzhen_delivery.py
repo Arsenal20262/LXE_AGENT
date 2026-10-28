@@ -6,6 +6,8 @@ import hashlib
 import json
 import os
 from pathlib import Path
+from zipfile import ZipFile
+from xml.etree import ElementTree as ET
 
 import pytest
 from openpyxl import load_workbook
@@ -14,7 +16,7 @@ from lxeskill import cli as lxeskill
 from services.mabang.amazon.fba import source_verification as verification
 from services.mabang.amazon.fba import store_msku_actual_inventory as inventory
 from services.mabang.amazon.fba import store_msku_replenishment as legacy_replenishment
-from services.mabang.amazon.fba.replenishment_v2_formulas import replenishment_v2_formulas
+from services.mabang.amazon.fba import replenishment_v2_workbook as workbook
 from services.mabang.amazon.fba.sku_catalog import LocalSkuDefinition
 from test_replenishment_v2_workbook import (
     SOURCE_HEADERS,
@@ -25,22 +27,9 @@ from test_replenishment_v2_workbook import (
 )
 
 
-@pytest.mark.parametrize(
-    ("include_unknown", "native_inventory"),
-    [
-        (False, "conflicting"),
-        (True, "conflicting"),
-        (False, "absent"),
-        (False, "blank"),
-        (False, "invalid"),
-    ],
-    ids=[
-        "formal-native-mismatch", "inventory-review", "formal-no-uq122",
-        "formal-blank-uq122", "formal-invalid-uq122",
-    ],
-)
+@pytest.mark.parametrize("include_unknown", [False, True], ids=["formal-no-uq122", "inventory-review-old-value-ignored"])
 def test_shenzhen_report_controls_ag_and_office_delivery_status(
-    tmp_path: Path, monkeypatch, capsys, include_unknown: bool, native_inventory: str,
+    tmp_path: Path, monkeypatch, capsys, include_unknown: bool,
 ) -> None:
     if not os.environ.get("LXE_OFFICE_NODE") or not os.environ.get("LXE_OFFICE_CLI"):
         pytest.skip("Office Kit is not configured; real recalculation remains NOT VERIFIED")
@@ -48,14 +37,9 @@ def test_shenzhen_report_controls_ag_and_office_delivery_status(
     monkeypatch.setenv("LXE_WORKSPACE_ROOT", str(tmp_path))
     monkeypatch.setenv("LXESKILL_SKILL_SCOPE", "replenishment-workflow-map")
     expected_stock = {"POS-1": 12, "ZERO-1": 0, "NEG-1": -3, "COMBO-1": 7}
-    def native_value(index: int) -> object:
-        if native_inventory == "conflicting":
-            return 900 + index
-        return None if native_inventory == "blank" else "not-a-number"
-
     rows = [
         {**_source_rows()[0], "MSKU": msku, "本地SKU": sku,
-         **({} if native_inventory == "absent" else {"本地库存": native_value(index)}),
+         **({"本地库存": 900 + index} if include_unknown else {}),
          "商品链接": f"https://example.test/{msku}"}
         for index, (msku, sku) in enumerate([
             ("POS-1", "SKU-POS"), ("ZERO-1", "SKU-ZERO"),
@@ -69,7 +53,7 @@ def test_shenzhen_report_controls_ag_and_office_delivery_status(
         ])
         expected_stock.update({"NO-LOCAL-1": None, "NO-STOCK-1": None})
     headers = (
-        (*SOURCE_HEADERS, "商品链接") if native_inventory == "absent"
+        (*SOURCE_HEADERS, "商品链接") if not include_unknown
         else (*SOURCE_HEADERS, "本地库存", "商品链接")
     )
     source = _write_source(
@@ -84,14 +68,14 @@ def test_shenzhen_report_controls_ag_and_office_delivery_status(
             )),
         ) + ((LocalSkuDefinition("SKU-MISSING", 1),) if include_unknown else ()),
     )
-    if native_inventory == "absent":
+    if not include_unknown:
         source_book = load_workbook(source, read_only=True, data_only=True)
         try:
             assert "本地库存" not in [cell.value for cell in source_book.active[1]]
         finally:
             source_book.close()
     verified = verification.load_verified_source(source, store_name=STORE)
-    if native_inventory == "absent":
+    if not include_unknown:
         assert all("本地库存" not in record for record in verified.records)
     # Produce the report with the existing Shenzhen algorithm, without ERP access.
     report_rows, missing = inventory.calculate_inventory_rows(
@@ -147,19 +131,29 @@ def test_shenzhen_report_controls_ag_and_office_delivery_status(
         assert [sheet[f"B{index}"].value for index in range(2, len(rows) + 2)] == list(expected_stock)
         for index, row in enumerate(rows, 2):
             assert sheet[f"AG{index}"].value == expected_stock[row["MSKU"]]
-            if native_inventory == "conflicting":
+            if include_unknown:
                 assert sheet[f"AG{index}"].value != row["本地库存"]
-            expected_formulas = replenishment_v2_formulas(index, peak_boost_enabled=False)
-            assert len(expected_formulas) == 14
-            assert {cell.column_letter for cell in sheet[index] if cell.data_type == "f"} == set(expected_formulas)
-            assert {column: sheet[f"{column}{index}"].value for column in expected_formulas} == expected_formulas
-            assert all("AG" not in expected_formulas[column] for column in ("X", "Y", "AA", "AB"))
-            assert cached[f"I{index}"].value is not None
-            assert sheet[f"I{index}"].data_type == "f"
-            assert sheet[f"J{index}"].data_type == "f"
+            assert len([cell for cell in sheet[index] if cell.data_type == "f"]) == 14
             assert isinstance(cached[f"J{index}"].value, (int, float))
         assert not any(cell.data_type == "e" for row in cached for cell in row)
     finally:
         formulas.close()
         values.close()
     assert [hashlib.sha256(path.read_bytes()).hexdigest() for path in inputs] == input_hashes
+
+    if not include_unknown:
+        # Reuse the recalculated file to prove the real inspector rejects an Excel error.
+        diagnostic = tmp_path / "office-error.xlsx"
+        with ZipFile(output) as original, ZipFile(diagnostic, "w") as changed:
+            for entry in original.infolist():
+                content = original.read(entry.filename)
+                if entry.filename == "xl/worksheets/sheet1.xml":
+                    sheet_xml = ET.fromstring(content)
+                    cell = sheet_xml.find(".//{*}c[@r='AC2']")
+                    assert cell is not None
+                    cell.set("t", "e")
+                    cell.find("{*}v").text = "#VALUE!"
+                    content = ET.tostring(sheet_xml)
+                changed.writestr(entry, content)
+        count, examples = workbook._inspect_recalculated(diagnostic, rows=rows)
+        assert count == 1 and examples == ("AC2=#VALUE!",)
