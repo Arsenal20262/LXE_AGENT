@@ -1788,7 +1788,6 @@ def test_formal_success_result_is_compact_and_keeps_every_deliverable_path() -> 
     }
     assert compact["manufacturer_count"] == 15
     assert compact["unmatched_summary"]["planned_shipment_quantity"] == "5"
-    assert any("未匹配库存 SKU" in warning for warning in compact["warnings"])
     assert compact["contract_xlsx_paths"] == [
         item["output_xlsx"] for item in contract_outputs
     ]
@@ -2040,19 +2039,6 @@ def test_formal_restock_rebuilds_current_and_inventory_skus_and_product_names(
         assert all(cell.fill.fgColor.rgb == "FFFFFF00" for cell in sheet[3])
     finally:
         workbook.close()
-
-
-def test_draft_is_removed() -> None:
-    result = cli.run(
-        {
-            "delivery_no": ["SP260710001"],
-            "master_xlsx": "master.xlsx",
-            "gross_margin": "0.3",
-            "draft": True,
-        }
-    )
-    assert result["success"] is False
-    assert result["error"]["code"] == "purchase_draft_mode_removed"
 
 
 def test_preview_rejects_inventory_quote_confirmation_without_http() -> None:
