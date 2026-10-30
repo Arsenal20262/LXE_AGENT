@@ -246,11 +246,9 @@ WAREHOUSE_ERROR = "查询条件已被新的搜索覆盖，请重新搜索后再�
 
 
 def test_warehouse_html_error_is_not_published_as_xlsx(monkeypatch, tmp_path) -> None:
-    existing = True
     path = tmp_path / "202610141356-shop_warehouse_stock.xlsx"
     original = _stock_xlsx_bytes([{"库存SKU编号": "S", "可用库存量": 8}])
-    if existing:
-        path.write_bytes(original)
+    path.write_bytes(original)
     session = _FakeSession([_FakeResponse(body=WAREHOUSE_ERROR_HTML)])
     monkeypatch.setattr(inv, "erp_http_session", session)
     monkeypatch.setattr(inv, "get_auth_context", _fake_auth_context)
@@ -259,18 +257,13 @@ def test_warehouse_html_error_is_not_published_as_xlsx(monkeypatch, tmp_path) ->
         asyncio.run(inv.download_warehouse_stock_xlsx(
             store_name="shop", output_dir=tmp_path, search_token=SEARCH_TOKEN,
         ))
-    if existing:
-        assert path.read_bytes() == original
-    else:
-        assert not path.exists()
+    assert path.read_bytes() == original
     assert len(session.calls) == 1
 
 
-@pytest.mark.parametrize("search_response,expected", [
-    (_FakeResponse(payload={"success": False, "message": WAREHOUSE_ERROR}), WAREHOUSE_ERROR),
-])
-def test_warehouse_search_failure_stops_before_download(monkeypatch, tmp_path, search_response, expected) -> None:
-    _assert_warehouse_pipeline(monkeypatch, tmp_path, [search_response], succeeds=False, calls=1, expected=expected)
+def test_warehouse_search_failure_stops_before_download(monkeypatch, tmp_path) -> None:
+    response = _FakeResponse(payload={"success": False, "message": WAREHOUSE_ERROR})
+    _assert_warehouse_pipeline(monkeypatch, tmp_path, [response], succeeds=False, calls=1, expected=WAREHOUSE_ERROR)
 
 
 def test_warehouse_pipeline_forwards_current_search_token_in_export_url(monkeypatch, tmp_path, caplog) -> None:
@@ -289,12 +282,9 @@ def test_warehouse_pipeline_forwards_current_search_token_in_export_url(monkeypa
     assert token not in caplog.text
 
 
-@pytest.mark.parametrize("payload", [
-    {"success": True},
-])
-def test_warehouse_missing_or_invalid_search_token_stops_before_export(monkeypatch, tmp_path, payload) -> None:
+def test_warehouse_missing_or_invalid_search_token_stops_before_export(monkeypatch, tmp_path) -> None:
     _assert_warehouse_pipeline(monkeypatch, tmp_path, [
-        _FakeResponse(payload=payload),
+        _FakeResponse(payload={"success": True}),
     ], succeeds=False, calls=1, expected="searchToken")
 
 

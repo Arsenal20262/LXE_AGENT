@@ -54,6 +54,7 @@ const referenceSkills = ["office-xlsx", "office-docx", "office-pptx"].map(name =
 let vietnamUploadError: boolean | string = false;
 let amazonV2Settings: { peak_boost_enabled: boolean; peak_boost_days: number | null } = { peak_boost_enabled: false, peak_boost_days: null };
 let amazonSaveMode: "success" | "error" = "success";
+let amazonReadMode: "success" | "error" = "success";
 let vietnamReadError = false;
 let vietnamExportMode: "success" | "cancel" | "error" | "hold" = "success";
 let releaseVietnamExport: (() => void) | undefined;
@@ -237,6 +238,7 @@ const desktop = {
   listInputAssets: async () => [],
   getAmazonV2Settings: async () => {
     calls.push({ operation: "amazon-v2.read" });
+    if (amazonReadMode === "error") throw new Error("PermissionError: fixture settings read denied");
     return { ...amazonV2Settings };
   },
   saveAmazonV2Settings: async input => {
@@ -507,6 +509,7 @@ const fixture = {
   },
   vietnamUploadFailure(value: boolean | string) { vietnamUploadError = value; },
   amazonSaveMode(value: typeof amazonSaveMode) { amazonSaveMode = value; },
+  amazonReadMode(value: typeof amazonReadMode) { amazonReadMode = value; },
   mountAmazonV2Settings(language: "en" | "zh") {
     reset();
     flushSync(() => root!.render(<I18nContext.Provider value={UI_TEXT[language]}>

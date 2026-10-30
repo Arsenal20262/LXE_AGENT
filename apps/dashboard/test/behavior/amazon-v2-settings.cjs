@@ -33,4 +33,14 @@ module.exports = async ({ js, step, waitFor, click, state }) => {
     await js("behavior.amazonSaveMode('success'); behavior.mountAmazonV2Settings('zh')"); await loaded();
     assert.equal(await js(`document.querySelector('${days}').value`), "20");
   });
+  await step("failed settings reads show the actual error and retry successfully", async () => {
+    await js("behavior.amazonReadMode('error'); behavior.mountAmazonV2Settings('zh')");
+    await waitFor("document.querySelector('[role=alert]')?.textContent.includes('settings read denied')", "settings read error");
+    assert.match(await js("document.querySelector('[role=alert]').textContent"), /PermissionError: fixture settings read denied/);
+    await js("behavior.amazonReadMode('success')");
+    await click(".workbench-refresh");
+    await loaded();
+    assert.equal(await js(`document.querySelector('${days}').value`), "20");
+    assert.equal(await js("document.querySelector('[role=alert]')"), null);
+  });
 };

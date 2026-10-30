@@ -64,12 +64,12 @@ def status_failure(monkeypatch, tmp_path):
     return install
 
 
-@pytest.mark.parametrize("status,stage", [("WMS待配货", "下载文件")])
 def test_status_stage_failure_preserves_exception_and_reaches_redacted_terminal(
-    status_failure, status, stage, monkeypatch, tmp_path, capsys,
+    status_failure, monkeypatch, tmp_path, capsys,
 ):
     from lxeskill import cli as lxeskill
 
+    status, stage = "WMS待配货", "下载文件"
     message = "synthetic failure: searchToken=synthetic-search-secret Cookie=synthetic-cookie Authorization=Bearer synthetic-bearer"
     error = (BatchDeliveryTimeoutError if stage == "轮询导出任务" else BatchDeliveryApiError)(message)
     calls, snapshot = status_failure(status, stage, error)
